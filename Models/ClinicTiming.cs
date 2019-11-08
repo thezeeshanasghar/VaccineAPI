@@ -13,7 +13,7 @@ namespace VaccineAPI.Models
         public string EndTime { get; set; }
         public string Session { get; set; }
         public int IsOpen { get; set; }
-        public int ClinicId { get; set; }
+        public long ClinicId { get; set; }
          [JsonIgnore]
         public Clinic Clinic { get; set; }
        

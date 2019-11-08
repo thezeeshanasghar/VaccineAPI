@@ -18,7 +18,7 @@ namespace VaccineAPI.Models
         public int? PhoneNumber { get; set; }
         public int? ValidUpto { get; set; }
         public int? InvoiceNumber { get; set; }
-        public int? ProfileImage { get; set; }
+        public string? ProfileImage { get; set; }
         public string SignatureImage { get; set; }
         public int DisplayName { get; set; }
         public int AllowInvoice { get; set; }
@@ -29,7 +29,7 @@ namespace VaccineAPI.Models
         public string DoctorType { get; set; }
         public string Qualification { get; set; }
         public string AdditionInfo { get; set; }
-        public int UserId { get; set; }
+        public long UserId { get; set; }
          [JsonIgnore]
         public User User { get; set; }
     }

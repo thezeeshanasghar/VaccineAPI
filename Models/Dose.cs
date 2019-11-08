@@ -13,7 +13,7 @@ namespace VaccineAPI.Models
         public int? MaxAge { get; set; }
         public int? MinGap { get; set; }
         public int? DoseOrder { get; set; }
-         public int VaccineId { get; set; }
+         public long VaccineId { get; set; }
          [JsonIgnore]
         public Vaccine Vaccine { get; set; }
     }

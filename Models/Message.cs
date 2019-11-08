@@ -12,7 +12,7 @@ namespace VaccineAPI.Models
         public string Sms { get; set; }
         public string ApiResponse { get; set; }
         public string Created { get; set; }
-        public int? UserId { get; set; }
+        public long? UserId { get; set; }
         [JsonIgnore]
         public User User { get; set; }
     }

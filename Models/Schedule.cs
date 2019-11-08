@@ -15,7 +15,7 @@ namespace VaccineAPI.Models
         public float? Circle { get; set; }
         public int IsDone { get; set; }
         public string GivenDate { get; set; }
-         public int? BrandId { get; set; }
+         public long? BrandId { get; set; }
         [JsonIgnore]
         public Brand Brand { get; set; }
         

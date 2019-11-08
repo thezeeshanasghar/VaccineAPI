@@ -9,7 +9,7 @@ namespace VaccineAPI.Models
     {
         public long Id { get; set; }
         public int? Name { get; set; }
-        public int VaccineId { get; set; }
+        public long VaccineId { get; set; }
         [JsonIgnore]
         public Vaccine Vaccine { get; set; }
     }

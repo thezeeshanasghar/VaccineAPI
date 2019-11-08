@@ -18,11 +18,11 @@ namespace VaccineAPI.Models
         public string PreferredSchedule  { get; set; }
         public int? IsEPIDone  { get; set; }
         public int? IsVerified  { get; set; }
-        public int ClinicId  { get; set; }
+        public long ClinicId  { get; set; }
          [JsonIgnore]
         public Clinic Clinic { get; set; }
        
-        public int UserId  { get; set; }
+        public long UserId  { get; set; }
          [JsonIgnore]
         public User User { get; set; }
         

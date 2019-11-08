@@ -15,7 +15,7 @@ namespace VaccineAPI.Models
         public int? PhoneNumber { get; set; }
         public int IsOnline { get; set; }
         public string Address { get; set; }
-        public int DoctorId { get; set; }
+        public long DoctorId { get; set; }
         [JsonIgnore]
         public Doctor Doctor { get; set; }
          

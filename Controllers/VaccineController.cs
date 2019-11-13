@@ -20,9 +20,10 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Vaccine>>> GetAll()
+        public async Task<Response<List<Vaccine>>> GetAll()
         {
-            return await _db.Vaccines.ToListAsync();
+            var list = await _db.Vaccines.ToListAsync();
+            return new Response<List<Vaccine>>(true, null, list);	
         }
 
         [HttpGet("{id}")]

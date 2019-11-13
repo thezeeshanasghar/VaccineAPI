@@ -10,9 +10,12 @@ namespace VaccineAPI.Models
         public long Id { get; set; }
         public string Name { get; set; }
         public int ConsultationFee { get; set; }
+        public string OffDays { get; set; }
+        public string StartTime { get; set; }
+        public string EndTime { get; set; }
         public float Lat { get; set; }
         public float Long { get; set; }
-        public int? PhoneNumber { get; set; }
+        public string PhoneNumber { get; set; }
         public int IsOnline { get; set; }
         public string Address { get; set; }
         public long DoctorId { get; set; }

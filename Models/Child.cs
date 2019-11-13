@@ -8,6 +8,7 @@ namespace VaccineAPI.Models
     public class Child
     {
         public long Id { get; set; }
+        public string Name { get; set; }
         public string FatherName { get; set; }
         public string Email { get; set; }
         public string DOB { get; set; }

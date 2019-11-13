@@ -2,15 +2,17 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using VaccineAPI.Models;
 
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    partial class ContextModelSnapshot : ModelSnapshot
+    [Migration("20191112035410_first")]
+    partial class first
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,7 +23,7 @@ namespace VaccineAPI.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd();
 
-                    b.Property<string>("Name");
+                    b.Property<int?>("Name");
 
                     b.Property<long>("VaccineId");
 
@@ -93,8 +95,6 @@ namespace VaccineAPI.Migrations
 
                     b.Property<int?>("IsVerified");
 
-                    b.Property<string>("Name");
-
                     b.Property<string>("PreferredDayOfReminder");
 
                     b.Property<string>("PreferredDayOfWeek");
@@ -123,8 +123,6 @@ namespace VaccineAPI.Migrations
 
                     b.Property<long>("DoctorId");
 
-                    b.Property<string>("EndTime");
-
                     b.Property<int>("IsOnline");
 
                     b.Property<float>("Lat");
@@ -133,11 +131,7 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("Name");
 
-                    b.Property<string>("OffDays");
-
                     b.Property<string>("PhoneNumber");
-
-                    b.Property<string>("StartTime");
 
                     b.HasKey("Id");
 
@@ -175,7 +169,7 @@ namespace VaccineAPI.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd();
 
-                    b.Property<string>("AdditionalInfo");
+                    b.Property<string>("AdditionInfo");
 
                     b.Property<int>("AllowChart");
 
@@ -185,7 +179,7 @@ namespace VaccineAPI.Migrations
 
                     b.Property<int>("AllowInvoice");
 
-                    b.Property<string>("DisplayName");
+                    b.Property<int>("DisplayName");
 
                     b.Property<string>("DoctorType");
 
@@ -199,9 +193,9 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("LastName");
 
-                    b.Property<string>("PMDC");
+                    b.Property<int>("PMDC");
 
-                    b.Property<string>("PhoneNo");
+                    b.Property<int?>("PhoneNumber");
 
                     b.Property<string>("ProfileImage");
 
@@ -217,7 +211,7 @@ namespace VaccineAPI.Migrations
 
                     b.Property<long>("UserId");
 
-                    b.Property<string>("ValidUpto");
+                    b.Property<int?>("ValidUpto");
 
                     b.HasKey("Id");
 
@@ -371,7 +365,7 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("MobileNumber");
 
-                    b.Property<string>("Password");
+                    b.Property<int>("Password");
 
                     b.Property<string>("UserType");
 

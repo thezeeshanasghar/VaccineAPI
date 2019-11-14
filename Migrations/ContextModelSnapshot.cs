@@ -399,7 +399,7 @@ namespace VaccineAPI.Migrations
             modelBuilder.Entity("VaccineAPI.Models.Brand", b =>
                 {
                     b.HasOne("VaccineAPI.Models.Vaccine", "Vaccine")
-                        .WithMany()
+                        .WithMany("Brands")
                         .HasForeignKey("VaccineId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
@@ -483,7 +483,7 @@ namespace VaccineAPI.Migrations
             modelBuilder.Entity("VaccineAPI.Models.Dose", b =>
                 {
                     b.HasOne("VaccineAPI.Models.Vaccine", "Vaccine")
-                        .WithMany()
+                        .WithMany("Doses")
                         .HasForeignKey("VaccineId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });

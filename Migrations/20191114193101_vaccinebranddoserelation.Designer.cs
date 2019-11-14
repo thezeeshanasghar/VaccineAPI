@@ -9,8 +9,8 @@ using VaccineAPI.Models;
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    [Migration("20191113233221_updated")]
-    partial class updated
+    [Migration("20191114193101_vaccinebranddoserelation")]
+    partial class vaccinebranddoserelation
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
@@ -401,7 +401,7 @@ namespace VaccineAPI.Migrations
             modelBuilder.Entity("VaccineAPI.Models.Brand", b =>
                 {
                     b.HasOne("VaccineAPI.Models.Vaccine", "Vaccine")
-                        .WithMany()
+                        .WithMany("Brands")
                         .HasForeignKey("VaccineId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
@@ -485,7 +485,7 @@ namespace VaccineAPI.Migrations
             modelBuilder.Entity("VaccineAPI.Models.Dose", b =>
                 {
                     b.HasOne("VaccineAPI.Models.Vaccine", "Vaccine")
-                        .WithMany()
+                        .WithMany("Doses")
                         .HasForeignKey("VaccineId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });

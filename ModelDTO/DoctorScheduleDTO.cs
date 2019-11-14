@@ -1,0 +1,23 @@
+using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
+namespace VaccineAPI.ModelDTO
+{
+
+    public class DoctorScheduleDTO
+    {
+        public long Id { get; set; }
+        public long DoseId { get; set; }
+        
+         [JsonIgnore]
+        public DoseDTO Dose { get; set; }
+       
+        public long DoctorId { get; set; }
+         [JsonIgnore]
+        public DoctorDTO Doctor { get; set; }
+       
+        public int GapInDays { get; set; }
+        
+    }
+
+}

@@ -2,22 +2,22 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 
-namespace VaccineAPI.Models
+namespace VaccineAPI.ModelDTO
 {
 
-    public class BrandInventory
+    public class BrandInventoryDTO
     {
         public long Id { get; set; }
         public int Count { get; set; }
         public long BrandId { get; set; }
         
         [JsonIgnore]
-        public Brand Brand { get; set; }
+        public BrandDTO Brand { get; set; }
       
         public long DoctorId { get; set; }
          [JsonIgnore]
-        public Doctor Doctor { get; set; }
-        public virtual ICollection<Vaccine> VaccineName { get; set; }
+        public DoctorDTO Doctor { get; set; }
+        public string VaccineName { get; set; }
     }
 
 }

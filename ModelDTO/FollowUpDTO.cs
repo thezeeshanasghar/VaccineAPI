@@ -6,7 +6,7 @@ using System;
 namespace VaccineAPI.Models
 {
 
-    public class FollowUp
+    public class FollowUpDTO
     {
         public long Id { get; set; }
         public string Disease { get; set; }

@@ -18,6 +18,7 @@ using MySql.Data.EntityFrameworkCore;
 using MySql.Data.EntityFrameworkCore.Extensions;
 using Newtonsoft.Json.Serialization;
 using VaccineAPI.Models;
+using AutoMapper;
 
 namespace VaccineAPI
 {
@@ -40,6 +41,14 @@ namespace VaccineAPI
                         // options =>   options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore
                         );
             services.AddCors();
+            // Auto Mapper Configurations
+            var mappingConfig = new MapperConfiguration(mc =>
+            {
+                mc.AddProfile(new AutoMapperProfile());
+            });
+
+            IMapper mapper = mappingConfig.CreateMapper();
+            services.AddSingleton(mapper);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using System;
 
 namespace VaccineAPI.Models
 {
@@ -9,7 +10,7 @@ namespace VaccineAPI.Models
     {
         public long Id { get; set; }
        
-        public string Date { get; set; }
+        public DateTime Date { get; set; }
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? Circle { get; set; }

@@ -2,7 +2,7 @@
 
 namespace VaccineAPI.Migrations
 {
-    public partial class first : Migration
+    public partial class vaccinebranddoserelation : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -13,7 +13,7 @@ namespace VaccineAPI.Migrations
                     Id = table.Column<long>(nullable: false)
                         .Annotation("MySQL:AutoIncrement", true),
                     MobileNumber = table.Column<string>(nullable: true),
-                    Password = table.Column<int>(nullable: false),
+                    Password = table.Column<string>(nullable: true),
                     UserType = table.Column<string>(nullable: true),
                     CountryCode = table.Column<int>(nullable: true)
                 },
@@ -46,16 +46,16 @@ namespace VaccineAPI.Migrations
                     FirstName = table.Column<string>(nullable: true),
                     LastName = table.Column<string>(nullable: true),
                     Email = table.Column<string>(nullable: true),
-                    PMDC = table.Column<int>(nullable: false),
+                    PMDC = table.Column<string>(nullable: true),
                     IsApproved = table.Column<int>(nullable: false),
                     ShowPhone = table.Column<int>(nullable: false),
                     ShowMobile = table.Column<int>(nullable: false),
-                    PhoneNumber = table.Column<int>(nullable: true),
-                    ValidUpto = table.Column<int>(nullable: true),
+                    PhoneNo = table.Column<string>(nullable: true),
+                    ValidUpto = table.Column<string>(nullable: true),
                     InvoiceNumber = table.Column<int>(nullable: true),
                     ProfileImage = table.Column<string>(nullable: true),
                     SignatureImage = table.Column<string>(nullable: true),
-                    DisplayName = table.Column<int>(nullable: false),
+                    DisplayName = table.Column<string>(nullable: true),
                     AllowInvoice = table.Column<int>(nullable: false),
                     AllowChart = table.Column<int>(nullable: false),
                     AllowFollowUp = table.Column<int>(nullable: false),
@@ -63,7 +63,7 @@ namespace VaccineAPI.Migrations
                     SmsLimit = table.Column<int>(nullable: false),
                     DoctorType = table.Column<string>(nullable: true),
                     Qualification = table.Column<string>(nullable: true),
-                    AdditionInfo = table.Column<string>(nullable: true),
+                    AdditionalInfo = table.Column<string>(nullable: true),
                     UserId = table.Column<long>(nullable: false)
                 },
                 constraints: table =>
@@ -106,7 +106,7 @@ namespace VaccineAPI.Migrations
                 {
                     Id = table.Column<long>(nullable: false)
                         .Annotation("MySQL:AutoIncrement", true),
-                    Name = table.Column<int>(nullable: true),
+                    Name = table.Column<string>(nullable: true),
                     VaccineId = table.Column<long>(nullable: false)
                 },
                 constraints: table =>
@@ -152,6 +152,9 @@ namespace VaccineAPI.Migrations
                         .Annotation("MySQL:AutoIncrement", true),
                     Name = table.Column<string>(nullable: true),
                     ConsultationFee = table.Column<int>(nullable: false),
+                    OffDays = table.Column<string>(nullable: true),
+                    StartTime = table.Column<string>(nullable: true),
+                    EndTime = table.Column<string>(nullable: true),
                     Lat = table.Column<float>(nullable: false),
                     Long = table.Column<float>(nullable: false),
                     PhoneNumber = table.Column<string>(nullable: true),
@@ -257,6 +260,7 @@ namespace VaccineAPI.Migrations
                 {
                     Id = table.Column<long>(nullable: false)
                         .Annotation("MySQL:AutoIncrement", true),
+                    Name = table.Column<string>(nullable: true),
                     FatherName = table.Column<string>(nullable: true),
                     Email = table.Column<string>(nullable: true),
                     DOB = table.Column<string>(nullable: true),

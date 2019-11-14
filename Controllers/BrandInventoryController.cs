@@ -20,19 +20,20 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<BrandInventory>>> GetAll()
+        public async Task<Response<List<BrandInventory>>> GetAll()
         {
-            return await _db.BrandInventorys.ToListAsync();
+            var list = await _db.BrandInventorys.ToListAsync();
+            return new Response<List<BrandInventory>>(true, null, list);
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<BrandInventory>> GetSingle(long id)
+        public async Task<Response<BrandInventory>> GetSingle(long id)
         {
             var single = await _db.BrandInventorys.FindAsync(id);
             if (single == null)
-                return NotFound();
-
-            return single;
+                 return new Response<BrandInventory>(false, "Not Found", null);
+           
+                 return new Response<BrandInventory>(true, null, single);
         }
 
         [HttpPost]

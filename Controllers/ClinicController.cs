@@ -20,19 +20,20 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Clinic>>> GetAll()
+        public async Task<Response<List<Clinic>>> GetAll()
         {
-            return await _db.Clinics.ToListAsync();
+            var list = await _db.Clinics.ToListAsync();
+            return new Response<List<Clinic>>(true, null, list);
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Clinic>> GetSingle(long id)
+        public async Task<Response<Clinic>> GetSingle(long id)
         {
             var single = await _db.Clinics.FindAsync(id);
             if (single == null)
-                return NotFound();
-
-            return single;
+                 return new Response<Clinic>(false, "Not Found", null);
+           
+                 return new Response<Clinic>(true, null, single);
         }
 
         [HttpPost]

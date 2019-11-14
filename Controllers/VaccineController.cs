@@ -27,13 +27,15 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Vaccine>> GetSingle(long id)
+        public async Task<Response<Vaccine>> GetSingle(long id)
         {
-            var single = await _db.Vaccines.FindAsync(id);
-            if (single == null)
-                return NotFound();
-
-            return single;
+            
+            var vaccine = await _db.Vaccines.FindAsync(id);
+           
+            if (vaccine == null)
+            return new Response<Vaccine>(false, "Not Found", null);
+           
+            return new Response<Vaccine>(true, null, vaccine);
         }
 
         [HttpPost]

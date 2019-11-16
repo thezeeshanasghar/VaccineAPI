@@ -10,7 +10,6 @@ namespace VaccineAPI.ModelDTO
         public long Id { get; set; }
         public string Name { get; set; }
         public long VaccineId { get; set; }
-        [JsonIgnore]
         public VaccineDTO Vaccine { get; set; }
     }
 

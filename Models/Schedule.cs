@@ -14,7 +14,7 @@ namespace VaccineAPI.Models
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? Circle { get; set; }
-        public int IsDone { get; set; }
+        public bool IsDone { get; set; }
         public string GivenDate { get; set; }
          public long? BrandId { get; set; }
         [JsonIgnore]
@@ -27,6 +27,8 @@ namespace VaccineAPI.Models
         public int DoseId { get; set; }
         [JsonIgnore]
         public Dose Dose { get; set; }
+        public virtual DateTime FromDate { get; set; }
+        public virtual DateTime ToDate { get; set; }
     }
 
 }

@@ -15,7 +15,7 @@ namespace VaccineAPI.ModelDTO
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? Circle { get; set; }
-        public int IsDone { get; set; }
+        public bool IsDone { get; set; }
          public long? BrandId { get; set; }
         [JsonIgnore]
         public List <BrandDTO> Brand { get; set; }

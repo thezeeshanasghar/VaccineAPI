@@ -4,7 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using AutoMapper;
 using VaccineAPI.Models;
+using VaccineAPI.ModelDTO;
 
 namespace VaccineAPI.Controllers
 {
@@ -13,17 +15,28 @@ namespace VaccineAPI.Controllers
     public class BrandController : ControllerBase
     {
         private readonly Context _db;
+        private readonly IMapper _mapper;
 
-        public BrandController(Context context)
+        public BrandController(Context context , IMapper mapper)
         {
             _db = context;
+            _mapper = mapper;
+            
         }
 
         [HttpGet]
-        public async Task<Response<List<Brand>>> GetAll()
+        // public async Task<Response<List<Brand>>> GetAll()
+        // {
+        //      var list = await _db.Brands.ToListAsync();
+        //     return new Response<List<Brand>>(true, null, list);
+        // }
+
+ public async Task<Response<List<BrandDTO>>> GetAll()
         {
-             var list = await _db.Brands.ToListAsync();
-            return new Response<List<Brand>>(true, null, list);
+            var list = await _db.Brands.OrderBy(x=>x.Id).ToListAsync();
+            List<BrandDTO> listDTO = _mapper.Map<List<BrandDTO>>(list);
+           
+            return new Response<List<BrandDTO>>(true, null, listDTO);
         }
 
         [HttpGet("{id}")]

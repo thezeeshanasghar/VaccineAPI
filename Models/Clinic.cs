@@ -21,6 +21,8 @@ namespace VaccineAPI.Models
         public long DoctorId { get; set; }
         [JsonIgnore]
         public Doctor Doctor { get; set; }
+        public virtual ICollection<Child> ChildrenCount { get; set; }
+        public virtual ICollection<ClinicTiming> ClinicTimings { get; set; }
          
     }
 

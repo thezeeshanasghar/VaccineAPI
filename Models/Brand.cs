@@ -10,8 +10,7 @@ namespace VaccineAPI.Models
         public long Id { get; set; }
         public string Name { get; set; }
         public long VaccineId { get; set; }
-        [JsonIgnore]
-        public Vaccine Vaccine { get; set; }
+        public virtual Vaccine Vaccine { get; set; }
     }
 
 }

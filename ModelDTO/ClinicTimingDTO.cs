@@ -13,7 +13,7 @@ namespace VaccineAPI.ModelDTO
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
         public string Session { get; set; }
-        public int IsOpen { get; set; }
+        public bool IsOpen { get; set; }
         public long ClinicId { get; set; }
          [JsonIgnore]
         public ClinicDTO Clinic { get; set; }

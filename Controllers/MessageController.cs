@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
+using AutoMapper;
+using VaccineAPI.ModelDTO;
 
 namespace VaccineAPI.Controllers
 {
@@ -13,17 +15,21 @@ namespace VaccineAPI.Controllers
     public class MessageController : ControllerBase
     {
         private readonly Context _db;
+        private readonly IMapper _mapper;
 
-        public MessageController(Context context)
+        public MessageController(Context context, IMapper mapper)
         {
             _db = context;
+            _mapper = mapper;
         }
 
         [HttpGet]
-        public async Task<Response<List<Message>>> GetAll()
+         public async Task<Response<List<MessageDTO>>> GetAll()
         {
-            var list = await _db.Messages.ToListAsync();
-            return new Response<List<Message>>(true, null, list);
+            var list = await _db.Messages.OrderBy(x=>x.Id).ToListAsync();
+            List<MessageDTO> listDTO = _mapper.Map<List<MessageDTO>>(list);
+           
+            return new Response<List<MessageDTO>>(true, null, listDTO);
         }
 
         [HttpGet("{id}")]

@@ -10,21 +10,21 @@ namespace VaccineAPI
         public AutoMapperProfile()
         {
             CreateMap<Vaccine, VaccineDTO>().ReverseMap();
-            CreateMap<Vaccine, UserDTO>().ReverseMap();
-            CreateMap<Vaccine, ScheduleDTO>().ReverseMap();
-            CreateMap<Vaccine, ScheduleBrandDTO>().ReverseMap();
-            CreateMap<Vaccine, MessageDTO>().ReverseMap();
-            CreateMap<Vaccine, FollowUpDTO>().ReverseMap();
-            CreateMap<Vaccine, DoseDTO>().ReverseMap();
-            CreateMap<Vaccine, DoctorScheduleDTO>().ReverseMap();
-            CreateMap<Vaccine, DoctorDTO>().ReverseMap();
-            CreateMap<Vaccine, ClinicTimingDTO>().ReverseMap();
-            CreateMap<Vaccine, ClinicDTO>().ReverseMap();
-            CreateMap<Vaccine, ChildDTO>().ReverseMap();
-            CreateMap<Vaccine, ChangePasswordRequestDTO>().ReverseMap();
-            CreateMap<Vaccine, BrandInventoryDTO>().ReverseMap();
-            CreateMap<Vaccine, BrandDTO>().ReverseMap();
-            CreateMap<Vaccine, BrandAmountDTO>().ReverseMap();
+            CreateMap<User, UserDTO>().ReverseMap();
+            CreateMap<Schedule, ScheduleDTO>().ReverseMap();
+          //  CreateMap<ScheduleBrand, ScheduleBrandDTO>().ReverseMap();
+            CreateMap<Message, MessageDTO>().ReverseMap();
+            CreateMap<FollowUp, FollowUpDTO>().ReverseMap();
+            CreateMap<Dose, DoseDTO>().ReverseMap();
+            CreateMap<DoctorSchedule, DoctorScheduleDTO>().ReverseMap();
+            CreateMap<Doctor, DoctorDTO>().ReverseMap();
+            CreateMap<ClinicTiming, ClinicTimingDTO>().ReverseMap();
+            CreateMap<Clinic, ClinicDTO>().ReverseMap();
+            CreateMap<Child, ChildDTO>().ReverseMap();
+           // CreateMap<ChangePasswordRequest, ChangePasswordRequestDTO>().ReverseMap();
+            CreateMap<BrandInventory, BrandInventoryDTO>().ReverseMap();
+            CreateMap<Brand, BrandDTO>().ReverseMap();
+            CreateMap<BrandAmount, BrandAmountDTO>().ReverseMap();
         }
 
     }

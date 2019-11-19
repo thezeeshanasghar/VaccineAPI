@@ -11,7 +11,7 @@ namespace VaccineAPI.Models
         public string MobileNumber { get; set; }
         public string Password { get; set; }
         public string UserType { get; set; }
-        public int? CountryCode { get; set; }
+        public string CountryCode { get; set; }
         public virtual long DoctorId { get; set; }
         public virtual bool AllowInventory { get; set; }
         public virtual bool AllowInvoice { get; set; }

@@ -5,7 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
-
+using VaccineAPI.ModelDTO;
+using AutoMapper;
 namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
@@ -13,19 +14,23 @@ namespace VaccineAPI.Controllers
     public class UserController : ControllerBase
     {
         private readonly Context _db;
+        private readonly IMapper _mapper;
 
-        public UserController(Context context)
+        public UserController(Context context, IMapper mapper)
         {
             _db = context;
+            _mapper = mapper;
         }
 
         [HttpGet]
-        public async Task<Response<List<User>>> GetAll()
+         public async Task<Response<List<UserDTO>>> GetAll()
         {
-           var list = await _db.Users.ToListAsync();
-           return new Response<List<User>>(true, null, list);
+            var list = await _db.Users.OrderBy(x=>x.Id).ToListAsync();
+            List<UserDTO> listDTO = _mapper.Map<List<UserDTO>>(list);
+           
+            return new Response<List<UserDTO>>(true, null, listDTO);
         }
-
+        
         [HttpGet("{id}")]
         public async Task<Response<User>> GetSingle(long id)
         {

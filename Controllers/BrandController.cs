@@ -25,15 +25,9 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-        // public async Task<Response<List<Brand>>> GetAll()
-        // {
-        //      var list = await _db.Brands.ToListAsync();
-        //     return new Response<List<Brand>>(true, null, list);
-        // }
-
  public async Task<Response<List<BrandDTO>>> GetAll()
         {
-            var list = await _db.Brands.OrderBy(x=>x.Id).ToListAsync();
+            var list = await _db.Brands.Include(x=>x.Vaccine).OrderBy(x=>x.Id).ToListAsync();
             List<BrandDTO> listDTO = _mapper.Map<List<BrandDTO>>(list);
            
             return new Response<List<BrandDTO>>(true, null, listDTO);

@@ -12,7 +12,7 @@ namespace VaccineAPI.Models
         public string Name { get; set; }
         public string FatherName { get; set; }
         public string Email { get; set; }
-        public string DOB { get; set; }
+        public DateTime DOB { get; set; }
         public string Gender  { get; set; }
         public string City  { get; set; }
         public string PreferredDayOfReminder  { get; set; }

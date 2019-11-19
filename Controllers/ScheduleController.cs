@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
+using AutoMapper;
+using VaccineAPI.ModelDTO;
 
 namespace VaccineAPI.Controllers
 {
@@ -13,17 +15,22 @@ namespace VaccineAPI.Controllers
     public class ScheduleController : ControllerBase
     {
         private readonly Context _db;
+        private readonly IMapper _mapper;
 
-        public ScheduleController(Context context)
+        public ScheduleController(Context context, IMapper mapper)
         {
             _db = context;
+            _mapper = mapper;
         }
 
         [HttpGet]
-        public async Task<Response<List<Schedule>>> GetAll()
+       
+         public async Task<Response<List<ScheduleDTO>>> GetAll()
         {
-            var list = await _db.Schedules.ToListAsync();
-            return new Response<List<Schedule>>(true, null, list);
+            var list = await _db.Schedules.OrderBy(x=>x.Id).ToListAsync();
+            List<ScheduleDTO> listDTO = _mapper.Map<List<ScheduleDTO>>(list);
+           
+            return new Response<List<ScheduleDTO>>(true, null, listDTO);
         }
 
         [HttpGet("{id}")]

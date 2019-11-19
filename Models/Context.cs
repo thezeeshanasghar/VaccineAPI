@@ -29,53 +29,73 @@ namespace VaccineAPI.Models
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
                     base.OnModelCreating(modelBuilder);
-                    modelBuilder.Entity< Doctor >() 
-                            .Property(r => r.IsApproved)
+                    modelBuilder.Entity< Doctor >(b=>{ b.Property(r => r.IsApproved)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
                              
-                             modelBuilder.Entity< Doctor >()
-                            .Property(r => r.ShowPhone)
+                            b.Property(r => r.ShowPhone)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
 
-                             modelBuilder.Entity< Doctor >()
-                            .Property(r => r.ShowMobile)
+                             
+                            b.Property(r => r.ShowMobile)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
 
-                              modelBuilder.Entity< Doctor >()
-                            .Property(r => r.AllowInvoice)
+                             
+                            b.Property(r => r.AllowInvoice)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
                              
-                              modelBuilder.Entity< Doctor >()
-                            .Property(r => r.AllowChart)
+                              
+                            b.Property(r => r.AllowChart)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
                              
-                              modelBuilder.Entity< Doctor >()
-                            .Property(r => r.AllowFollowUp)
+                              
+                            b.Property(r => r.AllowFollowUp)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
                              
-                              modelBuilder.Entity< Doctor >()
-                            .Property(r => r.AllowInventory)
+                              
+                            b.Property(r => r.AllowInventory)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
+                            }); 
+                           
 
                               modelBuilder.Entity< ClinicTiming >()
                             .Property(r => r.IsOpen)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
 
-                             modelBuilder.Entity< Child >()
-                            .Property(r => r.IsBrand)
+                              modelBuilder.Entity< Schedule >(b=>{
+                                b.Property(r => r.IsDone)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
                             
-                             modelBuilder.Entity< Child >()
-                            .Property(r => r.IsConsultationFee)
+                        
+                            b.Property(r => r.Due2EPI)
+                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+                              });
+
+                             modelBuilder.Entity< Child >(b=>{
+                                b.Property(r => r.IsBrand)
+                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+                            
+                        
+                            b.Property(r => r.IsConsultationFee)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
 
-                             modelBuilder.Entity< Child >()
-                            .Property(r => r.IsEPIDone)
+                             
+                            b.Property(r => r.IsEPIDone)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
 
-                             modelBuilder.Entity< Child >()
-                            .Property(r => r.IsVerified)
+                             
+                            b.Property(r => r.IsVerified)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
+                             });
+                           
+
+                             modelBuilder.Entity< User >(b=> {
+                               b.Property(r => r.AllowInventory)
+                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+                             
+                              b.Property(r => r.AllowInvoice)
+                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+                             });
+                            
                             
 
                             

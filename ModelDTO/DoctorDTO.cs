@@ -17,6 +17,7 @@ namespace VaccineAPI.ModelDTO
         public bool ShowPhone { get; set; }
         public bool ShowMobile { get; set; }
         public string PhoneNo { get; set; }
+        [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime ValidUpto { get; set; }
         public int? InvoiceNumber { get; set; }
         public string ProfileImage { get; set; }

@@ -15,6 +15,7 @@ namespace VaccineAPI.ModelDTO
         public string StreetAddress { get; set; }
         public string FatherName { get; set; }
         public string Email { get; set; }
+        [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime DOB { get; set; }
 
         public string Gender  { get; set; }
@@ -36,6 +37,7 @@ namespace VaccineAPI.ModelDTO
 
         //To select Vaccine of the child on add-new-child page
         public List<VaccineDTO> ChildVaccines { get; set; }
+        [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime InvoiceDate { get; set; }
         
     }

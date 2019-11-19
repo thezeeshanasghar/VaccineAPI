@@ -10,7 +10,9 @@ namespace VaccineAPI.Models
     {
         public long Id { get; set; }
         public string Disease { get; set; }
+        [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime CurrentVisitDate { get; set; }
+        [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime NextVisitDate { get; set; }
         public float? Weight { get; set; }
         public float? Height { get; set; }

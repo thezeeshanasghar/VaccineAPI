@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
+using AutoMapper;
+using VaccineAPI.ModelDTO;
 
 namespace VaccineAPI.Controllers
 {
@@ -13,27 +15,32 @@ namespace VaccineAPI.Controllers
     public class DoctorController : ControllerBase
     {
         private readonly Context _db;
+        private readonly IMapper _mapper;
 
-        public DoctorController(Context context)
+        public DoctorController(Context context, IMapper mapper)
         {
             _db = context;
+            _mapper = mapper;
         }
 
         [HttpGet]
-        public async Task<Response<List<Doctor>>> GetAll()
+        public async Task<Response<List<DoctorDTO>>> GetAll()
         {
-             var list = await _db.Doctors.ToListAsync();
-            return new Response<List<Doctor>>(true, null, list);
+            var list = await _db.Doctors.OrderBy(x=>x.Id).ToListAsync();
+            List<DoctorDTO> listDTO = _mapper.Map<List<DoctorDTO>>(list);
+           
+            return new Response<List<DoctorDTO>>(true, null, listDTO);
         }
 
         [HttpGet("{id}")]
-        public async Task<Response<Doctor>> GetSingle(long id)
+        public async Task<Response<DoctorDTO>> GetSingle(long id)
         {
             var single = await _db.Doctors.FindAsync(id);
+            
             if (single == null)
-                return new Response<Doctor>(false, "Not Found", null);
+                return new Response<DoctorDTO>(false, "Not Found", null);
            
-                 return new Response<Doctor>(true, null, single);
+                 return new Response<DoctorDTO>(true, null, singleDTO);
         }
 
         [HttpPost]

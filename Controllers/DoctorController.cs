@@ -33,24 +33,55 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<Response<DoctorDTO>> GetSingle(long id)
+       public async Task<Response<DoctorDTO>> GetSingle(long id)
         {
-            var single = await _db.Doctors.FindAsync(id);
             
-            if (single == null)
-                return new Response<DoctorDTO>(false, "Not Found", null);
+        
+            var dbdoctor = await _db.Doctors.Include(x=>x.Clinics).FirstOrDefaultAsync();
+            DoctorDTO doctorDTO = _mapper.Map<DoctorDTO>(dbdoctor);
            
-                 return new Response<DoctorDTO>(true, null, singleDTO);
+            if (dbdoctor == null)
+            return new Response<DoctorDTO>(false, "Not Found", null);
+           
+            return new Response<DoctorDTO>(true, null, doctorDTO);
         }
 
-        [HttpPost]
-        public async Task<ActionResult<Doctor>> Post(Doctor Doctor)
+          [HttpGet("approved")]
+       public async Task<Response<List<DoctorDTO>>> GetApproved()
         {
-            _db.Doctors.Update(Doctor);
-            await _db.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetSingle), new { id = Doctor.Id }, Doctor);
+            
+        
+            var dbdoctor = await _db.Doctors.Where(x=> x.IsApproved == true).Include(x=>x.Clinics).ToListAsync();
+            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
+           
+            if (dbdoctor == null)
+            return new Response<List<DoctorDTO>>(false, "Not Found", null);
+           
+            return new Response<List<DoctorDTO>>(true, null, doctorDTO);
         }
+
+         [HttpGet("unapproved")]
+       public async Task<Response<List<DoctorDTO>>> GetUnApproved()
+        {
+            
+        
+            var dbdoctor = await _db.Doctors.Where(x=> x.IsApproved == false).Include(x=>x.Clinics).ToListAsync();
+            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
+           
+            if (dbdoctor == null)
+            return new Response<List<DoctorDTO>>(false, "Not Found", null);
+           
+            return new Response<List<DoctorDTO>>(true, null, doctorDTO);
+        }
+
+        // [HttpPost]
+        // public async Task<ActionResult<Doctor>> Post(Doctor Doctor)
+        // {
+        //     _db.Doctors.Update(Doctor);
+        //     await _db.SaveChangesAsync();
+
+        //   //  return CreatedAtAction(nameof(GetSingle), new { id = Doctor.Id }, Doctor);
+        // }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Put(long id, Doctor Doctor)

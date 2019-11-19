@@ -25,12 +25,6 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-        // public async Task<Response<List<Dose>>> GetAll()
-        // {
-        //     var list = await _db.Doses.ToListAsync();
-        //     return new Response<List<Dose>>(true, null, list);
-        // }
-
         public async Task<Response<List<DoseDTO>>> GetAll()
         {
             var list = await _db.Doses.OrderBy(x=>x.Id).ToListAsync();
@@ -40,13 +34,16 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<Response<Dose>> GetSingle(long id)
+        public async Task<Response<DoseDTO>> GetSingle(long id)
         {
-            var single = await _db.Doses.FindAsync(id);
-            if (single == null)
-              return new Response<Dose>(false, "Not Found", null);
+            var dbdose = await _db.Doses.FirstOrDefaultAsync();
+
+           DoseDTO doseDTO = _mapper.Map<DoseDTO>(dbdose);
            
-                 return new Response<Dose>(true, null, single);
+            if (dbdose == null)
+            return new Response<DoseDTO>(false, "Not Found", null);
+           
+            return new Response<DoseDTO>(true, null, doseDTO);
         }
 
         [HttpPost]

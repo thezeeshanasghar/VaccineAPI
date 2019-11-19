@@ -42,15 +42,51 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<Response<Vaccine>> GetSingle(long id)
+        public async Task<Response<VaccineDTO>> GetSingle(long id)
         {
             
-            var vaccine = await _db.Vaccines.FindAsync(id);
+        
+            var dbvaccine = await _db.Vaccines.FindAsync(id);
+            VaccineDTO vaccineDTO = _mapper.Map<VaccineDTO>(dbvaccine);
            
-            if (vaccine == null)
-            return new Response<Vaccine>(false, "Not Found", null);
+            if (dbvaccine == null)
+            return new Response<VaccineDTO>(false, "Not Found", null);
            
-            return new Response<Vaccine>(true, null, vaccine);
+            return new Response<VaccineDTO>(true, null, vaccineDTO);
+        }
+
+         [HttpGet("{id}/dosses")]
+        public async Task<Response<List<DoseDTO>>> GetDosses(long id)
+        {
+            
+        
+            var dbvaccine = await _db.Vaccines.Include(x=>x.Doses).FirstOrDefaultAsync(x=> x.Id == id);
+           
+            if (dbvaccine == null)
+            return new Response<List<DoseDTO>>(false, "Vaccine Not Found", null);
+           
+           else {
+               var dbDosses = dbvaccine.Doses;
+            var dossesDTOs = _mapper.Map<List<DoseDTO>>(dbDosses);
+            return new Response<List<DoseDTO>>(true, null, dossesDTOs);
+           }
+        }
+
+         [HttpGet("{id}/brands")]
+        public async Task<Response<List<BrandDTO>>> GetBrands(long id)
+        {
+            
+        
+            var dbvaccine = await _db.Vaccines.Include(x=>x.Brands).FirstOrDefaultAsync(x=> x.Id == id);
+           
+            if (dbvaccine == null)
+            return new Response<List<BrandDTO>>(false, "Vaccine Not Found", null);
+           
+           else {
+               var dbBrands = dbvaccine.Brands;
+            var brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
+            return new Response<List<BrandDTO>>(true, null, brandDTOs);
+           }
         }
 
         [HttpPost]

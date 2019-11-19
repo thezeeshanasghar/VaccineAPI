@@ -34,13 +34,16 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<Response<Brand>> GetSingle(long id)
+        public async Task<Response<BrandDTO>> GetSingle(long id)
         {
-            var single = await _db.Brands.FindAsync(id);
-            if (single == null)
-                return new Response<Brand>(false, "Not Found", null);
+            var dbbrand = await _db.Brands.Include(x=>x.Vaccine).FirstOrDefaultAsync();
+
+           BrandDTO brandDTO = _mapper.Map<BrandDTO>(dbbrand);
            
-                 return new Response<Brand>(true, null, single);
+            if (dbbrand == null)
+            return new Response<BrandDTO>(false, "Not Found", null);
+           
+            return new Response<BrandDTO>(true, null, brandDTO);
         }
 
         [HttpPost]

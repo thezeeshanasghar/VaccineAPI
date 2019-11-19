@@ -26,14 +26,17 @@ namespace VaccineAPI.Models
         public bool AllowChart { get; set; }
         public bool AllowFollowUp { get; set; }
         public bool AllowInventory { get; set; }
-        public int SmsLimit { get; set; }
+        public int SMSLimit { get; set; }
         public string DoctorType { get; set; }
         public string Qualification { get; set; }
         public string AdditionalInfo { get; set; }
         public long UserId { get; set; }
         public virtual string Speciality { get; set; }
-        public virtual ICollection<Clinic> Clinics { get; set; }
-        public virtual ICollection<Child> Childs { get; set; }
+         public virtual ICollection<Clinic> Clinics { get; set; }
+         public virtual ICollection<Child> Childs { get; set; }
+
+        // public virtual Clinic Clinics { get; set; }
+        //public virtual Child Childs { get; set; }
         
     }
 

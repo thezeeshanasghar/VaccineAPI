@@ -16,13 +16,13 @@ namespace VaccineAPI.Models
         public float Lat { get; set; }
         public float Long { get; set; }
         public string PhoneNumber { get; set; }
-        public int IsOnline { get; set; }
+        public bool IsOnline { get; set; }
         public string Address { get; set; }
         public long DoctorId { get; set; }
-        [JsonIgnore]
+       // [JsonIgnore]
         public Doctor Doctor { get; set; }
         public virtual ICollection<Child> ChildrenCount { get; set; }
-        public virtual ICollection<ClinicTiming> ClinicTimings { get; set; }
+        public ClinicTiming ClinicTimings { get; set; }
          
     }
 

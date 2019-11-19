@@ -57,9 +57,10 @@ namespace VaccineAPI.Models
                             }); 
                            
 
-                              modelBuilder.Entity< ClinicTiming >()
-                            .Property(r => r.IsOpen)
+                              modelBuilder.Entity< Clinic>()
+                            .Property(r => r.IsOnline)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
+
 
                               modelBuilder.Entity< Schedule >(b=>{
                                 b.Property(r => r.IsDone)

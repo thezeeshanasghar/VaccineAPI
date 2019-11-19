@@ -12,11 +12,14 @@ namespace VaccineAPI.ModelDTO
         public string FirstName { get; set; }
         public string LastName { get; set; }
         public string Email { get; set; }
+         public string CountryCode { get; set; }
+        public string MobileNumber { get; set; }
+        public string PhoneNo { get; set; }
+        public string Password { get; set; }
         public string PMDC { get; set; }
         public bool IsApproved { get; set; }
         public bool ShowPhone { get; set; }
         public bool ShowMobile { get; set; }
-        public string PhoneNo { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime ValidUpto { get; set; }
         public int? InvoiceNumber { get; set; }
@@ -27,19 +30,19 @@ namespace VaccineAPI.ModelDTO
         public bool AllowChart { get; set; }
         public bool AllowFollowUp { get; set; }
         public bool AllowInventory { get; set; }
-        public int SmsLimit { get; set; }
+        public int SMSLimit { get; set; }
         public string DoctorType { get; set; }
         public string Qualification { get; set; }
         public string AdditionalInfo { get; set; }
-        public long UserId { get; set; }
-         [JsonIgnore]
-        public UserDTO User { get; set; }
+        // public long UserId { get; set; }
+        //  [JsonIgnore]
+        // public UserDTO User { get; set; }
 
-        public string[] Speciality { get; set; }
+        public string Speciality { get; set; }
 
         public ClinicDTO ClinicDTO { get; set; }
-       // public List<ClinicDTO> Clinics { get; set; }
-        public ClinicDTO Clinics { get; set; }
+        public List<ClinicDTO> Clinics { get; set; }
+        //public ClinicDTO Clinics { get; set; }
 
         //to show child info on change doctor page
         public ChildDTO ChildDTO { get; set; }

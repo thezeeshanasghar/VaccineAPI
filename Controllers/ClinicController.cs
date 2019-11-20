@@ -27,19 +27,23 @@ namespace VaccineAPI.Controllers
          public async Task<Response<List<ClinicDTO>>> GetAll()
         {
             var list = await _db.Clinics.Include(x=>x.ClinicTimings).OrderBy(x=>x.Id).ToListAsync();
+            //var list = await _db.Clinics.OrderBy(x=>x.Id).ToListAsync();
             List<ClinicDTO> listDTO = _mapper.Map<List<ClinicDTO>>(list);
            
             return new Response<List<ClinicDTO>>(true, null, listDTO);
         }
 
         [HttpGet("{id}")]
-        public async Task<Response<Clinic>> GetSingle(long id)
+      public async Task<Response<ClinicDTO>> GetSingle(long id)
         {
-            var single = await _db.Clinics.FindAsync(id);
-            if (single == null)
-                 return new Response<Clinic>(false, "Not Found", null);
+            var dbclinic = await _db.Clinics.Include(x=>x.ClinicTimings).FirstOrDefaultAsync();
+
+           ClinicDTO clinicDTO = _mapper.Map<ClinicDTO>(dbclinic);
            
-                 return new Response<Clinic>(true, null, single);
+            if (dbclinic == null)
+            return new Response<ClinicDTO>(false, "Not Found", null);
+           
+            return new Response<ClinicDTO>(true, null, clinicDTO);
         }
 
         [HttpPost]

@@ -95,6 +95,44 @@ namespace VaccineAPI.Controllers
             return NoContent();
         }
 
+       [HttpPut("{id}/update-permission")]
+        public Response<DoctorDTO> Put(int Id, DoctorDTO doctorDTO)
+        {
+             var dbDoctor = _db.Doctors.Where(c => c.Id == Id).FirstOrDefault();
+                    // dbDoctor.FirstName = doctorDTO.FirstName;
+                    // dbDoctor.LastName = doctorDTO.LastName;
+                    // dbDoctor.DisplayName = doctorDTO.DisplayName;
+                    // dbDoctor.IsApproved = doctorDTO.IsApproved;
+                    // dbDoctor.Email = doctorDTO.Email;
+                    // dbDoctor.PMDC = doctorDTO.PMDC;
+                    // dbDoctor.PhoneNo = doctorDTO.PhoneNo;
+                    // dbDoctor.ShowPhone = doctorDTO.ShowPhone;
+                    // dbDoctor.ShowMobile = doctorDTO.ShowMobile;
+                    // dbDoctor.Qualification = doctorDTO.Qualification;
+                    // dbDoctor.AdditionalInfo = doctorDTO.AdditionalInfo;
+                    // dbDoctor.AllowInvoice = doctorDTO.AllowInvoice;
+                    // dbDoctor.AllowFollowUp = doctorDTO.AllowFollowUp;
+                    // dbDoctor.AllowChart = doctorDTO.AllowChart;
+                    // dbDoctor.AllowInventory = doctorDTO.AllowInventory;   
+                    dbDoctor.AllowInvoice = doctorDTO.AllowInvoice;
+                    dbDoctor.AllowFollowUp = doctorDTO.AllowFollowUp;
+                     dbDoctor.AllowChart = doctorDTO.AllowChart;
+                     dbDoctor.AllowInventory = doctorDTO.AllowInventory;
+                    _db.SaveChanges();
+                    dbDoctor = _mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
+                    return new Response<DoctorDTO>(true, null, doctorDTO);
+        }
+       
+        [HttpPut("{id}/validUpto")]
+        public Response<DoctorDTO> ChangeValidity(int Id, DoctorDTO doctorDTO)
+        {
+                    var dbDoctor = _db.Doctors.Where(x => x.Id == Id).FirstOrDefault();
+                    dbDoctor.ValidUpto = doctorDTO.ValidUpto;
+                    _db.SaveChanges();
+                    DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
+                    return new Response<DoctorDTO>(true, null, doctorDTOs);
+                }
+       
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

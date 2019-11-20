@@ -22,7 +22,7 @@ namespace VaccineAPI.Models
        // [JsonIgnore]
         public Doctor Doctor { get; set; }
         public virtual ICollection<Child> ChildrenCount { get; set; }
-        public ClinicTiming ClinicTimings { get; set; }
+        public virtual ICollection<ClinicTiming> ClinicTimings { get; set; }
          
     }
 

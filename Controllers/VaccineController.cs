@@ -27,7 +27,7 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public async Task<Response<List<VaccineDTO>>> GetAll()
         {
-            var list = await _db.Vaccines.OrderBy(x=>x.MinAge).ToListAsync();
+            var list = await _db.Vaccines.Include(x=>x.Brands).Include(x=>x.Doses).OrderBy(x=>x.MinAge).ToListAsync();
             List<VaccineDTO> listDTO = _mapper.Map<List<VaccineDTO>>(list);
             foreach(var dto in listDTO)
             {
@@ -36,6 +36,11 @@ namespace VaccineAPI.Controllers
                     dto.NumOfBrands = vaccine.Brands.Count();
                 else
                     dto.NumOfBrands =0;
+                 
+                if(vaccine.Doses!=null)
+                    dto.NumOfDoses = vaccine.Doses.Count();
+                else
+                    dto.NumOfDoses =0;
                 // dto.NumOfDoses = _db.Vaccines.Where(x => x.Id == dto.Id).First().Doses.Count();
             }
             return new Response<List<VaccineDTO>>(true, null, listDTO);
@@ -99,29 +104,34 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, Vaccine Vaccine)
+        public  Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)
         {
-            if (id != Vaccine.Id)
-                return BadRequest();
-
-            _db.Entry(Vaccine).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+             var dbVaccine =  _db.Vaccines.Where(x=>x.Id == id).FirstOrDefaultAsync();
+                    VaccineDTO vaccineDTOs = _mapper.Map<VaccineDTO>(dbVaccine);
+                    _db.SaveChanges();
+                    return new Response<VaccineDTO>(true, null, vaccineDTOs);
         }
+
+       
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public async Task<Response<string>> Delete(long id)
+
         {
-            var obj = await _db.Vaccines.FindAsync(id);
-
-            if (obj == null)
-                return NotFound();
-
-            _db.Vaccines.Remove(obj);
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+                    var dbVaccine = await _db.Vaccines.FindAsync(id);
+                    // if (dbVaccine.Brands.Count > 0)
+                    //     return new Response<string>(false, "Cannot delete vaccine because it's brands exists. Delete the brands first", null);
+                    
+                    // if (dbVaccine.Doses.Count > 0)
+                    //     return new Response<string>(false, "Cannot delete vaccine because it's Doses exists. Delete the Doses first", null);
+                    
+                    _db.Vaccines.Remove(dbVaccine);
+                    _db.SaveChanges();
+                    return new Response<string>(true, null, "record deleted");
+                
+            }
+            
         }
+      
     }
-}
+

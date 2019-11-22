@@ -46,39 +46,32 @@ namespace VaccineAPI.Controllers
             return new Response<BrandDTO>(true, null, brandDTO);
         }
 
-        [HttpPost]
-        public async Task<ActionResult<Brand>> Post(Brand Brand)
+        [HttpPost("{vaccineId}")]
+        public Response<BrandDTO> Post(BrandDTO vaccineBrandDTO)
         {
-            _db.Brands.Update(Brand);
-            await _db.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetSingle), new { id = Brand.Id }, Brand);
+             Brand dbVaccineBrand = _mapper.Map<Brand>(vaccineBrandDTO);
+                    _db.Brands.Add(dbVaccineBrand);
+                    _db.SaveChanges();
+                    vaccineBrandDTO.Id = dbVaccineBrand.Id;
+                    return new Response<BrandDTO>(true, null, vaccineBrandDTO);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, Brand Brand)
+        public Response<BrandDTO> Put(int Id, BrandDTO vaccineBrandDTO)
         {
-            if (id != Brand.Id)
-                return BadRequest();
-
-            _db.Entry(Brand).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+             var dbVaccineBrand = _db.Brands.Where(c => c.Id == Id).FirstOrDefault();
+                    dbVaccineBrand.Name = vaccineBrandDTO.Name;
+                    _db.SaveChanges();
+                    return new Response<BrandDTO>(true, null, vaccineBrandDTO);
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public Response<string> Delete(int Id)
         {
-            var obj = await _db.Brands.FindAsync(id);
-
-            if (obj == null)
-                return NotFound();
-
-            _db.Brands.Remove(obj);
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+           var dbVaccineBrand = _db.Brands.Where(c => c.Id == Id).FirstOrDefault();
+                    _db.Brands.Remove(dbVaccineBrand);
+                    _db.SaveChanges();
+                    return new Response<string>(true, null, "record deleted");
         }
     }
 }

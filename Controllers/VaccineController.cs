@@ -17,7 +17,20 @@ namespace VaccineAPI.Controllers
         private readonly Context _db;
         private readonly IMapper _mapper;
 
-
+//   public static string GetMessageFromExceptionObject(Exception ex)
+//         {
+            
+//             String message = ex.Message;
+//             if(ex is DbEntityValidationException)
+//             {
+//                 var errorMessages = ((DbEntityValidationException)ex).EntityValidationErrors.SelectMany(x => x.ValidationErrors).Select(x => x.ErrorMessage);
+//                 var fullErrorMessage = string.Join("; ", errorMessages);
+//                 return string.Concat(ex.Message, "<br />The validation errors are: ", fullErrorMessage);
+//             }
+//             message += (ex.InnerException != null) ? ("<br />" + ex.InnerException.Message) : "";
+//             message += (ex.InnerException != null && ex.InnerException.InnerException != null) ? ("<br />" + ex.InnerException.InnerException.Message) : "";
+//             return message;
+//         }
         public VaccineController(Context context, IMapper mapper)
         {
             _db = context;
@@ -51,9 +64,10 @@ namespace VaccineAPI.Controllers
         {
             
         
-            var dbvaccine = await _db.Vaccines.FindAsync(id);
+            var dbvaccine = await _db.Vaccines.Include(X=>X.Doses).Include(x=>x.Brands).Where(x=>x.Id == id).FirstOrDefaultAsync();
             VaccineDTO vaccineDTO = _mapper.Map<VaccineDTO>(dbvaccine);
-           
+           vaccineDTO.NumOfBrands = dbvaccine.Brands.Count();
+           vaccineDTO.NumOfDoses = dbvaccine.Doses.Count();
             if (dbvaccine == null)
             return new Response<VaccineDTO>(false, "Not Found", null);
            
@@ -106,28 +120,39 @@ namespace VaccineAPI.Controllers
         [HttpPut("{id}")]
         public  Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)
         {
-             var dbVaccine =  _db.Vaccines.Where(x=>x.Id == id).FirstOrDefaultAsync();
-                    VaccineDTO vaccineDTOs = _mapper.Map<VaccineDTO>(dbVaccine);
-                    _db.SaveChanges();
-                    return new Response<VaccineDTO>(true, null, vaccineDTOs);
+             var dbVaccine =  _db.Vaccines.Where(x=>x.Id == id).FirstOrDefault();
+                    //VaccineDTO vaccineDTOs = _mapper.Map<VaccineDTO>(dbVaccine);
+                   //  dbVaccine = Mapper.Map<VaccineDTO, Vaccine>(vaccineDTO, dbVaccine);
+                    dbVaccine.Name = vaccineDTO.Name;
+                    dbVaccine.MinAge = vaccineDTO.MinAge;
+                    dbVaccine.MaxAge = vaccineDTO.MaxAge;
+                     _db.SaveChanges();
+                     return new Response<VaccineDTO>(true, null, vaccineDTO);
+
         }
 
        
 
         [HttpDelete("{id}")]
-        public async Task<Response<string>> Delete(long id)
+        public  Response<string> Delete(long id)
 
         {
-                    var dbVaccine = await _db.Vaccines.FindAsync(id);
-                    // if (dbVaccine.Brands.Count > 0)
-                    //     return new Response<string>(false, "Cannot delete vaccine because it's brands exists. Delete the brands first", null);
-                    
-                    // if (dbVaccine.Doses.Count > 0)
-                    //     return new Response<string>(false, "Cannot delete vaccine because it's Doses exists. Delete the Doses first", null);
-                    
+            //try {
+                    var dbVaccine =  _db.Vaccines.Include(X=>X.Doses).Include(x=>x.Brands).Where(x=>x.Id == id).FirstOrDefault();
+                    if (dbVaccine.Brands.Count > 0)
+                        return new Response<string>(false, "Cannot delete vaccine because it's brands exists. Delete the brands first", null); 
+                     else if (dbVaccine.Doses.Count > 0)
+                       return new Response<string>(false, "Cannot delete vaccine because it's Doses exists. Delete the Doses first", null);
                     _db.Vaccines.Remove(dbVaccine);
                     _db.SaveChanges();
                     return new Response<string>(true, null, "record deleted");
+            //    }
+            //    catch (Exception ex)
+           // {
+                // if (ex.InnerException.InnerException.Message.Contains("The DELETE statement conflicted with the REFERENCE constraint"))
+                //     return new Response<string>(false, "Cannot delete vaccine because it's doses exists. Delete the doses first.", null);
+                
+           // }
                 
             }
             

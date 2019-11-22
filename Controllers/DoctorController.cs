@@ -110,16 +110,12 @@ namespace VaccineAPI.Controllers
                     // dbDoctor.ShowMobile = doctorDTO.ShowMobile;
                     // dbDoctor.Qualification = doctorDTO.Qualification;
                     // dbDoctor.AdditionalInfo = doctorDTO.AdditionalInfo;
-                    // dbDoctor.AllowInvoice = doctorDTO.AllowInvoice;
-                    // dbDoctor.AllowFollowUp = doctorDTO.AllowFollowUp;
-                    // dbDoctor.AllowChart = doctorDTO.AllowChart;
-                    // dbDoctor.AllowInventory = doctorDTO.AllowInventory;   
                     dbDoctor.AllowInvoice = doctorDTO.AllowInvoice;
                     dbDoctor.AllowFollowUp = doctorDTO.AllowFollowUp;
                      dbDoctor.AllowChart = doctorDTO.AllowChart;
                      dbDoctor.AllowInventory = doctorDTO.AllowInventory;
                     _db.SaveChanges();
-                    dbDoctor = _mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
+                  //  dbDoctor = _mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
                     return new Response<DoctorDTO>(true, null, doctorDTO);
         }
        
@@ -131,6 +127,38 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
                     DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
                     return new Response<DoctorDTO>(true, null, doctorDTOs);
+                }
+
+         [HttpGet("approve/{id}")]
+        public Response<string> ApproveDoctor(int id)
+        {
+                    var dbDoctor = _db.Doctors.Where(x => x.Id == id).FirstOrDefault();
+                    dbDoctor.IsApproved = true ;
+                    dbDoctor.ValidUpto = DateTime.UtcNow.AddHours(5).AddMonths(3);
+                    _db.SaveChanges();
+                     var vaccines = _db.Vaccines.Include(x=>x.Brands).ToList();
+                    foreach (var vaccine in vaccines)
+                    {
+                        // add default brands amount and inventory count of doctor
+                        var brands = vaccine.Brands;
+                        foreach (var brand in brands)
+                        {
+                            BrandAmount ba = new BrandAmount();
+                            ba.Amount = 0;
+                            ba.DoctorId = dbDoctor.Id;
+                            ba.BrandId = brand.Id;
+                            _db.BrandAmounts.Add(ba);
+
+                            BrandInventory bi = new BrandInventory();
+                            bi.Count = 0;
+                            bi.DoctorId = dbDoctor.Id;
+                            bi.BrandId = brand.Id;
+                           _db.BrandInventorys.Add(bi);
+                            _db.SaveChanges();
+                        }
+                    }
+                   // DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
+                    return new Response<string>(true, null, "approved");
                 }
        
         [HttpDelete("{id}")]

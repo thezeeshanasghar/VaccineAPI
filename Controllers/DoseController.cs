@@ -47,38 +47,35 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Dose>> Post(Dose Dose)
+        public Response<DoseDTO> Post(DoseDTO doseDTO)
         {
-            _db.Doses.Update(Dose);
-            await _db.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetSingle), new { id = Dose.Id }, Dose);
+             Dose doseDb = _mapper.Map<Dose>(doseDTO);
+                    _db.Doses.Add(doseDb);
+                    _db.SaveChanges();
+                    doseDTO.Id = doseDb.Id;
+                    return new Response<DoseDTO>(true, null, doseDTO);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, Dose Dose)
+        public Response<DoseDTO> Put(int Id, DoseDTO doseDTO)
         {
-            if (id != Dose.Id)
-                return BadRequest();
-
-            _db.Entry(Dose).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+            var dbDose = _db.Doses.Where(c => c.Id == Id).FirstOrDefault();
+                    dbDose.Name = doseDTO.Name;
+                    dbDose.MinAge = doseDTO.MinAge;
+                    dbDose.MaxAge = doseDTO.MaxAge;
+                    dbDose.MinGap = doseDTO.MinGap;
+                    dbDose.DoseOrder = doseDTO.DoseOrder;
+                    _db.SaveChanges();
+                    return new Response<DoseDTO>(true, null, doseDTO);
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public Response<string> Delete(int Id)
         {
-            var obj = await _db.Doses.FindAsync(id);
-
-            if (obj == null)
-                return NotFound();
-
-            _db.Doses.Remove(obj);
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+            var dbDose = _db.Doses.Where(c => c.Id == Id).FirstOrDefault();
+                    _db.Doses.Remove(dbDose);
+                    _db.SaveChanges();
+                    return new Response<string>(true, null, "record deleted");
         }
     }
 }

@@ -34,6 +34,7 @@ namespace VaccineAPI.Models
         public virtual string Speciality { get; set; }
          public virtual ICollection<Clinic> Clinics { get; set; }
          public virtual ICollection<Child> Childs { get; set; }
+         public virtual User User { get; set; }
 
         // public virtual Clinic Clinics { get; set; }
         //public virtual Child Childs { get; set; }

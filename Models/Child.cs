@@ -12,7 +12,8 @@ namespace VaccineAPI.Models
         public string Name { get; set; }
         public string FatherName { get; set; }
         public string Email { get; set; }
-        public DateTime DOB { get; set; }
+        public System.DateTime DOB { get; set; }
+       // public string DOB { get; set; }
         public string Gender  { get; set; }
         public string City  { get; set; }
         public string PreferredDayOfReminder  { get; set; }
@@ -35,7 +36,13 @@ namespace VaccineAPI.Models
         public virtual bool IsBrand { get; set; }
         public virtual bool IsConsultationFee { get; set; }
         public virtual ICollection<Vaccine> ChildVaccines {get; set; } 
-        public virtual DateTime InvoiceDate {get; set;}
+        public virtual System.DateTime InvoiceDate {get; set;}
+       // public virtual string InvoiceDate {get; set;}
+         
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        public virtual ICollection<FollowUp> FollowUps { get; set; }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        public virtual ICollection<Schedule> Schedules { get; set; }
         
     }
 

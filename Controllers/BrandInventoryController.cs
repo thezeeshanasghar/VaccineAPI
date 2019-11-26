@@ -24,43 +24,54 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-        public async Task<Response<List<BrandInventoryDTO>>> GetAll()
+       public Response<List<BrandInventoryDTO>> GetTest(int Id)
         {
-            var list = await _db.BrandInventorys.OrderBy(x=>x.Id).ToListAsync();
-            List<BrandInventoryDTO> listDTO = _mapper.Map<List<BrandInventoryDTO>>(list);
+            List<BrandInventory> vaccineInventoryDBs = _db.BrandInventorys.Include("Brand").Include("Doctor").Where(x => x.DoctorId == Id).ToList();
+                    if (vaccineInventoryDBs == null || vaccineInventoryDBs.Count() == 0)
+                        return new Response<List<BrandInventoryDTO>>(false, "brand inventory not found", null);
+
+                    List<BrandInventoryDTO> VaccineInventoryDTOs = _mapper.Map<List<BrandInventoryDTO>>(vaccineInventoryDBs);
+                    foreach (BrandInventoryDTO brandInventoryDTO in VaccineInventoryDTOs)
+                        brandInventoryDTO.VaccineName = _db.Brands.Where(x => x.Id == brandInventoryDTO.BrandId).FirstOrDefault().Vaccine.Name;
+                    return new Response<List<BrandInventoryDTO>>(true, null, VaccineInventoryDTOs);
            
-            return new Response<List<BrandInventoryDTO>>(true, null, listDTO);
         }
 
-        [HttpGet("{id}")]
-        public async Task<Response<BrandInventory>> GetSingle(long id)
+        [HttpGet("{Id}")]
+       public Response<List<BrandInventoryDTO>> Get(int Id)
         {
-            var single = await _db.BrandInventorys.FindAsync(id);
-            if (single == null)
-                 return new Response<BrandInventory>(false, "Not Found", null);
+            List<BrandInventory> vaccineInventoryDBs = _db.BrandInventorys.Include("Brand").Include("Doctor").Where(x => x.DoctorId == Id).ToList();
+                    if (vaccineInventoryDBs == null || vaccineInventoryDBs.Count() == 0)
+                        return new Response<List<BrandInventoryDTO>>(false, "brand inventory not found", null);
+
+                    List<BrandInventoryDTO> VaccineInventoryDTOs = _mapper.Map<List<BrandInventoryDTO>>(vaccineInventoryDBs);
+                    foreach (BrandInventoryDTO brandInventoryDTO in VaccineInventoryDTOs)
+                        brandInventoryDTO.VaccineName = _db.Brands.Include(x=>x.Vaccine).Where(x => x.Id == brandInventoryDTO.BrandId).FirstOrDefault().Vaccine.Name;
+                    return new Response<List<BrandInventoryDTO>>(true, null, VaccineInventoryDTOs);
            
-                 return new Response<BrandInventory>(true, null, single);
         }
 
-        [HttpPost]
-        public async Task<ActionResult<BrandInventory>> Post(BrandInventory BrandInventory)
-        {
-            _db.BrandInventorys.Update(BrandInventory);
-            await _db.SaveChangesAsync();
+        // [HttpPost]
+        // public async Task<ActionResult<BrandInventory>> Post(BrandInventory BrandInventory)
+        // {
+        //     _db.BrandInventorys.Update(BrandInventory);
+        //     await _db.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetSingle), new { id = BrandInventory.Id }, BrandInventory);
-        }
+        //     return CreatedAtAction(nameof(GetSingle), new { id = BrandInventory.Id }, BrandInventory);
+        // }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, BrandInventory BrandInventory)
+       public Response<List<BrandInventoryDTO>> Put([FromBody] List<BrandInventoryDTO> vaccineInventoryDTOs)
         {
-            if (id != BrandInventory.Id)
-                return BadRequest();
+             foreach (var vaccineInventoryDTO in vaccineInventoryDTOs)
+                    {
+                        var vaccineInventoryDB = _db.BrandInventorys.Where(c => c.Id == vaccineInventoryDTO.Id).FirstOrDefault();
+                        vaccineInventoryDB.Count = vaccineInventoryDTO.Count;
+                        _db.SaveChanges();
+                    }
 
-            _db.Entry(BrandInventory).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
 
-            return NoContent();
+                    return new Response<List<BrandInventoryDTO>>(true, null, vaccineInventoryDTOs);
         }
 
         [HttpDelete("{id}")]

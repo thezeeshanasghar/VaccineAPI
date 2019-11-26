@@ -16,7 +16,7 @@ namespace VaccineAPI.Models
         public float? Circle { get; set; }
         public bool IsDone { get; set; }
         public bool Due2EPI { get; set; }
-        public DateTime GivenDate { get; set; }
+        public DateTime? GivenDate { get; set; }
          public long? BrandId { get; set; }
         [JsonIgnore]
         public Brand Brand { get; set; }
@@ -25,7 +25,7 @@ namespace VaccineAPI.Models
         [JsonIgnore]
         public Child Child { get; set; }
        
-        public int DoseId { get; set; }
+        public long DoseId { get; set; }
         [JsonIgnore]
         public Dose Dose { get; set; }
         public virtual DateTime FromDate { get; set; }

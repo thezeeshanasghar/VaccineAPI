@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using AutoMapper;
 using VaccineAPI.ModelDTO;
+using System.Globalization;
 
 namespace VaccineAPI.Controllers
 {
@@ -47,38 +48,97 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Clinic>> Post(Clinic Clinic)
+          public Response<ClinicDTO> Post([FromBody] ClinicDTO clinicDTO)
         {
-            _db.Clinics.Update(Clinic);
-            await _db.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetSingle), new { id = Clinic.Id }, Clinic);
+            TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
+                clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
+                {
+                    Clinic clinicDb = Mapper.Map<Clinic>(clinicDTO);
+                    _db.Clinics.Add(clinicDb);
+                    _db.SaveChanges();
+                    clinicDTO.Id = clinicDb.Id; 
+                    return new Response<ClinicDTO>(true, null, clinicDTO);
+                }
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, Clinic Clinic)
+          public Response<ClinicDTO> Put(int Id, ClinicDTO clinicDTO)
         {
-            if (id != Clinic.Id)
-                return BadRequest();
-
-            _db.Entry(Clinic).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+            TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
+                clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
+                
+                {
+                    var dbClinic = _db.Clinics.Where(c => c.Id == Id).FirstOrDefault();
+                    clinicDTO.IsOnline = false;
+                    dbClinic.Name = clinicDTO.Name;
+                    dbClinic.ConsultationFee = clinicDTO.ConsultationFee;
+                    dbClinic.PhoneNumber = clinicDTO.PhoneNumber;
+                    dbClinic.Lat = clinicDTO.Lat;
+                    dbClinic.Long = clinicDTO.Long;
+                    dbClinic.Address = clinicDTO.Address;
+                    _db.SaveChanges();
+                    foreach (var clinicTiming in clinicDTO.ClinicTimings)
+                    {
+                        ClinicTiming dbClinicTiming = _db.ClinicTimings.Where(x => x.Id == clinicTiming.Id).FirstOrDefault();
+                        if (dbClinicTiming != null)
+                        {
+                            dbClinicTiming.ClinicId = Id;
+                            dbClinicTiming.Day = clinicTiming.Day;
+                            dbClinicTiming.StartTime = clinicTiming.StartTime;
+                            dbClinicTiming.EndTime = clinicTiming.EndTime;
+                            dbClinicTiming.Session = clinicTiming.Session;
+                            dbClinicTiming.IsOpen = clinicTiming.IsOpen;
+                        }
+                        else if (dbClinicTiming == null && clinicTiming.IsOpen)
+                        {
+                            ClinicTiming newClinicTiming = new ClinicTiming();
+                            newClinicTiming.ClinicId = Id;
+                            newClinicTiming.Day = clinicTiming.Day;
+                            newClinicTiming.StartTime = clinicTiming.StartTime;
+                            newClinicTiming.EndTime = clinicTiming.EndTime;
+                            newClinicTiming.Session = clinicTiming.Session;
+                            newClinicTiming.IsOpen = clinicTiming.IsOpen;
+                            _db.ClinicTimings.Add(newClinicTiming);
+                        }
+                        _db.SaveChanges();
+                    }
+                    return new Response<ClinicDTO>(true, null, clinicDTO);
+                }
         }
 
+          [HttpPut("editClinic")]
+         public Response<ClinicDTO> EditClinic(ClinicDTO clinicDTO)
+          {
+                {
+                    var dbClinic = _db.Clinics.Where(c => c.Id == clinicDTO.Id).FirstOrDefault();
+                    if (clinicDTO.IsOnline)
+                    {
+                        dbClinic.IsOnline = true;
+
+                    }
+
+                    var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).Where(x => x.Id != clinicDTO.Id).ToList();
+                    if (clinicList.Count != 0)
+                        foreach (var clinic in clinicList)
+                        {
+                            clinic.IsOnline = false;
+                            _db.Clinics.Attach(clinic);
+                            _db.Entry(clinic).State = EntityState.Modified;
+                        }
+                    _db.SaveChanges();
+                    clinicDTO.Name = dbClinic.Name;
+                    return new Response<ClinicDTO>(true, null, clinicDTO);
+                }
+
+          }
+
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public Response<string> Delete(int Id)
         {
-            var obj = await _db.Clinics.FindAsync(id);
-
-            if (obj == null)
-                return NotFound();
-
-            _db.Clinics.Remove(obj);
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+           var dbClinic = _db.Clinics.Where(c => c.Id == Id).FirstOrDefault();
+                    _db.Clinics.Remove(dbClinic);
+                    _db.SaveChanges();
+                    return new Response<string>(true, null, "record deleted");
         }
     }
 }

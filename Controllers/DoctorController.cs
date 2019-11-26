@@ -7,6 +7,12 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using AutoMapper;
 using VaccineAPI.ModelDTO;
+using System.IO;
+using System.Web;
+using System.Globalization;
+using System.Net.Http;
+using System.Net;
+using Microsoft.AspNetCore.Hosting;
 
 namespace VaccineAPI.Controllers
 {
@@ -17,10 +23,12 @@ namespace VaccineAPI.Controllers
         private readonly Context _db;
         private readonly IMapper _mapper;
 
-        public DoctorController(Context context, IMapper mapper)
+        private readonly IHostingEnvironment _host;
+        public DoctorController(Context context, IMapper mapper, IHostingEnvironment host)
         {
             _db = context;
             _mapper = mapper;
+            _host = host;
         }
 
         [HttpGet]
@@ -82,34 +90,142 @@ namespace VaccineAPI.Controllers
 
         //   //  return CreatedAtAction(nameof(GetSingle), new { id = Doctor.Id }, Doctor);
         // }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, Doctor Doctor)
+       
+        [HttpGet("{id}/clinics")]
+         public Response<IEnumerable<ClinicDTO>> GetAllClinicsOfaDoctor(int id)
+         {
+              var doctor = _db.Doctors.Include(x=>x.Clinics).FirstOrDefault(c => c.Id == id);
+                    if (doctor == null)
+                        return new Response<IEnumerable<ClinicDTO>>(false, "Doctor not found", null);
+                    else
+                    {
+                        var dbClinics = doctor.Clinics.ToList();
+                        List<ClinicDTO> clinicDTOs = new List<ClinicDTO>();
+                        foreach (var clinic in dbClinics)
+                        {
+                            ClinicDTO clinicDTO = _mapper.Map<ClinicDTO>(clinic);
+                            clinicDTO.childrenCount = clinic.Children.Count();
+                            clinicDTOs.Add(clinicDTO);
+                        }
+                        //var clinicDTOs = Mapper.Map<List<ClinicDTO>>(dbClinics);
+                        return new Response<IEnumerable<ClinicDTO>>(true, null, clinicDTOs);
+                    }
+         }
+        [HttpPost]
+         public Response<DoctorDTO> Post(DoctorDTO doctorDTO)
         {
-            if (id != Doctor.Id)
-                return BadRequest();
+            
+                TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
+                doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.FirstName);
+                doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);
+                doctorDTO.DisplayName = textInfo.ToTitleCase(doctorDTO.DisplayName);
+                {
 
-            _db.Entry(Doctor).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
+                    // 1- send email to doctor
+                    UserEmail.DoctorEmail(doctorDTO);
 
-            return NoContent();
+                    // 2- save User first
+                    User userDB = new User();
+                    userDB.MobileNumber = doctorDTO.MobileNumber;
+                    userDB.Password = doctorDTO.Password;
+                    userDB.CountryCode = doctorDTO.CountryCode;
+                    userDB.UserType = "DOCTOR";
+                    _db.Users.Add(userDB);
+                    _db.SaveChanges();
+
+                    // 2- save Doctor 
+                    Doctor doctorDB = Mapper.Map<Doctor>(doctorDTO);
+                    doctorDB.ValidUpto = null;
+                    doctorDB.UserId = userDB.Id;
+                    _db.Doctors.Add(doctorDB);
+                    _db.SaveChanges();
+                    doctorDTO.Id = doctorDB.Id;
+
+                    //generate SMS and save it to the db
+                //    UserSMS.DoctorSMS(doctorDTO);
+
+                    // 4- check if clinicDto exsist; then save clinic as well
+                    if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))
+                    {
+                        doctorDTO.ClinicDTO.Name = textInfo.ToTitleCase(doctorDTO.ClinicDTO.Name);
+
+                        doctorDTO.ClinicDTO.DoctorId = doctorDB.Id;
+
+                        Clinic clinicDB = _mapper.Map<Clinic>(doctorDTO.ClinicDTO);
+                        _db.Clinics.Add(clinicDB);
+                        _db.SaveChanges();
+
+                        doctorDTO.ClinicDTO.Id = clinicDB.Id;
+                    }
+                }
+                return new Response<DoctorDTO>(true, null, doctorDTO);
+            }
+
+
+       [HttpPost("{id}/update-images")]
+        public Response<DoctorDTO> UpdateUploadedImages(int id)
+        {
+                var dbDoctor = _db.Doctors.Where(d => d.Id == id).FirstOrDefault();
+               
+                 if (HttpContext.Request.Form.Files.Any())
+                {
+                    var httpPostedProfileImage = HttpContext.Request.Form.Files["ProfileImage"];
+                    var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
+
+                    if (httpPostedProfileImage != null)
+                    {
+
+                        var fileSavePath = Path.Combine(_host.WebRootPath, "Content/UserImages", httpPostedProfileImage.FileName);
+                        using (var fileStream = new FileStream(fileSavePath, FileMode.Create)) 
+                                 httpPostedProfileImage.CopyToAsync(fileStream);
+                                   dbDoctor.ProfileImage = httpPostedProfileImage.FileName;
+                    }     
+                      
+                    
+                     if (httpPostedSignatureImage != null)
+                    {
+                        var fileSavePath = Path.Combine(_host.WebRootPath, "Content/UserImages", httpPostedSignatureImage.FileName);
+                        using (var fileStream = new FileStream(fileSavePath, FileMode.Create)) 
+                                 httpPostedSignatureImage.CopyToAsync(fileStream);
+                                 dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
+                    }
+                    _db.SaveChanges();
+                    return new Response<DoctorDTO>(true, null, null);
+                    }
+                   
+                    return new Response<DoctorDTO>(false, "invalid files in request", null);
+                }
+                
+           // }
+        [HttpPut("{id}")]
+        public Response<DoctorDTO> Put(int Id, DoctorDTO doctorDTO)
+        {
+                
+                    var dbDoctor = _db.Doctors.Where(c => c.Id == Id).FirstOrDefault();
+                    dbDoctor.FirstName = doctorDTO.FirstName;
+                    dbDoctor.LastName = doctorDTO.LastName;
+                    dbDoctor.DisplayName = doctorDTO.DisplayName;
+                    dbDoctor.IsApproved = doctorDTO.IsApproved;
+                    dbDoctor.Email = doctorDTO.Email;
+                    dbDoctor.PMDC = doctorDTO.PMDC;
+                    dbDoctor.PhoneNo = doctorDTO.PhoneNo;
+                    dbDoctor.ShowPhone = doctorDTO.ShowPhone;
+                    dbDoctor.ShowMobile = doctorDTO.ShowMobile;
+                    dbDoctor.Qualification = doctorDTO.Qualification;
+                    dbDoctor.AdditionalInfo = doctorDTO.AdditionalInfo;
+
+                    //dbDoctor = Mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
+                    //entities.Entry<Doctor>(dbDoctor).State = System.Data.Entity.EntityState.Modified;
+                    _db.SaveChanges();
+                    return new Response<DoctorDTO>(true, null, doctorDTO);
+                
         }
 
        [HttpPut("{id}/update-permission")]
-        public Response<DoctorDTO> Put(int Id, DoctorDTO doctorDTO)
+        public Response<DoctorDTO> UpdatePermissions(int Id, DoctorDTO doctorDTO)
         {
              var dbDoctor = _db.Doctors.Where(c => c.Id == Id).FirstOrDefault();
-                    // dbDoctor.FirstName = doctorDTO.FirstName;
-                    // dbDoctor.LastName = doctorDTO.LastName;
-                    // dbDoctor.DisplayName = doctorDTO.DisplayName;
-                    // dbDoctor.IsApproved = doctorDTO.IsApproved;
-                    // dbDoctor.Email = doctorDTO.Email;
-                    // dbDoctor.PMDC = doctorDTO.PMDC;
-                    // dbDoctor.PhoneNo = doctorDTO.PhoneNo;
-                    // dbDoctor.ShowPhone = doctorDTO.ShowPhone;
-                    // dbDoctor.ShowMobile = doctorDTO.ShowMobile;
-                    // dbDoctor.Qualification = doctorDTO.Qualification;
-                    // dbDoctor.AdditionalInfo = doctorDTO.AdditionalInfo;
+                  
                     dbDoctor.AllowInvoice = doctorDTO.AllowInvoice;
                     dbDoctor.AllowFollowUp = doctorDTO.AllowFollowUp;
                      dbDoctor.AllowChart = doctorDTO.AllowChart;
@@ -160,7 +276,49 @@ namespace VaccineAPI.Controllers
                    // DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
                     return new Response<string>(true, null, "approved");
                 }
-       
+
+
+       [HttpGet("{id}/{pageSize}/{currentPage}/childs/")]
+        public Response<IEnumerable<ChildDTO>> GetAllChildsOfaDoctor(int id,int pageSize,int currentPage, string searchKeyword = "")
+        {
+    
+            
+                
+                {
+                    var doctor = _db.Doctors.FirstOrDefault(c => c.UserId == id);
+                    if (doctor == null)
+                        return new Response<IEnumerable<ChildDTO>>(false, "Doctor not found", null);
+                    else
+                    {
+                        List<ChildDTO> childDTOs = new List<ChildDTO>();
+                        var doctorClinics = doctor.Clinics;
+                        foreach (var clinic in doctorClinics)
+                        {
+                            if (!String.IsNullOrEmpty(searchKeyword))
+                            {
+                                searchKeyword = searchKeyword.Trim();
+                                if (searchKeyword.StartsWith("+")) searchKeyword = searchKeyword.Substring(1);
+                                if (searchKeyword.StartsWith("0")) searchKeyword = searchKeyword.Substring(1);
+                                if (searchKeyword.StartsWith("00")) searchKeyword = searchKeyword.Substring(2);
+                                if (searchKeyword.StartsWith("92")) searchKeyword = searchKeyword.Substring(2);
+                                childDTOs.AddRange(Mapper.Map<List<ChildDTO>>(
+                                    clinic.Children.Where(x => x.Name.Trim().ToLower().Contains(searchKeyword.ToLower())
+                                    || x.FatherName.Trim().ToLower().Contains(searchKeyword.ToLower())
+                                    || x.User.MobileNumber.Trim().Contains(searchKeyword.ToLower())).ToList<Child>()));
+                                currentPage = 0;
+                            }
+                            else
+                                childDTOs.AddRange(Mapper.Map<List<ChildDTO>>(clinic.Children.ToList<Child>()));
+                        }
+                        foreach (var item in childDTOs)
+                        {
+                            var dbChild = _db.Childs.Where(x => x.Id == item.Id).FirstOrDefault();
+                            item.MobileNumber = dbChild.User.CountryCode + dbChild.User.MobileNumber;
+                        }
+                        return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs.OrderByDescending(x => x.Id).ToList().Skip(pageSize * currentPage).Take(pageSize));
+                    }
+                }
+            }
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
@@ -176,3 +334,4 @@ namespace VaccineAPI.Controllers
         }
     }
 }
+//}

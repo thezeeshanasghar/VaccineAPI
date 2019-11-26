@@ -11,10 +11,10 @@ namespace VaccineAPI.ModelDTO
         public string MobileNumber { get; set; }
         public string Password { get; set; }
         public string UserType { get; set; }
-        public int DoctorId { get; set; }
+        public long DoctorId { get; set; }
         public bool AllowInventory { get; set; }
         public bool AllowInvoice { get; set; }
-        public int ChildId { get; set; }
+        public long ChildId { get; set; }
         public string CountryCode { get; set; }
         public string Email { get; set; }
         public string ProfileImage { get; set; }

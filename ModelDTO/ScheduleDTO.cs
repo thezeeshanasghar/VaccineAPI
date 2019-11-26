@@ -21,6 +21,10 @@ namespace VaccineAPI.ModelDTO
          public long? BrandId { get; set; }
         [JsonIgnore]
         public List <BrandDTO> Brand { get; set; }
+        public List<BrandDTO> Brands { get; set; }
+      
+        public List<ScheduleBrandDTO> ScheduleBrands { get; set; }
+        public long DoctorId { get; set; }
         
         public long ChildId { get; set; }
         [JsonIgnore]

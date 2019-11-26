@@ -6,7 +6,7 @@ namespace VaccineAPI.Models
 {
     public class Context : DbContext
     {
-        public Context(DbContextOptions<Context> options) : base(options)
+        public  Context(DbContextOptions<Context> options) : base(options)
         {
 
         }
@@ -93,13 +93,13 @@ namespace VaccineAPI.Models
                              });
                            
 
-                             modelBuilder.Entity< User >(b=> {
-                               b.Property(r => r.AllowInventory)
-                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+                            //  modelBuilder.Entity< User >(b=> {
+                            //    b.Property(r => r.AllowInventory)
+                            // .HasConversion(new BoolToZeroOneConverter<Int16>());
                              
-                              b.Property(r => r.AllowInvoice)
-                            .HasConversion(new BoolToZeroOneConverter<Int16>());
-                             });
+                            //   b.Property(r => r.AllowInvoice)
+                            // .HasConversion(new BoolToZeroOneConverter<Int16>());
+                            //  });
                             
                             
 

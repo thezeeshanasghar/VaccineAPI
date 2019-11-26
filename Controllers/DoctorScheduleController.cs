@@ -7,6 +7,11 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using AutoMapper;
 using VaccineAPI.ModelDTO;
+using System.IO;
+using System.Web;
+using System.Globalization;
+using System.Net.Http;
+using System.Net;
 
 namespace VaccineAPI.Controllers
 {
@@ -32,35 +37,52 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<Response<DoctorSchedule>> GetSingle(long id)
+       public Response<List<DoctorScheduleDTO>> GetSingle(int Id)
         {
-            var single = await _db.DoctorSchedules.FindAsync(id);
-            if (single == null)
-                return new Response<DoctorSchedule>(false, "Not Found", null);
            
-                 return new Response<DoctorSchedule>(true, null, single);
-        }
+                {
+
+                    List<DoctorSchedule> doctorSchduleDBs = _db.DoctorSchedules.Include("Dose").Include("Doctor").Where(x => x.DoctorId == Id)
+                        .OrderBy(x => x.Dose.MinAge).ThenBy(x => x.Dose.Name).ToList();
+                    if (doctorSchduleDBs == null || doctorSchduleDBs.Count() == 0)
+                        return new Response<List<DoctorScheduleDTO>>(false, "DoctorSchedule not found", null);
+
+                    List<DoctorScheduleDTO> DoctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(doctorSchduleDBs);
+                    return new Response<List<DoctorScheduleDTO>>(true, null, DoctorScheduleDTOs);
+                }
+            }
 
         [HttpPost]
-        public async Task<ActionResult<DoctorSchedule>> Post(DoctorSchedule DoctorSchedule)
+        public Response<List<DoctorScheduleDTO>> Post(List<DoctorScheduleDTO> dsDTOS)
         {
-            _db.DoctorSchedules.Update(DoctorSchedule);
-            await _db.SaveChangesAsync();
+            
+                {
+                    foreach (var DoctorSchedueDTO in dsDTOS)
+                    {
+                        DoctorSchedule doctorSchduleDB = Mapper.Map<DoctorSchedule>(DoctorSchedueDTO);
+                        _db.DoctorSchedules.Add(doctorSchduleDB);
+                        _db.SaveChanges();
+                        DoctorSchedueDTO.Id = doctorSchduleDB.Id;
+                    }
+                    return new Response<List<DoctorScheduleDTO>>(true, null, dsDTOS);
+                }
+            }
 
-            return CreatedAtAction(nameof(GetSingle), new { id = DoctorSchedule.Id }, DoctorSchedule);
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, DoctorSchedule DoctorSchedule)
+    
+        [HttpPut]
+        public Response<List<DoctorScheduleDTO>> Put(List<DoctorScheduleDTO> dsDTOS)
         {
-            if (id != DoctorSchedule.Id)
-                return BadRequest();
-
-            _db.Entry(DoctorSchedule).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
-
-            return NoContent();
-        }
+                
+                {
+                    foreach (var DoctorSchedueDTO in dsDTOS)
+                    {
+                        var doctorSchduleDB = _db.DoctorSchedules.Where(c => c.Id == DoctorSchedueDTO.Id).FirstOrDefault();
+                        doctorSchduleDB.GapInDays = DoctorSchedueDTO.GapInDays;
+                        _db.SaveChanges();
+                    }
+                    return new Response<List<DoctorScheduleDTO>>(true, null, dsDTOS);
+                }
+            }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)

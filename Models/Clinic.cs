@@ -13,15 +13,15 @@ namespace VaccineAPI.Models
         public string OffDays { get; set; }
         public string StartTime { get; set; }
         public string EndTime { get; set; }
-        public float Lat { get; set; }
-        public float Long { get; set; }
+        public double Lat { get; set; }
+        public double Long { get; set; }
         public string PhoneNumber { get; set; }
         public bool IsOnline { get; set; }
         public string Address { get; set; }
         public long DoctorId { get; set; }
        // [JsonIgnore]
         public Doctor Doctor { get; set; }
-        public virtual ICollection<Child> ChildrenCount { get; set; }
+        public virtual ICollection<Child> Children { get; set; }
         public virtual ICollection<ClinicTiming> ClinicTimings { get; set; }
          
     }

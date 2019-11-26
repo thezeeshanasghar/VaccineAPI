@@ -31,10 +31,22 @@ namespace VaccineAPI.Models
         public string Qualification { get; set; }
         public string AdditionalInfo { get; set; }
         public long UserId { get; set; }
+        public User User { get; set; }
+        // [JsonIgnore]
         public virtual string Speciality { get; set; }
          public virtual ICollection<Clinic> Clinics { get; set; }
          public virtual ICollection<Child> Childs { get; set; }
-         public virtual User User { get; set; }
+         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        public virtual ICollection<DoctorSchedule> DoctorSchedules { get; set; }
+         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        public virtual ICollection<BrandAmount> BrandAmounts { get; set; }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        public virtual ICollection<BrandInventory> BrandInventories { get; set; }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        public virtual ICollection<FollowUp> FollowUps { get; set; }
+         
+        
+         
 
         // public virtual Clinic Clinics { get; set; }
         //public virtual Child Childs { get; set; }

@@ -43,15 +43,70 @@ namespace VaccineAPI.Controllers
 
             
         }
+         [HttpGet("alert/{GapDays}/{OnlineClinicID}")]
+        public Response<IEnumerable<FollowUpDTO>> GetAlert(int GapDays, int OnlineClinicID)
+        {
+                {
+                    var doctor = _db.Clinics.Where(x => x.Id == OnlineClinicID).First<Clinic>().Doctor;
+                  //  int[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<int>();
+
+                    IEnumerable<FollowUp> followups = new List<FollowUp>();
+                    DateTime AddedDateTime = DateTime.UtcNow.AddHours(5).AddDays(GapDays);
+                    DateTime pakistanTime = DateTime.UtcNow.AddHours(5);
+                    if (GapDays == 0)
+                        followups = _db.FollowUps.Include("Child")
+                   //         .Where(c => ClinicIDs.Contains(c.Child.ClinicID))
+                   //         .Where(c => System.Data.Entity.DbFunctions.TruncateTime(c.NextVisitDate) == System.Data.Entity.DbFunctions.TruncateTime(pakistanTime))
+                            .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate).ToList<FollowUp>();
+                    else if (GapDays > 0)
+                    {
+                        AddedDateTime = AddedDateTime.AddDays(1);
+                   //     followups = entities.FollowUps.Include("Child")
+                        
+                    //        .Where(c => ClinicIDs.Contains(c.Child.ClinicID))
+                  //          .Where(c => c.NextVisitDate > pakistanTime && c.NextVisitDate <= AddedDateTime)
+                 //           .OrderBy(x => x.Child.ID).ThenBy(x => x.NextVisitDate)
+                  //          .ToList<FollowUp>();
+
+                    }
+                    else if (GapDays < 0)
+                    {
+                        followups = _db.FollowUps.Include("Child")
+                        //    .Where(c => ClinicIDs.Contains(c.Child.ClinicID))
+                            .Where(c => c.NextVisitDate < pakistanTime && c.NextVisitDate >= AddedDateTime)
+                            .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate)
+                            .ToList<FollowUp>();
+                    }
+                        
+                    IEnumerable<FollowUpDTO> followUpDTO = Mapper.Map<IEnumerable<FollowUpDTO>>(followups);
+                    return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTO);
+                }
+            }
+
+             [HttpGet("sms-alert/{childId}")]
+        public Response<FollowUpDTO> SendSMSAlertToOneChild(int childId)
+        {
+            
+                {
+                    var dbChildFollowup = _db.FollowUps.Where(x => x.ChildId == childId).OrderByDescending(x => x.Id).FirstOrDefault();
+                    UserSMS.ParentFollowUpSMSAlert(dbChildFollowup);
+                    FollowUpDTO followupDTO = _mapper.Map<FollowUpDTO>(dbChildFollowup);
+                    return new Response<FollowUpDTO>(true, null, followupDTO);
+                }
+
+            }
 
         [HttpPost]
-        public async Task<ActionResult<FollowUp>> Post(FollowUp FollowUp)
-        {
-            _db.FollowUps.Update(FollowUp);
-            await _db.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetSingle), new { id = FollowUp.Id }, FollowUp);
-        }
+        public Response<FollowUpDTO> Post(FollowUpDTO FollowUpDto)
+        
+            {
+                {
+                    FollowUp dbFollowUp = _mapper.Map<FollowUp>(FollowUpDto);
+                    _db.FollowUps.Add(dbFollowUp);
+                    _db.SaveChanges();
+                    return new Response<FollowUpDTO>(true, null, FollowUpDto);
+                }
+            }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Put(long id, FollowUp FollowUp)

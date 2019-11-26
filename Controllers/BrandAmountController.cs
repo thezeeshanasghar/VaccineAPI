@@ -22,45 +22,41 @@ namespace VaccineAPI.Controllers
             _mapper = mapper;
         }
 
-        [HttpGet]
-       public async Task<Response<List<BrandAmountDTO>>> GetAll()
-        {
-            var list = await _db.BrandAmounts.OrderBy(x=>x.Id).ToListAsync();
-            List<BrandAmountDTO> listDTO = _mapper.Map<List<BrandAmountDTO>>(list);
-           
-            return new Response<List<BrandAmountDTO>>(true, null, listDTO);
-        }
+        [HttpGet("{Id}")]
+      public Response<List<BrandAmountDTO>> Get(int Id)
+       {
+                    List<BrandAmount> brandAmountDBs = _db.BrandAmounts.Include("Brand").Include("Doctor").Where(x => x.DoctorId == Id).ToList();
+                    if (brandAmountDBs == null || brandAmountDBs.Count() == 0)
+                        return new Response<List<BrandAmountDTO>>(false, "Brand not found", null);
+                    List<BrandAmountDTO> brandAmountDTOs = _mapper.Map<List<BrandAmountDTO>>(brandAmountDBs);
+                    foreach (BrandAmountDTO baDTO in brandAmountDTOs)
+                        baDTO.VaccineName = _db.Brands.Include(x=>x.Vaccine).Where(x => x.Id == baDTO.BrandId).First().Vaccine.Name;
+                    return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
+                }
 
-        [HttpGet("{id}")]
-        public async Task<Response<BrandAmount>> GetSingle(long id)
-        {
-            var single = await _db.BrandAmounts.FindAsync(id);
-            if (single == null)
-                 return new Response<BrandAmount>(false, "Not Found", null);
-           
-                 return new Response<BrandAmount>(true, null, single);
-        }
 
-        [HttpPost]
-        public async Task<ActionResult<BrandAmount>> Post(BrandAmount BrandAmount)
-        {
-            _db.BrandAmounts.Update(BrandAmount);
-            await _db.SaveChangesAsync();
+        // [HttpPost]
+        // public async Task<ActionResult<BrandAmount>> Post(BrandAmount BrandAmount)
+        // {
+        //     _db.BrandAmounts.Update(BrandAmount);
+        //     await _db.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetSingle), new { id = BrandAmount.Id }, BrandAmount);
-        }
+        //     return CreatedAtAction(nameof(GetSingle), new { id = BrandAmount.Id }, BrandAmount);
+        // }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, BrandAmount BrandAmount)
-        {
-            if (id != BrandAmount.Id)
-                return BadRequest();
-
-            _db.Entry(BrandAmount).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
-
-            return NoContent();
-        }
+        [HttpPut]
+       public Response<List<BrandAmountDTO>> Put([FromBody] List<BrandAmountDTO> brandAmountDTOs)
+       
+            {
+                    foreach (var brandAmountDTO in brandAmountDTOs)
+                    {
+                        var brandAmoundDB = _db.BrandAmounts.Where(b => b.Id == brandAmountDTO.Id).FirstOrDefault();
+                        brandAmoundDB.Amount = brandAmountDTO.Amount;
+                        _db.SaveChanges();
+                    }
+                    return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
+                }
+       
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)

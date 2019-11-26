@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using AutoMapper;
 using VaccineAPI.ModelDTO;
+using System.Xml;
+using Newtonsoft.Json.Linq;
 
 namespace VaccineAPI.Controllers
 {
@@ -24,12 +26,51 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-         public async Task<Response<List<MessageDTO>>> GetAll()
+        // public async Task<Response<List<MessageDTO>>> GetAll()
+        public Response<List<MessageDTO>> Get(string mobileNumber = "", string fromDate = "", string toDate = "")
         {
-            var list = await _db.Messages.OrderBy(x=>x.Id).ToListAsync();
-            List<MessageDTO> listDTO = _mapper.Map<List<MessageDTO>>(list);
-           
-            return new Response<List<MessageDTO>>(true, null, listDTO);
+            List<Message> dbMessages = new List<Message>();
+            var prevDays = DateTime.Now.AddDays(-10);
+            if (!string.IsNullOrEmpty(mobileNumber) || !string.IsNullOrEmpty(fromDate) || !string.IsNullOrEmpty(toDate))
+            {
+                var dbUser = _db.Users.Where(x => x.MobileNumber == mobileNumber && x.UserType == "DOCTOR").FirstOrDefault();
+                if (dbUser == null)
+                    return new Response<List<MessageDTO>>(false, "No records found", null);
+                if (fromDate != null && toDate == null)
+                {
+                    DateTime FromDate = DateTime.ParseExact(fromDate, "dd-MM-yyyy", null);
+                    dbMessages = _db.Messages.Where(m => m.UserId == dbUser.Id && m.Created >= FromDate).ToList();
+                }
+                if (toDate != null && fromDate == null)
+                {
+                    DateTime ToDate = DateTime.ParseExact(toDate, "dd-MM-yyyy", null);
+                    dbMessages = _db.Messages.Where(m => m.UserId == dbUser.Id &&
+                                    m.Created <= ToDate).ToList();
+                }
+                if (toDate != null && fromDate != null)
+                {
+                    DateTime FromDate = DateTime.ParseExact(fromDate, "dd-MM-yyyy", null);
+                    DateTime ToDate = DateTime.ParseExact(toDate, "dd-MM-yyyy", null);
+
+                    dbMessages = _db.Messages.Where(m => m.UserId == dbUser.Id && m.Created >= FromDate &&
+                                    m.Created <= ToDate).ToList();
+
+                }
+                if (toDate == null && fromDate == null)
+                {
+                    dbMessages = _db.Messages.Where(m => m.UserId == dbUser.Id && m.Created > prevDays).ToList();
+                }
+
+            }
+            else
+            {
+
+                dbMessages = _db.Messages.Where(m => m.Created > prevDays).ToList();
+            }
+
+
+            var messageDTOs = Mapper.Map<List<MessageDTO>>(dbMessages.OrderByDescending(x => x.Created));
+            return new Response<List<MessageDTO>>(true, null, messageDTOs);
         }
 
         [HttpGet("{id}")]
@@ -37,20 +78,67 @@ namespace VaccineAPI.Controllers
         {
             var single = await _db.Messages.FindAsync(id);
             if (single == null)
-                 return new Response<Message>(false, "Not Found", null);
-           
-                 return new Response<Message>(true, null, single);
+                return new Response<Message>(false, "Not Found", null);
 
-        
+            return new Response<Message>(true, null, single);
+
+
         }
 
-        [HttpPost]
-        public async Task<ActionResult<Message>> Post(Message Message)
+          protected bool IsJson(string input)
         {
-            _db.Messages.Update(Message);
-            await _db.SaveChangesAsync();
+            input = input.Trim();
+            return input.StartsWith("{") && input.EndsWith("}")
+                   || input.StartsWith("[") && input.EndsWith("]");
+        }
 
-            return CreatedAtAction(nameof(GetSingle), new { id = Message.Id }, Message);
+         [HttpGet("{id}/doctor")]
+        public Response<List<MessageDTO>> Get(int id)
+        {
+    
+    
+                {
+                    var dbMessages = _db.Messages.Where(x => x.UserId == id).OrderByDescending(x => x.Created).ToList();
+                    var messageDTOs = Mapper.Map<List<MessageDTO>>(dbMessages);
+                    foreach (var msg in messageDTOs)
+                    {
+                        if (IsJson(msg.ApiResponse))
+                        {
+                            JObject json = JObject.Parse(msg.ApiResponse);
+                            msg.ApiResponse = (string)json["returnString"];
+                        }
+                        else
+                        {
+                            XmlDocument xmlDoc = new XmlDocument();
+                            xmlDoc.LoadXml(msg.ApiResponse);
+
+                            string xpath = "Response";
+                            var parentNode = xmlDoc.SelectNodes(xpath);
+
+                            foreach (XmlNode childrenNode in parentNode)
+                                msg.ApiResponse = childrenNode.FirstChild.InnerText;
+                        }
+                    }
+
+                    return new Response<List<MessageDTO>>(true, null, messageDTOs);
+                }
+            }
+
+            
+
+        [HttpPost]
+        public Response<MessageDTO> Post([FromBody] MessageDTO msg)
+        {
+            if (!string.IsNullOrEmpty(msg.SMS) && !string.IsNullOrEmpty(msg.MobileNumber))
+            {
+                var response = UserSMS.SendSMS("92", msg.MobileNumber, "", msg.SMS);
+                //UserSMS.addMessageToDB(msg.MobileNumber, response, msg.SMS, 1, _db);
+                return new Response<MessageDTO>(true, null, null);
+            }
+            else
+            {
+                return new Response<MessageDTO>(false, "Please fill sms and mobile number text fields", null);
+            }
         }
 
         [HttpPut("{id}")]

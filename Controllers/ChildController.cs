@@ -80,7 +80,7 @@ namespace VaccineAPI.Controllers
                         dbSchedule.Brand = _db.Brands.Where<Brand>(x => x.Id == dbSchedule.BrandId).FirstOrDefault();
                     }
 
-                    var schedulesDTO = Mapper.Map<List<ScheduleDTO>>(dbSchedules);
+                    var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
                     //foreach (var scheduleDTO in schedulesDTO)
                     //    scheduleDTO.Dose = Mapper.Map<DoseDTO>(entities.Schedules.Include("Dose").Where<Schedule>(x => x.ID == scheduleDTO.ID).FirstOrDefault<Schedule>().Dose);
                     return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
@@ -97,7 +97,7 @@ namespace VaccineAPI.Controllers
 
             {
 
-                Child childDB = Mapper.Map<Child>(childDTO);
+                Child childDB = _mapper.Map<Child>(childDTO);
                 // check for existing parent 
                 User user = _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
 
@@ -118,8 +118,8 @@ namespace VaccineAPI.Controllers
                 else
                 {
                     Child existingChild = _db.Childs.FirstOrDefault(x => x.Name.Equals(childDTO.Name) && x.UserId == user.Id);
-                    if (existingChild != null)
-                        throw new Exception("Children with same name & number already exists. Parent should login and start change doctor process.");
+                     if (existingChild != null)
+                         throw new Exception("Children with same name & number already exists. Parent should login and start change doctor process.");
                     childDB.UserId = user.Id;
                     _db.Childs.Add(childDB);
                     _db.SaveChanges();
@@ -127,9 +127,12 @@ namespace VaccineAPI.Controllers
                 childDTO.Id = childDB.Id;
 
                 // get doctor schedule and apply it to child and save in Schedule table
-                Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).FirstOrDefault();
+                Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x=>x.Doctor).FirstOrDefault();
                 Doctor doctor = clinic.Doctor;
-                IEnumerable<DoctorSchedule> dss = doctor.DoctorSchedules;
+                
+                List<DoctorSchedule> dss = _db.DoctorSchedules.Where(x=>x.DoctorId == doctor.Id).ToList();
+                //IEnumerable<DoctorSchedule> dss = doctor.DoctorSchedules;
+                
                 foreach (DoctorSchedule ds in dss)
                 {
                     var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).FirstOrDefault();

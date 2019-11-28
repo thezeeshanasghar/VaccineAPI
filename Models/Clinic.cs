@@ -11,8 +11,8 @@ namespace VaccineAPI.Models
         public string Name { get; set; }
         public int ConsultationFee { get; set; }
         public string OffDays { get; set; }
-        public string StartTime { get; set; }
-        public string EndTime { get; set; }
+        // public string StartTime { get; set; }
+        // public string EndTime { get; set; }
         public double Lat { get; set; }
         public double Long { get; set; }
         public string PhoneNumber { get; set; }
@@ -20,8 +20,10 @@ namespace VaccineAPI.Models
         public string Address { get; set; }
         public long DoctorId { get; set; }
        // [JsonIgnore]
-        public Doctor Doctor { get; set; }
+        public virtual Doctor Doctor { get; set; }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
         public virtual ICollection<Child> Children { get; set; }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
         public virtual ICollection<ClinicTiming> ClinicTimings { get; set; }
          
     }

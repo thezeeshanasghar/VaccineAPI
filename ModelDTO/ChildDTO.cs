@@ -16,7 +16,7 @@ namespace VaccineAPI.ModelDTO
         public string FatherName { get; set; }
         public string Email { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
-        public string DOB { get; set; }
+        public DateTime DOB { get; set; }
         public string CountryCode { get; set; }
         public string Gender  { get; set; }
         public string City  { get; set; }

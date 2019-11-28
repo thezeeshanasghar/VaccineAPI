@@ -45,13 +45,15 @@ namespace VaccineAPI.Controllers
         {
             
         
-            var dbdoctor = await _db.Doctors.Include(x=>x.Clinics).FirstOrDefaultAsync();
+            var dbdoctor = await _db.Doctors.Where(x=>x.Id==id).Include(x=>x.User).Include(x=>x.Clinics).FirstOrDefaultAsync();
             DoctorDTO doctorDTO = _mapper.Map<DoctorDTO>(dbdoctor);
            
             if (dbdoctor == null)
             return new Response<DoctorDTO>(false, "Not Found", null);
+            doctorDTO.MobileNumber = dbdoctor.User.MobileNumber;
            
             return new Response<DoctorDTO>(true, null, doctorDTO);
+            
         }
 
           [HttpGet("approved")]
@@ -94,7 +96,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/clinics")]
          public Response<IEnumerable<ClinicDTO>> GetAllClinicsOfaDoctor(int id)
          {
-              var doctor = _db.Doctors.Include(x=>x.Clinics).FirstOrDefault(c => c.Id == id);
+              var doctor = _db.Doctors.Include(x=>x.Clinics).Include(x=>x.Childs).FirstOrDefault(c => c.Id == id);
                     if (doctor == null)
                         return new Response<IEnumerable<ClinicDTO>>(false, "Doctor not found", null);
                     else
@@ -104,7 +106,7 @@ namespace VaccineAPI.Controllers
                         foreach (var clinic in dbClinics)
                         {
                             ClinicDTO clinicDTO = _mapper.Map<ClinicDTO>(clinic);
-                            clinicDTO.childrenCount = clinic.Children.Count();
+                       //     clinicDTO.childrenCount = clinic.Children.Count();
                             clinicDTOs.Add(clinicDTO);
                         }
                         //var clinicDTOs = Mapper.Map<List<ClinicDTO>>(dbClinics);
@@ -134,7 +136,7 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
 
                     // 2- save Doctor 
-                    Doctor doctorDB = Mapper.Map<Doctor>(doctorDTO);
+                    Doctor doctorDB = _mapper.Map<Doctor>(doctorDTO);
                     doctorDB.ValidUpto = null;
                     doctorDB.UserId = userDB.Id;
                     _db.Doctors.Add(doctorDB);

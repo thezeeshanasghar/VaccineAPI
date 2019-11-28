@@ -53,7 +53,7 @@ namespace VaccineAPI.Controllers
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
                 clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
                 {
-                    Clinic clinicDb = Mapper.Map<Clinic>(clinicDTO);
+                    Clinic clinicDb = _mapper.Map<Clinic>(clinicDTO);
                     _db.Clinics.Add(clinicDb);
                     _db.SaveChanges();
                     clinicDTO.Id = clinicDb.Id; 

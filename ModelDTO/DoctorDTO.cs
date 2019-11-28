@@ -38,7 +38,7 @@ namespace VaccineAPI.ModelDTO
         //  [JsonIgnore]
         // public UserDTO User { get; set; }
 
-        public string Speciality { get; set; }
+        public string[] Speciality { get; set; }
 
         public ClinicDTO ClinicDTO { get; set; }
         public List<ClinicDTO> Clinics { get; set; }

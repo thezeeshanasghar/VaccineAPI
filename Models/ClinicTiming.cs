@@ -10,8 +10,8 @@ namespace VaccineAPI.Models
     {
         public long Id { get; set; }
         public string Day { get; set; }
-        public TimeSpan StartTime { get; set; }
-        public TimeSpan EndTime { get; set; }
+        public System.TimeSpan StartTime { get; set; }
+        public System.TimeSpan EndTime { get; set; }
         public string Session { get; set; }
         public bool IsOpen { get; set; }
         public long ClinicId { get; set; }

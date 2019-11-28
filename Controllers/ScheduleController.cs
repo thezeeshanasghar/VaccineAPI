@@ -123,7 +123,7 @@ namespace VaccineAPI.Controllers
          [HttpPost("add-vacation")]
         public Response<ScheduleDTO> AddVacations(ScheduleDTO obj)
         {
-                {
+                
                     foreach (var clinic in obj.Clinics)
                     {
                         var dbSchedules = _db.Schedules.Where(x => x.Child.ClinicId == clinic.Id
@@ -139,7 +139,7 @@ namespace VaccineAPI.Controllers
                     return new Response<ScheduleDTO>(true, "Vacations are considered and appointments are moved to " +
                         obj.ToDate.AddDays(1).ToString("dd-MM-yyy") + " date.", null);
 
-                }
+                
             }
 
 

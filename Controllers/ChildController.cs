@@ -112,6 +112,10 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
 
                     childDB.UserId = userDB.Id;
+                    childDB.ChildVaccines.Clear();
+                    foreach(VaccineDTO vaccineDTO in childDTO.ChildVaccines) {
+                        childDB.ChildVaccines.Add(_db.Vaccines.Where(x=>x.Id==vaccineDTO.Id).FirstOrDefault());
+                    }
                     _db.Childs.Add(childDB);
                     _db.SaveChanges();
                 }

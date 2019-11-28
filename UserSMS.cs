@@ -51,8 +51,8 @@ namespace VaccineAPI
             var response2 = SendSMS(child.User.CountryCode, child.User.MobileNumber, child.Email, sms2);
             //addMessageToDB(child.User.MobileNumber, response1, sms1, child.Clinic.Doctor.User.Id);
             //addMessageToDB(child.User.MobileNumber, response2, sms2, child.Clinic.Doctor.User.Id);
-            minusDoctorSMSCount(child.Clinic.Doctor);
-            minusDoctorSMSCount(child.Clinic.Doctor);
+            // minusDoctorSMSCount(child.Clinic.Doctor);
+            // minusDoctorSMSCount(child.Clinic.Doctor);
             return response1 + response2;
 
         }

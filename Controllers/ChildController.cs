@@ -139,7 +139,7 @@ namespace VaccineAPI.Controllers
                 
                 foreach (DoctorSchedule ds in dss)
                 {
-                    var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).FirstOrDefault();
+                    var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).Include(x=>x.Vaccine).FirstOrDefault();
                     if (childDTO.ChildVaccines.Any(x => x.Id == dbDose.Vaccine.Id))
                     {
                         Schedule cvd = new Schedule();
@@ -204,7 +204,8 @@ namespace VaccineAPI.Controllers
                         _db.SaveChanges();
                     }
                 }
-                Child c = _db.Childs.Include("Clinic").Where(x => x.Id == childDTO.Id).FirstOrDefault();
+              //  Child c = _db.Childs.Include("User").Include("Clinic").Where(x => x.Id == childDTO.Id).FirstOrDefault();
+              Child c = _db.Childs.Where(x => x.Id == childDTO.Id).Include(x=>x.User).Include(x=>x.Clinic).Include(x=>x.Clinic.Doctor.User).FirstOrDefault();
                 if (c.Email != "")
                     UserEmail.ParentEmail(c);
 

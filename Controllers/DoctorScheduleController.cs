@@ -38,7 +38,7 @@ namespace VaccineAPI.Controllers
 
         [HttpGet("{id}")]
        public Response<List<DoctorScheduleDTO>> GetSingle(int Id)
-        {
+        
            
                 {
 
@@ -50,7 +50,7 @@ namespace VaccineAPI.Controllers
                     List<DoctorScheduleDTO> DoctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(doctorSchduleDBs);
                     return new Response<List<DoctorScheduleDTO>>(true, null, DoctorScheduleDTOs);
                 }
-            }
+            
 
         [HttpPost]
         public Response<IEnumerable<DoctorScheduleDTO>> Post(IEnumerable<DoctorScheduleDTO> dsDTOS)
@@ -71,7 +71,7 @@ namespace VaccineAPI.Controllers
     
         [HttpPut]
         public Response<List<DoctorScheduleDTO>> Put(List<DoctorScheduleDTO> dsDTOS)
-        {
+        
                 
                 {
                     foreach (var DoctorSchedueDTO in dsDTOS)
@@ -82,7 +82,7 @@ namespace VaccineAPI.Controllers
                     }
                     return new Response<List<DoctorScheduleDTO>>(true, null, dsDTOS);
                 }
-            }
+            
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)

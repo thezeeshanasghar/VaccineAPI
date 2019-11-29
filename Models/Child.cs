@@ -16,7 +16,7 @@ namespace VaccineAPI.Models
        // public string DOB { get; set; }
         public string Gender  { get; set; }
         public string City  { get; set; }
-        public string PreferredDayOfReminder  { get; set; }
+        public int PreferredDayOfReminder  { get; set; }
         public string PreferredDayOfWeek  { get; set; }
         public string PreferredSchedule  { get; set; }
         public bool? IsEPIDone  { get; set; }

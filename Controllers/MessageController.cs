@@ -72,19 +72,6 @@ namespace VaccineAPI.Controllers
             var messageDTOs = Mapper.Map<List<MessageDTO>>(dbMessages.OrderByDescending(x => x.Created));
             return new Response<List<MessageDTO>>(true, null, messageDTOs);
         }
-
-        [HttpGet("{id}")]
-        public async Task<Response<Message>> GetSingle(long id)
-        {
-            var single = await _db.Messages.FindAsync(id);
-            if (single == null)
-                return new Response<Message>(false, "Not Found", null);
-
-            return new Response<Message>(true, null, single);
-
-
-        }
-
           protected bool IsJson(string input)
         {
             input = input.Trim();
@@ -99,7 +86,7 @@ namespace VaccineAPI.Controllers
     
                 {
                     var dbMessages = _db.Messages.Where(x => x.UserId == id).OrderByDescending(x => x.Created).ToList();
-                    var messageDTOs = Mapper.Map<List<MessageDTO>>(dbMessages);
+                    var messageDTOs = _mapper.Map<List<MessageDTO>>(dbMessages);
                     foreach (var msg in messageDTOs)
                     {
                         if (IsJson(msg.ApiResponse))
@@ -142,18 +129,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, Message Message)
-        {
-            if (id != Message.Id)
-                return BadRequest();
-
-            _db.Entry(Message).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
-
-            return NoContent();
-        }
-
+        
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

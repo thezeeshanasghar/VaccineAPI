@@ -9,7 +9,7 @@ using VaccineAPI.Models;
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    [Migration("20191115202318_first")]
+    [Migration("20191128233306_first")]
     partial class first
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -44,8 +44,6 @@ namespace VaccineAPI.Migrations
                     b.Property<long>("BrandId");
 
                     b.Property<long>("DoctorId");
-
-                    b.Property<string>("VaccineName");
 
                     b.HasKey("Id");
 
@@ -85,9 +83,7 @@ namespace VaccineAPI.Migrations
 
                     b.Property<long>("ClinicId");
 
-                    b.Property<string>("CountryCode");
-
-                    b.Property<string>("DOB");
+                    b.Property<DateTime>("DOB");
 
                     b.Property<long?>("DoctorId");
 
@@ -97,21 +93,11 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("Gender");
 
-                    b.Property<DateTime>("InvoiceDate");
+                    b.Property<short?>("IsEPIDone");
 
-                    b.Property<bool>("IsBrand");
-
-                    b.Property<bool>("IsConsultationFee");
-
-                    b.Property<bool?>("IsEPIDone");
-
-                    b.Property<bool?>("IsVerified");
-
-                    b.Property<string>("MobileNumber");
+                    b.Property<short?>("IsVerified");
 
                     b.Property<string>("Name");
-
-                    b.Property<string>("Password");
 
                     b.Property<string>("PreferredDayOfReminder");
 
@@ -119,11 +105,7 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("PreferredSchedule");
 
-                    b.Property<string>("StreetAddress");
-
                     b.Property<long>("UserId");
-
-                    b.Property<long?>("UserId1");
 
                     b.HasKey("Id");
 
@@ -131,7 +113,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("DoctorId");
 
-                    b.HasIndex("UserId1");
+                    b.HasIndex("UserId");
 
                     b.ToTable("Childs");
                 });
@@ -147,21 +129,17 @@ namespace VaccineAPI.Migrations
 
                     b.Property<long>("DoctorId");
 
-                    b.Property<string>("EndTime");
+                    b.Property<short>("IsOnline");
 
-                    b.Property<int>("IsOnline");
+                    b.Property<double>("Lat");
 
-                    b.Property<float>("Lat");
-
-                    b.Property<float>("Long");
+                    b.Property<double>("Long");
 
                     b.Property<string>("Name");
 
                     b.Property<string>("OffDays");
 
                     b.Property<string>("PhoneNumber");
-
-                    b.Property<string>("StartTime");
 
                     b.HasKey("Id");
 
@@ -181,7 +159,7 @@ namespace VaccineAPI.Migrations
 
                     b.Property<TimeSpan>("EndTime");
 
-                    b.Property<bool>("IsOpen");
+                    b.Property<short>("IsOpen");
 
                     b.Property<string>("Session");
 
@@ -201,13 +179,13 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("AdditionalInfo");
 
-                    b.Property<bool>("AllowChart");
+                    b.Property<short>("AllowChart");
 
-                    b.Property<bool>("AllowFollowUp");
+                    b.Property<short>("AllowFollowUp");
 
-                    b.Property<bool>("AllowInventory");
+                    b.Property<short>("AllowInventory");
 
-                    b.Property<bool>("AllowInvoice");
+                    b.Property<short>("AllowInvoice");
 
                     b.Property<string>("DisplayName");
 
@@ -231,21 +209,21 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("Qualification");
 
-                    b.Property<bool>("ShowMobile");
+                    b.Property<int>("SMSLimit");
 
-                    b.Property<bool>("ShowPhone");
+                    b.Property<short>("ShowMobile");
+
+                    b.Property<short>("ShowPhone");
 
                     b.Property<string>("SignatureImage");
 
-                    b.Property<int>("SmsLimit");
-
-                    b.Property<string>("Speciality");
-
                     b.Property<long>("UserId");
 
-                    b.Property<DateTime>("ValidUpto");
+                    b.Property<DateTime?>("ValidUpto");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Doctors");
                 });
@@ -335,11 +313,11 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("ApiResponse");
 
-                    b.Property<string>("Created");
+                    b.Property<DateTime>("Created");
 
                     b.Property<string>("MobileNumber");
 
-                    b.Property<string>("Sms");
+                    b.Property<string>("SMS");
 
                     b.Property<long?>("UserId");
 
@@ -363,17 +341,17 @@ namespace VaccineAPI.Migrations
 
                     b.Property<DateTime>("Date");
 
-                    b.Property<int>("DoseId");
+                    b.Property<long>("DoseId");
 
-                    b.Property<long?>("DoseId1");
+                    b.Property<short>("Due2EPI");
 
                     b.Property<DateTime>("FromDate");
 
-                    b.Property<string>("GivenDate");
+                    b.Property<DateTime?>("GivenDate");
 
                     b.Property<float?>("Height");
 
-                    b.Property<bool>("IsDone");
+                    b.Property<short>("IsDone");
 
                     b.Property<DateTime>("ToDate");
 
@@ -385,7 +363,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("ChildId");
 
-                    b.HasIndex("DoseId1");
+                    b.HasIndex("DoseId");
 
                     b.ToTable("Schedules");
                 });
@@ -395,25 +373,11 @@ namespace VaccineAPI.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd();
 
-                    b.Property<bool>("AllowInventory");
-
-                    b.Property<bool>("AllowInvoice");
-
-                    b.Property<long>("ChildId");
-
-                    b.Property<int?>("CountryCode");
-
-                    b.Property<long>("DoctorId");
-
-                    b.Property<string>("DoctorType");
-
-                    b.Property<string>("Email");
+                    b.Property<string>("CountryCode");
 
                     b.Property<string>("MobileNumber");
 
                     b.Property<string>("Password");
-
-                    b.Property<string>("ProfileImage");
 
                     b.Property<string>("UserType");
 
@@ -427,10 +391,6 @@ namespace VaccineAPI.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd();
 
-                    b.Property<long?>("BrandInventoryId");
-
-                    b.Property<long?>("ChildId");
-
                     b.Property<int?>("MaxAge");
 
                     b.Property<int>("MinAge");
@@ -438,10 +398,6 @@ namespace VaccineAPI.Migrations
                     b.Property<string>("Name");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("BrandInventoryId");
-
-                    b.HasIndex("ChildId");
 
                     b.ToTable("Vaccines");
                 });
@@ -462,7 +418,7 @@ namespace VaccineAPI.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("VaccineAPI.Models.Doctor", "Doctor")
-                        .WithMany()
+                        .WithMany("BrandAmounts")
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
@@ -475,7 +431,7 @@ namespace VaccineAPI.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("VaccineAPI.Models.Doctor", "Doctor")
-                        .WithMany()
+                        .WithMany("BrandInventories")
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
@@ -483,7 +439,7 @@ namespace VaccineAPI.Migrations
             modelBuilder.Entity("VaccineAPI.Models.Child", b =>
                 {
                     b.HasOne("VaccineAPI.Models.Clinic", "Clinic")
-                        .WithMany("ChildrenCount")
+                        .WithMany("Children")
                         .HasForeignKey("ClinicId")
                         .OnDelete(DeleteBehavior.Cascade);
 
@@ -492,8 +448,9 @@ namespace VaccineAPI.Migrations
                         .HasForeignKey("DoctorId");
 
                     b.HasOne("VaccineAPI.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId1");
+                        .WithMany("Childs")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Clinic", b =>
@@ -512,10 +469,18 @@ namespace VaccineAPI.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("VaccineAPI.Models.Doctor", b =>
+                {
+                    b.HasOne("VaccineAPI.Models.User", "User")
+                        .WithMany("Doctors")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("VaccineAPI.Models.DoctorSchedule", b =>
                 {
                     b.HasOne("VaccineAPI.Models.Doctor", "Doctor")
-                        .WithMany()
+                        .WithMany("DoctorSchedules")
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Cascade);
 
@@ -536,12 +501,12 @@ namespace VaccineAPI.Migrations
             modelBuilder.Entity("VaccineAPI.Models.FollowUp", b =>
                 {
                     b.HasOne("VaccineAPI.Models.Child", "Child")
-                        .WithMany()
+                        .WithMany("FollowUps")
                         .HasForeignKey("ChildId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("VaccineAPI.Models.Doctor", "Doctor")
-                        .WithMany()
+                        .WithMany("FollowUps")
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
@@ -549,7 +514,7 @@ namespace VaccineAPI.Migrations
             modelBuilder.Entity("VaccineAPI.Models.Message", b =>
                 {
                     b.HasOne("VaccineAPI.Models.User", "User")
-                        .WithMany()
+                        .WithMany("Messages")
                         .HasForeignKey("UserId");
                 });
 
@@ -560,24 +525,14 @@ namespace VaccineAPI.Migrations
                         .HasForeignKey("BrandId");
 
                     b.HasOne("VaccineAPI.Models.Child", "Child")
-                        .WithMany()
+                        .WithMany("Schedules")
                         .HasForeignKey("ChildId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("VaccineAPI.Models.Dose", "Dose")
                         .WithMany()
-                        .HasForeignKey("DoseId1");
-                });
-
-            modelBuilder.Entity("VaccineAPI.Models.Vaccine", b =>
-                {
-                    b.HasOne("VaccineAPI.Models.BrandInventory")
-                        .WithMany("VaccineName")
-                        .HasForeignKey("BrandInventoryId");
-
-                    b.HasOne("VaccineAPI.Models.Child")
-                        .WithMany("ChildVaccines")
-                        .HasForeignKey("ChildId");
+                        .HasForeignKey("DoseId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 #pragma warning restore 612, 618
         }

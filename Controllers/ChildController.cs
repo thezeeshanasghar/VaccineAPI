@@ -40,7 +40,7 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public Response<IEnumerable<ChildDTO>> Get()
         {
-            var dbChilds = _db.Childs.ToList();
+            var dbChilds = _db.Childs.Include(x=>x.User).ToList();
             List<ChildDTO> childDTOs = new List<ChildDTO>();
             foreach (var child in dbChilds)
             {
@@ -58,8 +58,8 @@ namespace VaccineAPI.Controllers
         {
             var dbChild = _db.Childs.Include(c => c.User).Where(c => c.Id == Id).FirstOrDefault();
             ChildDTO childDTO = _mapper.Map<ChildDTO>(dbChild);
-            childDTO.CountryCode = dbChild.User.CountryCode;
-            childDTO.MobileNumber = dbChild.User.MobileNumber;
+              childDTO.CountryCode = dbChild.User.CountryCode;
+              childDTO.MobileNumber = dbChild.User.MobileNumber;
             return new Response<ChildDTO>(true, null, childDTO);
         }
 
@@ -112,10 +112,10 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
 
                     childDB.UserId = userDB.Id;
-                    childDB.ChildVaccines.Clear();
-                    foreach(VaccineDTO vaccineDTO in childDTO.ChildVaccines) {
-                        childDB.ChildVaccines.Add(_db.Vaccines.Where(x=>x.Id==vaccineDTO.Id).FirstOrDefault());
-                    }
+                    // childDB.ChildVaccines.Clear();
+                    // foreach(VaccineDTO vaccineDTO in childDTO.ChildVaccines) {
+                    //     childDB.ChildVaccines.Add(_db.Vaccines.Where(x=>x.Id==vaccineDTO.Id).FirstOrDefault());
+                    // }
                     _db.Childs.Add(childDB);
                     _db.SaveChanges();
                 }
@@ -153,7 +153,7 @@ namespace VaccineAPI.Controllers
                             {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
-                                //     cvd.GivenDate = childDB.DOB;
+                                cvd.GivenDate = childDB.DOB;
                             }
                             else if (
                               ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase)
@@ -163,8 +163,8 @@ namespace VaccineAPI.Controllers
                             {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
-                                //     DateTime d = childDB.DOB;
-                                //    cvd.GivenDate = d.AddDays(42);
+                                    DateTime d = childDB.DOB;
+                                    cvd.GivenDate = d.AddDays(42);
                             }
                             else if (
                             ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase)
@@ -174,8 +174,8 @@ namespace VaccineAPI.Controllers
                             {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
-                                //      DateTime d = childDB.DOB;
-                                //     cvd.GivenDate = d.AddDays(70);
+                                      DateTime d = childDB.DOB;
+                                     cvd.GivenDate = d.AddDays(70);
                             }
                             else if (
                             ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase)
@@ -184,8 +184,8 @@ namespace VaccineAPI.Controllers
                             {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
-                                //         DateTime d = childDB.DOB;
-                                //       cvd.GivenDate = d.AddDays(98);
+                                 DateTime d = childDB.DOB;
+                                cvd.GivenDate = d.AddDays(98);
                             }
                             else if (
                            ds.Dose.Name.Equals("Measles # 1", StringComparison.OrdinalIgnoreCase)
@@ -193,12 +193,12 @@ namespace VaccineAPI.Controllers
                             {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
-                                //       DateTime d = childDB.DOB;
-                                //       cvd.GivenDate = d.AddMonths(9);
+                                       DateTime d = childDB.DOB;
+                                       cvd.GivenDate = d.AddMonths(9);
                             }
                         }
 
-                        //         cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
+                         cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
 
                         _db.Schedules.Add(cvd);
                         _db.SaveChanges();
@@ -209,7 +209,8 @@ namespace VaccineAPI.Controllers
                     UserEmail.ParentEmail(c);
 
                 // generate SMS and save it to the db
-                UserSMS.ParentSMS(c);
+                UserSMS u = new UserSMS(_db);
+                u.ParentSMS(c);
 
                 return new Response<ChildDTO>(true, null, childDTO);
             }
@@ -555,6 +556,37 @@ namespace VaccineAPI.Controllers
                 _db.SaveChanges();
                 return new Response<string>(true, "Child is deleted successfully", null);
             }
+        }
+
+         //Date Function
+          protected DateTime calculateDate(DateTime date, int GapInDays)
+        {
+            // For 3 months
+            if (GapInDays == 84)
+                return date.AddMonths(3);
+            // For 9 Year 1 month
+            else if (GapInDays == 3315)
+                return date.AddYears(9).AddMonths(1);
+            // For 10 Year 6 month
+            else if (GapInDays == 3833)
+                return date.AddYears(10).AddMonths(6);
+            // For 1 to 15 years
+            else if (GapInDays == 365 || GapInDays == 730 || GapInDays == 1095 ||
+                GapInDays == 1460 || GapInDays == 1825 || GapInDays == 2190 || GapInDays == 2555 ||
+                GapInDays == 2920 || GapInDays == 3285 || GapInDays == 3650 || GapInDays == 4015 ||
+                GapInDays == 4380 || GapInDays == 4745 || GapInDays == 5110 || GapInDays == 5475)
+                return date.AddYears((int)(GapInDays / 365));
+            // From 6 months to 11 months
+            else if (GapInDays >= 168 && GapInDays <= 334)
+                return date.AddMonths((int)(GapInDays / 28));
+            // From 13 months to 20 months
+            else if (GapInDays >= 395 && GapInDays <= 608)
+                return date.AddMonths((int)(GapInDays / 29));
+            // From 21 months to 11 months
+            else if (GapInDays >= 639 && GapInDays <= 1795)
+                return date.AddMonths((int)(GapInDays / 30));
+            else
+                return date.AddDays(GapInDays);
         }
     }
 }

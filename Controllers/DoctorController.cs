@@ -144,7 +144,8 @@ namespace VaccineAPI.Controllers
                     doctorDTO.Id = doctorDB.Id;
 
                     //generate SMS and save it to the db
-                //    UserSMS.DoctorSMS(doctorDTO);
+                    UserSMS u = new UserSMS(_db);
+                    u.DoctorSMS(doctorDTO);
 
                     // 4- check if clinicDto exsist; then save clinic as well
                     if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))

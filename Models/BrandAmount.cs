@@ -16,7 +16,7 @@ namespace VaccineAPI.Models
         public long DoctorId { get; set; }
          [JsonIgnore]
         public Doctor Doctor { get; set; }
-        public virtual string VaccineName { get; set; }
+      //  public virtual string VaccineName { get; set; }
     }
 
 }

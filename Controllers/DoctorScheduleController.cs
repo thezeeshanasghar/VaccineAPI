@@ -53,19 +53,19 @@ namespace VaccineAPI.Controllers
             }
 
         [HttpPost]
-        public Response<List<DoctorScheduleDTO>> Post(List<DoctorScheduleDTO> dsDTOS)
+        public Response<IEnumerable<DoctorScheduleDTO>> Post(IEnumerable<DoctorScheduleDTO> dsDTOS)
         {
             
-                {
+                
                     foreach (var DoctorSchedueDTO in dsDTOS)
                     {
-                        DoctorSchedule doctorSchduleDB = Mapper.Map<DoctorSchedule>(DoctorSchedueDTO);
+                        DoctorSchedule doctorSchduleDB = _mapper.Map<DoctorSchedule>(DoctorSchedueDTO);
                         _db.DoctorSchedules.Add(doctorSchduleDB);
                         _db.SaveChanges();
                         DoctorSchedueDTO.Id = doctorSchduleDB.Id;
                     }
-                    return new Response<List<DoctorScheduleDTO>>(true, null, dsDTOS);
-                }
+                    return new Response<IEnumerable<DoctorScheduleDTO>>(true, null, dsDTOS);
+                
             }
 
     

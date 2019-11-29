@@ -155,6 +155,13 @@ namespace VaccineAPI.Controllers
            // }
                 
             }
+
+             public static string sendRequest(string url)
+        {
+            System.Net.Http.HttpClient c = new System.Net.Http.HttpClient();
+            var content = c.GetStringAsync(url).Result;
+            return content.ToString();
+        }
             
         }
       

@@ -136,7 +136,8 @@ namespace VaccineAPI.Controllers
                         else
                         {
                             UserEmail.DoctorForgotPassword(doctorDb);
-                            UserSMS.DoctorForgotPasswordSMS(doctorDb);
+                            UserSMS u = new UserSMS(_db);
+                            u.DoctorForgotPasswordSMS(doctorDb);
                             return new Response<UserDTO>(true, "your password has been sent to your mobile number and email address", null);
 
                         }
@@ -151,7 +152,8 @@ namespace VaccineAPI.Controllers
                         else
                         {
                             UserEmail.ParentForgotPassword(childDB);
-                            UserSMS.ParentForgotPasswordSMS(childDB);
+                            UserSMS u = new UserSMS(_db);
+                            u.ParentForgotPasswordSMS(childDB);
                             return new Response<UserDTO>(true, "your password has been sent to your mobile number and email address", null);
                         }
                     }

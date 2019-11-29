@@ -29,14 +29,15 @@ namespace VaccineAPI.Models
          [JsonIgnore]
         public User User { get; set; }
         
-         public virtual string CountryCode { get; set; }
-        public virtual string MobileNumber { get; set; }
-        public virtual  string Password { get; set; }
-        public virtual  string StreetAddress { get; set; }
-        public virtual bool IsBrand { get; set; }
-        public virtual bool IsConsultationFee { get; set; }
-        public virtual ICollection<Vaccine> ChildVaccines {get; set; } 
-        public virtual System.DateTime InvoiceDate {get; set;}
+        //  public virtual string CountryCode { get; set; }
+        // public virtual string MobileNumber { get; set; }
+        // public virtual  string Password { get; set; }
+        // public virtual  string StreetAddress { get; set; }
+        // public virtual bool IsBrand { get; set; }
+        // public virtual bool IsConsultationFee { get; set; }
+      //   [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+      //  public virtual ICollection<Vaccine> ChildVaccines {get; set; } 
+       // public virtual System.DateTime InvoiceDate {get; set;}
        // public virtual string InvoiceDate {get; set;}
          
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]

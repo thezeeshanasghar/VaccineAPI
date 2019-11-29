@@ -8,6 +8,37 @@ namespace VaccineAPI.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "Users",
+                columns: table => new
+                {
+                    Id = table.Column<long>(nullable: false)
+                        .Annotation("MySQL:AutoIncrement", true),
+                    MobileNumber = table.Column<string>(nullable: true),
+                    Password = table.Column<string>(nullable: true),
+                    UserType = table.Column<string>(nullable: true),
+                    CountryCode = table.Column<string>(nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Users", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Vaccines",
+                columns: table => new
+                {
+                    Id = table.Column<long>(nullable: false)
+                        .Annotation("MySQL:AutoIncrement", true),
+                    Name = table.Column<string>(nullable: true),
+                    MinAge = table.Column<int>(nullable: false),
+                    MaxAge = table.Column<int>(nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Vaccines", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Doctors",
                 columns: table => new
                 {
@@ -21,7 +52,7 @@ namespace VaccineAPI.Migrations
                     ShowPhone = table.Column<short>(nullable: false),
                     ShowMobile = table.Column<short>(nullable: false),
                     PhoneNo = table.Column<string>(nullable: true),
-                    ValidUpto = table.Column<DateTime>(nullable: false),
+                    ValidUpto = table.Column<DateTime>(nullable: true),
                     InvoiceNumber = table.Column<int>(nullable: true),
                     ProfileImage = table.Column<string>(nullable: true),
                     SignatureImage = table.Column<string>(nullable: true),
@@ -30,66 +61,19 @@ namespace VaccineAPI.Migrations
                     AllowChart = table.Column<short>(nullable: false),
                     AllowFollowUp = table.Column<short>(nullable: false),
                     AllowInventory = table.Column<short>(nullable: false),
-                    SmsLimit = table.Column<int>(nullable: false),
+                    SMSLimit = table.Column<int>(nullable: false),
                     DoctorType = table.Column<string>(nullable: true),
                     Qualification = table.Column<string>(nullable: true),
                     AdditionalInfo = table.Column<string>(nullable: true),
-                    UserId = table.Column<long>(nullable: false),
-                    Speciality = table.Column<string>(nullable: true)
+                    UserId = table.Column<long>(nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Doctors", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Users",
-                columns: table => new
-                {
-                    Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
-                    MobileNumber = table.Column<string>(nullable: true),
-                    Password = table.Column<string>(nullable: true),
-                    UserType = table.Column<string>(nullable: true),
-                    CountryCode = table.Column<int>(nullable: true),
-                    DoctorId = table.Column<long>(nullable: false),
-                    AllowInventory = table.Column<short>(nullable: false),
-                    AllowInvoice = table.Column<short>(nullable: false),
-                    ChildId = table.Column<long>(nullable: false),
-                    Email = table.Column<string>(nullable: true),
-                    ProfileImage = table.Column<string>(nullable: true),
-                    DoctorType = table.Column<string>(nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Users", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Clinics",
-                columns: table => new
-                {
-                    Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
-                    Name = table.Column<string>(nullable: true),
-                    ConsultationFee = table.Column<int>(nullable: false),
-                    OffDays = table.Column<string>(nullable: true),
-                    StartTime = table.Column<string>(nullable: true),
-                    EndTime = table.Column<string>(nullable: true),
-                    Lat = table.Column<float>(nullable: false),
-                    Long = table.Column<float>(nullable: false),
-                    PhoneNumber = table.Column<string>(nullable: true),
-                    IsOnline = table.Column<int>(nullable: false),
-                    Address = table.Column<string>(nullable: true),
-                    DoctorId = table.Column<long>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Clinics", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Clinics_Doctors_DoctorId",
-                        column: x => x.DoctorId,
-                        principalTable: "Doctors",
+                        name: "FK_Doctors_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -101,9 +85,9 @@ namespace VaccineAPI.Migrations
                     Id = table.Column<long>(nullable: false)
                         .Annotation("MySQL:AutoIncrement", true),
                     MobileNumber = table.Column<string>(nullable: true),
-                    Sms = table.Column<string>(nullable: true),
+                    SMS = table.Column<string>(nullable: true),
                     ApiResponse = table.Column<string>(nullable: true),
-                    Created = table.Column<string>(nullable: true),
+                    Created = table.Column<DateTime>(nullable: false),
                     UserId = table.Column<long>(nullable: true)
                 },
                 constraints: table =>
@@ -113,139 +97,6 @@ namespace VaccineAPI.Migrations
                         name: "FK_Messages_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Childs",
-                columns: table => new
-                {
-                    Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
-                    Name = table.Column<string>(nullable: true),
-                    FatherName = table.Column<string>(nullable: true),
-                    Email = table.Column<string>(nullable: true),
-                    DOB = table.Column<string>(nullable: true),
-                    Gender = table.Column<string>(nullable: true),
-                    City = table.Column<string>(nullable: true),
-                    PreferredDayOfReminder = table.Column<string>(nullable: true),
-                    PreferredDayOfWeek = table.Column<string>(nullable: true),
-                    PreferredSchedule = table.Column<string>(nullable: true),
-                    IsEPIDone = table.Column<short>(nullable: true),
-                    IsVerified = table.Column<short>(nullable: true),
-                    ClinicId = table.Column<long>(nullable: false),
-                    UserId = table.Column<long>(nullable: false),
-                    UserId1 = table.Column<long>(nullable: true),
-                    CountryCode = table.Column<string>(nullable: true),
-                    MobileNumber = table.Column<string>(nullable: true),
-                    Password = table.Column<string>(nullable: true),
-                    StreetAddress = table.Column<string>(nullable: true),
-                    IsBrand = table.Column<short>(nullable: false),
-                    IsConsultationFee = table.Column<short>(nullable: false),
-                    InvoiceDate = table.Column<DateTime>(nullable: false),
-                    DoctorId = table.Column<long>(nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Childs", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Childs_Clinics_ClinicId",
-                        column: x => x.ClinicId,
-                        principalTable: "Clinics",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Childs_Doctors_DoctorId",
-                        column: x => x.DoctorId,
-                        principalTable: "Doctors",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Childs_Users_UserId1",
-                        column: x => x.UserId1,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ClinicTimings",
-                columns: table => new
-                {
-                    Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
-                    Day = table.Column<string>(nullable: true),
-                    StartTime = table.Column<TimeSpan>(nullable: false),
-                    EndTime = table.Column<TimeSpan>(nullable: false),
-                    Session = table.Column<string>(nullable: true),
-                    IsOpen = table.Column<short>(nullable: false),
-                    ClinicId = table.Column<long>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ClinicTimings", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ClinicTimings_Clinics_ClinicId",
-                        column: x => x.ClinicId,
-                        principalTable: "Clinics",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "FollowUps",
-                columns: table => new
-                {
-                    Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
-                    Disease = table.Column<string>(nullable: true),
-                    CurrentVisitDate = table.Column<DateTime>(nullable: false),
-                    NextVisitDate = table.Column<DateTime>(nullable: false),
-                    Weight = table.Column<float>(nullable: true),
-                    Height = table.Column<float>(nullable: true),
-                    OFC = table.Column<float>(nullable: true),
-                    BloodPressure = table.Column<float>(nullable: true),
-                    BloodSugar = table.Column<float>(nullable: true),
-                    ChildId = table.Column<long>(nullable: false),
-                    DoctorId = table.Column<long>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_FollowUps", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_FollowUps_Childs_ChildId",
-                        column: x => x.ChildId,
-                        principalTable: "Childs",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_FollowUps_Doctors_DoctorId",
-                        column: x => x.DoctorId,
-                        principalTable: "Doctors",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Vaccines",
-                columns: table => new
-                {
-                    Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
-                    Name = table.Column<string>(nullable: true),
-                    MinAge = table.Column<int>(nullable: false),
-                    MaxAge = table.Column<int>(nullable: true),
-                    BrandInventoryId = table.Column<long>(nullable: true),
-                    ChildId = table.Column<long>(nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Vaccines", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Vaccines_Childs_ChildId",
-                        column: x => x.ChildId,
-                        principalTable: "Childs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -295,6 +146,33 @@ namespace VaccineAPI.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Clinics",
+                columns: table => new
+                {
+                    Id = table.Column<long>(nullable: false)
+                        .Annotation("MySQL:AutoIncrement", true),
+                    Name = table.Column<string>(nullable: true),
+                    ConsultationFee = table.Column<int>(nullable: false),
+                    OffDays = table.Column<string>(nullable: true),
+                    Lat = table.Column<double>(nullable: false),
+                    Long = table.Column<double>(nullable: false),
+                    PhoneNumber = table.Column<string>(nullable: true),
+                    IsOnline = table.Column<short>(nullable: false),
+                    Address = table.Column<string>(nullable: true),
+                    DoctorId = table.Column<long>(nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Clinics", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Clinics_Doctors_DoctorId",
+                        column: x => x.DoctorId,
+                        principalTable: "Doctors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "BrandAmounts",
                 columns: table => new
                 {
@@ -302,8 +180,7 @@ namespace VaccineAPI.Migrations
                         .Annotation("MySQL:AutoIncrement", true),
                     Amount = table.Column<int>(nullable: false),
                     BrandId = table.Column<long>(nullable: false),
-                    DoctorId = table.Column<long>(nullable: false),
-                    VaccineName = table.Column<string>(nullable: true)
+                    DoctorId = table.Column<long>(nullable: false)
                 },
                 constraints: table =>
                 {
@@ -377,6 +254,108 @@ namespace VaccineAPI.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Childs",
+                columns: table => new
+                {
+                    Id = table.Column<long>(nullable: false)
+                        .Annotation("MySQL:AutoIncrement", true),
+                    Name = table.Column<string>(nullable: true),
+                    FatherName = table.Column<string>(nullable: true),
+                    Email = table.Column<string>(nullable: true),
+                    DOB = table.Column<DateTime>(nullable: false),
+                    Gender = table.Column<string>(nullable: true),
+                    City = table.Column<string>(nullable: true),
+                    PreferredDayOfReminder = table.Column<string>(nullable: true),
+                    PreferredDayOfWeek = table.Column<string>(nullable: true),
+                    PreferredSchedule = table.Column<string>(nullable: true),
+                    IsEPIDone = table.Column<short>(nullable: true),
+                    IsVerified = table.Column<short>(nullable: true),
+                    ClinicId = table.Column<long>(nullable: false),
+                    UserId = table.Column<long>(nullable: false),
+                    DoctorId = table.Column<long>(nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Childs", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Childs_Clinics_ClinicId",
+                        column: x => x.ClinicId,
+                        principalTable: "Clinics",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Childs_Doctors_DoctorId",
+                        column: x => x.DoctorId,
+                        principalTable: "Doctors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Childs_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ClinicTimings",
+                columns: table => new
+                {
+                    Id = table.Column<long>(nullable: false)
+                        .Annotation("MySQL:AutoIncrement", true),
+                    Day = table.Column<string>(nullable: true),
+                    StartTime = table.Column<TimeSpan>(nullable: false),
+                    EndTime = table.Column<TimeSpan>(nullable: false),
+                    Session = table.Column<string>(nullable: true),
+                    IsOpen = table.Column<short>(nullable: false),
+                    ClinicId = table.Column<long>(nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ClinicTimings", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ClinicTimings_Clinics_ClinicId",
+                        column: x => x.ClinicId,
+                        principalTable: "Clinics",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "FollowUps",
+                columns: table => new
+                {
+                    Id = table.Column<long>(nullable: false)
+                        .Annotation("MySQL:AutoIncrement", true),
+                    Disease = table.Column<string>(nullable: true),
+                    CurrentVisitDate = table.Column<DateTime>(nullable: false),
+                    NextVisitDate = table.Column<DateTime>(nullable: false),
+                    Weight = table.Column<float>(nullable: true),
+                    Height = table.Column<float>(nullable: true),
+                    OFC = table.Column<float>(nullable: true),
+                    BloodPressure = table.Column<float>(nullable: true),
+                    BloodSugar = table.Column<float>(nullable: true),
+                    ChildId = table.Column<long>(nullable: false),
+                    DoctorId = table.Column<long>(nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FollowUps", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_FollowUps_Childs_ChildId",
+                        column: x => x.ChildId,
+                        principalTable: "Childs",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_FollowUps_Doctors_DoctorId",
+                        column: x => x.DoctorId,
+                        principalTable: "Doctors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Schedules",
                 columns: table => new
                 {
@@ -387,11 +366,11 @@ namespace VaccineAPI.Migrations
                     Height = table.Column<float>(nullable: true),
                     Circle = table.Column<float>(nullable: true),
                     IsDone = table.Column<short>(nullable: false),
-                    GivenDate = table.Column<string>(nullable: true),
+                    Due2EPI = table.Column<short>(nullable: false),
+                    GivenDate = table.Column<DateTime>(nullable: true),
                     BrandId = table.Column<long>(nullable: true),
                     ChildId = table.Column<long>(nullable: false),
-                    DoseId = table.Column<int>(nullable: false),
-                    DoseId1 = table.Column<long>(nullable: true),
+                    DoseId = table.Column<long>(nullable: false),
                     FromDate = table.Column<DateTime>(nullable: false),
                     ToDate = table.Column<DateTime>(nullable: false)
                 },
@@ -411,11 +390,11 @@ namespace VaccineAPI.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_Schedules_Doses_DoseId1",
-                        column: x => x.DoseId1,
+                        name: "FK_Schedules_Doses_DoseId",
+                        column: x => x.DoseId,
                         principalTable: "Doses",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
@@ -454,9 +433,9 @@ namespace VaccineAPI.Migrations
                 column: "DoctorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Childs_UserId1",
+                name: "IX_Childs_UserId",
                 table: "Childs",
-                column: "UserId1");
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Clinics_DoctorId",
@@ -467,6 +446,11 @@ namespace VaccineAPI.Migrations
                 name: "IX_ClinicTimings_ClinicId",
                 table: "ClinicTimings",
                 column: "ClinicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Doctors_UserId",
+                table: "Doctors",
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DoctorSchedules_DoctorId",
@@ -509,37 +493,18 @@ namespace VaccineAPI.Migrations
                 column: "ChildId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Schedules_DoseId1",
+                name: "IX_Schedules_DoseId",
                 table: "Schedules",
-                column: "DoseId1");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Vaccines_BrandInventoryId",
-                table: "Vaccines",
-                column: "BrandInventoryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Vaccines_ChildId",
-                table: "Vaccines",
-                column: "ChildId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Vaccines_BrandInventorys_BrandInventoryId",
-                table: "Vaccines",
-                column: "BrandInventoryId",
-                principalTable: "BrandInventorys",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
+                column: "DoseId");
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_BrandInventorys_Brands_BrandId",
-                table: "BrandInventorys");
-
             migrationBuilder.DropTable(
                 name: "BrandAmounts");
+
+            migrationBuilder.DropTable(
+                name: "BrandInventorys");
 
             migrationBuilder.DropTable(
                 name: "ClinicTimings");
@@ -557,28 +522,25 @@ namespace VaccineAPI.Migrations
                 name: "Schedules");
 
             migrationBuilder.DropTable(
-                name: "Doses");
-
-            migrationBuilder.DropTable(
                 name: "Brands");
-
-            migrationBuilder.DropTable(
-                name: "Vaccines");
-
-            migrationBuilder.DropTable(
-                name: "BrandInventorys");
 
             migrationBuilder.DropTable(
                 name: "Childs");
 
             migrationBuilder.DropTable(
+                name: "Doses");
+
+            migrationBuilder.DropTable(
                 name: "Clinics");
 
             migrationBuilder.DropTable(
-                name: "Users");
+                name: "Vaccines");
 
             migrationBuilder.DropTable(
                 name: "Doctors");
+
+            migrationBuilder.DropTable(
+                name: "Users");
         }
     }
 }

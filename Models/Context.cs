@@ -76,12 +76,12 @@ namespace VaccineAPI.Models
                               });
 
                              modelBuilder.Entity< Child >(b=>{
-                                b.Property(r => r.IsBrand)
-                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+                            //     b.Property(r => r.IsBrand)
+                            // .HasConversion(new BoolToZeroOneConverter<Int16>());
                             
                         
-                            b.Property(r => r.IsConsultationFee)
-                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+                            // b.Property(r => r.IsConsultationFee)
+                            // .HasConversion(new BoolToZeroOneConverter<Int16>());
 
                              
                             b.Property(r => r.IsEPIDone)

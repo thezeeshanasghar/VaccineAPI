@@ -131,8 +131,9 @@ namespace VaccineAPI.Controllers
         {
             if (!string.IsNullOrEmpty(msg.SMS) && !string.IsNullOrEmpty(msg.MobileNumber))
             {
-                var response = UserSMS.SendSMS("92", msg.MobileNumber, "", msg.SMS);
-                //UserSMS.addMessageToDB(msg.MobileNumber, response, msg.SMS, 1, _db);
+                UserSMS u = new UserSMS(_db);
+                var response = u.SendSMS("92", msg.MobileNumber, "", msg.SMS);
+                u.addMessageToDB(msg.MobileNumber, response, msg.SMS, 1);
                 return new Response<MessageDTO>(true, null, null);
             }
             else

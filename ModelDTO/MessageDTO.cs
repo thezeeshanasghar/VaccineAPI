@@ -16,8 +16,6 @@ namespace VaccineAPI.ModelDTO
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime Created { get; set; }
         public int UserId { get; set; }
-        
-        [JsonIgnore]
         public UserDTO User { get; set; }
     }
 

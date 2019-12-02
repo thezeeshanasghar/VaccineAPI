@@ -69,7 +69,7 @@ namespace VaccineAPI.Controllers
             }
 
 
-            var messageDTOs = Mapper.Map<List<MessageDTO>>(dbMessages.OrderByDescending(x => x.Created));
+            var messageDTOs = _mapper.Map<List<MessageDTO>>(dbMessages.OrderByDescending(x => x.Created));
             return new Response<List<MessageDTO>>(true, null, messageDTOs);
         }
           protected bool IsJson(string input)
@@ -85,7 +85,7 @@ namespace VaccineAPI.Controllers
     
     
                 {
-                    var dbMessages = _db.Messages.Where(x => x.UserId == id).OrderByDescending(x => x.Created).ToList();
+                    var dbMessages = _db.Messages.Where(x => x.UserId == id).Include(x=>x.User).OrderByDescending(x => x.Created).ToList();
                     var messageDTOs = _mapper.Map<List<MessageDTO>>(dbMessages);
                     foreach (var msg in messageDTOs)
                     {

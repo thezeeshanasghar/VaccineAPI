@@ -14,8 +14,7 @@ namespace VaccineAPI.Models
         public string ApiResponse { get; set; }
         public DateTime Created { get; set; }
         public long? UserId { get; set; }
-        [JsonIgnore]
-        public User User { get; set; }
+        public virtual User User { get; set; }
     }
 
 }

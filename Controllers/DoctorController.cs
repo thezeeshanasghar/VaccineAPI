@@ -288,13 +288,14 @@ namespace VaccineAPI.Controllers
             
                 
                 {
-                    var doctor = _db.Doctors.FirstOrDefault(c => c.UserId == id);
+                    var doctor = _db.Doctors.Include(x=>x.Clinics).FirstOrDefault(c => c.UserId == id);
                     if (doctor == null)
                         return new Response<IEnumerable<ChildDTO>>(false, "Doctor not found", null);
                     else
                     {
                         List<ChildDTO> childDTOs = new List<ChildDTO>();
-                        var doctorClinics = doctor.Clinics;
+                      // var doctorClinics = doctor.Clinics;
+                          var doctorClinics = _db.Clinics.Include(x=>x.Childs).Where(x=>x.DoctorId == doctor.Id).ToList();
                         foreach (var clinic in doctorClinics)
                         {
                             if (!String.IsNullOrEmpty(searchKeyword))
@@ -304,18 +305,18 @@ namespace VaccineAPI.Controllers
                                 if (searchKeyword.StartsWith("0")) searchKeyword = searchKeyword.Substring(1);
                                 if (searchKeyword.StartsWith("00")) searchKeyword = searchKeyword.Substring(2);
                                 if (searchKeyword.StartsWith("92")) searchKeyword = searchKeyword.Substring(2);
-                                childDTOs.AddRange(Mapper.Map<List<ChildDTO>>(
-                                    clinic.Children.Where(x => x.Name.Trim().ToLower().Contains(searchKeyword.ToLower())
+                                childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(
+                                    clinic.Childs.Where(x => x.Name.Trim().ToLower().Contains(searchKeyword.ToLower())
                                     || x.FatherName.Trim().ToLower().Contains(searchKeyword.ToLower())
                                     || x.User.MobileNumber.Trim().Contains(searchKeyword.ToLower())).ToList<Child>()));
                                 currentPage = 0;
                             }
                             else
-                                childDTOs.AddRange(Mapper.Map<List<ChildDTO>>(clinic.Children.ToList<Child>()));
+                                childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(clinic.Childs.ToList<Child>()));
                         }
                         foreach (var item in childDTOs)
                         {
-                            var dbChild = _db.Childs.Where(x => x.Id == item.Id).FirstOrDefault();
+                            var dbChild = _db.Childs.Where(x => x.Id == item.Id).Include(x=>x.User).FirstOrDefault();
                             item.MobileNumber = dbChild.User.CountryCode + dbChild.User.MobileNumber;
                         }
                         return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs.OrderByDescending(x => x.Id).ToList().Skip(pageSize * currentPage).Take(pageSize));

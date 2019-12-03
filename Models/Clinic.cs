@@ -7,6 +7,12 @@ namespace VaccineAPI.Models
 
     public class Clinic
     {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
+        public Clinic()
+        {
+            this.Childs = new HashSet<Child>();
+            this.ClinicTimings = new HashSet<ClinicTiming>();
+        }
         public long Id { get; set; }
         public string Name { get; set; }
         public int ConsultationFee { get; set; }

@@ -8,6 +8,12 @@ namespace VaccineAPI.Models
 
     public class Child
     {
+         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
+        public Child()
+        {
+            this.FollowUps = new HashSet<FollowUp>();
+            this.Schedules = new HashSet<Schedule>();
+        }
         public long Id { get; set; }
         public string Name { get; set; }
         public string FatherName { get; set; }

@@ -18,18 +18,15 @@ namespace VaccineAPI.Models
         public bool Due2EPI { get; set; }
         public Nullable<System.DateTime> GivenDate { get; set; }
          public long? BrandId { get; set; }
-        [JsonIgnore]
-        public Brand Brand { get; set; }
+        public virtual Brand Brand { get; set; }
         
          public long ChildId { get; set; }
-        [JsonIgnore]
-        public Child Child { get; set; }
+        public virtual Child Child { get; set; }
        
         public long DoseId { get; set; }
-        [JsonIgnore]
         public virtual Dose Dose { get; set; }
-        public virtual DateTime FromDate { get; set; }
-        public virtual DateTime ToDate { get; set; }
+        // public virtual DateTime FromDate { get; set; }
+        // public virtual DateTime ToDate { get; set; }
     }
 
 }

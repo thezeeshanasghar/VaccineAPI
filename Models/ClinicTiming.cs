@@ -15,8 +15,7 @@ namespace VaccineAPI.Models
         public string Session { get; set; }
         public bool IsOpen { get; set; }
         public long ClinicId { get; set; }
-         [JsonIgnore]
-        public Clinic Clinic { get; set; }
+        public virtual Clinic Clinic { get; set; }
        
     }
 

@@ -8,6 +8,15 @@ namespace VaccineAPI.Models
 
     public class Doctor
     {
+      [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
+        public Doctor()
+        {
+            this.BrandAmounts = new HashSet<BrandAmount>();
+            this.BrandInventories = new HashSet<BrandInventory>();
+            this.DoctorSchedules = new HashSet<DoctorSchedule>();
+            this.FollowUps = new HashSet<FollowUp>();
+            this.Clinics = new HashSet<Clinic>();
+        }
         public long Id { get; set; }
         public string FirstName { get; set; }
         public string LastName { get; set; }
@@ -37,7 +46,6 @@ namespace VaccineAPI.Models
          public virtual ICollection<Clinic> Clinics { get; set; }
          public virtual ICollection<Child> Childs { get; set; }
          [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
-       // public virtual ICollection<DoctorSchedule> DoctorSchedules { get; set; }
       //   [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
           public ICollection<DoctorSchedule> DoctorSchedules { get; set; }
         public virtual ICollection<BrandAmount> BrandAmounts { get; set; }

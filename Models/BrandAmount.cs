@@ -11,11 +11,11 @@ namespace VaccineAPI.Models
         public int Amount { get; set; }
         public long BrandId { get; set; }
          [JsonIgnore]
-        public Brand Brand { get; set; }
+        public virtual Brand Brand { get; set; }
     
         public long DoctorId { get; set; }
          [JsonIgnore]
-        public Doctor Doctor { get; set; }
+        public virtual Doctor Doctor { get; set; }
       //  public virtual string VaccineName { get; set; }
     }
 

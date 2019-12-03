@@ -29,6 +29,7 @@ namespace VaccineAPI.Models
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
                     base.OnModelCreating(modelBuilder);
+                    modelBuilder.Entity<User>().HasData(new User() {Id = 1, MobileNumber= "3331231231" , Password = "1234" , UserType  = "SUPERADMIN" , CountryCode = "92"});
                     modelBuilder.Entity< Doctor >(b=>{ b.Property(r => r.IsApproved)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
                              

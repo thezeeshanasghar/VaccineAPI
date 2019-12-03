@@ -101,12 +101,13 @@ namespace VaccineAPI.Controllers
                         return new Response<IEnumerable<ClinicDTO>>(false, "Doctor not found", null);
                     else
                     {
-                        var dbClinics = doctor.Clinics.ToList();
+                        var dbClinics = _db.Clinics.Include(x=>x.Childs).Where(x=> x.DoctorId == doctor.Id).ToList();
+                       // var dbClinics = doctor.Clinics.ToList();
                         List<ClinicDTO> clinicDTOs = new List<ClinicDTO>();
                         foreach (var clinic in dbClinics)
                         {
                             ClinicDTO clinicDTO = _mapper.Map<ClinicDTO>(clinic);
-                       //     clinicDTO.childrenCount = clinic.Children.Count();
+                            clinicDTO.childrenCount = clinic.Childs.Count();
                             clinicDTOs.Add(clinicDTO);
                         }
                         //var clinicDTOs = Mapper.Map<List<ClinicDTO>>(dbClinics);

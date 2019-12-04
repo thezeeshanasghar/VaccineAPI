@@ -81,7 +81,7 @@ namespace VaccineAPI.Controllers
                             .ToList<FollowUp>();
                     }
                         
-                    IEnumerable<FollowUpDTO> followUpDTO = Mapper.Map<IEnumerable<FollowUpDTO>>(followups);
+                    IEnumerable<FollowUpDTO> followUpDTO = _mapper.Map<IEnumerable<FollowUpDTO>>(followups);
                     return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTO);
                 }
             }

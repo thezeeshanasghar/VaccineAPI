@@ -30,7 +30,7 @@ namespace VaccineAPI.ModelDTO
         public ClinicDTO Clinic { get; set; }
        
         public long UserId  { get; set; }
-         [JsonIgnore]
+       //  [JsonIgnore]
         public UserDTO User { get; set; }
         public bool IsBrand { get; set; }
         public bool IsConsultationFee { get; set; }

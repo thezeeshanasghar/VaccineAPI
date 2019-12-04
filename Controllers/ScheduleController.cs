@@ -54,21 +54,23 @@ namespace VaccineAPI.Controllers
 
          [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
 
-        public Response<IEnumerable<ScheduleDTO>> GetAlert(int GapDays, int OnlineClinicID)
+        public Response<IEnumerable<ScheduleDTO>> GetAlert(int GapDays, long OnlineClinicId)
         {
             
                 {
-                    List<Schedule> schedules = GetAlertData(GapDays, OnlineClinicID, _db);
+                    List<Schedule> schedules = GetAlertData(GapDays, OnlineClinicId, _db);
                     IEnumerable<ScheduleDTO> scheduleDTO = _mapper.Map<IEnumerable<ScheduleDTO>>(schedules);
                     return new Response<IEnumerable<ScheduleDTO>>(true, null, scheduleDTO);
                 }
             
         }
-        private static List<Schedule> GetAlertData(int GapDays, int OnlineClinicId, Context db)
+        private static List<Schedule> GetAlertData(int GapDays, long OnlineClinicId, Context db)
         {
             List<Schedule> schedules = new List<Schedule>();
-            var doctor = db.Clinics.Where(x => x.Id == OnlineClinicId).First<Clinic>().Doctor;
-            long[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<long>();
+            var doctor = db.Clinics.Where(x => x.Id == OnlineClinicId).Include(x=>x.Doctor).First<Clinic>().Doctor;
+            var clinics = db.Clinics.Where(x=>x.DoctorId == doctor.Id).ToList();
+           // long[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<long>();
+           long[] ClinicIDs = clinics.Select(x => x.Id).ToArray<long>();
             DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
             DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
             if (GapDays == 0)
@@ -100,12 +102,20 @@ namespace VaccineAPI.Controllers
             }
             else if (GapDays < 0)
             {
-                schedules = db.Schedules.Include("Child")
+               // schedules = db.Schedules.Include("Child")
+               schedules = db.Schedules.Include(x=>x.Child)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                     .Where(c => c.Date < CurrentPakDateTime.Date && c.Date >= AddedDateTime)
                     .Where(c => c.IsDone == false)
                     .OrderBy(x => x.Child.Id).ThenBy(x => x.Date)
                     .ToList<Schedule>();
+                    // schchild = schedules.Child;
+                     foreach(var sch in schedules)
+                     {
+                       var childss = db.Childs.Include("User").Where(x=> x.Id == sch.Child.Id).FirstOrDefault();
+                      // sch.Child.User.MobileNumber = childss.User.MobileNumber;
+                    }
+                    
             }
             schedules = removeDuplicateRecords(schedules);
             return schedules;
@@ -186,7 +196,10 @@ namespace VaccineAPI.Controllers
 
                     var doseName = "";
                     DateTime scheduleDate = new DateTime();
-                    var dbChild = _db.Childs.Where(x => x.Id == childId).FirstOrDefault();
+                    var dbChild = _db.Childs.Include(x=>x.User).Include(x=>x.Clinic).Where(x => x.Id == childId).FirstOrDefault();
+                    var Childdoctor = _db.Clinics.Include(x=>x.Doctor).Where(x=>x.Id ==dbChild.ClinicId).FirstOrDefault();
+                    var doctorUser = _db.Doctors.Include(x=>x.User).Where(x=>x.Id == dbChild.Clinic.DoctorId).FirstOrDefault();
+                   
                     foreach (var schedule in Schedules)
                     {
                         doseName += schedule.Dose.Name.Trim() + ", ";

@@ -32,7 +32,7 @@ namespace VaccineAPI.Models
         public Clinic Clinic { get; set; }
        
         public long UserId  { get; set; }
-         [JsonIgnore]
+        [JsonIgnore]
         public User User { get; set; }
         
         //  public virtual string CountryCode { get; set; }

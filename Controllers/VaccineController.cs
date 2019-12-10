@@ -109,13 +109,23 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Vaccine>> Post(Vaccine Vaccine)
-        {
-            _db.Vaccines.Update(Vaccine);
-            await _db.SaveChangesAsync();
+         public Response<VaccineDTO> Post(VaccineDTO vaccineDTO)
+        
+                {
+                    Vaccine vaccinedb = _mapper.Map<Vaccine>(vaccineDTO);
+                    _db.Vaccines.Add(vaccinedb);
+                    _db.SaveChanges();
+                    vaccineDTO.Id = vaccinedb.Id;
+                    //add vaccine in brand
+                    Brand dbBrand = new Brand();
+                    dbBrand.VaccineId = vaccinedb.Id;
+                    dbBrand.Name = "Local";
+                    _db.Brands.Add(dbBrand);
+                    _db.SaveChanges();
 
-            return CreatedAtAction(nameof(GetSingle), new { id = Vaccine.Id }, Vaccine);
-        }
+                    return new Response<VaccineDTO>(true, null, vaccineDTO);
+
+                }
 
         [HttpPut("{id}")]
         public  Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)

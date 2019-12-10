@@ -327,6 +327,61 @@ namespace VaccineAPI.Controllers
                 return output;
             }
         }
+
+        [HttpGet("{keyword}/search")]
+        public Response<IEnumerable<ChildDTO>> SearchChildren(string keyword)
+        {
+            
+                {
+
+                    List<Child> dbChildrenResults = new List<Child>();
+                    List<ChildDTO> childDTOs = new List<ChildDTO>();
+
+                    dbChildrenResults = _db.Childs.Where(c => c.Name.ToLower().Contains(keyword.ToLower()) ||
+                                        c.FatherName.ToLower().Contains(keyword.ToLower())).ToList();
+                    childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(dbChildrenResults));
+
+                    foreach (var item in childDTOs)
+                    {
+                        item.MobileNumber = dbChildrenResults.Where(x => x.Id == item.Id).FirstOrDefault().User.MobileNumber;
+                    }
+
+                    return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
+                }
+        }
+
+
+      [HttpGet("search")]
+        public Response<IEnumerable<ChildDTO>> SearchChildrenByCity([FromQuery] string name = "", [FromQuery] string city = "", [FromQuery] string dob = "")
+        
+                {
+
+                    List<Child> dbChildrenResults = _db.Childs.Include(x=>x.User).ToList();
+                    List<ChildDTO> childDTOs = new List<ChildDTO>();
+                    if (!String.IsNullOrEmpty(name))
+                        dbChildrenResults = dbChildrenResults.Where(c =>
+                               c.Name.ToLower().Contains(name.Trim().ToLower()) ||
+                               c.FatherName.ToLower().Contains(name.Trim().ToLower())).ToList();
+
+                    if (!String.IsNullOrEmpty(city))
+                        dbChildrenResults = dbChildrenResults.Where(c => c.City != null && c.City.ToLower().Contains(city.Trim().ToLower())).ToList();
+
+                    if(!String.IsNullOrEmpty(dob))
+                        dbChildrenResults = dbChildrenResults.Where(c => c.DOB == Convert.ToDateTime(dob).Date).ToList();
+
+                 
+                    childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(dbChildrenResults));
+
+                    foreach (var item in childDTOs)
+                    {
+                        item.MobileNumber = dbChildrenResults.Where(x => x.Id == item.Id).FirstOrDefault().User.MobileNumber;
+                    }
+
+                    return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
+                }
+         
+        
+
        
 
         [HttpPost]
@@ -473,10 +528,10 @@ namespace VaccineAPI.Controllers
                     followUpDto.DoctorId = dbChild.Clinic.DoctorId;
                 }
                 // when followup call from doctor side
-                var dbFollowUps = _db.FollowUps
+                var dbFollowUps = _db.FollowUps.Include(x=>x.Child)
                     .Where(f => f.DoctorId == followUpDto.DoctorId && f.ChildId == followUpDto.ChildId)
                     .OrderByDescending(x => x.CurrentVisitDate).ToList();
-                List<FollowUpDTO> followUpDTOs = Mapper.Map<List<FollowUpDTO>>(dbFollowUps);
+                List<FollowUpDTO> followUpDTOs = _mapper.Map<List<FollowUpDTO>>(dbFollowUps);
                 return new Response<List<FollowUpDTO>>(true, null, followUpDTOs);
             }
         }
@@ -764,7 +819,7 @@ namespace VaccineAPI.Controllers
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
 
             {
-                var dbChild = _db.Childs.FirstOrDefault(c => c.Id == childDTO.Id);
+                var dbChild = _db.Childs.Include(x=>x.User).FirstOrDefault(c => c.Id == childDTO.Id);
                 if (dbChild == null) return new Response<ChildDTO>(false, "Child not found", null);
                 dbChild.Name = childDTO.Name;
                 dbChild.Email = childDTO.Email;

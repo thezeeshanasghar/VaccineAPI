@@ -179,7 +179,7 @@ namespace VaccineAPI.Controllers
                     if (httpPostedProfileImage != null)
                     {
 
-                        var fileSavePath = Path.Combine(_host.WebRootPath, "Content/UserImages", httpPostedProfileImage.FileName);
+                        var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedProfileImage.FileName);
                         using (var fileStream = new FileStream(fileSavePath, FileMode.Create)) 
                                  httpPostedProfileImage.CopyToAsync(fileStream);
                                    dbDoctor.ProfileImage = httpPostedProfileImage.FileName;
@@ -188,7 +188,7 @@ namespace VaccineAPI.Controllers
                     
                      if (httpPostedSignatureImage != null)
                     {
-                        var fileSavePath = Path.Combine(_host.WebRootPath, "Content/UserImages", httpPostedSignatureImage.FileName);
+                        var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedSignatureImage.FileName);
                         using (var fileStream = new FileStream(fileSavePath, FileMode.Create)) 
                                  httpPostedSignatureImage.CopyToAsync(fileStream);
                                  dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
@@ -283,11 +283,8 @@ namespace VaccineAPI.Controllers
 
 
        [HttpGet("{id}/{pageSize}/{currentPage}/childs/")]
-        public Response<IEnumerable<ChildDTO>> GetAllChildsOfaDoctor(int id,int pageSize,int currentPage, string searchKeyword = "")
+        public Response<IEnumerable<ChildDTO>> GetAllChildsOfaDoctor(int id,int pageSize,int currentPage, [FromQuery]string searchKeyword)
         {
-    
-            
-                
                 {
                     var doctor = _db.Doctors.Include(x=>x.Clinics).FirstOrDefault(c => c.UserId == id);
                     if (doctor == null)
@@ -297,8 +294,11 @@ namespace VaccineAPI.Controllers
                         List<ChildDTO> childDTOs = new List<ChildDTO>();
                       // var doctorClinics = doctor.Clinics;
                           var doctorClinics = _db.Clinics.Include(x=>x.Childs).Where(x=>x.DoctorId == doctor.Id).ToList();
+                          
+                          
                         foreach (var clinic in doctorClinics)
                         {
+                            var doctorChilds = _db.Childs.Include(x=>x.User).Where(x=>x.ClinicId == clinic.Id).ToList();
                             if (!String.IsNullOrEmpty(searchKeyword))
                             {
                                 searchKeyword = searchKeyword.Trim();
@@ -312,7 +312,7 @@ namespace VaccineAPI.Controllers
                                     || x.User.MobileNumber.Trim().Contains(searchKeyword.ToLower())).ToList<Child>()));
                                 currentPage = 0;
                             }
-                            else
+                           else
                                 childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(clinic.Childs.ToList<Child>()));
                         }
                         foreach (var item in childDTOs)

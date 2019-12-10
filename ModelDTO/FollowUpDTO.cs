@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using System;
 
-namespace VaccineAPI.Models
+namespace VaccineAPI.ModelDTO
 {
 
     public class FollowUpDTO
@@ -20,12 +20,9 @@ namespace VaccineAPI.Models
         public float? BloodPressure { get; set; }
         public float? BloodSugar{ get; set; }
          public long ChildId { get; set; }
-         [JsonIgnore]
-        public Child Child { get; set; }
-       
+        public ChildDTO Child { get; set; }
         public long DoctorId { get; set; }
-         [JsonIgnore]
-        public Doctor Doctor { get; set; }
+        public DoctorDTO Doctor { get; set; }
     }
 
 }

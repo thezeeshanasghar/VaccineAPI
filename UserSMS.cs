@@ -158,7 +158,9 @@ namespace VaccineAPI
         //     //string webTarget = "http://icworldsms.com:82/Service.asmx/SendSMS?SessionId=Ud1vaibfSexGvkohsFVVVEzoWrhUKfpylFZqOFVy9EB7CaifKP&CompaignName=text&MobileNo={0}&MaskName=VACCS+IO&Message={1}&MessageType=English";
         //     //string url = String.Format(webTarget, "0" + MobileNumber, HttpUtility.0UrlEncode(text));
 
-            string webTarget = "http://58.65.138.38:8181/sc/smsApi/sendSms?username=vccsio&password=123456&mobileNumber={0}&message={1}&mask=VACCS%20IO";
+          //  string webTarget = "http://58.65.138.38:8181/sc/smsApi/sendSms?username=vccsio&password=123456&mobileNumber={0}&message={1}&mask=VACCS%20IO";
+          string webTarget = "https://brandyourtext.com/sms/api/send?username=vaccsio&password=123456&mask=VACCS%20IO&mobile={0}&message={1}%20Message";
+         // view-source:https://brandyourtext.com/sms/api/send?username=vaccsio&password=123456&mask=VACCS%20IO&mobile=3143041544&message=Test%20Message
             string url = String.Format(webTarget, "92" + MobileNumber, HttpUtility.UrlEncode(text));
 
           return Controllers.VaccineController.sendRequest(url);

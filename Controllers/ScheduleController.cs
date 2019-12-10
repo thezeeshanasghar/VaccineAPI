@@ -80,6 +80,10 @@ namespace VaccineAPI.Controllers
                     .Where(c => c.Date == CurrentPakDateTime.Date)
                     .Where(c => c.IsDone == false)
                     .OrderBy(x => x.Child.Id).ThenBy(x => x.Date).ToList<Schedule>();
+                      foreach(var sch in schedules)
+                     {
+                       var childss = db.Childs.Include("User").Where(x=> x.Id == sch.Child.Id).FirstOrDefault();
+                    }
                 var sc = db.Schedules.Include("Child")
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                     .Where(c => c.Child.PreferredDayOfReminder != 0)
@@ -98,6 +102,10 @@ namespace VaccineAPI.Controllers
                     .Where(c => c.IsDone == false)
                     .OrderBy(x => x.Child.Id).ThenBy(x => x.Date)
                     .ToList<Schedule>();
+                     foreach(var sch in schedules)
+                     {
+                       var childss = db.Childs.Include("User").Where(x=> x.Id == sch.Child.Id).FirstOrDefault();
+                    }
                 
             }
             else if (GapDays < 0)
@@ -217,7 +225,7 @@ namespace VaccineAPI.Controllers
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
         {
                 {
-                    var dbSchedule = _db.Schedules.Where(c => c.Id == scheduleDTO.Id).FirstOrDefault();
+                    var dbSchedule = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(c => c.Id == scheduleDTO.Id).FirstOrDefault();
                     var dbBrandInventory = _db.BrandInventorys.Where(b => b.BrandId == scheduleDTO.BrandId
                                             && b.DoctorId == scheduleDTO.DoctorId).FirstOrDefault();
                     if (dbBrandInventory != null && dbBrandInventory.Count > 0)
@@ -239,6 +247,8 @@ namespace VaccineAPI.Controllers
         {
             var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
 
+            var dbDose = _db.Doses.Include(x=>x.Vaccine).ToList();
+            var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
             var AllDoses = dbSchedule.Dose.Vaccine.Doses;
             AllDoses = AllDoses.Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).ToList();
             foreach (var d in AllDoses)
@@ -263,7 +273,9 @@ namespace VaccineAPI.Controllers
         {
            
                 {
-                    var dbSchedule = _db.Schedules.Where(x => x.Date == scheduleDto.Date && x.ChildId == scheduleDto.ChildId).ToList();
+                    var dbSchedule = _db.Schedules.Include(x=>x.Dose).Where(x => x.Date == scheduleDto.Date && x.ChildId == scheduleDto.ChildId).ToList();
+                    var dbDose = _db.Doses.Include(x=>x.Vaccine).ToList();
+                    var dbVacc = _db.Vaccines.Include(x=>x.Doses).Include(x=>x.Brands).ToList();
 
                     List<ScheduleDTO> scheduleDTOs = new List<ScheduleDTO>();
                     foreach (var schedule in dbSchedule)
@@ -309,13 +321,13 @@ namespace VaccineAPI.Controllers
      
         
          [HttpPut("BulkReschedule")]
-        public Response<ScheduleDTO> BulkReschedule(ScheduleDTO scheduleDTO,  bool ignoreMaxAgeRule = false, bool ignoreMinAgeFromDOB = false,  bool ignoreMinGapFromPreviousDose = false)
+        public Response<ScheduleDTO> BulkReschedule(ScheduleDTO scheduleDTO, [FromQuery] bool ignoreMaxAgeRule = false, [FromQuery]bool ignoreMinAgeFromDOB = false,  [FromQuery]bool ignoreMinGapFromPreviousDose = false)
         {
             
                 {
                     var dbSchedule = _db.Schedules.Where(x => x.Id == scheduleDTO.Id).FirstOrDefault();
 
-                    var dbSchedules = _db.Schedules.Where(x => x.Date == dbSchedule.Date 
+                    var dbSchedules = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(x => x.Date == dbSchedule.Date 
                                                                 && x.ChildId == dbSchedule.ChildId
                                                                 && x.IsDone==false
                                                                 ).ToList();
@@ -400,7 +412,9 @@ namespace VaccineAPI.Controllers
            private void ChangeDueDatesOfSchedule(ScheduleDTO scheduleDTO, Context db, Schedule dbSchedule, string mode, bool ignoreMaxAgeRule, bool ignoreMinAgeFromDOB, bool ignoreMinGapFromPreviousDose)
         {
             var daysDifference = Convert.ToInt32((scheduleDTO.Date.Date - dbSchedule.Date.Date).TotalDays);
-
+            //var daysDifference = Convert.ToInt32((scheduleDTO.Date - dbSchedule.Date).TotalDays);
+            var dbDose = _db.Doses.Include(x=>x.Vaccine).ToList();
+            var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
             var AllDoses = dbSchedule.Dose.Vaccine.Doses;
             // FOR BCG Only or those vaccines who have only 1 dose 
             if (AllDoses.Count == 1)
@@ -415,11 +429,11 @@ namespace VaccineAPI.Controllers
                     if (mode.Equals("bulk"))
                         throw new Exception("Cannot reschedule to your selected date: " +
                            Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because is is greater than the Max Age of dose. " +
-                           "<button onclick=BulkReschedule({ID:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)> Ignore Rule</a>");
+                           "<button onclick=BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)> Ignore Rule</a>");
                     else
                         throw new Exception("Cannot reschedule to your selected date: " +
                        Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because is is greater than the Max Age of dose. " +
-                       "<button onclick=Reschedule({ID:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)> Ignore Rule</a>");
+                       "<button onclick=Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)> Ignore Rule</a>");
 
                 TargetSchedule.Date = calculateDate(TargetSchedule.Date, daysDifference);// TargetSchedule.Date.AddDays(daysDifference);
             }
@@ -521,10 +535,12 @@ namespace VaccineAPI.Controllers
         }
 
          [HttpPut("Reschedule")]
-        public Response<ScheduleDTO> Reschedule(ScheduleDTO scheduleDTO , bool ignoreMaxAgeRule = false, bool ignoreMinAgeFromDOB = false, bool ignoreMinGapFromPreviousDose = false)
+        public Response<ScheduleDTO> Reschedule(ScheduleDTO scheduleDTO , [FromQuery]bool ignoreMaxAgeRule = false, [FromQuery]bool ignoreMinAgeFromDOB = false, [FromQuery]bool ignoreMinGapFromPreviousDose = false)
         {
                 {
-                    var dbSchedule = _db.Schedules.Where(x => x.Id == scheduleDTO.Id).FirstOrDefault();
+                    var dbSchedule = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(x => x.Id == scheduleDTO.Id).FirstOrDefault();
+                    var dbDose = _db.Doses.Include(X=>X.Vaccine).ToList();
+                    var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
                     ChangeDueDatesOfSchedule(scheduleDTO, _db, dbSchedule, "single", ignoreMaxAgeRule, ignoreMinAgeFromDOB, ignoreMinGapFromPreviousDose);
 
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);

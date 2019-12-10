@@ -27,7 +27,7 @@ namespace VaccineAPI.Controllers
 
         [HttpGet]
         // public async Task<Response<List<MessageDTO>>> GetAll()
-        public Response<List<MessageDTO>> Get(string mobileNumber = "", string fromDate = "", string toDate = "")
+        public Response<List<MessageDTO>> Get([FromQuery]string mobileNumber = "", [FromQuery]string fromDate = "", [FromQuery]string toDate = "")
         {
             List<Message> dbMessages = new List<Message>();
             var prevDays = DateTime.Now.AddDays(-10);

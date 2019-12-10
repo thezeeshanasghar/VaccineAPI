@@ -10,8 +10,10 @@ namespace VaccineAPI.Models
     {
         public long Id { get; set; }
         public string Disease { get; set; }
-        public DateTime CurrentVisitDate { get; set; }
-        public DateTime NextVisitDate { get; set; }
+        // public DateTime? CurrentVisitDate { get; set; }
+        // public DateTime NextVisitDate { get; set; }
+        public Nullable<System.DateTime> NextVisitDate { get; set; }
+        public Nullable<System.DateTime> CurrentVisitDate { get; set; }
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? OFC { get; set; }

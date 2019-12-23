@@ -282,8 +282,8 @@ namespace VaccineAPI.Controllers
                     {
                         ScheduleDTO scheduleDTO = new ScheduleDTO();
                         var dbBrands = schedule.Dose.Vaccine.Brands.ToList();
-                        List<BrandDTO> brandDTOs = Mapper.Map<List<BrandDTO>>(dbBrands);
-                        scheduleDTO.Dose = Mapper.Map<DoseDTO>(schedule.Dose);
+                        List<BrandDTO> brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
+                        scheduleDTO.Dose = _mapper.Map<DoseDTO>(schedule.Dose);
                         scheduleDTO.Id = schedule.Id;
                         scheduleDTO.Brands = brandDTOs;
                         scheduleDTO.Date = schedule.Date;
@@ -325,12 +325,14 @@ namespace VaccineAPI.Controllers
         {
             
                 {
-                    var dbSchedule = _db.Schedules.Where(x => x.Id == scheduleDTO.Id).FirstOrDefault();
+                    var dbSchedule = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(x => x.Id == scheduleDTO.Id).FirstOrDefault();
 
                     var dbSchedules = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(x => x.Date == dbSchedule.Date 
                                                                 && x.ChildId == dbSchedule.ChildId
                                                                 && x.IsDone==false
                                                                 ).ToList();
+                     var dbDose = _db.Doses.Include(x=>x.Vaccine).ToList();
+                     var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
 
                     foreach (var schedule in dbSchedules)
                         ChangeDueDatesOfSchedule(scheduleDTO, _db, schedule, "bulk", ignoreMaxAgeRule, ignoreMinAgeFromDOB, ignoreMinGapFromPreviousDose);
@@ -412,9 +414,6 @@ namespace VaccineAPI.Controllers
            private void ChangeDueDatesOfSchedule(ScheduleDTO scheduleDTO, Context db, Schedule dbSchedule, string mode, bool ignoreMaxAgeRule, bool ignoreMinAgeFromDOB, bool ignoreMinGapFromPreviousDose)
         {
             var daysDifference = Convert.ToInt32((scheduleDTO.Date.Date - dbSchedule.Date.Date).TotalDays);
-            //var daysDifference = Convert.ToInt32((scheduleDTO.Date - dbSchedule.Date).TotalDays);
-            var dbDose = _db.Doses.Include(x=>x.Vaccine).ToList();
-            var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
             var AllDoses = dbSchedule.Dose.Vaccine.Doses;
             // FOR BCG Only or those vaccines who have only 1 dose 
             if (AllDoses.Count == 1)

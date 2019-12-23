@@ -87,25 +87,25 @@ namespace VaccineAPI.Controllers
                 {
                     var dbMessages = _db.Messages.Where(x => x.UserId == id).Include(x=>x.User).OrderByDescending(x => x.Created).ToList();
                     var messageDTOs = _mapper.Map<List<MessageDTO>>(dbMessages);
-                    foreach (var msg in messageDTOs)
-                    {
-                        if (IsJson(msg.ApiResponse))
-                        {
-                            JObject json = JObject.Parse(msg.ApiResponse);
-                            msg.ApiResponse = (string)json["returnString"];
-                        }
-                        else
-                        {
-                            XmlDocument xmlDoc = new XmlDocument();
-                            xmlDoc.LoadXml(msg.ApiResponse);
+                    // foreach (var msg in messageDTOs)
+                    // {
+                    //     if (IsJson(msg.ApiResponse))
+                    //     {
+                    //         JObject json = JObject.Parse(msg.ApiResponse);
+                    //         msg.ApiResponse = (string)json["returnString"];
+                    //     }
+                    //     else
+                    //     {
+                    //         XmlDocument xmlDoc = new XmlDocument();
+                    //         xmlDoc.LoadXml(msg.ApiResponse);
 
-                            string xpath = "Response";
-                            var parentNode = xmlDoc.SelectNodes(xpath);
+                    //         string xpath = "Response";
+                    //         var parentNode = xmlDoc.SelectNodes(xpath);
 
-                            foreach (XmlNode childrenNode in parentNode)
-                                msg.ApiResponse = childrenNode.FirstChild.InnerText;
-                        }
-                    }
+                    //         foreach (XmlNode childrenNode in parentNode)
+                    //             msg.ApiResponse = childrenNode.FirstChild.InnerText;
+                    //     }
+                    // }
 
                     return new Response<List<MessageDTO>>(true, null, messageDTOs);
                 }

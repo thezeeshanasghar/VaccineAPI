@@ -286,7 +286,7 @@ namespace VaccineAPI.Controllers
         public Response<IEnumerable<ChildDTO>> GetAllChildsOfaDoctor(int id,int pageSize,int currentPage, [FromQuery]string searchKeyword)
         {
                 {
-                    var doctor = _db.Doctors.Include(x=>x.Clinics).FirstOrDefault(c => c.UserId == id);
+                    var doctor = _db.Doctors.Include(x=>x.Clinics).Where(c => c.Id == id).FirstOrDefault();
                     if (doctor == null)
                         return new Response<IEnumerable<ChildDTO>>(false, "Doctor not found", null);
                     else

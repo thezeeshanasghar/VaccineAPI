@@ -324,7 +324,7 @@ namespace VaccineAPI.Controllers
         public Response<ScheduleDTO> BulkReschedule(ScheduleDTO scheduleDTO, [FromQuery] bool ignoreMaxAgeRule = false, [FromQuery]bool ignoreMinAgeFromDOB = false,  [FromQuery]bool ignoreMinGapFromPreviousDose = false)
         {
             
-                {
+                
                     var dbSchedule = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(x => x.Id == scheduleDTO.Id).FirstOrDefault();
 
                     var dbSchedules = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(x => x.Date == dbSchedule.Date 
@@ -333,16 +333,21 @@ namespace VaccineAPI.Controllers
                                                                 ).ToList();
                      var dbDose = _db.Doses.Include(x=>x.Vaccine).ToList();
                      var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
+                     string message;
 
                     foreach (var schedule in dbSchedules)
-                        ChangeDueDatesOfSchedule(scheduleDTO, _db, schedule, "bulk", ignoreMaxAgeRule, ignoreMinAgeFromDOB, ignoreMinGapFromPreviousDose);
+                    {
+                        message = ChangeDueDatesOfSchedule(scheduleDTO, _db, schedule, "bulk", ignoreMaxAgeRule, ignoreMinAgeFromDOB, ignoreMinGapFromPreviousDose);
+                        if (message != "ok")
+                        return new Response<ScheduleDTO>(false, message , null);
+                    
+                    }
 
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
-                }
+                
             }
 
-        [HttpPut]
-        [Route("api/schedule/update-bulk-injection")]
+        [HttpPut("update-bulk-injection")]
         public Response<ScheduleDTO> UpdateBulkInjection(ScheduleDTO scheduleDTO)
         {
            
@@ -411,28 +416,44 @@ namespace VaccineAPI.Controllers
                 return date.AddDays(GapInDays);
         }
          //Reschedule Function
-           private void ChangeDueDatesOfSchedule(ScheduleDTO scheduleDTO, Context db, Schedule dbSchedule, string mode, bool ignoreMaxAgeRule, bool ignoreMinAgeFromDOB, bool ignoreMinGapFromPreviousDose)
+           private string ChangeDueDatesOfSchedule(ScheduleDTO scheduleDTO, Context db, Schedule dbSchedule, string mode, bool ignoreMaxAgeRule, bool ignoreMinAgeFromDOB, bool ignoreMinGapFromPreviousDose)
         {
             var daysDifference = Convert.ToInt32((scheduleDTO.Date.Date - dbSchedule.Date.Date).TotalDays);
             var AllDoses = dbSchedule.Dose.Vaccine.Doses;
+            string message;
             // FOR BCG Only or those vaccines who have only 1 dose 
             if (AllDoses.Count == 1)
             {
                 // check for reschedule backward from DateOfBirth
-                if (scheduleDTO.Date < dbSchedule.Child.DOB)
-                    throw new Exception("Cannot reschedule to your selected date: " +
-                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is less than date of birth of child.");
+                // if (scheduleDTO.Date < dbSchedule.Child.DOB)
+                //     throw new Exception("Cannot reschedule to your selected date: " +
+                //                 Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is less than date of birth of child.");
+
+                 if (scheduleDTO.Date < dbSchedule.Child.DOB)
+                 {
+                 message = "Cannot reschedule to your selected date: " +
+                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is less than date of birth of child.";
+                  return message;
+                 }
                 Dose d = AllDoses.ElementAt<Dose>(0);
                 var TargetSchedule = db.Schedules.Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id).FirstOrDefault();
                 if (daysDifference > d.MaxAge && !ignoreMaxAgeRule)
                     if (mode.Equals("bulk"))
-                        throw new Exception("Cannot reschedule to your selected date: " +
-                           Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because is is greater than the Max Age of dose. " +
-                           "<button onclick=BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)> Ignore Rule</a>");
+                    {
+                        message = "Cannot reschedule to your selected date: " +
+                           Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is greater than the Max Age of dose. " ;
+                        //    +
+                        //    "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>");
+                           return message;
+                    }
                     else
-                        throw new Exception("Cannot reschedule to your selected date: " +
-                       Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because is is greater than the Max Age of dose. " +
-                       "<button onclick=Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)> Ignore Rule</a>");
+                    {
+                        message = "Cannot reschedule to your selected date: " +
+                       Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is greater than the Max Age of dose. ";
+                    //     +
+                    //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>");
+                       return message;
+                    }
 
                 TargetSchedule.Date = calculateDate(TargetSchedule.Date, daysDifference);// TargetSchedule.Date.AddDays(daysDifference);
             }
@@ -462,13 +483,21 @@ namespace VaccineAPI.Controllers
                             // check for MaxAge of any Dose
                             if (daysDifference > d.MaxAge && !ignoreMaxAgeRule)
                                 if (mode.Equals("bulk"))
-                                    throw new Exception("Cannot reschedule to your selected date: " +
-                                   Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because is is greater than the Max Age of dose. " +
-                                   "<button onclick=BulkReschedule({ID:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)> Ignore Rule</a>");
+                                {
+                                    message = "Cannot reschedule to your selected date: " +
+                                   Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is greater than the Max Age of dose."; 
+                                //    +
+                                //    "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>";
+                                   return message;
+                                }
                                 else
-                                    throw new Exception("Cannot reschedule to your selected date: " +
-                                   Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because is is greater than the Max Age of dose. " +
-                                   "<button onclick=Reschedule({ID:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)> Ignore Rule</a>");
+                                {
+                                    message = "Cannot reschedule to your selected date: " +
+                                   Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is greater than the Max Age of dose. ";
+                                //     +
+                                //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>";
+                                   return message;
+                                }
                             TargetSchedule.Date = calculateDate(TargetSchedule.Date, daysDifference); //TargetSchedule.Date.AddDays(daysDifference);
                         }
                         previousDate = TargetSchedule.Date;
@@ -487,17 +516,27 @@ namespace VaccineAPI.Controllers
 
                         int diff = Convert.ToInt32((scheduleDTO.Date.Date - FirstDoseSchedule.Child.DOB).TotalDays);
                         if (diff < 0)
-                            throw new Exception("Cannot reschedule to your selected date: " +
-                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is less than date of birth of child.");
+                             {
+                            message = "Cannot reschedule to your selected date: " +
+                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is less than date of birth of child.";
+                                return message;
+                             }
                         else if (diff < d.MinAge && !ignoreMinAgeFromDOB)
                             if (mode.Equals("bulk"))
-                                throw new Exception("Cannot reschedule to your selected date: " +
-                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because Minimum Age of this vaccine from date of birth should be " + d.MinAge + " days." +
-                                "<button onclick=BulkReschedule({ID:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,true,false)> Ignore Rule</a>");
+                               {
+                                message = "Cannot reschedule to your selected date: " +
+                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because Minimum Age of this vaccine from date of birth should be " + d.MinAge + " days.";
+                                //  +
+                                // "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,true,false)'> Ignore Rule</ion-button>";
+                                return message ;
+                               }
                             else
-                                throw new Exception("Cannot reschedule to your selected date: " +
-                               Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because Minimum Age of this vaccine from date of birth should be " + d.MinAge + " days." +
-                               "<button onclick=Reschedule({ID:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,true,false)> Ignore Rule</a>");
+                              {
+                                message = "Cannot reschedule to your selected date: " +
+                               Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because Minimum Age of this vaccine from date of birth should be " + d.MinAge + " days.";
+                            //     +
+                            //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,true,false)'> Ignore Rule</ion-button>";
+                              }
                         else
                             FirstDoseSchedule.Date = calculateDate(FirstDoseSchedule.Date, daysDifference);
                     }
@@ -519,18 +558,27 @@ namespace VaccineAPI.Controllers
 
                         if (doseDaysDifference < lastDose.MinGap && !ignoreMinGapFromPreviousDose)
                             if (mode.Equals("bulk"))
-                                throw new Exception("Cannot reschedule to your selected date: " +
-                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because Minimum Gap from previous dose of this vaccine should be " + lastDose.MinGap + " days." +
-                                "<button onclick=BulkReschedule({ID:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,false,true)> Ignore Rule</a>");
+                             {
+                                message = "Cannot reschedule to your selected date: " +
+                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because Minimum Gap from previous dose of this vaccine should be " + lastDose.MinGap + " days.";
+                                //  +
+                                // "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,false,true);'> Ignore Rule</a>";
+                                return message;
+                             }
                             else
-                                throw new Exception("Cannot reschedule to your selected date: " +
-                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because Minimum Gap from previous dose of this vaccine should be " + lastDose.MinGap + " days." +
-                                "<button onclick=Reschedule({ID:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,false,true)> Ignore Rule</a>");
+                            {
+                                message = "Cannot reschedule to your selected date: " +
+                                Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because Minimum Gap from previous dose of this vaccine should be " + lastDose.MinGap + " days.";
+                                //  +
+                                // "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,false,true);'> Ignore Rule</ion-button>";
+                                return message;
+                            }
                         TargetSchedule.Date = calculateDate(TargetSchedule.Date, daysDifference);
                     }
                 }
             }
             db.SaveChanges();
+            return "ok";
         }
 
          [HttpPut("Reschedule")]
@@ -540,9 +588,11 @@ namespace VaccineAPI.Controllers
                     var dbSchedule = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(x => x.Id == scheduleDTO.Id).FirstOrDefault();
                     var dbDose = _db.Doses.Include(X=>X.Vaccine).ToList();
                     var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
-                    ChangeDueDatesOfSchedule(scheduleDTO, _db, dbSchedule, "single", ignoreMaxAgeRule, ignoreMinAgeFromDOB, ignoreMinGapFromPreviousDose);
-
+                   var message = ChangeDueDatesOfSchedule(scheduleDTO, _db, dbSchedule, "single", ignoreMaxAgeRule, ignoreMinAgeFromDOB, ignoreMinGapFromPreviousDose);
+                   if (message == "ok" ) 
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
+                   else 
+                    return new Response<ScheduleDTO>(false, message, null);
                 }
             }
 

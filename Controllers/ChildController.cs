@@ -387,6 +387,7 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<ChildDTO> Post(ChildDTO childDTO)
         {
+           
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             childDTO.Name = textInfo.ToTitleCase(childDTO.Name);
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
@@ -419,7 +420,7 @@ namespace VaccineAPI.Controllers
                 {
                     Child existingChild = _db.Childs.FirstOrDefault(x => x.Name.Equals(childDTO.Name) && x.UserId == user.Id);
                      if (existingChild != null)
-                         throw new Exception("Children with same name & number already exists. Parent should login and start change doctor process.");
+                         return new Response<ChildDTO>(false, "Children with same name & number already exists. Parent should login and start change doctor process.", null); 
                     childDB.UserId = user.Id;
                     _db.Childs.Add(childDB);
                     _db.SaveChanges();
@@ -513,7 +514,7 @@ namespace VaccineAPI.Controllers
             }
             // var cache = Configuration.CacheOutputConfiguration().GetCacheOutputProvider(Request);
             // cache.RemoveStartsWith(Configuration.CacheOutputConfiguration().MakeBaseCachekey((DoctorController t) => t.GetAllChildsOfaDoctor(0, 0, 20, "")));
-
+          
 
         }
 

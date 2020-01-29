@@ -150,9 +150,9 @@ namespace VaccineAPI.Controllers
         private Stream CreateSchedulePdf(int childId)
         {
             //Access db data
-            var dbChild = _db.Childs.Include("Clinic").Where(x => x.Id == childId).FirstOrDefault();
+            var dbChild = _db.Childs.Include(x => x.User).Include(x => x.Clinic).ThenInclude(x=>x.Doctor).ThenInclude(x => x.User).Where(x => x.Id == childId).FirstOrDefault();
             var dbDoctor = dbChild.Clinic.Doctor;
-            var child = _db.Childs.Include(x=>x.Schedules).FirstOrDefault(c => c.Id == childId);
+            var child = _db.Childs.Include(x=>x.Schedules).ThenInclude(x => x.Dose).FirstOrDefault(c => c.Id == childId);
             var dbSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
             var scheduleDoses = from schedule in dbSchedules
                                 group schedule.Dose by schedule.Date into scheduleDose
@@ -231,7 +231,7 @@ namespace VaccineAPI.Controllers
                 //table.AddCell(CreateCell("Injected", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
               //  var imgPath = System.Web.Hosting.HostingEnvironment.MapPath("~/Content/img");
-               var imgPath = Path.Combine(_host.WebRootPath, "Content/img");
+               var imgPath = Path.Combine(_host.ContentRootPath, "Content/img");
                 foreach (var schedule in scheduleDoses)
                 {
                     int doseCount = 0;

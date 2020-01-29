@@ -16,8 +16,6 @@ using System.Web.Http;
 using iTextSharp.text.pdf;
 using iTextSharp.text;
 using Microsoft.AspNetCore.Hosting;
-// using iTextSharp.text;
-// using iTextSharp.text.pdf;
 //using WebApi.OutputCache.V2;
 
 namespace VaccineAPI.Controllers
@@ -123,28 +121,40 @@ namespace VaccineAPI.Controllers
         }
    
 
-       [HttpGet("{id}/Download-Schedule-PDF")]
-        public HttpResponseMessage DownloadSchedulePDF(int id)
+    //    [HttpGet("{id}/Download-Schedule-PDF")]
+    //     public HttpResponseMessage DownloadSchedulePDF(int id)
+    //     {
+    //         Child dbScheduleChild;
+    //         {
+    //             dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault();
+    //         }
+    //         var stream = CreateSchedulePdf(id);
+
+    //         return new HttpResponseMessage
+    //         {
+    //             Content = new StreamContent(stream)
+    //             {
+    //                 Headers = {
+    //                             ContentType = new MediaTypeHeaderValue("application/pdf"),
+    //                             ContentDisposition = new ContentDispositionHeaderValue("attachment") {
+    //                                 FileName =dbScheduleChild.Name.Replace(" ","")+"_Schedule_" +DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy")+ ".pdf"
+    //                             }
+    //                         }
+    //             },
+    //             StatusCode = HttpStatusCode.OK
+    //         };
+    //     }
+
+         [HttpGet("{id}/Download-Schedule-PDF")]
+        public IActionResult DownloadSchedulePDF(int id)
         {
             Child dbScheduleChild;
             {
                 dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault();
             }
             var stream = CreateSchedulePdf(id);
-
-            return new HttpResponseMessage
-            {
-                Content = new StreamContent(stream)
-                {
-                    Headers = {
-                                ContentType = new MediaTypeHeaderValue("application/pdf"),
-                                ContentDisposition = new ContentDispositionHeaderValue("attachment") {
-                                    FileName =dbScheduleChild.Name.Replace(" ","")+"_Schedule_" +DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy")+ ".pdf"
-                                }
-                            }
-                },
-                StatusCode = HttpStatusCode.OK
-            };
+            var FileName =dbScheduleChild.Name.Replace(" ","")+"_Schedule_" +DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy")+ ".pdf";
+           return File(stream, "application/pdf", FileName);
         }
        
         private Stream CreateSchedulePdf(int childId)

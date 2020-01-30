@@ -786,7 +786,7 @@ namespace VaccineAPI.Controllers
             {
                 signatureImage = "avatar.png";
             }
-            Image img = Image.GetInstance(imgPath + "\\" + signatureImage);
+            Image img = Image.GetInstance(imgPath + "//" + signatureImage);
 
             img.ScaleAbsolute(2f, 2f);
             PdfPCell imageCell = new PdfPCell(img, true);

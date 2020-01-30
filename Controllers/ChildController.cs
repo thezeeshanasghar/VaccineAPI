@@ -597,10 +597,11 @@ namespace VaccineAPI.Controllers
 
         }
 
-        [HttpPost("Download-Invoice-PDF")]
-        public HttpResponseMessage DownloadInvoicePDF(ChildDTO childDTO)
+       // [HttpPost("Download-Invoice-PDF")]
+       [HttpGet("{Id}/{IsBrand}/{IsConsultationFee}/{InvoiceDate}/{DoctorId}/Download-Invoice-PDF")]
+  //      public IActionResult DownloadInvoicePDF(ChildDTO childDTO)
+        public IActionResult DownloadInvoicePDF(int Id , bool IsBrand , bool IsConsultationFee , DateTime InvoiceDate , int DoctorId )
         {
-
 
             Stream stream;
             int amount = 0;
@@ -621,10 +622,10 @@ namespace VaccineAPI.Controllers
 
             //Access db data
 
-            var dbDoctor = _db.Doctors.Where(x => x.Id == childDTO.DoctorId).FirstOrDefault();
+            var dbDoctor = _db.Doctors.Where(x => x.Id == DoctorId).Include(x => x.User).FirstOrDefault();
             dbDoctor.InvoiceNumber = (dbDoctor.InvoiceNumber > 0) ? dbDoctor.InvoiceNumber + 1 : 1;
-            var dbChild = _db.Childs.Include("Clinic").Where(x => x.Id == childDTO.Id).FirstOrDefault();
-            var dbSchedules = _db.Schedules.Include("Dose").Include("Brand").Where(x => x.ChildId == childDTO.Id).ToList();
+            var dbChild = _db.Childs.Include("Clinic").Where(x => x.Id == Id).FirstOrDefault();
+            var dbSchedules = _db.Schedules.Include(x => x.Dose).ThenInclude(x => x.Vaccine).Include("Brand").Where(x => x.ChildId == Id).ToList();
             childName = dbChild.Name;
             //
             //Table 1 for description above amounts table
@@ -650,7 +651,7 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
 
 
-            if (childDTO.IsConsultationFee)
+            if (IsConsultationFee)
             {
                 consultaionFee = (int)dbChild.Clinic.ConsultationFee;
             }
@@ -675,7 +676,7 @@ namespace VaccineAPI.Controllers
 
             //2nd Table
             float[] widths = new float[] { 30f, 200f, 100f };
-            if (childDTO.IsBrand)
+            if (IsBrand)
             {
                 col = 4;
                 widths = new float[] { 30f, 200f, 150f, 100f };
@@ -691,7 +692,7 @@ namespace VaccineAPI.Controllers
 
             table.AddCell(CreateCell("#", "backgroudLightGray", 1, "center", "invoiceRecords"));
             table.AddCell(CreateCell("Item", "backgroudLightGray", 1, "center", "invoiceRecords"));
-            if (childDTO.IsBrand)
+            if (IsBrand)
             {
                 table.AddCell(CreateCell("Brand", "backgroudLightGray", 1, "center", "invoiceRecords"));
             }
@@ -723,11 +724,11 @@ namespace VaccineAPI.Controllers
                         count++;
                         table.AddCell(CreateCell(count.ToString(), "", 1, "center", "invoiceRecords"));
                         table.AddCell(CreateCell(schedule.Dose.Vaccine.Name, "", 1, "center", "invoiceRecords"));
-                        if (childDTO.IsBrand)
+                        if (IsBrand)
                         {
                             table.AddCell(CreateCell(schedule.Brand.Name, "", 1, "center", "invoiceRecords"));
                         }
-                        var brandAmount = _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == childDTO.DoctorId).FirstOrDefault();
+                        var brandAmount = _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault();
                         if (brandAmount != null)
                         {
                             amount = amount + Convert.ToInt32(brandAmount.Amount);
@@ -747,7 +748,7 @@ namespace VaccineAPI.Controllers
             //table.AddCell(CreateCell("Total(PKR)", "", col - 1, "right", "invoiceRecords"));
 
             //add consultancy fee
-            if (childDTO.IsConsultationFee)
+            if (IsConsultationFee)
             {
                 amount = amount + (int)dbChild.Clinic.ConsultationFee;
             }
@@ -774,11 +775,11 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell(imgcellLeft);
 
             //var imgPath = System.Web.Hosting.HostingEnvironment.MapPath("~/Content/UserImages");
-             var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
-             var imgPath = Path.Combine(_host.WebRootPath, "Content/UserImages", httpPostedSignatureImage.FileName);
-            using (var fileStream = new FileStream(imgPath, FileMode.Create)) 
-             httpPostedSignatureImage.CopyToAsync(fileStream);
-             dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
+           //  var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
+             var imgPath = Path.Combine(_host.ContentRootPath, "Content/UserImages");
+           // using (var fileStream = new FileStream(imgPath, FileMode.Create)) 
+            // httpPostedSignatureImage.CopyToAsync(fileStream);
+            // dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
 
             var signatureImage = dbDoctor.SignatureImage;
             if (signatureImage == null)
@@ -802,21 +803,8 @@ namespace VaccineAPI.Controllers
             stream = output;
 
             //}
-            return new HttpResponseMessage
-            {
-                Content = new StreamContent(stream)
-                {
-                    Headers =
-                            {
-                                ContentType = new MediaTypeHeaderValue("application/pdf"),
-                                ContentDisposition = new ContentDispositionHeaderValue("attachment")
-                                {
-                                    FileName = childName.Replace(" ","") +"_Invoice"+"_"+DateTime.UtcNow.AddHours(5).Date.ToString("MMMM-dd-yyyy")+".pdf"
-                                }
-                            }
-                },
-                StatusCode = HttpStatusCode.OK
-            };
+           var FileName = childName.Replace(" ","") +"_Invoice"+"_"+DateTime.UtcNow.AddHours(5).Date.ToString("MMMM-dd-yyyy")+".pdf" ;
+           return File(stream, "application/pdf", FileName);
         }
 
 

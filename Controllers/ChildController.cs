@@ -362,7 +362,7 @@ namespace VaccineAPI.Controllers
 
 
       [HttpGet("search")]
-        public Response<IEnumerable<ChildDTO>> SearchChildrenByCity([FromQuery] string name = "", [FromQuery] string city = "", [FromQuery] string dob = "")
+        public Response<IEnumerable<ChildDTO>> SearchChildrenByCity([FromQuery] string name = "", [FromQuery] string city = "", [FromQuery] string dob = "", [FromQuery] string gender = "" )
         
                 {
 
@@ -378,8 +378,10 @@ namespace VaccineAPI.Controllers
 
                     if(!String.IsNullOrEmpty(dob))
                         dbChildrenResults = dbChildrenResults.Where(c => c.DOB == Convert.ToDateTime(dob).Date).ToList();
+                        
+                    if(!String.IsNullOrEmpty(gender))
+                        dbChildrenResults = dbChildrenResults.Where(c => c.Gender == gender).ToList();
 
-                 
                     childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(dbChildrenResults));
 
                     foreach (var item in childDTOs)

@@ -352,7 +352,7 @@ namespace VaccineAPI.Controllers
         {
            
                 {
-                    var dbSchedule = _db.Schedules.Where(x => x.Id == scheduleDTO.Id).FirstOrDefault();
+                    var dbSchedule = _db.Schedules.Where(x => x.Id == scheduleDTO.Id).Include(x=>x.Child).ThenInclude(x=>x.Schedules).FirstOrDefault();
                     var dbChildSchedules = dbSchedule.Child.Schedules.Where(x => x.Date == dbSchedule.Date).ToList();
 
                     foreach (var schedule in dbChildSchedules)

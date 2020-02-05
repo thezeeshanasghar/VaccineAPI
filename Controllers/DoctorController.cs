@@ -75,7 +75,7 @@ namespace VaccineAPI.Controllers
         {
             
         
-            var dbdoctor = await _db.Doctors.Where(x=> x.IsApproved == false).Include(x=>x.Clinics).ToListAsync();
+            var dbdoctor = await _db.Doctors.Where(x=> x.IsApproved == false).Include(x=> x.User).Include(x=>x.Clinics).ToListAsync();
             List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
            
             if (dbdoctor == null)
@@ -156,6 +156,7 @@ namespace VaccineAPI.Controllers
                         doctorDTO.ClinicDTO.DoctorId = doctorDB.Id;
 
                         Clinic clinicDB = _mapper.Map<Clinic>(doctorDTO.ClinicDTO);
+                        clinicDB.IsOnline = true;
                         _db.Clinics.Add(clinicDB);
                         _db.SaveChanges();
 

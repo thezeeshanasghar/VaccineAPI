@@ -519,8 +519,8 @@ namespace VaccineAPI.Controllers
                     UserEmail.ParentEmail(c);
 
                 // generate SMS and save it to the db
-                UserSMS u = new UserSMS(_db);
-                u.ParentSMS(c);
+              //  UserSMS u = new UserSMS(_db);
+              //  u.ParentSMS(c);
 
                 return new Response<ChildDTO>(true, null, childDTO);
             }

@@ -213,8 +213,8 @@ namespace VaccineAPI.Controllers
                         doseName += schedule.Dose.Name.Trim() + ", ";
                         scheduleDate = schedule.Date;
                     }
-                     UserSMS u = new UserSMS(_db);
-                     u.ParentSMSAlert(doseName, scheduleDate, dbChild);
+                   //  UserSMS u = new UserSMS(_db);
+                   //  u.ParentSMSAlert(doseName, scheduleDate, dbChild);
 
                     List<ScheduleDTO> scheduleDtos = _mapper.Map<List<ScheduleDTO>>(Schedules);
                     return new Response<IEnumerable<ScheduleDTO>>(true, null, scheduleDtos);

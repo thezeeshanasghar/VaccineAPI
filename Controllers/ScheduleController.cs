@@ -228,6 +228,13 @@ namespace VaccineAPI.Controllers
                     var dbSchedule = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(c => c.Id == scheduleDTO.Id).FirstOrDefault();
                     var dbBrandInventory = _db.BrandInventorys.Where(b => b.BrandId == scheduleDTO.BrandId
                                             && b.DoctorId == scheduleDTO.DoctorId).FirstOrDefault();
+                    if (scheduleDTO.IsDone == false)
+                    {
+                    dbSchedule.IsDone = scheduleDTO.IsDone;
+                    dbSchedule.GivenDate = null;
+                     _db.SaveChanges();
+                    return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
+                    }
                     if (dbBrandInventory != null && dbBrandInventory.Count > 0)
                         if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                             dbBrandInventory.Count--;
@@ -237,8 +244,8 @@ namespace VaccineAPI.Controllers
                     dbSchedule.Circle = scheduleDTO.Circle;
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = scheduleDTO.GivenDate;
-
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, _db , dbSchedule);
+
                     _db.SaveChanges();
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
                 }

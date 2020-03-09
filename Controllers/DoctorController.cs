@@ -55,6 +55,21 @@ namespace VaccineAPI.Controllers
             return new Response<DoctorDTO>(true, null, doctorDTO);
             
         }
+         [HttpGet("user/{id}")]
+       public async Task<Response<DoctorDTO>> GetSinglebyuser(long id)
+        {
+            
+        
+            var dbdoctor = await _db.Doctors.Where(x=>x.UserId==id).Include(x=>x.User).FirstOrDefaultAsync();
+            DoctorDTO doctorDTO = _mapper.Map<DoctorDTO>(dbdoctor);
+           
+            if (dbdoctor == null)
+            return new Response<DoctorDTO>(false, "Not Found", null);
+            doctorDTO.MobileNumber = dbdoctor.User.MobileNumber;
+           
+            return new Response<DoctorDTO>(true, null, doctorDTO);
+            
+        }
 
           [HttpGet("approved")]
        public async Task<Response<List<DoctorDTO>>> GetApproved()
@@ -96,7 +111,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/clinics")]
          public Response<IEnumerable<ClinicDTO>> GetAllClinicsOfaDoctor(int id)
          {
-              var doctor = _db.Doctors.Include(x=>x.Clinics).Include(x=>x.Childs).FirstOrDefault(c => c.Id == id);
+              var doctor = _db.Doctors.Include(x=>x.Clinics).ThenInclude(x=>x.ClinicTimings).Include(x=>x.Childs).FirstOrDefault(c => c.Id == id);
                     if (doctor == null)
                         return new Response<IEnumerable<ClinicDTO>>(false, "Doctor not found", null);
                     else

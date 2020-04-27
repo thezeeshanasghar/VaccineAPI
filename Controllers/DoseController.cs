@@ -36,7 +36,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}")]
         public async Task<Response<DoseDTO>> GetSingle(long id)
         {
-            var dbdose = await _db.Doses.FirstOrDefaultAsync();
+            var dbdose = await _db.Doses.Where(x=> x.Id == id).FirstOrDefaultAsync();
 
            DoseDTO doseDTO = _mapper.Map<DoseDTO>(dbdose);
            

@@ -13,6 +13,7 @@ namespace VaccineAPI.ModelDTO
         public int? MaxAge { get; set; }
         public int? MinGap { get; set; }
         public int? DoseOrder { get; set; }
+        public bool? IsSpecial { get; set; }
          public long VaccineId { get; set; }
         public VaccineDTO Vaccine { get; set; }
     }

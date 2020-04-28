@@ -19,7 +19,8 @@ namespace VaccineAPI.Models
         public int? MaxAge { get; set; }
         public int? MinGap { get; set; }
         public int? DoseOrder { get; set; }
-         public long VaccineId { get; set; }
+        public bool? IsSpecial { get; set; }
+        public long VaccineId { get; set; }
          [JsonIgnore]
       //  public Vaccine Vaccine { get; set; }
          [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]

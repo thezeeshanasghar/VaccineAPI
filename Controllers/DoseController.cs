@@ -65,6 +65,7 @@ namespace VaccineAPI.Controllers
                     dbDose.MaxAge = doseDTO.MaxAge;
                     dbDose.MinGap = doseDTO.MinGap;
                     dbDose.DoseOrder = doseDTO.DoseOrder;
+                    dbDose.IsSpecial = doseDTO.IsSpecial;
                     _db.SaveChanges();
                     return new Response<DoseDTO>(true, null, doseDTO);
         }

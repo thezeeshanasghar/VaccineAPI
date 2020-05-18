@@ -38,9 +38,9 @@ namespace VaccineAPI.Controllers
 
         [HttpGet("{id}")]
        public Response<ScheduleDTO> GetSingle(int Id)
-        {
+            {
                 
-                    var dbSchedule = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Brand).Where(c => c.Id == Id).FirstOrDefault();
+                    var dbSchedule = _db.Schedules.Include(x=>x.Dose).ThenInclude(x=>x.Vaccine).Include(x=>x.Brand).Where(c => c.Id == Id).FirstOrDefault();
                     ScheduleDTO scheduleDTOs = _mapper.Map<ScheduleDTO>(dbSchedule);
                     long vaccineId = dbSchedule.Dose.VaccineId;
                     var dbBrands = _db.Brands.Where(b => b.VaccineId == vaccineId).ToList();
@@ -232,6 +232,7 @@ namespace VaccineAPI.Controllers
                     {
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
+                    dbSchedule.IsSkip =scheduleDTO.IsSkip ;
                      _db.SaveChanges();
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
                     }

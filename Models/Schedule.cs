@@ -15,7 +15,10 @@ namespace VaccineAPI.Models
         public float? Height { get; set; }
         public float? Circle { get; set; }
         public bool IsDone { get; set; }
+        public bool? IsSkip { get; set; }
+        public bool? IsDisease { get; set; }
         public bool Due2EPI { get; set; }
+        public string DiseaseYear {get; set;}
         public Nullable<System.DateTime> GivenDate { get; set; }
          public long? BrandId { get; set; }
         public virtual Brand Brand { get; set; }

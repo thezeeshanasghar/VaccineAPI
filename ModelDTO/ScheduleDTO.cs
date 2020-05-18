@@ -20,6 +20,9 @@ namespace VaccineAPI.ModelDTO
         public float? Circle { get; set; }
         public bool IsDone { get; set; }
         public bool Due2EPI { get; set; }
+        public bool? IsSkip { get; set; }
+        public bool? IsDisease { get; set; }
+        public string DiseaseYear {get; set;}
          public DoseDTO Dose { get; set; }
         public virtual ChildDTO Child { get; set; }
         public List<BrandDTO> Brands { get; set; }

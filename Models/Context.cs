@@ -78,6 +78,12 @@ namespace VaccineAPI.Models
                         
                             b.Property(r => r.Due2EPI)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
+
+                             b.Property(r => r.IsSkip)
+                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+
+                             b.Property(r => r.IsDisease)
+                            .HasConversion(new BoolToZeroOneConverter<Int16>());
                               });
 
                              modelBuilder.Entity< Child >(b=>{

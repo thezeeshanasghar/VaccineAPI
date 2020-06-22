@@ -233,6 +233,7 @@ namespace VaccineAPI.Controllers
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
                     dbSchedule.IsSkip =scheduleDTO.IsSkip ;
+                    
                      _db.SaveChanges();
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
                     }
@@ -245,6 +246,8 @@ namespace VaccineAPI.Controllers
                     dbSchedule.Circle = scheduleDTO.Circle;
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = scheduleDTO.GivenDate;
+                    dbSchedule.DiseaseYear =scheduleDTO.DiseaseYear;
+                    dbSchedule.IsDisease =scheduleDTO.IsDisease;
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, _db , dbSchedule);
 
                     _db.SaveChanges();

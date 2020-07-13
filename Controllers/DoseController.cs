@@ -33,6 +33,47 @@ namespace VaccineAPI.Controllers
             return new Response<List<DoseDTO>>(true, null, listDTO);
         }
 
+//to add new dose in doctor schedule
+         [HttpGet("newdoctor/{id}")]
+        public async Task<Response<List<DoseDTO>>> GetNewDoses(long id)
+        {
+           var doctorschedule = await _db.DoctorSchedules.Where(x=>x.DoctorId == id).ToListAsync();
+           var dosesa = await _db.Doses.ToListAsync();
+           List<Dose> doses = new List<Dose>();
+             foreach(var dose in dosesa)
+            {
+               // var dctschedule = await _db.DoctorSchedules.Where(x=>x.DoctorId == id).Where(x=>x.DoseId == dose.Id).ToListAsync();
+                 var dctschedule =  doctorschedule.Where(x=>x.DoseId == dose.Id).FirstOrDefault();
+                if (dctschedule == null)
+                doses.Add(dose);
+            }
+
+            List<DoseDTO> listDTO = _mapper.Map<List<DoseDTO>>(doses);
+           
+            return new Response<List<DoseDTO>>(true, null, listDTO);
+        }
+
+         
+         // to add new dose in child schedule
+          [HttpGet("newchild/{id}")]
+        public async Task<Response<List<DoseDTO>>> GetNewChildDoses(long id)
+        {
+           var childschedule = await _db.Schedules.Where(x=>x.ChildId == id).ToListAsync();
+           var dosesa = await _db.Doses.ToListAsync();
+           List<Dose> doses = new List<Dose>();
+             foreach(var dose in dosesa)
+            {
+               // var dctschedule = await _db.DoctorSchedules.Where(x=>x.DoctorId == id).Where(x=>x.DoseId == dose.Id).ToListAsync();
+                 var chldschedule =  childschedule.Where(x=>x.DoseId == dose.Id).FirstOrDefault();
+                if (chldschedule == null)
+                doses.Add(dose);
+            }
+
+            List<DoseDTO> listDTO = _mapper.Map<List<DoseDTO>>(doses);
+           
+            return new Response<List<DoseDTO>>(true, null, listDTO);
+        }
+
         [HttpGet("{id}")]
         public async Task<Response<DoseDTO>> GetSingle(long id)
         {

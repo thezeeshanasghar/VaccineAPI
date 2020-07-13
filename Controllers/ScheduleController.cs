@@ -248,13 +248,29 @@ namespace VaccineAPI.Controllers
                     dbSchedule.GivenDate = scheduleDTO.GivenDate;
                     dbSchedule.DiseaseYear =scheduleDTO.DiseaseYear;
                     dbSchedule.IsDisease =scheduleDTO.IsDisease;
-                    ChangeDueDatesOfInjectedSchedule(scheduleDTO, _db , dbSchedule);
+                    ChangeDueDatesOfInjectedSchedule(scheduleDTO , dbSchedule);
 
                     _db.SaveChanges();
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
                 }
             }
-           private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Context entities, Schedule dbSchedule)
+        //    private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Context entities, Schedule dbSchedule)
+        // {
+        //     var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
+
+        //     var dbDose = _db.Doses.Include(x=>x.Vaccine).ToList();
+        //     var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
+        //     var AllDoses = dbSchedule.Dose.Vaccine.Doses;
+        //     AllDoses = AllDoses.Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).ToList();
+        //     foreach (var d in AllDoses)
+        //     {
+        //         var TargetSchedule = entities.Schedules.Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id).FirstOrDefault();
+        //         TargetSchedule.Date = calculateDate(TargetSchedule.Date, daysDifference); //TargetSchedule.Date.AddDays(daysDifference);
+        //     }
+
+        // }
+
+         private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO,  Schedule dbSchedule)
         {
             var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
 
@@ -264,20 +280,33 @@ namespace VaccineAPI.Controllers
             AllDoses = AllDoses.Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).ToList();
             foreach (var d in AllDoses)
             {
-                var TargetSchedule = entities.Schedules.Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id).FirstOrDefault();
+                var TargetSchedule = _db.Schedules.Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id).FirstOrDefault();
                 TargetSchedule.Date = calculateDate(TargetSchedule.Date, daysDifference); //TargetSchedule.Date.AddDays(daysDifference);
             }
 
         }
 
-        [HttpPost]
-        public async Task<ActionResult<Schedule>> Post(Schedule Schedule)
-        {
-            _db.Schedules.Update(Schedule);
-            await _db.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetSingle), new { id = Schedule.Id }, Schedule);
-        }
+          [HttpPost]
+        public Response<IEnumerable<ScheduleDTO>> Post(IEnumerable<ScheduleDTO> dsDTOS)
+        {
+              
+              
+                
+                    foreach (var SchedueDTO in dsDTOS)
+                    {
+                        var dbChild =  _db.Childs.Where(x=>x.Id == SchedueDTO.ChildId).FirstOrDefault();
+                        var dbDose =  _db.Doses.Where(x=>x.Id == SchedueDTO.DoseId).FirstOrDefault();
+                        SchedueDTO.Date = calculateDate(dbChild.DOB , dbDose.MinAge);
+                        Schedule SchduleDB = _mapper.Map<Schedule>(SchedueDTO);
+                      //  SchduleDB.Date = calculateDate(dbChild.DOB , dbDose.MinAge);
+                        _db.Schedules.Add(SchduleDB);
+                        _db.SaveChanges();
+                        SchedueDTO.Id = SchduleDB.Id;
+                    }
+                    return new Response<IEnumerable<ScheduleDTO>>(true, null, dsDTOS);
+                
+            }
 
          [HttpPost("bulk-brand")]
         public Response<List<ScheduleDTO>> GetVaccineBrands(ScheduleDTO scheduleDto)
@@ -374,12 +403,12 @@ namespace VaccineAPI.Controllers
                         schedule.Height = (scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
                         schedule.Circle = (scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
                         schedule.IsDone = scheduleDTO.IsDone;
-                        schedule.GivenDate = scheduleDTO.GivenDate;
+                        schedule.GivenDate = scheduleDTO.GivenDate.Date;
 
                         if (scheduleDTO.ScheduleBrands.Count > 0)
                         {
                             var scheduleBrand = scheduleDTO.ScheduleBrands.Find(x => x.ScheduleId == schedule.Id);
-                            if (scheduleBrand != null)
+                            if (scheduleBrand != null && scheduleBrand.BrandId != null )
                             {
                                 schedule.BrandId = scheduleBrand.BrandId;
                                 if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
@@ -389,7 +418,7 @@ namespace VaccineAPI.Controllers
                                 }
                             }
                         }
-                        ChangeDueDatesOfInjectedSchedule(scheduleDTO, _db, schedule);
+                        //ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
                     }
                     _db.SaveChanges();
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
@@ -397,7 +426,7 @@ namespace VaccineAPI.Controllers
             }
 
          //date Function
-          protected DateTime calculateDate(DateTime date, int GapInDays)
+          public static DateTime calculateDate(DateTime date, int GapInDays)
         {
             // For 3 months
             if (GapInDays == 84)

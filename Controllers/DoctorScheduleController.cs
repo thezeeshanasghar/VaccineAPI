@@ -69,19 +69,36 @@ namespace VaccineAPI.Controllers
             }
 
     
-        [HttpPut]
-        public Response<List<DoctorScheduleDTO>> Put(List<DoctorScheduleDTO> dsDTOS)
+        // [HttpPut]
+        // public Response<List<DoctorScheduleDTO>> Put(List<DoctorScheduleDTO> dsDTOS)
+        
+                
+        //         {
+        //             foreach (var DoctorScheduedTO in dsDTOS)
+        //             {
+        //                 var doctorSchduleDB = _db.DoctorSchedules.Where(c => c.Id == DoctorScheduedTO.Id).FirstOrDefault();
+        //                 doctorSchduleDB.GapInDays = DoctorScheduedTO.GapInDays;
+        //                 Console.WriteLine("loop");
+        //                // _db.SaveChanges();
+        //             }
+        //              _db.SaveChanges();
+        //             return new Response<List<DoctorScheduleDTO>>(true, null, dsDTOS);
+        //         }
+
+         [HttpPut]
+        public Response<List<DoctorSchedule>> Put([FromBody]List<DoctorSchedule> dsDTOS)
         
                 
                 {
-                    foreach (var DoctorSchedueDTO in dsDTOS)
+                    foreach (var DoctorScheduedTO in dsDTOS)
                     {
-                        var doctorSchduleDB = _db.DoctorSchedules.Where(c => c.Id == DoctorSchedueDTO.Id).FirstOrDefault();
-                        doctorSchduleDB.GapInDays = DoctorSchedueDTO.GapInDays;
+                        var doctorSchduleDB = _db.DoctorSchedules.Where(c => c.Id == DoctorScheduedTO.Id).FirstOrDefault();
+                        doctorSchduleDB.GapInDays = DoctorScheduedTO.GapInDays;
+                        Console.WriteLine("loop");
                        // _db.SaveChanges();
                     }
                      _db.SaveChanges();
-                    return new Response<List<DoctorScheduleDTO>>(true, null, dsDTOS);
+                    return new Response<List<DoctorSchedule>>(true, null, dsDTOS);
                 }
             
 

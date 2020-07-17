@@ -67,6 +67,22 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
 
+          [HttpGet("user/{id}")]
+        public Response<IEnumerable<ChildDTO>> GetChildByUser(long id)
+        {
+            var dbChilds = _db.Childs.Include(x=>x.User).Where(x=>x.UserId == id).OrderByDescending(x=>x.Id).ToList();
+            List<ChildDTO> childDTOs = new List<ChildDTO>();
+            foreach (var child in dbChilds)
+            {
+                ChildDTO childDTO = _mapper.Map<ChildDTO>(child);
+                childDTO.CountryCode = child.User.CountryCode;
+                childDTO.MobileNumber = child.User.MobileNumber;
+                childDTOs.Add(childDTO);
+            }
+
+            return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
+        }
+
         [HttpGet("{Id}")]
         public Response<ChildDTO> GetSingle(int Id)
         {

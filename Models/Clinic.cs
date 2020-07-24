@@ -24,6 +24,7 @@ namespace VaccineAPI.Models
         public string PhoneNumber { get; set; }
         public bool IsOnline { get; set; }
         public string Address { get; set; }
+        public string MonogramImage { get; set; }
         public long DoctorId { get; set; }
        // [JsonIgnore]
         public virtual Doctor Doctor { get; set; }

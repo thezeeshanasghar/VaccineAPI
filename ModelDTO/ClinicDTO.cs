@@ -11,6 +11,7 @@ namespace VaccineAPI.ModelDTO
         public string Name { get; set; }
         public string PhoneNumber { get; set; }
         public string Address { get; set; }
+        public string MonogramImage { get; set; }
         public int ConsultationFee { get; set; }
           public double Lat { get; set; }
         public double Long { get; set; }

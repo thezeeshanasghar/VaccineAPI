@@ -395,14 +395,36 @@ namespace VaccineAPI.Controllers
                 GetPDFHeading(document, "Immunization Record");
 
                 //Table 1 for description above Schedule table
-                PdfPTable upperTable = new PdfPTable(2);
-                float[] upperTableWidths = new float[] { 250f, 250f };
+                PdfPTable upperTable = new PdfPTable(3);
+                float[] upperTableWidths = new float[] { 150f, 200f , 150f };
                 upperTable.HorizontalAlignment = 0;
                 upperTable.TotalWidth = 500f;
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths(upperTableWidths);
 
+             
+
                 upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 1, "left", "description"));
+                     //image code start
+               var imgPath = Path.Combine(_host.ContentRootPath, "Resources\\Images\\default.jpg");
+              
+               if (dbChild.Clinic.MonogramImage != null)
+                imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);
+
+              Image img = Image.GetInstance(imgPath);
+               img.ScaleAbsolute(40f, 40f);
+              //img.ScaleToFit(40f, 40f);
+
+            PdfPCell imageCell = new PdfPCell(img , false);
+           // imageCell.PaddingTop = 5;
+           imageCell.Colspan = 1; // either 1 if you need to insert one cell
+           imageCell.Rowspan = 4;
+           imageCell.Border = 0;
+           imageCell.FixedHeight = 1f;
+           imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
+           upperTable.AddCell(imageCell);
+               //image code end
+                
                 upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));
 
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "", 1, "left", "description"));
@@ -453,8 +475,8 @@ namespace VaccineAPI.Controllers
                 table.AddCell(CreateCell("OFC", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 //table.AddCell(CreateCell("Injected", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
-              //  var imgPath = System.Web.Hosting.HostingEnvironment.MapPath("~/Content/img");
-               var imgPath = Path.Combine(_host.ContentRootPath, "Content/img");
+
+             
                 foreach (var dbSchedule in dbSchedules)
                 {
                     if (dbSchedule.IsSkip ==false ||dbSchedule.IsSkip == null )

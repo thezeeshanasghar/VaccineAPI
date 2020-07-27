@@ -132,7 +132,9 @@ namespace VaccineAPI.Controllers
         [HttpPost]
          public Response<DoctorDTO> Post(DoctorDTO doctorDTO)
         {
-            
+            var edoctor = _db.Users.Where(x=>x.MobileNumber == doctorDTO.MobileNumber).FirstOrDefault();
+            if (edoctor != null)
+            return new Response<DoctorDTO>(false, "Account already exist", null);
                 TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
                 doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.FirstName);
                 doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);
@@ -140,7 +142,7 @@ namespace VaccineAPI.Controllers
                 {
 
                     // 1- send email to doctor
-                    UserEmail.DoctorEmail(doctorDTO);
+                    
 
                     // 2- save User first
                     User userDB = new User();
@@ -162,6 +164,7 @@ namespace VaccineAPI.Controllers
                     //generate SMS and save it to the db
                     UserSMS u = new UserSMS(_db);
                     u.DoctorSMS(doctorDTO);
+                    UserEmail.DoctorEmail(doctorDTO);
 
                     // 4- check if clinicDto exsist; then save clinic as well
                     if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))

@@ -20,12 +20,11 @@ namespace VaccineAPI
         static TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
         public string DoctorSMS(DoctorDTO doctor)
         {
-            string body = "Hi Dr. " + textInfo.ToTitleCase(doctor.FirstName) + " " + textInfo.ToTitleCase(doctor.LastName) + " \n"
-                + "You are registered at Vaccs.io\n\n"
-                + "Your account credentials are: \n"
-                + "Id/Mobile Number: " + doctor.MobileNumber + "\n"
+            string body = "Hi " + textInfo.ToTitleCase(doctor.FirstName) + " " + textInfo.ToTitleCase(doctor.LastName) + " \n"
+                + "You are Succesfully registered in registered in vaccine.pk\n\n"
+                + "Id: " + doctor.MobileNumber + "\n"
                 + "Password: " + doctor.Password + "\n"
-                + "https://vaccs.io/";
+                + "Weblink: https://vaccine.pk";
             var response = SendSMS(doctor.CountryCode, doctor.MobileNumber, doctor.Email, body);
             addMessageToDB(doctor.MobileNumber, response, body, 1);
             return response;

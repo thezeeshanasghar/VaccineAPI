@@ -328,6 +328,7 @@ namespace VaccineAPI.Controllers
                                 childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(
                                     clinic.Childs.Where(x => x.Name.Trim().ToLower().Contains(searchKeyword.ToLower())
                                     || x.FatherName.Trim().ToLower().Contains(searchKeyword.ToLower())
+                                    || x.Email.Trim().Contains(searchKeyword.ToLower())
                                     || x.User.MobileNumber.Trim().Contains(searchKeyword.ToLower())).ToList<Child>()));
                                 currentPage = 0;
                             }

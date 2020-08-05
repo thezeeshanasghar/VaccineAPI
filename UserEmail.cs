@@ -21,22 +21,21 @@ namespace VaccineAPI
 
         public static void ParentEmail(Child child)
         {
-            string body = "Mr. " + child.FatherName + ",<br>";
+            string body = "";
             if (child.Gender == "Boy")
-                body += "Your Son <b>" + child.Name + "</b>";
+                body += "Mr. " + child.Name + "</b>";
 
             if (child.Gender == "Girl")
-                body += "Your Daughter <b>" + child.Name + "</b>";
+                body += "Miss. " + child.Name + "</b>";
 
-            body += " has been registered at ";
-            body += "<b>" + child.Clinic.Name + "</b><br>";
+            body += " has been registered at vaccine.pk ";
 
 
             body += "ID: <b>" + child.User.MobileNumber + "</b><br>Password: <b>" + child.User.Password + "</b><br/>"
                 + "Clinic Phone Number <b>" + child.Clinic.PhoneNumber + "</b><br>";
 
             body += "Doctor Phone Number: <b>" + child.Clinic.Doctor.PhoneNo + "<b><br>";
-            body += "Web Link: <a href=\"https://vaccs.io\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccs.io</a>";
+            body += "Web Link: <a href=\"https://vaccine.pk\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccine.pk</a>";
             //TODO: website and android link
             SendEmail(child.Name, child.Email, body);
         }

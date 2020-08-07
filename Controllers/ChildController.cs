@@ -1058,9 +1058,9 @@ namespace VaccineAPI.Controllers
 
         {
             {
-                var dbChild = _db.Childs.Where(c => c.Id == Id).FirstOrDefault();
-                //entities.Schedules.RemoveRange(dbChild.Schedules);
-                //entities.FollowUps.RemoveRange(dbChild.FollowUps);
+                var dbChild = _db.Childs.Include(x=>x.User).ThenInclude(x=>x.Childs).Include(x=>x.Schedules).Include(x=>x.FollowUps).Where(c => c.Id == Id).FirstOrDefault();
+                _db.Schedules.RemoveRange(dbChild.Schedules);
+                _db.FollowUps.RemoveRange(dbChild.FollowUps);
                 if (dbChild.User.Childs.Count == 1)
                     _db.Users.Remove(dbChild.User);
                 _db.Childs.Remove(dbChild);

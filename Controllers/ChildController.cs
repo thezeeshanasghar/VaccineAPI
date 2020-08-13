@@ -406,7 +406,8 @@ namespace VaccineAPI.Controllers
 
                 upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 1, "left", "description"));
                      //image code start
-               var imgPath = Path.Combine(_host.ContentRootPath, "Resources\\Images\\default.jpg");
+               
+               var imgPath = Path.Combine(_host.ContentRootPath, "Resources/Images/default.jpg");
               
                if (dbChild.Clinic.MonogramImage != null)
                 imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);

@@ -410,6 +410,7 @@ namespace VaccineAPI.Controllers
                var imgPath = Path.Combine(_host.ContentRootPath, "Resources/Images/default.jpg");
               
                if (dbChild.Clinic.MonogramImage != null)
+               {
                 imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);
 
               Image img = Image.GetInstance(imgPath);
@@ -424,6 +425,7 @@ namespace VaccineAPI.Controllers
            imageCell.FixedHeight = 1f;
            imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
            upperTable.AddCell(imageCell);
+               }
                //image code end
                 
                 upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));
@@ -1058,7 +1060,7 @@ namespace VaccineAPI.Controllers
         public Response<string> Delete(int Id)
 
         {
-            {
+            
                 var dbChild = _db.Childs.Include(x=>x.User).ThenInclude(x=>x.Childs).Include(x=>x.Schedules).Include(x=>x.FollowUps).Where(c => c.Id == Id).FirstOrDefault();
                 _db.Schedules.RemoveRange(dbChild.Schedules);
                 _db.FollowUps.RemoveRange(dbChild.FollowUps);
@@ -1067,7 +1069,7 @@ namespace VaccineAPI.Controllers
                 _db.Childs.Remove(dbChild);
                 _db.SaveChanges();
                 return new Response<string>(true, "Child is deleted successfully", null);
-            }
+            
         }
 
          //Date Function

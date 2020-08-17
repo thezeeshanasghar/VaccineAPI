@@ -23,10 +23,10 @@ namespace VaccineAPI
         {
             string body = "";
             if (child.Gender == "Boy")
-                body += "Mr. " + child.Name + "</b>";
+                body += ("Mr. " + child.Name + "</b>");
 
             if (child.Gender == "Girl")
-                body += "Miss. " + child.Name + "</b>";
+                body += ("Miss. " + child.Name + "</b>");
 
             body += " has been registered at vaccine.pk ";
 
@@ -34,7 +34,7 @@ namespace VaccineAPI
             body += "ID: <b>" + child.User.MobileNumber + "</b><br>Password: <b>" + child.User.Password + "</b><br/>"
                 + "Clinic Phone Number <b>" + child.Clinic.PhoneNumber + "</b><br>";
 
-            body += "Doctor Phone Number: <b>" + child.Clinic.Doctor.PhoneNo + "<b><br>";
+            body += "Doctor Phone Number: <b>" + child.Clinic.Doctor.User.MobileNumber + "<b><br>";
             body += "Web Link: <a href=\"https://vaccine.pk\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccine.pk</a>";
             //TODO: website and android link
             SendEmail(child.Name, child.Email, body);

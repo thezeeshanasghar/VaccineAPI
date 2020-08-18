@@ -664,7 +664,7 @@ namespace VaccineAPI.Controllers
                 foreach (DoctorSchedule ds in dss)
                 {
                     var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).Include(x=>x.Vaccine).FirstOrDefault();
-                    if (childDTO.ChildVaccines.Any(x => x.Id == dbDose.Vaccine.Id))
+                  //  if (childDTO.ChildVaccines.Any(x => x.Id == dbDose.Vaccine.Id))
                     {
                         Schedule cvd = new Schedule();
                         cvd.ChildId = childDTO.Id;

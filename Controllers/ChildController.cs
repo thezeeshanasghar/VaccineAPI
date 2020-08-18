@@ -426,6 +426,16 @@ namespace VaccineAPI.Controllers
            imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
            upperTable.AddCell(imageCell);
                }
+               else{
+                   PdfPCell imageCell = new PdfPCell();
+           // imageCell.PaddingTop = 5;
+           imageCell.Colspan = 1; // either 1 if you need to insert one cell
+           imageCell.Rowspan = 4;
+           imageCell.Border = 0;
+           imageCell.FixedHeight = 1f;
+           imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
+           upperTable.AddCell(imageCell);
+               }
                //image code end
                 
                 upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));

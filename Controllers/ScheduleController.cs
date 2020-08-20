@@ -225,7 +225,7 @@ namespace VaccineAPI.Controllers
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
         {
                 {
-                    var dbSchedule = _db.Schedules.Include(x=>x.Dose).Include(x=>x.Child).Where(c => c.Id == scheduleDTO.Id).FirstOrDefault();
+                    var dbSchedule = _db.Schedules.Include(x=>x.Dose).ThenInclude(x=>x.Vaccine).Include(x=>x.Child).Where(c => c.Id == scheduleDTO.Id).FirstOrDefault();
                     var dbBrandInventory = _db.BrandInventorys.Where(b => b.BrandId == scheduleDTO.BrandId
                                             && b.DoctorId == scheduleDTO.DoctorId).FirstOrDefault();
                     if (scheduleDTO.IsDone == false)
@@ -240,6 +240,21 @@ namespace VaccineAPI.Controllers
                     if (dbBrandInventory != null && dbBrandInventory.Count > 0)
                         if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                             dbBrandInventory.Count--;
+                    
+                    // to hide next doses if disease appeared
+                    if (scheduleDTO.IsDisease == true)
+                    {
+                        var nextDoses = _db.Doses.Where(x=>x.VaccineId == dbSchedule.Dose.VaccineId).ToList();
+                        foreach (var dose in nextDoses)
+                        {
+                            if (dose.Id != dbSchedule.DoseId)
+                            {
+                            var childschedule = _db.Schedules.Where(x=>x.ChildId == dbSchedule.Child.Id && x.DoseId == dose.Id).FirstOrDefault();
+                            childschedule.IsSkip = true;
+                            }
+                        }
+                    }
+
                     dbSchedule.BrandId = scheduleDTO.BrandId;
                     dbSchedule.Weight = scheduleDTO.Weight;
                     dbSchedule.Height = scheduleDTO.Height;

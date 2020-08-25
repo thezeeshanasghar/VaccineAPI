@@ -446,14 +446,15 @@ namespace VaccineAPI.Controllers {
                         if (childDTO.IsEPIDone) {
                             if (ds.Dose.Name.StartsWith ("BCG") ||
                                 ds.Dose.Name.StartsWith ("HBV") ||
-                                ds.Dose.Name.Equals ("OPV # 1")) {
+                                ds.Dose.Name.Equals ("OPV 1")) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
                                 cvd.GivenDate = childDB.DOB;
                             } else if (
                                 ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase) ||
                                 ds.Dose.Name.Equals ("Pneumococcal # 1", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Rota Virus GE # 1", StringComparison.OrdinalIgnoreCase)
+                                ds.Dose.Name.Equals ("ROTA GE 1", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
@@ -462,7 +463,8 @@ namespace VaccineAPI.Controllers {
                             } else if (
                                 ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase) ||
                                 ds.Dose.Name.Equals ("Pneumococcal # 2", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Rota Virus GE # 2", StringComparison.OrdinalIgnoreCase)
+                                ds.Dose.Name.Equals ("ROTA GE 2", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
@@ -470,14 +472,15 @@ namespace VaccineAPI.Controllers {
                                 cvd.GivenDate = d.AddDays (70);
                             } else if (
                                 ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase)
+                                ds.Dose.Name.Equals ("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
                                 DateTime d = childDB.DOB;
                                 cvd.GivenDate = d.AddDays (98);
                             } else if (
-                                ds.Dose.Name.Equals ("Measles # 1", StringComparison.OrdinalIgnoreCase)
+                                ds.Dose.Name.Equals ("Measles 1", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;

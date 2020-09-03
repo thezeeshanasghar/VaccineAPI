@@ -118,7 +118,7 @@ namespace VaccineAPI.Controllers {
 
         [HttpPost]
         public Response<DoctorDTO> Post (DoctorDTO doctorDTO) {
-            var edoctor = _db.Users.Where (x => x.MobileNumber == doctorDTO.MobileNumber).FirstOrDefault ();
+            var edoctor = _db.Users.Where (x => x.MobileNumber == doctorDTO.MobileNumber && x.UserType == "DOCTOR").FirstOrDefault ();
             if (edoctor != null)
                 return new Response<DoctorDTO> (false, "Account already exist", null);
             TextInfo textInfo = new CultureInfo ("en-US", false).TextInfo;

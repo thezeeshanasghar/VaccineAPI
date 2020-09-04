@@ -258,7 +258,7 @@ namespace VaccineAPI.Controllers {
                 document.Add (new Paragraph (""));
                 document.Add (new Chunk ("\n"));
                 //Schedule Table
-                float[] widths = new float[] { 25f, 145f, 70f, 70f, 45f, 45f, 45f };
+                float[] widths = new float[] { 25f, 145f, 110f, 70f, 45f, 45f, 45f };
 
                 PdfPTable table = new PdfPTable (7);
                 table.HorizontalAlignment = 0;
@@ -293,8 +293,14 @@ namespace VaccineAPI.Controllers {
                             dosenameCell.HorizontalAlignment = Element.ALIGN_CENTER;
 
                             table.AddCell (dosenameCell);
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true) {
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true) {
                                 PdfPCell statusCell = new PdfPCell (new Phrase ("Given on " + dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy"), font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                table.AddCell (statusCell);
+                            }
+
+                             else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true) {
+                                PdfPCell statusCell = new PdfPCell (new Phrase ("Given by EPI", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 table.AddCell (statusCell);
                             } else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true) {
@@ -307,20 +313,20 @@ namespace VaccineAPI.Controllers {
                                 table.AddCell (statusCell);
                             }
 
-                            PdfPCell brandCell = new PdfPCell (new Phrase (dbSchedule.Brand != null ? dbSchedule.Brand.Name.ToString () : "N/A", font));
+                            PdfPCell brandCell = new PdfPCell (new Phrase (dbSchedule.Brand != null ? dbSchedule.Brand.Name.ToString () : "-", font));
                             brandCell.HorizontalAlignment = Element.ALIGN_CENTER;
 
                             table.AddCell (brandCell);
 
-                            PdfPCell weightCell = new PdfPCell (new Phrase (dbSchedule.Weight > 0 ? dbSchedule.Weight.ToString () : "N/A", font));
+                            PdfPCell weightCell = new PdfPCell (new Phrase (dbSchedule.Weight > 0 ? dbSchedule.Weight.ToString () : "-", font));
                             weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             table.AddCell (weightCell);
 
-                            PdfPCell heightCell = new PdfPCell (new Phrase (dbSchedule.Height > 0 ? dbSchedule.Height.ToString () : "N/A", font));
+                            PdfPCell heightCell = new PdfPCell (new Phrase (dbSchedule.Height > 0 ? dbSchedule.Height.ToString () : "-", font));
                             heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             table.AddCell (heightCell);
 
-                            PdfPCell circleCell = new PdfPCell (new Phrase (dbSchedule.Circle > 0 ? dbSchedule.Circle.ToString () : "N/A", font));
+                            PdfPCell circleCell = new PdfPCell (new Phrase (dbSchedule.Circle > 0 ? dbSchedule.Circle.ToString () : "-", font));
                             circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             table.AddCell (circleCell);
                         }
@@ -451,8 +457,8 @@ namespace VaccineAPI.Controllers {
                                 cvd.Due2EPI = true;
                                 cvd.GivenDate = childDB.DOB;
                             } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Pneumococcal # 1", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("OPV/IPV+HB+Hib+DTaP 1", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("PCV 1", StringComparison.OrdinalIgnoreCase) ||
                                 ds.Dose.Name.Equals ("ROTA GE 1", StringComparison.OrdinalIgnoreCase) ||
                                 ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
                             ) {
@@ -461,8 +467,8 @@ namespace VaccineAPI.Controllers {
                                 DateTime d = childDB.DOB;
                                 cvd.GivenDate = d.AddDays (42);
                             } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Pneumococcal # 2", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("OPV/IPV+HB+Hib+DTaP 2", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("PCV 2", StringComparison.OrdinalIgnoreCase) ||
                                 ds.Dose.Name.Equals ("ROTA GE 2", StringComparison.OrdinalIgnoreCase) ||
                                 ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
                             ) {
@@ -471,8 +477,8 @@ namespace VaccineAPI.Controllers {
                                 DateTime d = childDB.DOB;
                                 cvd.GivenDate = d.AddDays (70);
                             } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("OPV/IPV+HB+Hib+DTaP 3", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("PCV 3", StringComparison.OrdinalIgnoreCase) ||
                                 ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
@@ -863,10 +869,10 @@ namespace VaccineAPI.Controllers {
         // write on end of each page
         public override void OnEndPage (PdfWriter writer, Document document) {
             base.OnEndPage (writer, document);
-            string footer = @"This schedule is automatically generated for " + child.Clinic.Name + @" by Vaccs.io Visit https://www.vaccs.io/ for more details
+            string footer = @"This schedule is automatically generated for " + child.Clinic.Name + @" by Vaccine.pk Visit https://www.vaccine.pk/ for more details
              ____________________________________________________________________________________________________________________________________________
              Disclaimer: This schedule provides recommended dates for immunizations for your child based on date of birth. Your pediatrician
-             may update due dates or add/remove vaccines from this schedule.Vaccs.io or its management or staff holds no responsibility on any loss or damage due to any vaccine given to child at any given timeOfSending.";
+             may update due dates or add/remove vaccines from this schedule.Vaccine.pk or its management or staff holds no responsibility on any loss or damage due to any vaccine given to child at any given timeOfSending.";
             footer = footer.Replace (Environment.NewLine, String.Empty).Replace ("  ", String.Empty);
             Font georgia = FontFactory.GetFont ("georgia", 7f);
 

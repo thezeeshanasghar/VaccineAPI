@@ -449,6 +449,7 @@ namespace VaccineAPI.Controllers {
                         cvd.DoseId = ds.DoseId;
                         if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith ("HPV"))
                             continue;
+
                         if (childDTO.IsEPIDone) {
                             if (ds.Dose.Name.StartsWith ("BCG") ||
                                 ds.Dose.Name.StartsWith ("HBV") ||
@@ -494,6 +495,9 @@ namespace VaccineAPI.Controllers {
                                 cvd.GivenDate = d.AddMonths (9);
                             }
                         }
+
+                        if (ds.Dose.Name.StartsWith ("HPV") && ds.Dose.DoseOrder == 3)
+                            cvd.IsSkip = true;
 
                         cvd.Date = calculateDate (childDTO.DOB, ds.GapInDays);
                         _db.Schedules.Add (cvd);

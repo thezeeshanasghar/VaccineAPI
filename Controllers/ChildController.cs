@@ -86,7 +86,7 @@ namespace VaccineAPI.Controllers {
         [HttpGet ("{id}/schedule")]
         public Response<IEnumerable<ScheduleDTO>> GetChildSchedule (int id) {
             {
-                var child = _db.Childs.Include (x => x.Schedules).FirstOrDefault (c => c.Id == id);
+                var child = _db.Childs.Include (x => x.Schedules).Include (x => x.User).FirstOrDefault (c => c.Id == id);
                 if (child == null)
                     return new Response<IEnumerable<ScheduleDTO>> (false, "Child not found", null);
                 else {
@@ -95,6 +95,7 @@ namespace VaccineAPI.Controllers {
                         var dbSchedule = dbSchedules.ElementAt (i);
                         dbSchedule.Dose = _db.Schedules.Include ("Dose").Where<Schedule> (x => x.Id == dbSchedule.Id).FirstOrDefault ().Dose;
                         dbSchedule.Brand = _db.Brands.Where<Brand> (x => x.Id == dbSchedule.BrandId).FirstOrDefault ();
+
                     }
 
                     var schedulesDTO = _mapper.Map<List<ScheduleDTO>> (dbSchedules);

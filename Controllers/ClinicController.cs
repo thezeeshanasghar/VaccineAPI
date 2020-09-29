@@ -37,7 +37,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}")]
       public async Task<Response<ClinicDTO>> GetSingle(long id)
         {
-            var dbclinic = await _db.Clinics.Include(x=>x.ClinicTimings).FirstOrDefaultAsync();
+            var dbclinic = await _db.Clinics.Include(x=>x.ClinicTimings).Where(x=>x.Id == id).FirstOrDefaultAsync();
 
            ClinicDTO clinicDTO = _mapper.Map<ClinicDTO>(dbclinic);
            

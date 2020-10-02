@@ -76,6 +76,7 @@ namespace VaccineAPI.Controllers
                     dbClinic.Lat = clinicDTO.Lat;
                     dbClinic.Long = clinicDTO.Long;
                     dbClinic.Address = clinicDTO.Address;
+                    dbClinic.MonogramImage = clinicDTO.MonogramImage;
                     _db.SaveChanges();
                     foreach (var clinicTiming in clinicDTO.ClinicTimings)
                     {

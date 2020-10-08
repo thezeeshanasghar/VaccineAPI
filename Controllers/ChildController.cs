@@ -6,9 +6,11 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Threading.Tasks;
 using System.Web.Http;
 using AutoMapper;
+using CsvHelper;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using Microsoft.AspNetCore.Hosting;
@@ -106,6 +108,60 @@ namespace VaccineAPI.Controllers {
             }
         }
 
+        // csv file start
+        [HttpGet ("{id}/downloadcsv")]
+        public IActionResult MyExportAction (int id) {
+            var schedule = _db.Schedules.Where (x => x.ChildId == id).Include (x => x.Dose).ThenInclude (x => x.Vaccine).ToList ();
+            DateTime nextvisitDate = getNextDate (schedule);
+            var progresses = _db.Childs.Include (x => x.User).Where (x => x.Id == id).ToList ()
+                .Select (progress =>
+                    new ChildCsvDTO () {
+                        Name = progress.Name,
+                            FatherName = progress.FatherName,
+                            DOB = progress.DOB.ToShortDateString (),
+                            City = progress.City,
+                            Next_Due_Date = nextvisitDate.ToString ("yyyy/MM/dd"),
+                            Next_Due_Vaccines = getNextVaccine(schedule , nextvisitDate),
+                            Phone = progress.User.MobileNumber,
+                            Email = progress.Email
+                    }
+                );
+
+            // List<ChildCsvDTO> reportCSVModels = childModel.ToList();
+
+            var stream = new MemoryStream ();
+            using (var writeFile = new StreamWriter (stream, Encoding.UTF8, 512, true)) {
+                var csv = new CsvWriter (writeFile, CultureInfo.InvariantCulture);
+                //csv.Configuration.RegisterClassMap<GroupReportCSVMap>();            
+                csv.WriteRecords (progresses);
+            }
+            stream.Position = 0; //reset stream
+            return File (stream, "application/octet-stream", "Reports.csv");
+        }
+        // csv file end
+
+        public DateTime getNextDate (List<Schedule> schedul) {
+            DateTime Now = DateTime.Now;
+
+            foreach (var sch in schedul) {
+                Console.WriteLine (Now);
+                //sch.Date = sch.Date.ToString ("yyyy/MM/dd");
+                Console.WriteLine (sch.Date);
+                if (sch.Date > Now)
+                    return sch.Date;
+            }
+            return Now;
+        }
+
+        public string getNextVaccine (List<Schedule> schedu, DateTime nextDate) {
+            string nextVaccines = "";
+            foreach (var sch in schedu) {
+                if (sch.Date == nextDate)
+                    nextVaccines += (sch.Dose.Name + ",");
+            }
+            return nextVaccines;
+        }
+
         [HttpGet ("{id}/GetChildAgainstMobile")]
         public Response<IEnumerable<ChildDTO>> GetChildAgainstMobile (string id) {
 
@@ -164,8 +220,6 @@ namespace VaccineAPI.Controllers {
             var FileName = dbScheduleChild.Name.Replace (" ", "") + "_Schedule_" + DateTime.UtcNow.AddHours (5).ToString ("MMMM-dd-yyyy") + ".pdf";
             return File (stream, "application/pdf", FileName);
         }
-
-      
 
         private Stream CreateSchedulePdf (int childId) {
             //Access db data
@@ -298,9 +352,7 @@ namespace VaccineAPI.Controllers {
                                 PdfPCell statusCell = new PdfPCell (new Phrase ("Given on " + dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy"), font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 table.AddCell (statusCell);
-                            }
-
-                             else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true) {
+                            } else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true) {
                                 PdfPCell statusCell = new PdfPCell (new Phrase ("Given by EPI", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 table.AddCell (statusCell);

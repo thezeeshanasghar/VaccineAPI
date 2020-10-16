@@ -134,6 +134,43 @@ namespace VaccineAPI.Controllers {
                 var csv = new CsvWriter (writeFile, CultureInfo.InvariantCulture);
                 //csv.Configuration.RegisterClassMap<GroupReportCSVMap>();            
                 csv.WriteRecords (progresses);
+                csv.WriteRecords (progresses);
+            }
+            stream.Position = 0; //reset stream
+            return File (stream, "application/octet-stream", "Reports.csv");
+        }
+        // csv file end
+
+        // csv file start
+        [HttpGet ("downloadcsv")] 
+        public IActionResult MyExportAction2 ([FromQuery(Name = "arr[]")] long[] arr) {
+            
+            List<Child> alerts = new List<Child>();
+           
+            var stream = new MemoryStream ();
+            using (var writeFile = new StreamWriter (stream, Encoding.UTF8, 512, true)) {
+                var csv = new CsvWriter (writeFile, CultureInfo.InvariantCulture);   
+                foreach(long id in arr)
+            {  
+            var schedule = _db.Schedules.Where (x => x.ChildId == id).Include (x => x.Dose).ThenInclude (x => x.Vaccine).ToList ();
+            DateTime nextvisitDate = getNextDate (schedule);
+             var progresses = _db.Childs.Include (x => x.User).Where (x => x.Id == id).ToList ()
+                .Select (progress =>
+                    new ChildCsvDTO () {
+                        Name = progress.Name,
+                            FatherName = progress.FatherName,
+                            DOB = progress.DOB.ToShortDateString (),
+                            City = progress.City,
+                            Next_Due_Date = nextvisitDate.ToString ("yyyy/MM/dd"),
+                            Next_Due_Vaccines = getNextVaccine(schedule , nextvisitDate),
+                            Phone = progress.User.MobileNumber,
+                            Email = progress.Email
+                    }
+                );
+             csv.WriteRecords (progresses);
+        
+            }        
+               
             }
             stream.Position = 0; //reset stream
             return File (stream, "application/octet-stream", "Reports.csv");

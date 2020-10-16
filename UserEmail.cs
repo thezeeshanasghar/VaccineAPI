@@ -144,7 +144,7 @@ namespace VaccineAPI
           public static void SendEmail(string userName, string userEmail, string body)
         {
 
-            using (System.Net.Mail.MailMessage mm = new System.Net.Mail.MailMessage ("admin@vaccine.pk", userEmail)) {
+            using (System.Net.Mail.MailMessage mm = new System.Net.Mail.MailMessage ("info@vaccine.pk", userEmail)) {
                 mm.Subject = "vaccine.pk";   
                 mm.Body = body;
                 mm.IsBodyHtml = true;
@@ -153,10 +153,10 @@ namespace VaccineAPI
                 //smtp.Host = "premium55.web-hosting.com";
                 smtp.Host = "mail.vaccines.pk";
                 smtp.EnableSsl = false;
-                NetworkCredential NetworkCred = new NetworkCredential ("admin@vaccine.pk", "HtxRX#a4vf4V");
+                NetworkCredential NetworkCred = new NetworkCredential ("info@vaccine.pk", "XDQ0@73GvLKJ");
                 smtp.UseDefaultCredentials = false;
                 smtp.Credentials = NetworkCred;
-                smtp.Port = 26;
+                 smtp.Port = 465;//smtp.Port = 26;
                 smtp.Send (mm);
 
             }

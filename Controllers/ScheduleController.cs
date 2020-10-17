@@ -14,10 +14,10 @@ namespace VaccineAPI.Controllers {
     [ApiController]
     public class ScheduleController : ControllerBase {
         private readonly Context _db;
-        private readonly IHostingEnvironment _host;
+        private readonly IWebHostEnvironment _host;
         private readonly IMapper _mapper;
 
-        public ScheduleController (Context context, IMapper mapper, IHostingEnvironment host) {
+        public ScheduleController (Context context, IMapper mapper, IWebHostEnvironment host) {
             _host = host;
             _db = context;
             _mapper = mapper;
@@ -406,7 +406,7 @@ namespace VaccineAPI.Controllers {
 
                     if (scheduleDTO.ScheduleBrands.Count > 0) {
                         var scheduleBrand = scheduleDTO.ScheduleBrands.Find (x => x.ScheduleId == schedule.Id);
-                        if (scheduleBrand != null && scheduleBrand.BrandId != null) {
+                        if (scheduleBrand != null) {
                             schedule.BrandId = scheduleBrand.BrandId;
                             if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours (5).Date) {
                                 var brandInventory = _db.BrandInventorys.Where (b => b.BrandId == scheduleBrand.BrandId && b.DoctorId == scheduleDTO.DoctorId).FirstOrDefault ();

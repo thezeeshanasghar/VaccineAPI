@@ -1,9 +1,10 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using MySql.Data.EntityFrameworkCore.Metadata;
 
 namespace VaccineAPI.Migrations
 {
-    public partial class first : Migration
+    public partial class InitialCreate : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -12,7 +13,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     MobileNumber = table.Column<string>(nullable: true),
                     Password = table.Column<string>(nullable: true),
                     UserType = table.Column<string>(nullable: true),
@@ -28,7 +29,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Name = table.Column<string>(nullable: true),
                     MinAge = table.Column<int>(nullable: false),
                     MaxAge = table.Column<int>(nullable: true)
@@ -43,7 +44,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     FirstName = table.Column<string>(nullable: true),
                     LastName = table.Column<string>(nullable: true),
                     Email = table.Column<string>(nullable: true),
@@ -83,7 +84,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     MobileNumber = table.Column<string>(nullable: true),
                     SMS = table.Column<string>(nullable: true),
                     ApiResponse = table.Column<string>(nullable: true),
@@ -106,7 +107,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Name = table.Column<string>(nullable: true),
                     VaccineId = table.Column<long>(nullable: false)
                 },
@@ -126,12 +127,13 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Name = table.Column<string>(nullable: true),
                     MinAge = table.Column<int>(nullable: false),
                     MaxAge = table.Column<int>(nullable: true),
                     MinGap = table.Column<int>(nullable: true),
                     DoseOrder = table.Column<int>(nullable: true),
+                    IsSpecial = table.Column<short>(nullable: true),
                     VaccineId = table.Column<long>(nullable: false)
                 },
                 constraints: table =>
@@ -150,7 +152,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Name = table.Column<string>(nullable: true),
                     ConsultationFee = table.Column<int>(nullable: false),
                     OffDays = table.Column<string>(nullable: true),
@@ -159,6 +161,7 @@ namespace VaccineAPI.Migrations
                     PhoneNumber = table.Column<string>(nullable: true),
                     IsOnline = table.Column<short>(nullable: false),
                     Address = table.Column<string>(nullable: true),
+                    MonogramImage = table.Column<string>(nullable: true),
                     DoctorId = table.Column<long>(nullable: false)
                 },
                 constraints: table =>
@@ -177,7 +180,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Amount = table.Column<int>(nullable: false),
                     BrandId = table.Column<long>(nullable: false),
                     DoctorId = table.Column<long>(nullable: false)
@@ -204,7 +207,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Count = table.Column<int>(nullable: false),
                     BrandId = table.Column<long>(nullable: false),
                     DoctorId = table.Column<long>(nullable: false)
@@ -231,7 +234,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     DoseId = table.Column<long>(nullable: false),
                     DoctorId = table.Column<long>(nullable: false),
                     GapInDays = table.Column<int>(nullable: false)
@@ -258,14 +261,14 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Name = table.Column<string>(nullable: true),
                     FatherName = table.Column<string>(nullable: true),
                     Email = table.Column<string>(nullable: true),
                     DOB = table.Column<DateTime>(nullable: false),
                     Gender = table.Column<string>(nullable: true),
                     City = table.Column<string>(nullable: true),
-                    PreferredDayOfReminder = table.Column<string>(nullable: true),
+                    PreferredDayOfReminder = table.Column<int>(nullable: false),
                     PreferredDayOfWeek = table.Column<string>(nullable: true),
                     PreferredSchedule = table.Column<string>(nullable: true),
                     IsEPIDone = table.Column<short>(nullable: true),
@@ -302,7 +305,7 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Day = table.Column<string>(nullable: true),
                     StartTime = table.Column<TimeSpan>(nullable: false),
                     EndTime = table.Column<TimeSpan>(nullable: false),
@@ -326,10 +329,10 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Disease = table.Column<string>(nullable: true),
-                    CurrentVisitDate = table.Column<DateTime>(nullable: false),
-                    NextVisitDate = table.Column<DateTime>(nullable: false),
+                    NextVisitDate = table.Column<DateTime>(nullable: true),
+                    CurrentVisitDate = table.Column<DateTime>(nullable: true),
                     Weight = table.Column<float>(nullable: true),
                     Height = table.Column<float>(nullable: true),
                     OFC = table.Column<float>(nullable: true),
@@ -360,19 +363,20 @@ namespace VaccineAPI.Migrations
                 columns: table => new
                 {
                     Id = table.Column<long>(nullable: false)
-                        .Annotation("MySQL:AutoIncrement", true),
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Date = table.Column<DateTime>(nullable: false),
                     Weight = table.Column<float>(nullable: true),
                     Height = table.Column<float>(nullable: true),
                     Circle = table.Column<float>(nullable: true),
                     IsDone = table.Column<short>(nullable: false),
+                    IsSkip = table.Column<short>(nullable: true),
+                    IsDisease = table.Column<short>(nullable: true),
                     Due2EPI = table.Column<short>(nullable: false),
+                    DiseaseYear = table.Column<string>(nullable: true),
                     GivenDate = table.Column<DateTime>(nullable: true),
                     BrandId = table.Column<long>(nullable: true),
                     ChildId = table.Column<long>(nullable: false),
-                    DoseId = table.Column<long>(nullable: false),
-                    FromDate = table.Column<DateTime>(nullable: false),
-                    ToDate = table.Column<DateTime>(nullable: false)
+                    DoseId = table.Column<long>(nullable: false)
                 },
                 constraints: table =>
                 {
@@ -396,6 +400,11 @@ namespace VaccineAPI.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
+
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "Id", "CountryCode", "MobileNumber", "Password", "UserType" },
+                values: new object[] { 1L, "92", "3331231231", "1234", "SUPERADMIN" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_BrandAmounts_BrandId",

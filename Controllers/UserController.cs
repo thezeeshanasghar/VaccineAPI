@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -7,10 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
 using AutoMapper;
-using System.Net.Http;
-using System.Net;
-using System.Web.Http;
-using System.Net.Http.Formatting;
 
 namespace VaccineAPI.Controllers
 {

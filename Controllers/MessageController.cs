@@ -7,8 +7,6 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using AutoMapper;
 using VaccineAPI.ModelDTO;
-using System.Xml;
-using Newtonsoft.Json.Linq;
 
 namespace VaccineAPI.Controllers
 {

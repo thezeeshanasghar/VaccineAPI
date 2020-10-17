@@ -1,26 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Net.Http.Formatting;
-using System.Threading.Tasks;
-using System.Web.Http;
 using AutoMapper;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
 using Google.Apis.Sheets.v4;
 using Google.Apis.Sheets.v4.Data;
-using Google.Apis.Util.Store;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
 using System.IO;
-using System.Threading;
 
-namespace VaccineAPI.Controllers {
+namespace VaccineAPI.Controllers
+{
     [Route ("api/[controller]")]
     [ApiController]
     public class BookingController : ControllerBase {
@@ -29,10 +20,8 @@ namespace VaccineAPI.Controllers {
 
         static readonly string[] Scopes = { SheetsService.Scope.Spreadsheets }; //SheetsService.Scope.SpreadsheetsReadonly
         static readonly string ApplicationName = "VaccineAPI"; //"quickstart-1599807090946";
-        static readonly string sheet = "testsheet";
         static readonly string SpreadsheetId = "1VxF4JqAPwfZZomaf3GctMkWAq3nEg0N4yTjkCYJr_PY";
         static SheetsService service;
-        //static CancellationToken CancellationToken;
 
         public BookingController (Context context, IMapper mapper) {
             _db = context;

@@ -3,12 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
-using System.Threading.Tasks;
-using System.Web.Http;
 using AutoMapper;
 using CsvHelper;
 using iTextSharp.text;
@@ -20,15 +15,16 @@ using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
 //using WebApi.OutputCache.V2;
 
-namespace VaccineAPI.Controllers {
+namespace VaccineAPI.Controllers
+{
     [Route ("api/[controller]")]
     [ApiController]
     public class ChildController : ControllerBase {
         private readonly Context _db;
         private readonly IMapper _mapper;
-        private readonly IHostingEnvironment _host;
+        private readonly IWebHostEnvironment _host;
 
-        public ChildController (Context context, IMapper mapper, IHostingEnvironment host) {
+        public ChildController (Context context, IMapper mapper, IWebHostEnvironment host) {
             _db = context;
             _mapper = mapper;
             _host = host;

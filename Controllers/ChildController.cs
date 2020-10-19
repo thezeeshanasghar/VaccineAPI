@@ -278,7 +278,7 @@ namespace VaccineAPI.Controllers {
                 // calling PDFFooter class to Include in document
                 writer.PageEvent = new PDFFooter (child);
                 document.Open ();
-                GetPDFHeading (document, "Immunization Record");
+               // GetPDFHeading (document, "Immunization Record");
 
                 //Table 1 for description above Schedule table
                 PdfPTable upperTable = new PdfPTable (3);
@@ -295,7 +295,6 @@ namespace VaccineAPI.Controllers {
 
                 if (dbChild.Clinic.MonogramImage != null) {
                     imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
-
                     Image img = Image.GetInstance (imgPath);
                     img.ScaleAbsolute (40f, 40f);
                     //img.ScaleToFit(40f, 40f);
@@ -346,21 +345,27 @@ namespace VaccineAPI.Controllers {
                 // }
                 upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
                 document.Add (upperTable);
+                Paragraph title = new Paragraph("IMMUNIZATION RECORD");
+                title.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+                title.Alignment = Element.ALIGN_CENTER;
 
-                document.Add (new Paragraph (""));
-                document.Add (new Chunk ("\n"));
+                document.Add (title);
+              //  document.Add(new Paragraph(""));
+               // document.Add (new Chunk (""));
                 //Schedule Table
-                float[] widths = new float[] { 25f, 145f, 110f, 70f, 45f, 45f, 45f };
+                float[] widths = new float[] { 20f, 140f ,60f, 70 ,70f, 45f, 45f, 45f };
 
-                PdfPTable table = new PdfPTable (7);
+                PdfPTable table = new PdfPTable (8);
                 table.HorizontalAlignment = 0;
                 table.TotalWidth = 500f;
                 table.LockedWidth = true;
+                table.SpacingBefore = 5;
                 table.SetWidths (widths);
 
                 table.AddCell (CreateCell ("Sr", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 table.AddCell (CreateCell ("Vaccine", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 table.AddCell (CreateCell ("Status", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell (CreateCell ("Date", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 table.AddCell (CreateCell ("Brand", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 table.AddCell (CreateCell ("Weight", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 table.AddCell (CreateCell ("Height", "backgroudLightGray", 1, "center", "scheduleRecords"));
@@ -374,38 +379,56 @@ namespace VaccineAPI.Controllers {
                         count++;
                         doseCount++;
                         Font font = FontFactory.GetFont (FontFactory.HELVETICA, 10);
+                        Font boldfont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
+                        Font italicfont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.ITALIC );
 
                         {
                             PdfPCell ageCell = new PdfPCell (new Phrase (count.ToString (), font));
                             ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
-
                             table.AddCell (ageCell);
 
                             PdfPCell dosenameCell = new PdfPCell (new Phrase (dbSchedule.Dose.Name, font));
                             dosenameCell.HorizontalAlignment = Element.ALIGN_CENTER;
-
                             table.AddCell (dosenameCell);
+
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true) {
-                                PdfPCell statusCell = new PdfPCell (new Phrase ("Given on " + dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy"), font));
-                                statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                PdfPCell statusCell = new PdfPCell (new Phrase ("Given", boldfont));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 table.AddCell (statusCell);
                             } else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true) {
-                                PdfPCell statusCell = new PdfPCell (new Phrase ("Given by EPI", font));
-                                statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                PdfPCell statusCell = new PdfPCell (new Phrase ("By EPI", font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 table.AddCell (statusCell);
-                            } else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true) {
-                                PdfPCell statusCell = new PdfPCell (new Phrase ("Due on " + dbSchedule.Date.Date.ToString ("dd/MM/yyyy"), font));
-                                statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                            } else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date)) {
+                                PdfPCell statusCell = new PdfPCell (new Phrase ("Due", font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                table.AddCell (statusCell);
+                            } 
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date)) {
+                                PdfPCell statusCell = new PdfPCell (new Phrase (" Missed", italicfont));
+                                statusCell.HorizontalAlignment = Element.ALIGN_RIGHT;
                                 table.AddCell (statusCell);
                             } else {
-                                PdfPCell statusCell = new PdfPCell (new Phrase ("Diseased in " + dbSchedule.DiseaseYear, font));
-                                statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                PdfPCell statusCell = new PdfPCell (new Phrase ("Diseased" + dbSchedule.DiseaseYear, font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 table.AddCell (statusCell);
+                            }
+
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                            PdfPCell dateCell = new PdfPCell (new Phrase(dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy"), font));
+                            dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                            table.AddCell (dateCell);
+                            }
+                            else
+                            {
+                            PdfPCell dateCell = new PdfPCell (new Phrase(dbSchedule.Date.Date.ToString ("dd/MM/yyyy"), font));
+                             dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                             table.AddCell (dateCell);
                             }
 
                             PdfPCell brandCell = new PdfPCell (new Phrase (dbSchedule.Brand != null ? dbSchedule.Brand.Name.ToString () : "-", font));
                             brandCell.HorizontalAlignment = Element.ALIGN_CENTER;
-
                             table.AddCell (brandCell);
 
                             PdfPCell weightCell = new PdfPCell (new Phrase (dbSchedule.Weight > 0 ? dbSchedule.Weight.ToString () : "-", font));
@@ -426,12 +449,46 @@ namespace VaccineAPI.Controllers {
                 }
 
                 document.Add (table);
+                // special vaccines table start
+                // float[] lowerwidths = new float[] { 250f, 250f };
+                // PdfPTable lowertable = new PdfPTable (2);
+                // lowertable.HorizontalAlignment = 0;
+                // lowertable.TotalWidth = 500f;
+                // lowertable.LockedWidth = true;
+                // lowertable.SpacingBefore = 5;
+                // lowertable.SetWidths (lowerwidths);
+                // lowertable.AddCell (CreateCell ("Typhoid (Every 2-3 years)", "", 1, "center", "scheduleRecords"));
+                // lowertable.AddCell (CreateCell ("Flu (Yearly)", "", 1, "center", "scheduleRecords"));
+                // document.Add (lowertable);
+
+                // float[] lowerwidths2 = new float[] { 62f, 62f, 62f, 62f, 62f, 62f, 62f, 62f };
+                // PdfPTable lowertable = new PdfPTable (8);
+                // lowertable.HorizontalAlignment = 0;
+                // lowertable.TotalWidth = 500f;
+                // lowertable.LockedWidth = true;
+                // lowertable.SetWidths (lowerwidths2);
+                // lowertable.AddCell (CreateCell ("Typhoid (Every 2-3 years)", "", 1, "center", "scheduleRecords"));
+                // lowertable.AddCell (CreateCell ("Flu (Yearly)", "", 1, "center", "scheduleRecords"));
+                // document.Add (lowertable);
+                //special vaccines table end
+
+
+
                 document.Close ();
 
                 output.Seek (0, SeekOrigin.Begin);
 
                 return output;
             }
+        }
+
+        public bool checkForMissed(DateTime DueDate){
+            DateTime todayDate = DateTime.Now;
+            if (todayDate > DueDate)
+            return true;
+            else
+            return false;
+            
         }
 
         [HttpGet ("{keyword}/search")]

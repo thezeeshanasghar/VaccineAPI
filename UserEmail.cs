@@ -151,12 +151,13 @@ namespace VaccineAPI
                 System.Net.Mail.SmtpClient smtp = new System.Net.Mail.SmtpClient();
                 //smtp.Host = "smtp.gmail.com";
                 //smtp.Host = "premium55.web-hosting.com";
-                smtp.Host = "mail.vaccines.pk";
+                smtp.Host =   "mail.vaccine.pk";    //"mail.vaccines.pk";
                 smtp.EnableSsl = false;
                 NetworkCredential NetworkCred = new NetworkCredential ("info@vaccine.pk", "XDQ0@73GvLKJ");
-                smtp.UseDefaultCredentials = false;
+                smtp.UseDefaultCredentials = true;
                 smtp.Credentials = NetworkCred;
-                 smtp.Port = 465;//smtp.Port = 26;
+                //smtp.Port = 465;
+                smtp.Port = 26;
                 smtp.Send (mm);
 
             }

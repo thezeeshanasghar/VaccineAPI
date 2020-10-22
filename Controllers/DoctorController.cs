@@ -3,10 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
 using System.Threading.Tasks;
-using System.Web;
 using AutoMapper;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -14,15 +11,16 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
 
-namespace VaccineAPI.Controllers {
+namespace VaccineAPI.Controllers
+{
     [Route ("api/[controller]")]
     [ApiController]
     public class DoctorController : ControllerBase {
         private readonly Context _db;
         private readonly IMapper _mapper;
 
-        private readonly IHostingEnvironment _host;
-        public DoctorController (Context context, IMapper mapper, IHostingEnvironment host) {
+        private readonly IWebHostEnvironment _host;
+        public DoctorController (Context context, IMapper mapper, IWebHostEnvironment host) {
             _db = context;
             _mapper = mapper;
             _host = host;

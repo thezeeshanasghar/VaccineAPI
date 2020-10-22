@@ -4,7 +4,7 @@ using System.Linq;
 using System.Web;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
-using Microsoft.EntityFrameworkCore;
+
 namespace VaccineAPI
 {
     public  class UserSMS

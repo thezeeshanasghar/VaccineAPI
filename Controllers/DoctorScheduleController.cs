@@ -7,11 +7,6 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using AutoMapper;
 using VaccineAPI.ModelDTO;
-using System.IO;
-using System.Web;
-using System.Globalization;
-using System.Net.Http;
-using System.Net;
 
 namespace VaccineAPI.Controllers
 {

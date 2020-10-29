@@ -1,20 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using MySql.Data.EntityFrameworkCore;
-using MySql.Data.EntityFrameworkCore.Extensions;
-using Microsoft.Extensions.Logging;
 using VaccineAPI.Models;
 using Microsoft.EntityFrameworkCore;
-using Newtonsoft.Json.Serialization;
 using AutoMapper;
 using Microsoft.Extensions.FileProviders;
 using System.IO;
@@ -36,7 +26,10 @@ namespace VaccineAPI
         {
             services.AddDbContext<Context>(options => options.UseMySQL(Configuration.GetConnectionString("DefaultConnection")));
             
-            services.AddControllers();
+            services.AddControllers().AddJsonOptions(jsonOptions =>
+                {
+                    jsonOptions.JsonSerializerOptions.PropertyNamingPolicy = null;
+                });
             services.AddCors();
             // Auto Mapper Configurations
             var mappingConfig = new MapperConfiguration(mc =>

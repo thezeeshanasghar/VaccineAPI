@@ -9,6 +9,12 @@ using AutoMapper;
 using Microsoft.Extensions.FileProviders;
 using System.IO;
 using Microsoft.AspNetCore.Http;
+// using System.Text.Json;
+// using System.Text.Json.Serialization;
+using System.Buffers;
+using System.Buffers.Text;
+using Newtonsoft.Json.Serialization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace VaccineAPI
 {
@@ -26,11 +32,25 @@ namespace VaccineAPI
         {
             services.AddDbContext<Context>(options => options.UseMySQL(Configuration.GetConnectionString("DefaultConnection")));
             
-            services.AddControllers().AddJsonOptions(jsonOptions =>
-                {
-                    jsonOptions.JsonSerializerOptions.PropertyNamingPolicy = null;
-                });
-            services.AddCors();
+            // services.AddControllers().AddJsonOptions(jsonOptions =>
+            //     {
+            //         jsonOptions.JsonSerializerOptions.PropertyNamingPolicy = null;
+            //     });
+
+            services.AddControllers()
+        .AddNewtonsoftJson(options =>
+        {
+            options.UseMemberCasing();
+        });
+            //services.AddCors();
+        services.AddCors(options =>
+        {
+            options.AddPolicy("CorsApi",
+                builder => builder.AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+        });
+
             // Auto Mapper Configurations
             var mappingConfig = new MapperConfiguration(mc =>
             {
@@ -50,22 +70,18 @@ namespace VaccineAPI
                 app.UseDeveloperExceptionPage();
             }
 
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
 
             app.UseRouting();
-
+            app.UseCors("CorsApi");
             app.UseAuthorization();
-
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
             });
 
             
-            app.UseCors(builder =>
-            {
-                builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
-            });
+           app.UseCors("CorsApi");
             // app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseStaticFiles(new StaticFileOptions()

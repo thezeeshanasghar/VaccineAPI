@@ -129,6 +129,9 @@ namespace VaccineAPI.Migrations
                     b.Property<string>("PreferredSchedule")
                         .HasColumnType("text");
 
+                    b.Property<string>("Type")
+                        .HasColumnType("text");
+
                     b.Property<long>("UserId")
                         .HasColumnType("bigint");
 

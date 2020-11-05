@@ -4,7 +4,7 @@ using MySql.Data.EntityFrameworkCore.Metadata;
 
 namespace VaccineAPI.Migrations
 {
-    public partial class InitialCreate : Migration
+    public partial class first : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -267,6 +267,7 @@ namespace VaccineAPI.Migrations
                     Email = table.Column<string>(nullable: true),
                     DOB = table.Column<DateTime>(nullable: false),
                     Gender = table.Column<string>(nullable: true),
+                    Type = table.Column<string>(nullable: true),
                     City = table.Column<string>(nullable: true),
                     PreferredDayOfReminder = table.Column<int>(nullable: false),
                     PreferredDayOfWeek = table.Column<string>(nullable: true),

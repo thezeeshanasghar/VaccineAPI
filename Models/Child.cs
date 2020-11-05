@@ -21,6 +21,7 @@ namespace VaccineAPI.Models
         public System.DateTime DOB { get; set; }
        // public string DOB { get; set; }
         public string Gender  { get; set; }
+        public string Type  { get; set; }
         public string City  { get; set; }
         public int PreferredDayOfReminder  { get; set; }
         public string PreferredDayOfWeek  { get; set; }
@@ -28,8 +29,7 @@ namespace VaccineAPI.Models
         public bool? IsEPIDone  { get; set; }
         public bool? IsVerified  { get; set; }
         public long ClinicId  { get; set; }
-         [JsonIgnore]
-        public Clinic Clinic { get; set; }
+        public virtual Clinic Clinic { get; set; }
        
         public long UserId  { get; set; }
         [JsonIgnore]

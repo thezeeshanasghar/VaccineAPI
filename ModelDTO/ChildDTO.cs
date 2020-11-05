@@ -19,6 +19,7 @@ namespace VaccineAPI.ModelDTO
         public DateTime DOB { get; set; }
         public string CountryCode { get; set; }
         public string Gender  { get; set; }
+        public string Type { get; set; }
         public string City  { get; set; }
         public int PreferredDayOfReminder  { get; set; }
         public string PreferredDayOfWeek  { get; set; }

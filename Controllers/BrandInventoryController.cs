@@ -59,8 +59,8 @@ namespace VaccineAPI.Controllers
         //     return CreatedAtAction(nameof(GetSingle), new { id = BrandInventory.Id }, BrandInventory);
         // }
 
-        [HttpPut("{id}")]
-       public Response<List<BrandInventoryDTO>> Put([FromBody] List<BrandInventoryDTO> vaccineInventoryDTOs)
+        [HttpPut]
+       public Response<List<BrandInventoryDTO>> Put(List<BrandInventoryDTO> vaccineInventoryDTOs)
         {
              foreach (var vaccineInventoryDTO in vaccineInventoryDTOs)
                     {

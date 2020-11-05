@@ -10,6 +10,7 @@ using AutoMapper;
 
 namespace VaccineAPI.Controllers
 {
+   // [EnableCors("CorsApi")]
     [Route("api/[controller]")]
     [ApiController]
     public class DoseController : ControllerBase

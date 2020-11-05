@@ -9,8 +9,8 @@ using VaccineAPI.Models;
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    [Migration("20201017102543_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20201023094714_first")]
+    partial class first
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
@@ -129,6 +129,9 @@ namespace VaccineAPI.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("PreferredSchedule")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
                         .HasColumnType("text");
 
                     b.Property<long>("UserId")

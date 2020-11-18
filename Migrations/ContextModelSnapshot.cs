@@ -436,6 +436,9 @@ namespace VaccineAPI.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
 
+                    b.Property<int?>("Amount")
+                        .HasColumnType("int");
+
                     b.Property<long?>("BrandId")
                         .HasColumnType("bigint");
 

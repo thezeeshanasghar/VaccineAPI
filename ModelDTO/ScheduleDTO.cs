@@ -28,7 +28,7 @@ namespace VaccineAPI.ModelDTO
         public List<BrandDTO> Brands { get; set; }
         public BrandDTO Brand { get; set; }
          public long? BrandId { get; set; }
-      
+         public int? Amount {get; set;}
         public List<ScheduleBrandDTO> ScheduleBrands { get; set; }
         public long DoctorId { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]

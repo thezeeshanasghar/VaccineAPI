@@ -22,6 +22,7 @@ namespace VaccineAPI.Models
         public DateTime? GivenDate { get; set; }
          public long? BrandId { get; set; }
         public virtual Brand Brand { get; set; }
+        public int? Amount {get; set;}
         
          public long ChildId { get; set; }
         public virtual Child Child { get; set; }

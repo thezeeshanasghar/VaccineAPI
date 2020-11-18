@@ -376,6 +376,7 @@ namespace VaccineAPI.Migrations
                     DiseaseYear = table.Column<string>(nullable: true),
                     GivenDate = table.Column<DateTime>(nullable: true),
                     BrandId = table.Column<long>(nullable: true),
+                    Amount = table.Column<int>(nullable: true),
                     ChildId = table.Column<long>(nullable: false),
                     DoseId = table.Column<long>(nullable: false)
                 },

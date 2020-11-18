@@ -9,7 +9,7 @@ using VaccineAPI.Models;
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    [Migration("20201023094714_first")]
+    [Migration("20201112101416_first")]
     partial class first
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -437,6 +437,9 @@ namespace VaccineAPI.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
+
+                    b.Property<int?>("Amount")
+                        .HasColumnType("int");
 
                     b.Property<long?>("BrandId")
                         .HasColumnType("bigint");

@@ -44,9 +44,9 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<ChildDTO>> (true, null, childDTOs);
         }
 
-        [HttpGet ("clinic/{id}")]
-        public Response<IEnumerable<ChildDTO>> GetChildByClinic (long id) {
-            var dbChilds = _db.Childs.Include (x => x.User).Where (x => x.ClinicId == id).OrderByDescending (x => x.Id).ToList ();
+        [HttpGet ("clinic/{id}/{page}")]
+        public Response<IEnumerable<ChildDTO>> GetChildByClinic (long id , int page) {
+            var dbChilds = _db.Childs.Include (x => x.User).Where (x => x.ClinicId == id).OrderByDescending (x => x.Id).Skip(10 * page).Take(10).ToList ();
             List<ChildDTO> childDTOs = new List<ChildDTO> ();
             foreach (var child in dbChilds) {
                 ChildDTO childDTO = _mapper.Map<ChildDTO> (child);
@@ -595,41 +595,41 @@ namespace VaccineAPI.Controllers
                         if (childDTO.IsEPIDone) {
                             if (ds.Dose.Name.StartsWith ("BCG") ||
                                 ds.Dose.Name.StartsWith ("HBV") ||
-                                ds.Dose.Name.Equals ("OPV 1")) {
+                                ds.Dose.Name.Equals ("OPV # 1")) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
                                 cvd.GivenDate = childDB.DOB;
                             } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HB+Hib+DTaP 1", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("PCV 1", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("ROTA GE 1", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
+                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("Pneumococcal # 1", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("Rota Virus GE # 1", StringComparison.OrdinalIgnoreCase) 
+                                //ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
                                 DateTime d = childDB.DOB;
                                 cvd.GivenDate = d.AddDays (42);
                             } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HB+Hib+DTaP 2", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("PCV 2", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("ROTA GE 2", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
+                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("Pneumococcal # 2", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("Rota Virus GE # 2", StringComparison.OrdinalIgnoreCase)
+                                //ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
                                 DateTime d = childDB.DOB;
                                 cvd.GivenDate = d.AddDays (70);
                             } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HB+Hib+DTaP 3", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("PCV 3", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
+                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase) ||
+                                ds.Dose.Name.Equals ("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase) 
+                               // ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
                                 DateTime d = childDB.DOB;
                                 cvd.GivenDate = d.AddDays (98);
                             } else if (
-                                ds.Dose.Name.Equals ("Measles 1", StringComparison.OrdinalIgnoreCase)
+                                ds.Dose.Name.Equals ("Measles # 1", StringComparison.OrdinalIgnoreCase)
                             ) {
                                 cvd.IsDone = true;
                                 cvd.Due2EPI = true;
@@ -649,8 +649,8 @@ namespace VaccineAPI.Controllers
            }
                 //  Child c = _db.Childs.Include("User").Include("Clinic").Where(x => x.Id == childDTO.Id).FirstOrDefault();
                 Child c = _db.Childs.Where (x => x.Id == childDTO.Id).Include (x => x.User).Include (x => x.Clinic).Include (x => x.Clinic.Doctor.User).FirstOrDefault ();
-                if (c.Email != "")
-                    UserEmail.ParentEmail (c);
+            //    if (c.Email != "")
+            //        UserEmail.ParentEmail (c);
 
                 // generate SMS and save it to the db
                 //  UserSMS u = new UserSMS(_db);
@@ -721,9 +721,7 @@ namespace VaccineAPI.Controllers
 
         }
 
-        // [HttpPost("Download-Invoice-PDF")]
         [HttpGet ("{Id}/{IsBrand}/{IsConsultationFee}/{InvoiceDate}/{DoctorId}/Download-Invoice-PDF")]
-        //      public IActionResult DownloadInvoicePDF(ChildDTO childDTO)
         public IActionResult DownloadInvoicePDF (int Id, bool IsBrand, bool IsConsultationFee, DateTime InvoiceDate, int DoctorId) {
 
             Stream stream;
@@ -777,16 +775,9 @@ namespace VaccineAPI.Controllers
             if (IsConsultationFee) {
                 consultaionFee = (int) dbChild.Clinic.ConsultationFee;
             }
-            //  upperTable.AddCell(CreateCell("Consultation Fee: " + consultaionFee, "noColor", 1, "left", "description"));
-            //upperTable.AddCell(CreateCell("", "", 1, "left", "description"));
-            //upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
 
             upperTable.AddCell (CreateCell ("", "", 1, "left", "description"));
             upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
-            //upperTable.AddCell(CreateCell("", "", 1, "left", "description"));
-            //upperTable.AddCell(CreateCell("Father: " + dbChild.FatherName, "", 1, "right", "description"));
-            //upperTable.AddCell(CreateCell("", "", 1, "left", "description"));
-            //upperTable.AddCell(CreateCell("Child: " + dbChild.Name, "", 1, "right", "description"));
             upperTable.AddCell (CreateCell ("P: " + dbDoctor.PhoneNo, "", 1, "left", "description"));
             upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
             upperTable.AddCell (CreateCell ("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description"));
@@ -861,7 +852,6 @@ namespace VaccineAPI.Controllers
             if (IsConsultationFee) {
                 amount = amount + (int) dbChild.Clinic.ConsultationFee;
             }
-            //table.AddCell(CreateCell(amount.ToString(), "", 1, "right", "invoiceRecords"));
 
             _db.SaveChanges ();
             document.Add (table);
@@ -914,6 +904,197 @@ namespace VaccineAPI.Controllers
             var FileName = childName.Replace (" ", "") + "_Invoice" + "_" + DateTime.UtcNow.AddHours (5).Date.ToString ("MMMM-dd-yyyy") + ".pdf";
             return File (stream, "application/pdf", FileName);
         }
+
+  [HttpGet ("{Id}/{InvoiceDate}/Download-Invoice-PDF")]
+        public IActionResult DownloadInvoicePDFUpdated (int Id, DateTime InvoiceDate) {
+        var IsConsultationFee = false;
+        var IsBrand = true;
+            Stream stream;
+            int amount = 0;
+            int count = 1;
+            int col = 3;
+            int consultaionFee = 0;
+            string childName = "";
+            var document = new Document (PageSize.A4, 50, 50, 25, 25);
+            var output = new MemoryStream ();
+            var writer = PdfWriter.GetInstance (document, output);
+            writer.CloseStream = false;
+
+            document.Open ();
+            //Page Heading
+            GetPDFHeading (document, "INVOICE");
+
+            //Access db data
+            var dbChild = _db.Childs.Include (x=>x.Clinic).ThenInclude(x=>x.Doctor).ThenInclude(y=>y.User).Where (x => x.Id == Id).FirstOrDefault ();
+            var dbDoctor = dbChild.Clinic.Doctor;
+            var DoctorId = dbDoctor.Id;
+            dbDoctor.InvoiceNumber = (dbDoctor.InvoiceNumber > 0) ? dbDoctor.InvoiceNumber + 1 : 1;
+            // var dbSchedules = _db.Schedules.Include (x => x.Dose).ThenInclude (x => x.Vaccine).Include (x=> x.Brand)
+            // .Where (x => x.ChildId == Id && x.Date.Date == InvoiceDate.Date && x.IsSkip != true && x.IsDone != true && x.IsDisease != true).ToList ();
+            // childName = dbChild.Name;
+
+            var dbSchedules = _db.Schedules.Include (x => x.Dose).ThenInclude (x => x.Vaccine).Include (x=> x.Brand)
+            .Where (x => x.ChildId == Id && x.Date.Date == InvoiceDate.Date && x.IsSkip != true && x.IsDone == true && x.IsDisease != true).ToList();
+            childName = dbChild.Name;
+            //Table 1 for description above amounts table
+            PdfPTable upperTable = new PdfPTable (2);
+            float[] upperTableWidths = new float[] { 250f, 250f };
+            upperTable.HorizontalAlignment = 0;
+            upperTable.TotalWidth = 500f;
+            upperTable.LockedWidth = true;
+            // upperTable.DefaultCell.PaddingLeft = 4;
+            upperTable.SetWidths (upperTableWidths);
+
+            upperTable.AddCell (CreateCell ("Dr " + dbDoctor.DisplayName, "bold", 1, "left", "description"));
+            upperTable.AddCell (CreateCell ("Invoice # " + dbDoctor.InvoiceNumber, "", 1, "right", "description"));
+            upperTable.AddCell (CreateCell (dbDoctor.Qualification, "", 1, "left", "description"));
+            // upperTable.AddCell(CreateCell("Date: " + DateTime.UtcNow.AddHours(5), "", 1, "right", "description"));
+            upperTable.AddCell (CreateCell ("Date: " + InvoiceDate.ToString ("dd-MM-yyyy"), "", 1, "right", "description"));
+            upperTable.AddCell (CreateCell (dbDoctor.AdditionalInfo, "", 1, "left", "description"));
+            upperTable.AddCell (CreateCell ("Bill To: " + dbChild.Name, "bold", 1, "right", "description"));
+
+            upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "", 1, "left", "description"));
+
+            //upperTable.AddCell(CreateCell("Clinic Ph: " + dbChild.Clinic.PhoneNumber, "noColor", 1, "left", "description"));
+
+            upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
+
+            if (IsConsultationFee) {
+                consultaionFee = (int) dbChild.Clinic.ConsultationFee;
+            }
+
+            upperTable.AddCell (CreateCell ("", "", 1, "left", "description"));
+            upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
+            upperTable.AddCell (CreateCell ("P: " + dbDoctor.PhoneNo, "", 1, "left", "description"));
+            upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
+            upperTable.AddCell (CreateCell ("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description"));
+            upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
+
+            document.Add (upperTable);
+            document.Add (new Paragraph (""));
+            document.Add (new Chunk ("\n"));
+
+            //2nd Table
+            float[] widths = new float[] { 30f, 200f, 100f };
+            if (IsBrand) {
+                col = 4;
+                widths = new float[] { 30f, 200f, 150f, 100f };
+            }
+
+            PdfPTable table = new PdfPTable (col);
+            // table.WidthPercentage = 100;
+
+            table.HorizontalAlignment = 0;
+            table.TotalWidth = 500f;
+            table.LockedWidth = true;
+            table.SetWidths (widths);
+
+            table.AddCell (CreateCell ("#", "backgroudLightGray", 1, "center", "invoiceRecords"));
+            table.AddCell (CreateCell ("Item", "backgroudLightGray", 1, "center", "invoiceRecords"));
+            if (IsBrand) {
+                table.AddCell (CreateCell ("Brand", "backgroudLightGray", 1, "center", "invoiceRecords"));
+            }
+            table.AddCell (CreateCell ("Amount", "backgroudLightGray", 1, "center", "invoiceRecords"));
+            //Rows
+            table.AddCell (CreateCell (count.ToString (), "", 1, "center", "invoiceRecords"));
+            //col = (col > 3) ? col - 3 : col-2;
+            if (col - 2 < 2) {
+                table.AddCell (CreateCell ("Consultation Fee", "", col - 2, "center", "invoiceRecords"));
+            } else {
+                table.AddCell (CreateCell ("Consultation Fee", "", 1, "center", "invoiceRecords"));
+                table.AddCell (CreateCell ("------------------", "", 1, "center", "invoiceRecords"));
+
+            }
+            table.AddCell (CreateCell (consultaionFee.ToString (), "", 1, "right", "invoiceRecords"));
+            if (dbSchedules.Count != 0) {
+                foreach (var schedule in dbSchedules) {
+                    //date is static due to date conversion issue
+                    //  && schedule.Date.Date == DateTime.Now.Date
+                    //when we add bulk injection we don't add brandId in schedule
+                    if (schedule.IsDone == true) {
+                        count++;
+                        table.AddCell (CreateCell (count.ToString (), "", 1, "center", "invoiceRecords"));
+                        table.AddCell (CreateCell (schedule.Dose.Vaccine.Name, "", 1, "center", "invoiceRecords"));
+                        if (schedule.BrandId > 0) {
+                            table.AddCell (CreateCell (schedule.Brand.Name, "", 1, "center", "invoiceRecords"));
+                        }
+                        else {
+                            table.AddCell (CreateCell ("-", "", 1, "center", "invoiceRecords"));
+                        }
+                        var brandAmount = _db.BrandAmounts.Where (x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault ();
+                        if (brandAmount != null && schedule.Amount == null) {
+                            amount = amount + Convert.ToInt32 (brandAmount.Amount);
+                            table.AddCell (CreateCell (brandAmount.Amount.ToString (), "", 1, "right", "invoiceRecords"));
+                        } else if (brandAmount != null && schedule.Amount != null)  {
+                            amount = amount + Convert.ToInt32 (schedule.Amount);
+                            table.AddCell (CreateCell (schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
+                        }
+                        else if (brandAmount == null && schedule.Amount != null)  {
+                            amount = amount + Convert.ToInt32 (schedule.Amount);
+                            table.AddCell (CreateCell (schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
+                        }
+                        else 
+                        {
+                            table.AddCell (CreateCell ("0", "", 1, "right", "invoiceRecords"));
+                        }
+
+                    }
+                }
+            }
+
+            //table.AddCell(CreateCell("Total(PKR)", "", col - 1, "right", "invoiceRecords"));
+
+            //add consultancy fee
+            if (IsConsultationFee) {
+                amount = amount + (int) dbChild.Clinic.ConsultationFee;
+            }
+
+            _db.SaveChanges ();
+            document.Add (table);
+
+            document.Add (new Paragraph (""));
+            document.Add (new Chunk ("\n"));
+            //Table 3 for description above amounts table
+            PdfPTable bottomTable = new PdfPTable (2);
+            float[] bottomTableWidths = new float[] { 200f, 200f };
+            bottomTable.HorizontalAlignment = 0;
+            bottomTable.TotalWidth = 400f;
+            bottomTable.LockedWidth = true;
+            bottomTable.SetWidths (bottomTableWidths);
+
+            bottomTable.AddCell (CreateCell ("Thank you for your visit", "bold", 1, "left", "description"));
+            bottomTable.AddCell (CreateCell ("Total Amount: " + amount.ToString () + "/-", "bold", 1, "right", "description"));
+
+            var imgcellLeft = CreateCell ("", "", 1, "left", "description");
+            imgcellLeft.PaddingTop = 5;
+            bottomTable.AddCell (imgcellLeft);
+
+            var imgPath = Path.Combine (_host.ContentRootPath, "Resources/UserImages");
+            var signatureImage = dbDoctor.SignatureImage;
+            if (signatureImage == null) {
+                signatureImage = "avatar.png";
+            }
+           // Image img = Image.GetInstance (imgPath + "//" + signatureImage);
+
+           // img.ScaleAbsolute (2f, 2f);
+           // PdfPCell imageCell = new PdfPCell (img, true);
+           // imageCell.PaddingTop = 5;
+           // imageCell.Colspan = 1; // either 1 if you need to insert one cell
+           // imageCell.Border = 0;
+           // imageCell.FixedHeight = 40f;
+           // imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+           // bottomTable.AddCell (imageCell);
+
+            document.Add (bottomTable);
+            document.Close ();
+            output.Seek (0, SeekOrigin.Begin);
+            stream = output;
+
+            //}
+            var FileName = childName.Replace (" ", "") + "_Invoice" + "_" + DateTime.UtcNow.AddHours (5).Date.ToString ("MMMM-dd-yyyy") + ".pdf";
+            return File (stream, "application/pdf", FileName);
+        }
+
 
         [HttpPut]
         public Response<ChildDTO> Put ([FromBody] ChildDTO childDTO) {

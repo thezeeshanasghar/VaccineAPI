@@ -82,7 +82,7 @@ namespace VaccineAPI
 
             
            app.UseCors("CorsApi");
-            // app.UseHttpsRedirection();
+            app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseStaticFiles(new StaticFileOptions()
             {

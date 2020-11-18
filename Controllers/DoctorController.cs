@@ -144,9 +144,9 @@ namespace VaccineAPI.Controllers
                 doctorDTO.Id = doctorDB.Id;
 
                 //generate SMS and save it to the db
-                UserSMS u = new UserSMS (_db);
-                u.DoctorSMS (doctorDTO);
-                UserEmail.DoctorEmail (doctorDTO);
+               // UserSMS u = new UserSMS (_db);
+               // u.DoctorSMS (doctorDTO);
+               // UserEmail.DoctorEmail (doctorDTO);
 
                 // 4- check if clinicDto exsist; then save clinic as well
                 if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty (doctorDTO.ClinicDTO.Name)) {
@@ -269,8 +269,8 @@ namespace VaccineAPI.Controllers
             return new Response<string> (true, null, "approved");
         }
 
-        [HttpGet ("{id}/{pageSize}/{currentPage}/childs/")]
-        public Response<IEnumerable<ChildDTO>> GetAllChildsOfaDoctor (int id, int pageSize, int currentPage, [FromQuery] string searchKeyword) {
+        [HttpGet ("{id}/{currentPage}/childs/")]
+        public Response<IEnumerable<ChildDTO>> GetAllChildsOfaDoctor (int id, int currentPage, [FromQuery] string searchKeyword) {
             {
                 var doctor = _db.Doctors.Include (x => x.Clinics).Where (c => c.Id == id).FirstOrDefault ();
                 if (doctor == null)
@@ -293,7 +293,7 @@ namespace VaccineAPI.Controllers
                                     x.FatherName.Trim ().ToLower ().Contains (searchKeyword.ToLower ()) ||
                                     x.Email.Trim ().Contains (searchKeyword.ToLower ()) ||
                                     x.User.MobileNumber.Trim ().Contains (searchKeyword.ToLower ())).ToList<Child> ()));
-                            currentPage = 0;
+
                         } else
                             childDTOs.AddRange (_mapper.Map<List<ChildDTO>> (clinic.Childs.ToList<Child> ()));
                     }
@@ -301,7 +301,7 @@ namespace VaccineAPI.Controllers
                         var dbChild = _db.Childs.Where (x => x.Id == item.Id).Include (x => x.User).FirstOrDefault ();
                         item.MobileNumber = dbChild.User.CountryCode + dbChild.User.MobileNumber;
                     }
-                    return new Response<IEnumerable<ChildDTO>> (true, null, childDTOs.OrderByDescending (x => x.Id).ToList ().Skip (pageSize * currentPage).Take (pageSize));
+                    return new Response<IEnumerable<ChildDTO>> (true, null, childDTOs.OrderByDescending (x => x.Id).ToList ().Skip (15 * currentPage).Take (15));
                 }
             }
         }

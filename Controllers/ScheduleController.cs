@@ -65,47 +65,36 @@ namespace VaccineAPI.Controllers {
             DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours (5);
             DateTime AddedDateTime = CurrentPakDateTime.AddDays (GapDays);
             if (GapDays == 0) {
-                schedules = db.Schedules.Include ("Child")
+                schedules = db.Schedules.Include (x=>x.Child).ThenInclude(x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Date == CurrentPakDateTime.Date)
-                    .Where (c => c.IsDone == false)
+                    .Where (c => c.IsDone == false &&  c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date).ToList<Schedule> ();
-                foreach (var sch in schedules) {
-                    var childss = db.Childs.Include ("User").Where (x => x.Id == sch.Child.Id).FirstOrDefault ();
-                }
-                var sc = db.Schedules.Include ("Child")
+               
+                var sc = db.Schedules.Include (c=> c.Child).ThenInclude(c=>c.User).Include(c=> c.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Child.PreferredDayOfReminder != 0)
-                    .Where (c => c.Date == CurrentPakDateTime.Date.AddDays (c.Child.PreferredDayOfReminder))
-                    // .Where(c => c.Date == AddedDateTime.AddDays(CurrentPakDateTime.Date, c.Child.PreferredDayOfReminder))
-                    .Where (c => c.IsDone == false)
+                    .Where (c => c.Date == (CurrentPakDateTime.AddDays (1)).Date)  //.AddDays (c.Child.PreferredDayOfReminder
+                    .Where (c => c.IsDone == false && c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date).ToList<Schedule> ();
                 schedules.AddRange (sc);
             } else if (GapDays > 0) {
                 AddedDateTime = AddedDateTime.AddDays (1);
-                schedules = db.Schedules.Include ("Child")
+                schedules = db.Schedules.Include (x=>x.Child).ThenInclude (x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Date > CurrentPakDateTime.Date && c.Date <= AddedDateTime)
                     .Where (c => c.IsDone == false)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date)
                     .ToList<Schedule> ();
-                foreach (var sch in schedules) {
-                    var childss = db.Childs.Include ("User").Where (x => x.Id == sch.Child.Id).FirstOrDefault ();
-                }
 
             } else if (GapDays < 0) {
                 // schedules = db.Schedules.Include("Child")
-                schedules = db.Schedules.Include (x => x.Child)
+                schedules = db.Schedules.Include (x => x.Child).ThenInclude (x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Date < CurrentPakDateTime.Date && c.Date >= AddedDateTime)
                     .Where (c => c.IsDone == false)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date)
                     .ToList<Schedule> ();
-                // schchild = schedules.Child;
-                foreach (var sch in schedules) {
-                    var childss = db.Childs.Include ("User").Where (x => x.Id == sch.Child.Id).FirstOrDefault ();
-                    // sch.Child.User.MobileNumber = childss.User.MobileNumber;
-                }
 
             }
             schedules = removeDuplicateRecords (schedules);
@@ -337,6 +326,8 @@ namespace VaccineAPI.Controllers {
                     scheduleDTO.Dose = _mapper.Map<DoseDTO> (schedule.Dose);
                     scheduleDTO.Id = schedule.Id;
                     scheduleDTO.Brands = brandDTOs;
+                    scheduleDTO.BrandId = schedule.BrandId;
+                    scheduleDTO.Amount = schedule.Amount;
                     scheduleDTO.Date = schedule.Date;
                     scheduleDTO.IsDone = schedule.IsDone;
                     scheduleDTOs.Add (scheduleDTO);
@@ -419,6 +410,16 @@ namespace VaccineAPI.Controllers {
                 _db.SaveChanges ();
                 return new Response<ScheduleDTO> (true, "schedule updated successfully.", null);
             }
+        }
+
+         [HttpPut ("update-bulk-invoice")]
+        public Response<IEnumerable<ScheduleDTO>> updateInvoice (IEnumerable<ScheduleDTO> dsDTOS){   
+                foreach (var schedule in dsDTOS) {
+                    var schedulec = _db.Schedules.Where(x=>x.Id == schedule.Id).FirstOrDefault();
+                    schedulec.Amount = schedule.Amount;
+            }
+             _db.SaveChanges ();
+                return new Response<IEnumerable<ScheduleDTO>> (true, "Invoice updated successfully.", null);
         }
 
         //date Function

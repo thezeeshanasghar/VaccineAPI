@@ -505,6 +505,7 @@ namespace VaccineAPI.Controllers {
                         var TargetSchedule = db.Schedules.Where (x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id).FirstOrDefault ();
                         // if MinGap is this dose < MinAge of Previouse Dose; then dont reschedule
                         // stop updating date of a dose if minimum gap is valid
+                      if (TargetSchedule != null) {
                         if (i != 0) {
                             var doseDaysDifference = Convert.ToInt32 ((TargetSchedule.Date.Date - previousDate.Date).TotalDays);
                             if (doseDaysDifference <= MinGap)
@@ -529,6 +530,7 @@ namespace VaccineAPI.Controllers {
                             TargetSchedule.Date = calculateDate (TargetSchedule.Date, daysDifference); //TargetSchedule.Date.AddDays(daysDifference);
                         }
                         previousDate = TargetSchedule.Date;
+                    }
                     }
                 }
                 // backward rescheduling
@@ -591,6 +593,7 @@ namespace VaccineAPI.Controllers {
                             // "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,false,true);'> Ignore Rule</ion-button>";
                             return message;
                         }
+                        if (TargetSchedule != null)
                         TargetSchedule.Date = calculateDate (TargetSchedule.Date, daysDifference);
                     }
                 }

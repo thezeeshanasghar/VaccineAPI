@@ -283,50 +283,49 @@ namespace VaccineAPI.Controllers
                 upperTable.TotalWidth = 500f;
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths (upperTableWidths);
-                upperTable.AddCell (CreateCell ("DR SALMAN AHMED BAJWA", "bold", 3, "left", "description"));
+                upperTable.AddCell (CreateCell ("DR SALMAN AHMAD BAJWA", "bold", 3, "left", "description"));
                 upperTable.AddCell (CreateCell ("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert","unbold", 2, "left", "description"));
                 
                 //image code start
-                var imgPath = Path.Combine (_host.ContentRootPath, "Resources/Images/default.jpg");
+                var imgPath = Path.Combine (_host.ContentRootPath, "Resources/Images/cliniclogo.jpg");
 
-                if (dbChild.Clinic.MonogramImage != null) {
-                    imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
+                // if (dbChild.Clinic.MonogramImage != null) {
+                   // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
                     Image img = Image.GetInstance (imgPath);
-                    img.ScaleAbsolute (40f, 40f);
+                    img.ScaleAbsolute (100f, 35f);
                     //img.ScaleToFit(40f, 40f);
 
                     PdfPCell imageCell = new PdfPCell (img, false);
                     // imageCell.PaddingTop = 5;
                     imageCell.Colspan = 1; // either 1 if you need to insert one cell
-                    imageCell.Rowspan = 4;
+                   // imageCell.Rowspan = 1;
                     imageCell.Border = 0;
                     imageCell.FixedHeight = 1f;
-                    imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                    //upperTable.AddCell (imageCell);
-                } else {
-                    PdfPCell imageCell = new PdfPCell ();
-                    // imageCell.PaddingTop = 5;
-                    imageCell.Colspan = 1; // either 1 if you need to insert one cell
-                    imageCell.Rowspan = 4;
-                    imageCell.Border = 0;
-                    imageCell.FixedHeight = 1f;
-                    imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                   // upperTable.AddCell (imageCell);
-                }
+                    imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                    upperTable.AddCell (imageCell);
+                // } else {
+                //     PdfPCell imageCell = new PdfPCell ();
+                //     // imageCell.PaddingTop = 5;
+                //     imageCell.Colspan = 1; // either 1 if you need to insert one cell
+                //     imageCell.Rowspan = 4;
+                //     imageCell.Border = 0;
+                //     imageCell.FixedHeight = 1f;
+                //     imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                //    // upperTable.AddCell (imageCell);
+                // }
                 //image code end
 
-                upperTable.AddCell (CreateCell ("Vaccine.pk", "sitetitle", 1, "right", "description"));
+              //  upperTable.AddCell (CreateCell ("Vaccine.pk", "sitetitle", 1, "right", "description"));
 
                 upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "bold", 2, "left", "description"));
 
-                upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
-
+                
                 // upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "", 1, "left", "description"));
-                // if (dbChild.Gender == "Girl") {
-                //     upperTable.AddCell (CreateCell ("D/O " + dbChild.FatherName, "", 1, "right", "description"));
-                // } else {
-                //     upperTable.AddCell (CreateCell ("S/O " + dbChild.FatherName, "", 1, "right", "description"));
-                // }
+                 if (dbChild.Gender == "Girl") {
+                     upperTable.AddCell (CreateCell (dbChild.Name + "  D/O", "bold", 1, "right", "description"));
+                 } else {
+                     upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
+                 }
 
                 upperTable.AddCell (CreateCell (dbChild.Clinic.Address, "unbold", 2, "left", "description"));
                 upperTable.AddCell (CreateCell (dbChild.FatherName , "", 1, "right", "description"));
@@ -334,7 +333,7 @@ namespace VaccineAPI.Controllers
                 upperTable.AddCell (CreateCell ("Clinic Ph: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
                 upperTable.AddCell (CreateCell ("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right", "description"));
                  upperTable.AddCell (CreateCell ("", "", 2, "left", "description"));
-                upperTable.AddCell (CreateCell (dbChild.DOB.ToString ("dd MMMM, yyyy"), "", 1, "right", "description"));
+                upperTable.AddCell (CreateCell ("DOB:" + dbChild.DOB.ToString ("dd MMMM, yyyy"), "", 1, "right", "description"));
 
                
                // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
@@ -366,8 +365,28 @@ namespace VaccineAPI.Controllers
                 table.AddCell (CreateCell ("OFC", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 //table.AddCell(CreateCell("Injected", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
+               // for typhoid and flu
+                 var flu1Date = " ";
+                 var flu2Date = " ";
+                 var flu3Date = " ";
+                 var flu1GivenDate = " ";
+                 var flu2GivenDate = " ";
+                 var flu3GivenDate = " ";
+                 var flustop = false;
+
+                 var type1Date = "";
+                 var type2Date = "";
+                 var type3Date = "";
+                 var type4Date = "";
+                 var type1GivenDate = "";
+                 var type2GivenDate = "";
+                 var type3GivenDate = "";
+                 var type4GivenDate = "";
+                 var typestop = false;
+
+
                 foreach (var dbSchedule in dbSchedules) {
-                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") && !dbSchedule.Dose.Name.StartsWith("TyphoId")) {
+                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") && !dbSchedule.Dose.Name.StartsWith("Typhoid")) {
                         int doseCount = 0;
                         Paragraph p = new Paragraph ();
                         count++;
@@ -382,7 +401,7 @@ namespace VaccineAPI.Controllers
                             table.AddCell (ageCell);
 
                             PdfPCell dosenameCell = new PdfPCell (new Phrase (dbSchedule.Dose.Name, font));
-                            dosenameCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                            dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             table.AddCell (dosenameCell);
 
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true) {
@@ -421,19 +440,19 @@ namespace VaccineAPI.Controllers
                              table.AddCell (dateCell);
                             }
 
-                            PdfPCell brandCell = new PdfPCell (new Phrase (dbSchedule.Brand != null ? dbSchedule.Brand.Name.ToString () : "-", font));
-                            brandCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                            PdfPCell brandCell = new PdfPCell (new Phrase (dbSchedule.Brand != null ? dbSchedule.Brand.Name.ToString () : "", font));
+                            brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             table.AddCell (brandCell);
 
-                            PdfPCell weightCell = new PdfPCell (new Phrase (dbSchedule.Weight > 0 ? dbSchedule.Weight.ToString () : "-", font));
+                            PdfPCell weightCell = new PdfPCell (new Phrase (dbSchedule.Weight > 0 ? dbSchedule.Weight.ToString () : "", font));
                             weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             table.AddCell (weightCell);
 
-                            PdfPCell heightCell = new PdfPCell (new Phrase (dbSchedule.Height > 0 ? dbSchedule.Height.ToString () : "-", font));
+                            PdfPCell heightCell = new PdfPCell (new Phrase (dbSchedule.Height > 0 ? dbSchedule.Height.ToString () : "", font));
                             heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             table.AddCell (heightCell);
 
-                            PdfPCell circleCell = new PdfPCell (new Phrase (dbSchedule.Circle > 0 ? dbSchedule.Circle.ToString () : "-", font));
+                            PdfPCell circleCell = new PdfPCell (new Phrase (dbSchedule.Circle > 0 ? dbSchedule.Circle.ToString () : "", font));
                             circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             table.AddCell (circleCell);
                         }
@@ -441,104 +460,88 @@ namespace VaccineAPI.Controllers
                     }
 
                  // for typhoid and flu
-                 var flu1Date = "";
-                 var flu2Date = "";
-                 var flu3Date = "";
-                 var flu1GivenDate = "";
-                 var flu2GivenDate = "";
-                 var flu3GivenDate = "";
-                 var flustop = false;
-
-                 var type1Date = "";
-                 var type2Date = "";
-                 var type3Date = "";
-                 var type4Date = "";
-                 var type1GivenDate = "";
-                 var type2GivenDate = "";
-                 var type3GivenDate = "";
-                 var type4GivenDate = "";
-                 var typestop = false;
                 
-        //          if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 1)  {
-        //               if (dbSchedule.IsDone == true)
-        //               {
-        //                   flu1GivenDate = dbSchedule.GivenDate;
-        //               }
-        //               else {
-        //                   flustop = true;
-        //                   flu1Date = dbSchedule.Date;
-        //               }       
+                
+                 if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 1)  {
+                      if (dbSchedule.IsDone == true)
+                      {
+                          flu1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                      }
+                      else {
+                          flustop = true;
+                          flu1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                      }       
                       
-        //          }
-        //           if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 2 && flustop = false)  {
-        //               if (dbSchedule.IsDone == true)
-        //               {
-        //                   flu2GivenDate = dbSchedule.GivenDate;
-        //               }
-        //               else {
-        //                   flustop = true;
-        //                   flu1Date = dbSchedule.Date;
-        //               }       
+                 }
+                  if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 2 && flustop == false)  {
+                      if (dbSchedule.IsDone == true)
+                      {
+                          flu2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                      }
+                      else {
+                          flustop = true;
+                          flu1Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                      }       
                       
-        //          }
-        //          if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 3 && flustop = false)  {
-        //               if (dbSchedule.IsDone == true)
-        //               {
-        //                   flu3GivenDate = dbSchedule.GivenDate;
-        //               }
-        //               else {
-        //                   flustop = true;
-        //                   flu2Date = dbSchedule.Date;
-        //               }       
+                 }
+                 if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 3 && flustop == false)  {
+                      if (dbSchedule.IsDone == true)
+                      {
+                          flu3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                      }
+                      else {
+                          flustop = true;
+                          flu2Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                      }       
                       
-        //          }
+                 }
 
         //   //typhoid 
-        //    if(dbSchedule.Dose.Name.StartsWith("TyphoId") && dbSchedule.Dose.DoseOrder == 1)  {
-        //               if (dbSchedule.IsDone == true)
-        //               {
-        //                   type1GivenDate = dbSchedule.GivenDate;
-        //               }
-        //               else {
-        //                   typestop = true;
-        //                   type1Date = dbSchedule.Date;
-        //               }       
+           if(dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.Dose.DoseOrder == 1)  {
+                      if (dbSchedule.IsDone == true)
+                      {
+                          type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                      }
+                      else {
+                          typestop = true;
+                          type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                      }       
                       
-        //          }
-        //           if(dbSchedule.Dose.Name.StartsWith("TyphoId") && dbSchedule.Dose.DoseOrder == 2 && typestop = false)  {
-        //               if (dbSchedule.IsDone == true)
-        //               {
-        //                   type2GivenDate = dbSchedule.GivenDate;
-        //               }
-        //               else {
-        //                   typestop = true;
-        //                   type1Date = dbSchedule.Date;
-        //               }       
+                 }
+                  if(dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.Dose.DoseOrder == 2 && typestop == false)  {
+                      if (dbSchedule.IsDone == true)
+                      {
+                          type2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                      }
+                      else {
+                          typestop = true;
+                          type1Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                      }       
                       
-        //          }
-        //          if(dbSchedule.Dose.Name.StartsWith("TyphoId") && dbSchedule.Dose.DoseOrder == 3 && typestop = false)  {
-        //               if (dbSchedule.IsDone == true)
-        //               {
-        //                   type3GivenDate = dbSchedule.GivenDate;
-        //               }
-        //               else {
-        //                   typestop = true;
-        //                   type2Date = dbSchedule.Date;
-        //               }       
+                 }
+                 if(dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.Dose.DoseOrder == 3 && typestop == false)  {
+                      if (dbSchedule.IsDone == true)
+                      {
+                          type3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                      }
+                      else {
+                          typestop = true;
+                          type2Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                      }       
                       
-        //          }
+                 }
 
-        //            if(dbSchedule.Dose.Name.StartsWith("TyphoId") && dbSchedule.Dose.DoseOrder == 4 && typestop = false)  {
-        //               if (dbSchedule.IsDone == true)
-        //               {
-        //                   type4GivenDate = dbSchedule.GivenDate;
-        //               }
-        //               else {
-        //                   typestop = true;
-        //                   type3Date = dbSchedule.Date;
-        //               }       
+                   if(dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.Dose.DoseOrder == 4 && typestop == false)  {
+                      if (dbSchedule.IsDone == true)
+                      {
+                          type4GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                      }
+                      else {
+                          typestop = true;
+                          type3Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                      }       
                       
-        //          }
+                 }
 
 
 
@@ -576,30 +579,30 @@ namespace VaccineAPI.Controllers
                  
                  //boxes
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell (flu1GivenDate, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell (flu1Date, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type1Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu1GivenDate, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu1Date, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
 
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell (flu2GivenDate, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell (flu2Date, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type2Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu2GivenDate, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu2Date, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
 
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell (flu3GivenDate, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell (flu3Date, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type3GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type3Date, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu3GivenDate, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu3Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 
                 document.Add (lowertable2);
@@ -830,6 +833,7 @@ namespace VaccineAPI.Controllers
             Font font = FontFactory.GetFont (FontFactory.HELVETICA, 11);
             if (color == "bold" || color == "backgroudLightGray") {
                 font = FontFactory.GetFont (FontFactory.HELVETICA_BOLD, 11);
+                font.Size = 11;
             }
             
             if (color == "unbold") {
@@ -840,9 +844,9 @@ namespace VaccineAPI.Controllers
                 font = FontFactory.GetFont (FontFactory.HELVETICA, 16);
             }
 
-            if (table != "description") {
-                font.Size = 7;
-            }
+            // if (table != "description" && color != "backgroudLightGray") {
+            //     font.Size = 7;
+            // }
             PdfPCell cell = new PdfPCell (new Phrase (value, font));
             if (color == "backgroudLightGray") {
                 cell.BackgroundColor = GrayColor.LightGray;
@@ -1341,7 +1345,11 @@ namespace VaccineAPI.Controllers
         // write on end of each page
         public override void OnEndPage (PdfWriter writer, Document document) {
             base.OnEndPage (writer, document);
-            string footer = @"This schedule is automatically generated for " + child.Clinic.Name + @" by Vaccine.pk Visit https://www.vaccine.pk/ for more details
+            string footer = @"NOTE: 1. Vaccines can cause fever, localised redness and pain. 2. This schedule is valid to produce on demand at all airports, embassies and schools of the world. 3. We alway use best available vaccine brand/manufacturer. With time and continuous research 
+            vaccine brand can be diﬀerent for future doses. Disclaimer: This schedule provides recommended dates for immunisations for individual based date of birth, past history of immunisation and disease. Your consultant may update the due dates or add/remove vaccines. Vaccine.pk, 
+            its management or staﬀ holds no responsibility for any loss or damage due to any vaccine given. " + "  Printed On" + " " + DateTime.UtcNow.AddHours(5).ToString ("MMMM dd, yyyy");
+            
+            string footerold = @"This schedule is automatically generated for " + child.Clinic.Name + @" by Vaccine.pk Visit https://www.vaccine.pk/ for more details
              ____________________________________________________________________________________________________________________________________________
              Disclaimer: This schedule provides recommended dates for immunizations for your child based on date of birth. Your pediatrician
              may update due dates or add/remove vaccines from this schedule.Vaccine.pk or its management or staff holds no responsibility on any loss or damage due to any vaccine given to child at any given timeOfSending.";

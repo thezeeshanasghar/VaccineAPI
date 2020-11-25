@@ -13,6 +13,7 @@ namespace VaccineAPI.ModelDTO
         public long DoctorId { get; set; }
         public DoctorDTO Doctor { get; set; }
         public int GapInDays { get; set; }
+        public bool? IsActive { get; set; }
         
     }
 

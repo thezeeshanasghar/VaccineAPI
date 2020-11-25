@@ -20,6 +20,7 @@ namespace VaccineAPI.ModelDTO
         public string CountryCode { get; set; }
         public string Gender  { get; set; }
         public string Type { get; set; }
+        public bool IsSkip { get; set; }
         public string City  { get; set; }
         public int PreferredDayOfReminder  { get; set; }
         public string PreferredDayOfWeek  { get; set; }

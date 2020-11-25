@@ -103,6 +103,11 @@ namespace VaccineAPI.Models
                             b.Property(r => r.IsVerified)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
                              });
+
+                             modelBuilder.Entity< DoctorSchedule >(b=>{  
+                            b.Property(r => r.IsActive)
+                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+                             });
                            
 
                             //  modelBuilder.Entity< User >(b=> {

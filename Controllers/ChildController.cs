@@ -278,7 +278,7 @@ namespace VaccineAPI.Controllers
 
                 //Table 1 for description above Schedule table
                 PdfPTable upperTable = new PdfPTable (3);
-                float[] upperTableWidths = new float[] { 250f, 50f, 200f };
+                float[] upperTableWidths = new float[] { 250f, 10f, 240f };
                 upperTable.HorizontalAlignment = 0;
                 upperTable.TotalWidth = 500f;
                 upperTable.LockedWidth = true;
@@ -287,18 +287,18 @@ namespace VaccineAPI.Controllers
                 upperTable.AddCell (CreateCell ("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert","unbold", 2, "left", "description"));
                 
                 //image code start
-                var imgPath = Path.Combine (_host.ContentRootPath, "Resources/Images/cliniclogo.jpg");
+                var imgPath = Path.Combine (_host.ContentRootPath, "Resources/Images/cliniclogo.png");
 
                 // if (dbChild.Clinic.MonogramImage != null) {
                    // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
                     Image img = Image.GetInstance (imgPath);
-                    img.ScaleAbsolute (100f, 35f);
+                    img.ScaleAbsolute (115f, 35f);
                     //img.ScaleToFit(40f, 40f);
 
                     PdfPCell imageCell = new PdfPCell (img, false);
                     // imageCell.PaddingTop = 5;
                     imageCell.Colspan = 1; // either 1 if you need to insert one cell
-                   // imageCell.Rowspan = 1;
+                   // imageCell.Rowspan = 2;
                     imageCell.Border = 0;
                     imageCell.FixedHeight = 1f;
                     imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
@@ -333,7 +333,7 @@ namespace VaccineAPI.Controllers
                 upperTable.AddCell (CreateCell ("Clinic Ph: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
                 upperTable.AddCell (CreateCell ("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right", "description"));
                  upperTable.AddCell (CreateCell ("", "", 2, "left", "description"));
-                upperTable.AddCell (CreateCell ("DOB:" + dbChild.DOB.ToString ("dd MMMM, yyyy"), "", 1, "right", "description"));
+                upperTable.AddCell (CreateCell ("DOB: " + dbChild.DOB.ToString ("dd MMMM, yyyy"), "", 1, "right", "description"));
 
                
                // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
@@ -369,6 +369,9 @@ namespace VaccineAPI.Controllers
                  var flu1Date = " ";
                  var flu2Date = " ";
                  var flu3Date = " ";
+                 var flu1Brand = " ";
+                 var flu2Brand = " ";
+                 var flu3Brand = " ";
                  var flu1GivenDate = " ";
                  var flu2GivenDate = " ";
                  var flu3GivenDate = " ";
@@ -378,6 +381,9 @@ namespace VaccineAPI.Controllers
                  var type2Date = "";
                  var type3Date = "";
                  var type4Date = "";
+                 var type1Brand = "";
+                 var type2Brand = "";
+                 var type3Brand = "";
                  var type1GivenDate = "";
                  var type2GivenDate = "";
                  var type3GivenDate = "";
@@ -466,6 +472,7 @@ namespace VaccineAPI.Controllers
                       if (dbSchedule.IsDone == true)
                       {
                           flu1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                          flu1Brand = dbSchedule.Brand?.Name.ToString ();
                       }
                       else {
                           flustop = true;
@@ -477,6 +484,7 @@ namespace VaccineAPI.Controllers
                       if (dbSchedule.IsDone == true)
                       {
                           flu2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                          flu2Brand = dbSchedule.Brand?.Name.ToString ();
                       }
                       else {
                           flustop = true;
@@ -488,6 +496,7 @@ namespace VaccineAPI.Controllers
                       if (dbSchedule.IsDone == true)
                       {
                           flu3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                          flu3Brand = dbSchedule.Brand?.Name.ToString ();
                       }
                       else {
                           flustop = true;
@@ -501,6 +510,7 @@ namespace VaccineAPI.Controllers
                       if (dbSchedule.IsDone == true)
                       {
                           type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                          type1Brand = dbSchedule.Brand?.Name.ToString ();
                       }
                       else {
                           typestop = true;
@@ -512,6 +522,7 @@ namespace VaccineAPI.Controllers
                       if (dbSchedule.IsDone == true)
                       {
                           type2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                          type2Brand = dbSchedule.Brand?.Name.ToString ();
                       }
                       else {
                           typestop = true;
@@ -523,6 +534,7 @@ namespace VaccineAPI.Controllers
                       if (dbSchedule.IsDone == true)
                       {
                           type3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                          type3Brand = dbSchedule.Brand?.Name.ToString ();
                       }
                       else {
                           typestop = true;
@@ -578,29 +590,29 @@ namespace VaccineAPI.Controllers
                 lowertable2.AddCell (CreateCell ("Signature", "backgroudLightGray", 1, "center", "scheduleRecords"));
                  
                  //boxes
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (type1Brand, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type1Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu1Brand, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (flu1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (flu1Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
 
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (type2Brand, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type2Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu2Brand, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (flu2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (flu2Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
 
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (type3Brand, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type3GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type3Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell (CreateCell (flu3Brand, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (flu3GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (flu3Date, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
@@ -729,6 +741,9 @@ namespace VaccineAPI.Controllers
                         cvd.DoseId = ds.DoseId;
                         if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith ("HPV"))
                             continue;
+                       
+                        if (childDTO.IsSkip == true && ds.IsActive != true)               // skip unactive doses
+                        continue;
 
                         if (childDTO.IsEPIDone) {
                             if (ds.Dose.Name.StartsWith ("BCG") ||

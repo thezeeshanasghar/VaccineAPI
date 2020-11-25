@@ -189,6 +189,7 @@ namespace VaccineAPI.Controllers {
                 var dbSchedule = _db.Schedules.Include (x => x.Dose).ThenInclude (x => x.Vaccine).Include (x => x.Child).Where (c => c.Id == scheduleDTO.Id).FirstOrDefault ();
                 var dbBrandInventory = _db.BrandInventorys.Where (b => b.BrandId == scheduleDTO.BrandId &&
                     b.DoctorId == scheduleDTO.DoctorId).FirstOrDefault ();
+                       
                 if (scheduleDTO.IsDone == false) {
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
@@ -327,6 +328,10 @@ namespace VaccineAPI.Controllers {
                     scheduleDTO.Id = schedule.Id;
                     scheduleDTO.Brands = brandDTOs;
                     scheduleDTO.BrandId = schedule.BrandId;
+                    var brandAmount = _db.BrandAmounts.Where(x=>x.BrandId == schedule.BrandId).FirstOrDefault();
+                    if (brandAmount != null && schedule.Amount == null)
+                    scheduleDTO.Amount = brandAmount.Amount;
+                    else
                     scheduleDTO.Amount = schedule.Amount;
                     scheduleDTO.Date = schedule.Date;
                     scheduleDTO.IsDone = schedule.IsDone;
@@ -401,6 +406,7 @@ namespace VaccineAPI.Controllers {
                             schedule.BrandId = scheduleBrand.BrandId;
                             if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours (5).Date) {
                                 var brandInventory = _db.BrandInventorys.Where (b => b.BrandId == scheduleBrand.BrandId && b.DoctorId == scheduleDTO.DoctorId).FirstOrDefault ();
+                                if(brandInventory != null)
                                 brandInventory.Count--;
                             }
                         }
@@ -572,11 +578,12 @@ namespace VaccineAPI.Controllers {
                         var TargetSchedulePrevious = db.Schedules.Where (x => x.ChildId == dbSchedule.ChildId && x.DoseId == secondLastDose.Id).FirstOrDefault ();
 
                         long doseDaysDifference = 0;
-
+                        if (TargetSchedulePrevious != null) {
                         if (TargetSchedulePrevious.IsDone && TargetSchedulePrevious.GivenDate.HasValue)
                             doseDaysDifference = Convert.ToInt32 ((scheduleDTO.Date.Date - TargetSchedulePrevious.GivenDate.Value).TotalDays);
                         else
                             doseDaysDifference = Convert.ToInt32 ((scheduleDTO.Date.Date - TargetSchedulePrevious.Date).TotalDays);
+                        }
 
                         if (doseDaysDifference < lastDose.MinGap && !ignoreMinGapFromPreviousDose)
                             if (mode.Equals ("bulk")) {

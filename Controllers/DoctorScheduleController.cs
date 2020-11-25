@@ -89,8 +89,7 @@ namespace VaccineAPI.Controllers
                     {
                         var doctorSchduleDB = _db.DoctorSchedules.Where(c => c.Id == DoctorScheduedTO.Id).FirstOrDefault();
                         doctorSchduleDB.GapInDays = DoctorScheduedTO.GapInDays;
-                        Console.WriteLine("loop");
-                       // _db.SaveChanges();
+                        doctorSchduleDB.IsActive = DoctorScheduedTO.IsActive;
                     }
                      _db.SaveChanges();
                     return new Response<List<DoctorSchedule>>(true, null, dsDTOS);

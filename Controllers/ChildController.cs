@@ -266,7 +266,7 @@ namespace VaccineAPI.Controllers
 
             int count = 0;
             //
-            var document = new Document (PageSize.A4, 50, 50, 25, 105); {
+            var document = new Document (PageSize.A4, 60, 60, 30, 130); {  //new Document (PageSize.A4, 50, 50, 25, 105); {
                 var output = new MemoryStream ();
 
                 var writer = PdfWriter.GetInstance (document, output);
@@ -278,27 +278,26 @@ namespace VaccineAPI.Controllers
 
                 //Table 1 for description above Schedule table
                 PdfPTable upperTable = new PdfPTable (3);
-                float[] upperTableWidths = new float[] { 250f, 10f, 240f };
+                float[] upperTableWidths = new float[] { 250f, 50f, 250f };
                 upperTable.HorizontalAlignment = 0;
-                upperTable.TotalWidth = 500f;
+                upperTable.TotalWidth = 470f;
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths (upperTableWidths);
-                upperTable.AddCell (CreateCell ("DR SALMAN AHMAD BAJWA", "bold", 3, "left", "description"));
-                upperTable.AddCell (CreateCell ("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert","unbold", 2, "left", "description"));
-                
-                //image code start
+                upperTable.AddCell (CreateCell ("DR SALMAN AHMAD BAJWA", "bold", 2, "left", "description"));
+  
+               //image code start
                 var imgPath = Path.Combine (_host.ContentRootPath, "Resources/Images/cliniclogo.png");
 
                 // if (dbChild.Clinic.MonogramImage != null) {
                    // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
                     Image img = Image.GetInstance (imgPath);
-                    img.ScaleAbsolute (115f, 35f);
+                    img.ScaleAbsolute (140f, 50f);
                     //img.ScaleToFit(40f, 40f);
 
                     PdfPCell imageCell = new PdfPCell (img, false);
                     // imageCell.PaddingTop = 5;
                     imageCell.Colspan = 1; // either 1 if you need to insert one cell
-                   // imageCell.Rowspan = 2;
+                    imageCell.Rowspan = 2;
                     imageCell.Border = 0;
                     imageCell.FixedHeight = 1f;
                     imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
@@ -315,7 +314,12 @@ namespace VaccineAPI.Controllers
                 // }
                 //image code end
 
-              //  upperTable.AddCell (CreateCell ("Vaccine.pk", "sitetitle", 1, "right", "description"));
+
+
+                upperTable.AddCell (CreateCell ("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert","unbold", 2, "left", "description"));
+                
+             
+
 
                 upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "bold", 2, "left", "description"));
 
@@ -347,11 +351,11 @@ namespace VaccineAPI.Controllers
               //  document.Add(new Paragraph(""));
                // document.Add (new Chunk (""));
                 //Schedule Table
-                float[] widths = new float[] { 20f, 140f ,60f, 70 ,70f, 45f, 45f, 45f };
+                float[] widths = new float[] { 20f, 160f ,50f, 70 ,70f, 45f, 45f, 35f };
 
                 PdfPTable table = new PdfPTable (8);
                 table.HorizontalAlignment = 0;
-                table.TotalWidth = 500f;
+                table.TotalWidth = 470f;
                 table.LockedWidth = true;
                 table.SpacingBefore = 5;
                 table.SetWidths (widths);
@@ -404,6 +408,7 @@ namespace VaccineAPI.Controllers
                         {
                             PdfPCell ageCell = new PdfPCell (new Phrase (count.ToString (), font));
                             ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                            ageCell.FixedHeight   = 15f;
                             table.AddCell (ageCell);
 
                             PdfPCell dosenameCell = new PdfPCell (new Phrase (dbSchedule.Dose.Name, font));
@@ -565,9 +570,9 @@ namespace VaccineAPI.Controllers
                 float[] lowerwidths = new float[] { 250f, 250f };
                 PdfPTable lowertable = new PdfPTable (2);
                 lowertable.HorizontalAlignment = 0;
-                lowertable.TotalWidth = 500f;
+                lowertable.TotalWidth = 470f;
                 lowertable.LockedWidth = true;
-                lowertable.SpacingBefore = 5;
+                lowertable.SpacingBefore = 10;
                 lowertable.SetWidths (lowerwidths);
                 lowertable.AddCell (CreateCell ("Typhoid (Every 2-3 years)", "bold", 1, "center", "scheduleRecords"));
                 lowertable.AddCell (CreateCell ("Flu (Yearly)", "bold", 1, "center", "scheduleRecords"));
@@ -576,7 +581,7 @@ namespace VaccineAPI.Controllers
                 float[] lowerwidths2 = new float[] { 62f, 62f, 62f, 62f, 62f, 62f, 62f, 62f };
                 PdfPTable lowertable2 = new PdfPTable (8);
                 lowertable2.HorizontalAlignment = 0;
-                lowertable2.TotalWidth = 500f;
+                lowertable2.TotalWidth = 470f;
                 lowertable2.LockedWidth = true;
                 lowertable2.SetWidths (lowerwidths2);
                 //header
@@ -802,8 +807,8 @@ namespace VaccineAPI.Controllers
            }
                 //  Child c = _db.Childs.Include("User").Include("Clinic").Where(x => x.Id == childDTO.Id).FirstOrDefault();
                 Child c = _db.Childs.Where (x => x.Id == childDTO.Id).Include (x => x.User).Include (x => x.Clinic).Include (x => x.Clinic.Doctor.User).FirstOrDefault ();
-            //    if (c.Email != "")
-            //        UserEmail.ParentEmail (c);
+                // if (c.Email != "")
+                // UserEmail.ParentEmail (c);
 
                 // generate SMS and save it to the db
                 //  UserSMS u = new UserSMS(_db);
@@ -865,6 +870,8 @@ namespace VaccineAPI.Controllers
             PdfPCell cell = new PdfPCell (new Phrase (value, font));
             if (color == "backgroudLightGray") {
                 cell.BackgroundColor = GrayColor.LightGray;
+                 cell.FixedHeight   = 20f;
+                // cell.BorderColor = BaseColor.LightGray;
             }
             if (alignment == "right") {
                 cell.HorizontalAlignment = Element.ALIGN_RIGHT;
@@ -879,6 +886,9 @@ namespace VaccineAPI.Controllers
             if (table == "description") {
                 cell.Border = 0;
                 cell.Padding = 2f;
+            }
+             if (table == "scheduleRecords") {
+                cell.FixedHeight   = 15f;
             }
             return cell;
 
@@ -1361,26 +1371,25 @@ namespace VaccineAPI.Controllers
         public override void OnEndPage (PdfWriter writer, Document document) {
             base.OnEndPage (writer, document);
             string footer = @"NOTE: 1. Vaccines can cause fever, localised redness and pain. 2. This schedule is valid to produce on demand at all airports, embassies and schools of the world. 3. We alway use best available vaccine brand/manufacturer. With time and continuous research 
-            vaccine brand can be diﬀerent for future doses. Disclaimer: This schedule provides recommended dates for immunisations for individual based date of birth, past history of immunisation and disease. Your consultant may update the due dates or add/remove vaccines. Vaccine.pk, 
+
+            vaccine brand can be different for future doses. Disclaimer: This schedule provides recommended dates for immunisations for individual based date of birth, past history of immunisation and disease. Your consultant may update the due dates or add/remove vaccines. Vaccine.pk, 
+            
             its management or staﬀ holds no responsibility for any loss or damage due to any vaccine given. " + "  Printed On" + " " + DateTime.UtcNow.AddHours(5).ToString ("MMMM dd, yyyy");
             
-            string footerold = @"This schedule is automatically generated for " + child.Clinic.Name + @" by Vaccine.pk Visit https://www.vaccine.pk/ for more details
-             ____________________________________________________________________________________________________________________________________________
-             Disclaimer: This schedule provides recommended dates for immunizations for your child based on date of birth. Your pediatrician
-             may update due dates or add/remove vaccines from this schedule.Vaccine.pk or its management or staff holds no responsibility on any loss or damage due to any vaccine given to child at any given timeOfSending.";
             footer = footer.Replace (Environment.NewLine, String.Empty).Replace ("  ", String.Empty);
-            Font georgia = FontFactory.GetFont ("georgia", 7f);
+            Font georgia = FontFactory.GetFont ("georgia", 9f);
 
             Chunk beginning = new Chunk (footer, georgia);
 
             PdfPTable tabFot = new PdfPTable (1);
             PdfPCell cell;
-            tabFot.SetTotalWidth (new float[] { 575f });
-            tabFot.DefaultCell.HorizontalAlignment = Element.ALIGN_LEFT;
+            tabFot.SetTotalWidth (new float[] { 500f });
+            tabFot.DefaultCell.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
             cell = new PdfPCell (new Phrase (beginning));
+
             cell.Border = 0;
             tabFot.AddCell (cell);
-            tabFot.WriteSelectedRows (0, -1, 10, 50, writer.DirectContent);
+            tabFot.WriteSelectedRows (0, -1, 50, 90, writer.DirectContent);   //tabFot.WriteSelectedRows (0, -1, 10, 50, writer.DirectContent);
         }
 
         //write on close of document

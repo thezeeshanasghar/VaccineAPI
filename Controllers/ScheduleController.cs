@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Data;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -67,7 +68,7 @@ namespace VaccineAPI.Controllers {
             if (GapDays == 0) {
                 schedules = db.Schedules.Include (x=>x.Child).ThenInclude(x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
-                    .Where (c => c.Date == CurrentPakDateTime.Date)
+                    .Where (c => c.Date.Date == CurrentPakDateTime.Date)
                     .Where (c => c.IsDone == false &&  c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date).ToList<Schedule> ();
                
@@ -82,8 +83,8 @@ namespace VaccineAPI.Controllers {
                 AddedDateTime = AddedDateTime.AddDays (1);
                 schedules = db.Schedules.Include (x=>x.Child).ThenInclude (x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
-                    .Where (c => c.Date > CurrentPakDateTime.Date && c.Date <= AddedDateTime)
-                    .Where (c => c.IsDone == false)
+                    .Where (c => c.Date.Date > CurrentPakDateTime.Date && c.Date.Date <= AddedDateTime.Date)
+                    .Where (c => c.IsDone == false && c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date)
                     .ToList<Schedule> ();
 
@@ -92,25 +93,48 @@ namespace VaccineAPI.Controllers {
                 schedules = db.Schedules.Include (x => x.Child).ThenInclude (x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Date < CurrentPakDateTime.Date && c.Date >= AddedDateTime)
-                    .Where (c => c.IsDone == false)
+                    .Where (c => c.IsDone == false && c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date)
                     .ToList<Schedule> ();
 
             }
-            schedules = removeDuplicateRecords (schedules);
+            Dictionary<long, string> map = AddDoseNames (schedules);
+            schedules = removeDuplicateRecords (schedules , map);
             return schedules;
         }
 
-        private static List<Schedule> removeDuplicateRecords (List<Schedule> schedules) {
+        private static  Dictionary<long, string> AddDoseNames  (List<Schedule> schedules) {
+            Dictionary<long, string> map = new Dictionary<long, string>();
+            long childId = 0;
+           var DoseName = "";
+            foreach (Schedule s in schedules) {
+                if(!map.ContainsKey(s.ChildId))
+                map.Add(s.ChildId, s.Dose.Name);
+                else
+                {
+                    string name  = map[s.ChildId];
+                    name += " , " + s.Dose.Name;
+                    map[s.ChildId] = name;
+                }
+                childId = s.ChildId;
+            }
+            return map;
+        }
+
+          private static List<Schedule> removeDuplicateRecords (List<Schedule> schedules , Dictionary<long, string> map) {
             List<Schedule> uniqueSchedule = new List<Schedule> ();
             long childId = 0;
             foreach (Schedule s in schedules) {
-                if (childId != s.ChildId)
+                if (childId != s.ChildId) {
+                    string name  = map[s.ChildId];
+                    s.Dose.Name = name;
                     uniqueSchedule.Add (s);
+                }
                 childId = s.ChildId;
             }
             return uniqueSchedule;
         }
+
 
         [HttpGet ("sms-alert/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ScheduleDTO>> SendSMSAlertToParent (int GapDays, int OnlineClinicId) {
@@ -215,7 +239,7 @@ namespace VaccineAPI.Controllers {
 
                 if (dbSchedule.Dose.Name.StartsWith ("HPV") && dbSchedule.Dose.DoseOrder == 1) {
                     var daysDifference = Convert.ToInt32 ((scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays);
-                    Console.WriteLine (daysDifference);
+                   // Console.WriteLine (daysDifference);
                     if (daysDifference > 5475) {
                         // CHANGE NEXT DOSES
                         var nextDoses = _db.Doses.Where (x => x.VaccineId == dbSchedule.Dose.VaccineId).ToList ();
@@ -347,7 +371,7 @@ namespace VaccineAPI.Controllers {
 
             foreach (var clinic in obj.Clinics) {
                 var dbSchedules = _db.Schedules.Where (x => x.Child.ClinicId == clinic.Id &&
-                    x.Date >= obj.FromDate && x.Date <= obj.ToDate).ToList ();
+                    x.Date.Date >= obj.FromDate.Date && x.Date.Date <= obj.ToDate.Date).ToList ();
 
                 foreach (Schedule schedule in dbSchedules) {
                     schedule.Date = obj.ToDate.AddDays (1);

@@ -15,8 +15,7 @@ using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
 //using WebApi.OutputCache.V2;
 
-namespace VaccineAPI.Controllers
-{
+namespace VaccineAPI.Controllers {
     [Route ("api/[controller]")]
     [ApiController]
     public class ChildController : ControllerBase {
@@ -45,8 +44,8 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet ("clinic/{id}/{page}")]
-        public Response<IEnumerable<ChildDTO>> GetChildByClinic (long id , int page) {
-            var dbChilds = _db.Childs.Include (x => x.User).Where (x => x.ClinicId == id).OrderByDescending (x => x.Id).Skip(10 * page).Take(10).ToList ();
+        public Response<IEnumerable<ChildDTO>> GetChildByClinic (long id, int page) {
+            var dbChilds = _db.Childs.Include (x => x.User).Where (x => x.ClinicId == id).OrderByDescending (x => x.Id).Skip (10 * page).Take (10).ToList ();
             List<ChildDTO> childDTOs = new List<ChildDTO> ();
             foreach (var child in dbChilds) {
                 ChildDTO childDTO = _mapper.Map<ChildDTO> (child);
@@ -117,7 +116,7 @@ namespace VaccineAPI.Controllers
                             DOB = progress.DOB.ToShortDateString (),
                             City = progress.City,
                             Next_Due_Date = nextvisitDate.ToString ("yyyy/MM/dd"),
-                            Next_Due_Vaccines = getNextVaccine(schedule , nextvisitDate),
+                            Next_Due_Vaccines = getNextVaccine (schedule, nextvisitDate),
                             Phone = progress.User.MobileNumber,
                             Email = progress.Email
                     }
@@ -138,35 +137,34 @@ namespace VaccineAPI.Controllers
         // csv file end
 
         // csv file start
-        [HttpGet ("downloadcsv")] 
-        public IActionResult MyExportAction2 ([FromQuery(Name = "arr[]")] long[] arr) {
-            
-            List<Child> alerts = new List<Child>();
-           
+        [HttpGet ("downloadcsv")]
+        public IActionResult MyExportAction2 ([FromQuery (Name = "arr[]")] long[] arr) {
+
+            List<Child> alerts = new List<Child> ();
+
             var stream = new MemoryStream ();
             using (var writeFile = new StreamWriter (stream, Encoding.UTF8, 512, true)) {
-                var csv = new CsvWriter (writeFile, CultureInfo.InvariantCulture);   
-                foreach(long id in arr)
-            {  
-            var schedule = _db.Schedules.Where (x => x.ChildId == id).Include (x => x.Dose).ThenInclude (x => x.Vaccine).ToList ();
-            DateTime nextvisitDate = getNextDate (schedule);
-             var progresses = _db.Childs.Include (x => x.User).Where (x => x.Id == id).ToList ()
-                .Select (progress =>
-                    new ChildCsvDTO () {
-                        Name = progress.Name,
-                            FatherName = progress.FatherName,
-                            DOB = progress.DOB.ToShortDateString (),
-                            City = progress.City,
-                            Next_Due_Date = nextvisitDate.ToString ("yyyy/MM/dd"),
-                            Next_Due_Vaccines = getNextVaccine(schedule , nextvisitDate),
-                            Phone = progress.User.MobileNumber,
-                            Email = progress.Email
-                    }
-                );
-             csv.WriteRecords (progresses);
-        
-            }        
-               
+                var csv = new CsvWriter (writeFile, CultureInfo.InvariantCulture);
+                foreach (long id in arr) {
+                    var schedule = _db.Schedules.Where (x => x.ChildId == id).Include (x => x.Dose).ThenInclude (x => x.Vaccine).ToList ();
+                    DateTime nextvisitDate = getNextDate (schedule);
+                    var progresses = _db.Childs.Include (x => x.User).Where (x => x.Id == id).ToList ()
+                        .Select (progress =>
+                            new ChildCsvDTO () {
+                                Name = progress.Name,
+                                    FatherName = progress.FatherName,
+                                    DOB = progress.DOB.ToShortDateString (),
+                                    City = progress.City,
+                                    Next_Due_Date = nextvisitDate.ToString ("yyyy/MM/dd"),
+                                    Next_Due_Vaccines = getNextVaccine (schedule, nextvisitDate),
+                                    Phone = progress.User.MobileNumber,
+                                    Email = progress.Email
+                            }
+                        );
+                    csv.WriteRecords (progresses);
+
+                }
+
             }
             stream.Position = 0; //reset stream
             return File (stream, "application/octet-stream", "Reports.csv");
@@ -177,9 +175,9 @@ namespace VaccineAPI.Controllers
             DateTime Now = DateTime.Now;
 
             foreach (var sch in schedul) {
-               // Console.WriteLine (Now);
+                // Console.WriteLine (Now);
                 //sch.Date = sch.Date.ToString ("yyyy/MM/dd");
-               // Console.WriteLine (sch.Date);
+                // Console.WriteLine (sch.Date);
                 if (sch.Date > Now)
                     return sch.Date;
             }
@@ -266,7 +264,7 @@ namespace VaccineAPI.Controllers
 
             int count = 0;
             //
-            var document = new Document (PageSize.A4, 60, 60, 30, 30); {  //new Document (PageSize.A4, 50, 50, 25, 105); {
+            var document = new Document (PageSize.A4, 60, 60, 30, 30); { //new Document (PageSize.A4, 50, 50, 25, 105); {
                 var output = new MemoryStream ();
 
                 var writer = PdfWriter.GetInstance (document, output);
@@ -274,7 +272,7 @@ namespace VaccineAPI.Controllers
                 // calling PDFFooter class to Include in document
                 writer.PageEvent = new PDFFooter (child);
                 document.Open ();
-               // GetPDFHeading (document, "Immunization Record");
+                // GetPDFHeading (document, "Immunization Record");
 
                 //Table 1 for description above Schedule table
                 PdfPTable upperTable = new PdfPTable (3);
@@ -284,24 +282,24 @@ namespace VaccineAPI.Controllers
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths (upperTableWidths);
                 upperTable.AddCell (CreateCell ("DR SALMAN AHMAD BAJWA", "bold", 2, "left", "description"));
-  
-               //image code start
+
+                //image code start
                 var imgPath = Path.Combine (_host.ContentRootPath, "Resources/Images/cliniclogo.png");
 
                 // if (dbChild.Clinic.MonogramImage != null) {
-                   // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
-                    Image img = Image.GetInstance (imgPath);
-                    img.ScaleAbsolute (160f, 50f);
-                    //img.ScaleToFit(40f, 40f);
+                // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
+                Image img = Image.GetInstance (imgPath);
+                img.ScaleAbsolute (160f, 50f);
+                //img.ScaleToFit(40f, 40f);
 
-                    PdfPCell imageCell = new PdfPCell (img, false);
-                    // imageCell.PaddingTop = 5;
-                    imageCell.Colspan = 1; // either 1 if you need to insert one cell
-                    imageCell.Rowspan = 2;
-                    imageCell.Border = 0;
-                    imageCell.FixedHeight = 1f;
-                    imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                    upperTable.AddCell (imageCell);
+                PdfPCell imageCell = new PdfPCell (img, false);
+                // imageCell.PaddingTop = 5;
+                imageCell.Colspan = 1; // either 1 if you need to insert one cell
+                imageCell.Rowspan = 2;
+                imageCell.Border = 0;
+                imageCell.FixedHeight = 1f;
+                imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                upperTable.AddCell (imageCell);
                 // } else {
                 //     PdfPCell imageCell = new PdfPCell ();
                 //     // imageCell.PaddingTop = 5;
@@ -314,44 +312,37 @@ namespace VaccineAPI.Controllers
                 // }
                 //image code end
 
-
-
-                upperTable.AddCell (CreateCell ("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert","unbold", 2, "left", "description"));
-                
-             
-
+                upperTable.AddCell (CreateCell ("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert", "unbold", 2, "left", "description"));
 
                 upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "bold", 2, "left", "description"));
 
-                
                 // upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "", 1, "left", "description"));
-                 if (dbChild.Gender == "Girl") {
-                     upperTable.AddCell (CreateCell (dbChild.Name + "  D/O", "bold", 1, "right", "description"));
-                 } else {
-                     upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
-                 }
+                if (dbChild.Gender == "Girl") {
+                    upperTable.AddCell (CreateCell (dbChild.Name + "  D/O", "bold", 1, "right", "description"));
+                } else {
+                    upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
+                }
 
                 upperTable.AddCell (CreateCell (dbChild.Clinic.Address, "unbold", 2, "left", "description"));
-                upperTable.AddCell (CreateCell (dbChild.FatherName , "", 1, "right", "description"));
+                upperTable.AddCell (CreateCell (dbChild.FatherName, "", 1, "right", "description"));
 
                 upperTable.AddCell (CreateCell ("Clinic Ph: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
                 upperTable.AddCell (CreateCell ("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right", "description"));
                 upperTable.AddCell (CreateCell ("", "", 2, "left", "description"));
                 upperTable.AddCell (CreateCell ("DOB: " + dbChild.DOB.ToString ("dd MMMM, yyyy"), "", 1, "right", "description"));
 
-               
-               // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
-              //  upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
+                // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
+                //  upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
                 document.Add (upperTable);
-                Paragraph title = new Paragraph("IMMUNIZATION RECORD");
-                title.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+                Paragraph title = new Paragraph ("IMMUNIZATION RECORD");
+                title.Font = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
                 title.Alignment = Element.ALIGN_CENTER;
 
                 document.Add (title);
                 //  document.Add(new Paragraph(""));
                 // document.Add (new Chunk (""));
                 //Schedule Table
-                float[] widths = new float[] { 20f, 160f ,50f, 70 ,70f, 45f, 45f, 35f };
+                float[] widths = new float[] { 20f, 160f, 50f, 70, 70f, 45f, 45f, 35f };
 
                 PdfPTable table = new PdfPTable (8);
                 table.HorizontalAlignment = 0;
@@ -369,46 +360,45 @@ namespace VaccineAPI.Controllers
                 table.AddCell (CreateCell ("OFC", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 //table.AddCell(CreateCell("Injected", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
-               // for typhoid and flu
-                 var flu1Date = " ";
-                 var flu2Date = " ";
-                 var flu3Date = " ";
-                 var flu1Brand = " ";
-                 var flu2Brand = " ";
-                 var flu3Brand = " ";
-                 var flu1GivenDate = " ";
-                 var flu2GivenDate = " ";
-                 var flu3GivenDate = " ";
-                 var flustop = false;
+                // for typhoid and flu
+                var flu1Date = " ";
+                var flu2Date = " ";
+                var flu3Date = " ";
+                var flu1Brand = " ";
+                var flu2Brand = " ";
+                var flu3Brand = " ";
+                var flu1GivenDate = " ";
+                var flu2GivenDate = " ";
+                var flu3GivenDate = " ";
+                var flustop = false;
 
-                 var type1Date = "";
-                 var type2Date = "";
-                 var type3Date = "";
-                 var type4Date = "";
-                 var type1Brand = "";
-                 var type2Brand = "";
-                 var type3Brand = "";
-                 var type1GivenDate = "";
-                 var type2GivenDate = "";
-                 var type3GivenDate = "";
-                 var type4GivenDate = "";
-                 var typestop = false;
-
+                var type1Date = "";
+                var type2Date = "";
+                var type3Date = "";
+                var type4Date = "";
+                var type1Brand = "";
+                var type2Brand = "";
+                var type3Brand = "";
+                var type1GivenDate = "";
+                var type2GivenDate = "";
+                var type3GivenDate = "";
+                var type4GivenDate = "";
+                var typestop = false;
 
                 foreach (var dbSchedule in dbSchedules) {
-                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") && !dbSchedule.Dose.Name.StartsWith("Typhoid")) {
+                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith ("Flu") && !dbSchedule.Dose.Name.StartsWith ("Typhoid")) {
                         int doseCount = 0;
                         Paragraph p = new Paragraph ();
                         count++;
                         doseCount++;
                         Font font = FontFactory.GetFont (FontFactory.HELVETICA, 10);
                         Font boldfont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
-                        Font italicfont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.ITALIC );
+                        Font italicfont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.ITALIC);
 
                         {
                             PdfPCell ageCell = new PdfPCell (new Phrase (count.ToString (), font));
                             ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                            ageCell.FixedHeight   = 15f;
+                            ageCell.FixedHeight = 15f;
                             ageCell.BorderColor = GrayColor.LightGray;
                             table.AddCell (ageCell);
 
@@ -427,13 +417,12 @@ namespace VaccineAPI.Controllers
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell (statusCell);
-                            } else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date)) {
+                            } else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed (dbSchedule.Date)) {
                                 PdfPCell statusCell = new PdfPCell (new Phrase ("Due", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell (statusCell);
-                            } 
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date)) {
+                            } else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed (dbSchedule.Date)) {
                                 PdfPCell statusCell = new PdfPCell (new Phrase (" Missed", italicfont));
                                 statusCell.HorizontalAlignment = Element.ALIGN_RIGHT;
                                 statusCell.BorderColor = GrayColor.LightGray;
@@ -445,19 +434,16 @@ namespace VaccineAPI.Controllers
                                 table.AddCell (statusCell);
                             }
 
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                            {
-                            PdfPCell dateCell = new PdfPCell (new Phrase(dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy"), font));
-                            dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                            dateCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (dateCell);
-                            }
-                            else
-                            {
-                            PdfPCell dateCell = new PdfPCell (new Phrase(dbSchedule.Date.Date.ToString ("dd/MM/yyyy"), font));
-                             dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                             dateCell.BorderColor = GrayColor.LightGray;
-                             table.AddCell (dateCell);
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true) {
+                                PdfPCell dateCell = new PdfPCell (new Phrase (dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy"), font));
+                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell (dateCell);
+                            } else {
+                                PdfPCell dateCell = new PdfPCell (new Phrase (dbSchedule.Date.Date.ToString ("dd/MM/yyyy"), font));
+                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell (dateCell);
                             }
 
                             PdfPCell brandCell = new PdfPCell (new Phrase (dbSchedule.Brand != null ? dbSchedule.Brand.Name.ToString () : "", font));
@@ -483,98 +469,80 @@ namespace VaccineAPI.Controllers
 
                     }
 
-                 // for typhoid and flu
-                
-                
-                 if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 1)  {
-                      if (dbSchedule.IsDone == true)
-                      {
-                          flu1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                          flu1Brand = dbSchedule.Brand?.Name.ToString ();
-                      }
-                      else {
-                          flustop = true;
-                          flu1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                      }       
-                      
-                 }
-                  if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 2 && flustop == false)  {
-                      if (dbSchedule.IsDone == true)
-                      {
-                          flu2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                          flu2Brand = dbSchedule.Brand?.Name.ToString ();
-                      }
-                      else {
-                          flustop = true;
-                          flu1Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                      }       
-                      
-                 }
-                 if(dbSchedule.Dose.Name.StartsWith("Flu") && dbSchedule.Dose.DoseOrder == 3 && flustop == false)  {
-                      if (dbSchedule.IsDone == true)
-                      {
-                          flu3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                          flu3Brand = dbSchedule.Brand?.Name.ToString ();
-                      }
-                      else {
-                          flustop = true;
-                          flu2Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                      }       
-                      
-                 }
+                    // for typhoid and flu
 
-        //   //typhoid 
-           if(dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.Dose.DoseOrder == 1)  {
-                      if (dbSchedule.IsDone == true)
-                      {
-                          type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                          type1Brand = dbSchedule.Brand?.Name.ToString ();
-                      }
-                      else {
-                          typestop = true;
-                          type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                      }       
-                      
-                 }
-                  if(dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.Dose.DoseOrder == 2 && typestop == false)  {
-                      if (dbSchedule.IsDone == true)
-                      {
-                          type2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                          type2Brand = dbSchedule.Brand?.Name.ToString ();
-                      }
-                      else {
-                          typestop = true;
-                          type1Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                      }       
-                      
-                 }
-                 if(dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.Dose.DoseOrder == 3 && typestop == false)  {
-                      if (dbSchedule.IsDone == true)
-                      {
-                          type3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                          type3Brand = dbSchedule.Brand?.Name.ToString ();
-                      }
-                      else {
-                          typestop = true;
-                          type2Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                      }       
-                      
-                 }
+                    if (dbSchedule.Dose.Name.StartsWith ("Flu") && dbSchedule.Dose.DoseOrder == 1) {
+                        if (dbSchedule.IsDone == true) {
+                            flu1GivenDate = dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy");
+                            flu1Brand = dbSchedule.Brand?.Name.ToString ();
+                        } else {
+                            flustop = true;
+                            flu1Date = dbSchedule.Date.ToString ("dd/MM/yyyy");
+                        }
 
-                   if(dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.Dose.DoseOrder == 4 && typestop == false)  {
-                      if (dbSchedule.IsDone == true)
-                      {
-                          type4GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                      }
-                      else {
-                          typestop = true;
-                          type3Date = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                      }       
-                      
-                 }
+                    }
+                    if (dbSchedule.Dose.Name.StartsWith ("Flu") && dbSchedule.Dose.DoseOrder == 2 && flustop == false) {
+                        if (dbSchedule.IsDone == true) {
+                            flu2GivenDate = dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy");
+                            flu2Brand = dbSchedule.Brand?.Name.ToString ();
+                        } else {
+                            flustop = true;
+                            flu1Date = dbSchedule.Date.Date.ToString ("dd/MM/yyyy");
+                        }
 
+                    }
+                    if (dbSchedule.Dose.Name.StartsWith ("Flu") && dbSchedule.Dose.DoseOrder == 3 && flustop == false) {
+                        if (dbSchedule.IsDone == true) {
+                            flu3GivenDate = dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy");
+                            flu3Brand = dbSchedule.Brand?.Name.ToString ();
+                        } else {
+                            flustop = true;
+                            flu2Date = dbSchedule.Date.Date.ToString ("dd/MM/yyyy");
+                        }
 
+                    }
 
+                    //   //typhoid 
+                    if (dbSchedule.Dose.Name.StartsWith ("Typhoid") && dbSchedule.Dose.DoseOrder == 1) {
+                        if (dbSchedule.IsDone == true) {
+                            type1GivenDate = dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy");
+                            type1Brand = dbSchedule.Brand?.Name.ToString ();
+                        } else {
+                            typestop = true;
+                            type1Date = dbSchedule.Date.ToString ("dd/MM/yyyy");
+                        }
+
+                    }
+                    if (dbSchedule.Dose.Name.StartsWith ("Typhoid") && dbSchedule.Dose.DoseOrder == 2 && typestop == false) {
+                        if (dbSchedule.IsDone == true) {
+                            type2GivenDate = dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy");
+                            type2Brand = dbSchedule.Brand?.Name.ToString ();
+                        } else {
+                            typestop = true;
+                            type1Date = dbSchedule.Date.Date.ToString ("dd/MM/yyyy");
+                        }
+
+                    }
+                    if (dbSchedule.Dose.Name.StartsWith ("Typhoid") && dbSchedule.Dose.DoseOrder == 3 && typestop == false) {
+                        if (dbSchedule.IsDone == true) {
+                            type3GivenDate = dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy");
+                            type3Brand = dbSchedule.Brand?.Name.ToString ();
+                        } else {
+                            typestop = true;
+                            type2Date = dbSchedule.Date.Date.ToString ("dd/MM/yyyy");
+                        }
+
+                    }
+
+                    if (dbSchedule.Dose.Name.StartsWith ("Typhoid") && dbSchedule.Dose.DoseOrder == 4 && typestop == false) {
+                        if (dbSchedule.IsDone == true) {
+                            type4GivenDate = dbSchedule.GivenDate?.Date.ToString ("dd/MM/yyyy");
+                        } else {
+                            typestop = true;
+                            type3Date = dbSchedule.Date.Date.ToString ("dd/MM/yyyy");
+                        }
+
+                    }
 
                 }
 
@@ -591,7 +559,7 @@ namespace VaccineAPI.Controllers
                 lowertable.AddCell (CreateCell ("Flu (Yearly)", "bold", 1, "center", "scheduleRecords"));
                 document.Add (lowertable);
 
-                float[] lowerwidths2 = new float[] { 62f, 62f, 62f, 62f, 62f, 62f};
+                float[] lowerwidths2 = new float[] { 62f, 62f, 62f, 62f, 62f, 62f };
                 PdfPTable lowertable2 = new PdfPTable (6);
                 lowertable2.HorizontalAlignment = 0;
                 lowertable2.TotalWidth = 470f;
@@ -606,8 +574,8 @@ namespace VaccineAPI.Controllers
                 lowertable2.AddCell (CreateCell ("Given On ", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell ("Next Due", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 // lowertable2.AddCell (CreateCell ("Signature", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                 
-                 //boxes
+
+                //boxes
                 lowertable2.AddCell (CreateCell (type1Brand, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (type1Date, "", 1, "center", "scheduleRecords"));
@@ -634,7 +602,7 @@ namespace VaccineAPI.Controllers
                 lowertable2.AddCell (CreateCell (flu3GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell (CreateCell (flu3Date, "", 1, "center", "scheduleRecords"));
                 // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                
+
                 document.Add (lowertable2);
                 //special vaccines table end
                 document.Close ();
@@ -645,13 +613,13 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        private bool checkForMissed(DateTime DueDate){
+        private bool checkForMissed (DateTime DueDate) {
             DateTime todayDate = DateTime.Now;
             if (todayDate > DueDate)
-            return true;
+                return true;
             else
-            return false;
-            
+                return false;
+
         }
 
         [HttpGet ("{keyword}/search")]
@@ -674,13 +642,28 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // for admin app
         [HttpGet ("search")]
-        public Response<IEnumerable<ChildDTO>> SearchChildrenByCity ([FromQuery] string name = "", [FromQuery] string city = "", [FromQuery] string dob = "", [FromQuery] string gender = "")
+        public Response<IEnumerable<ChildDTO>> SearchChildrenByCity ([FromQuery] string name = "", [FromQuery] string city = "", [FromQuery] string fromdob = "", [FromQuery] string todob = "", [FromQuery] string gender = "", [FromQuery] string vaccineid = "", [FromQuery] string doctorid="")
 
         {
 
-            List<Child> dbChildrenResults = _db.Childs.Include (x => x.User).ToList ();
+            List<Child> dbChildrenResults = new List<Child> ();
+            // if (!String.IsNullOrEmpty (vaccineid) && !String.IsNullOrEmpty (doctorid))
+            // {
+            //     var dose = _db.Doses.Where(x => x.VaccineId == Convert.ToInt32(vaccineid)).FirstOrDefault();
+            //     if (dose != null ) {
+            //     schedules = _db.Schedules.Where(x=>x.DoseId == dose.Id).Include(x => x.Child).ToList();
+            //     dbChildrenResults = schedules.Select(x=>x.Child).ToList ();
+            //     }
+            // }
+            
+           // List<Child> dbChildrenResults = _db.Childs.Include (x => x.User).ToList ();
             List<ChildDTO> childDTOs = new List<ChildDTO> ();
+            List<Schedule> schedules = new List<Schedule> ();
+            List<Clinic> clinics = new List<Clinic> ();
+            Dose dose = new Dose();
+            Doctor doctor = new Doctor ();
             if (!String.IsNullOrEmpty (name))
                 dbChildrenResults = dbChildrenResults.Where (c =>
                     c.Name.ToLower ().Contains (name.Trim ().ToLower ()) ||
@@ -689,11 +672,30 @@ namespace VaccineAPI.Controllers
             if (!String.IsNullOrEmpty (city))
                 dbChildrenResults = dbChildrenResults.Where (c => c.City != null && c.City.ToLower ().Contains (city.Trim ().ToLower ())).ToList ();
 
-            if (!String.IsNullOrEmpty (dob))
-                dbChildrenResults = dbChildrenResults.Where (c => c.DOB == Convert.ToDateTime (dob).Date).ToList ();
+            if (!String.IsNullOrEmpty (fromdob) && !String.IsNullOrEmpty (todob))
+                dbChildrenResults = dbChildrenResults.Where (c => c.DOB >= Convert.ToDateTime (fromdob).Date && c.DOB <= Convert.ToDateTime (todob).Date).ToList ();
 
             if (!String.IsNullOrEmpty (gender))
                 dbChildrenResults = dbChildrenResults.Where (c => c.Gender == gender).ToList ();
+
+            if (!String.IsNullOrEmpty (vaccineid)) {
+                
+                // dose = _db.Doses.Where(x => x.VaccineId == Convert.ToInt32(vaccineid)).FirstOrDefault();
+                // if (dose != null ) {
+                // schedules = _db.Schedules.Where(x=>x.DoseId == dose.Id).Include(x => x.Child).ToList();
+                // dbChildrenResults = schedules.Select(x=>x.Child).ToList ();
+                // }
+            }
+
+
+            if (!String.IsNullOrEmpty (doctorid)) {
+                doctor = _db.Doctors.Where(x=> x.Id == Convert.ToInt32(doctorid)).Include(x=>x.Clinics).FirstOrDefault();
+                clinics = doctor.Clinics.ToList();
+                foreach (var clinic in clinics)
+                {
+                    dbChildrenResults = dbChildrenResults.Where (c => c.ClinicId == clinic.Id).ToList ();
+                }
+            }
 
             childDTOs.AddRange (_mapper.Map<List<ChildDTO>> (dbChildrenResults));
 
@@ -742,86 +744,86 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges ();
                 }
                 childDTO.Id = childDB.Id;
-           if(childDTO.Type == "regular"){
-                // get doctor schedule and apply it to child and save in Schedule table
-                Clinic clinic = _db.Clinics.Where (x => x.Id == childDTO.ClinicId).Include (x => x.Doctor).FirstOrDefault ();
-                Doctor doctor = clinic.Doctor;
+                if (childDTO.Type == "regular") {
+                    // get doctor schedule and apply it to child and save in Schedule table
+                    Clinic clinic = _db.Clinics.Where (x => x.Id == childDTO.ClinicId).Include (x => x.Doctor).FirstOrDefault ();
+                    Doctor doctor = clinic.Doctor;
 
-                List<DoctorSchedule> dss = _db.DoctorSchedules.Where (x => x.DoctorId == doctor.Id).ToList ();
-                //IEnumerable<DoctorSchedule> dss = doctor.DoctorSchedules;
+                    List<DoctorSchedule> dss = _db.DoctorSchedules.Where (x => x.DoctorId == doctor.Id).ToList ();
+                    //IEnumerable<DoctorSchedule> dss = doctor.DoctorSchedules;
 
-                foreach (DoctorSchedule ds in dss) {
-                    var dbDose = _db.Doses.Where (x => x.Id == ds.DoseId).Include (x => x.Vaccine).FirstOrDefault ();
-                    //  if (childDTO.ChildVaccines.Any(x => x.Id == dbDose.Vaccine.Id))
-                    {
-                        Schedule cvd = new Schedule ();
-                        cvd.ChildId = childDTO.Id;
-                        cvd.DoseId = ds.DoseId;
-                        if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith ("HPV"))
-                            continue;
-                       
-                        if (childDTO.IsSkip == true && ds.IsActive != true)               // skip unactive doses
-                        continue;
+                    foreach (DoctorSchedule ds in dss) {
+                        var dbDose = _db.Doses.Where (x => x.Id == ds.DoseId).Include (x => x.Vaccine).FirstOrDefault ();
+                        //  if (childDTO.ChildVaccines.Any(x => x.Id == dbDose.Vaccine.Id))
+                        {
+                            Schedule cvd = new Schedule ();
+                            cvd.ChildId = childDTO.Id;
+                            cvd.DoseId = ds.DoseId;
+                            if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith ("HPV"))
+                                continue;
 
-                        if (childDTO.IsEPIDone) {
-                            if (ds.Dose.Name.StartsWith ("BCG") ||
-                                ds.Dose.Name.StartsWith ("HBV") ||
-                                ds.Dose.Name.Equals ("OPV # 1")) {
-                                cvd.IsDone = true;
-                                cvd.Due2EPI = true;
-                                cvd.GivenDate = childDB.DOB;
-                            } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Pneumococcal # 1", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Rota Virus GE # 1", StringComparison.OrdinalIgnoreCase) 
-                                //ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
-                            ) {
-                                cvd.IsDone = true;
-                                cvd.Due2EPI = true;
-                                DateTime d = childDB.DOB;
-                                cvd.GivenDate = d.AddDays (42);
-                            } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Pneumococcal # 2", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Rota Virus GE # 2", StringComparison.OrdinalIgnoreCase)
-                                //ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
-                            ) {
-                                cvd.IsDone = true;
-                                cvd.Due2EPI = true;
-                                DateTime d = childDB.DOB;
-                                cvd.GivenDate = d.AddDays (70);
-                            } else if (
-                                ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase) ||
-                                ds.Dose.Name.Equals ("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase) 
-                               // ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
-                            ) {
-                                cvd.IsDone = true;
-                                cvd.Due2EPI = true;
-                                DateTime d = childDB.DOB;
-                                cvd.GivenDate = d.AddDays (98);
-                            } else if (
-                                ds.Dose.Name.Equals ("Measles # 1", StringComparison.OrdinalIgnoreCase)
-                            ) {
-                                cvd.IsDone = true;
-                                cvd.Due2EPI = true;
-                                DateTime d = childDB.DOB;
-                                cvd.GivenDate = d.AddMonths (9);
+                            if (childDTO.IsSkip == true && ds.IsActive != true) // skip unactive doses
+                                continue;
+
+                            if (childDTO.IsEPIDone) {
+                                if (ds.Dose.Name.StartsWith ("BCG") ||
+                                    ds.Dose.Name.StartsWith ("HBV") ||
+                                    ds.Dose.Name.Equals ("OPV # 1")) {
+                                    cvd.IsDone = true;
+                                    cvd.Due2EPI = true;
+                                    cvd.GivenDate = childDB.DOB;
+                                } else if (
+                                    ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase) ||
+                                    ds.Dose.Name.Equals ("Pneumococcal # 1", StringComparison.OrdinalIgnoreCase) ||
+                                    ds.Dose.Name.Equals ("Rota Virus GE # 1", StringComparison.OrdinalIgnoreCase)
+                                    //ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
+                                ) {
+                                    cvd.IsDone = true;
+                                    cvd.Due2EPI = true;
+                                    DateTime d = childDB.DOB;
+                                    cvd.GivenDate = d.AddDays (42);
+                                } else if (
+                                    ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase) ||
+                                    ds.Dose.Name.Equals ("Pneumococcal # 2", StringComparison.OrdinalIgnoreCase) ||
+                                    ds.Dose.Name.Equals ("Rota Virus GE # 2", StringComparison.OrdinalIgnoreCase)
+                                    //ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
+                                ) {
+                                    cvd.IsDone = true;
+                                    cvd.Due2EPI = true;
+                                    DateTime d = childDB.DOB;
+                                    cvd.GivenDate = d.AddDays (70);
+                                } else if (
+                                    ds.Dose.Name.Equals ("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase) ||
+                                    ds.Dose.Name.Equals ("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase)
+                                    // ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
+                                ) {
+                                    cvd.IsDone = true;
+                                    cvd.Due2EPI = true;
+                                    DateTime d = childDB.DOB;
+                                    cvd.GivenDate = d.AddDays (98);
+                                } else if (
+                                    ds.Dose.Name.Equals ("Measles # 1", StringComparison.OrdinalIgnoreCase)
+                                ) {
+                                    cvd.IsDone = true;
+                                    cvd.Due2EPI = true;
+                                    DateTime d = childDB.DOB;
+                                    cvd.GivenDate = d.AddMonths (9);
+                                }
                             }
+
+                            if (ds.Dose.Name.StartsWith ("HPV") && ds.Dose.DoseOrder == 3)
+                                cvd.IsSkip = true;
+
+                            cvd.Date = calculateDate (childDTO.DOB, ds.GapInDays);
+                            _db.Schedules.Add (cvd);
+                            _db.SaveChanges ();
                         }
-
-                        if (ds.Dose.Name.StartsWith ("HPV") && ds.Dose.DoseOrder == 3)
-                            cvd.IsSkip = true;
-
-                        cvd.Date = calculateDate (childDTO.DOB, ds.GapInDays);
-                        _db.Schedules.Add (cvd);
-                        _db.SaveChanges ();
                     }
                 }
-           }
                 //  Child c = _db.Childs.Include("User").Include("Clinic").Where(x => x.Id == childDTO.Id).FirstOrDefault();
                 Child c = _db.Childs.Where (x => x.Id == childDTO.Id).Include (x => x.User).Include (x => x.Clinic).Include (x => x.Clinic.Doctor.User).FirstOrDefault ();
-                // if (c.Email != "")
-                // UserEmail.ParentEmail (c);
+                 if (c.Email != "")
+                 UserEmail.ParentEmail (c);
 
                 // generate SMS and save it to the db
                 //  UserSMS u = new UserSMS(_db);
@@ -868,12 +870,16 @@ namespace VaccineAPI.Controllers
                 font = FontFactory.GetFont (FontFactory.HELVETICA_BOLD, 11);
                 font.Size = 11;
             }
-            
+
+            if (table == "inwordamount") {
+                font = FontFactory.GetFont (FontFactory.HELVETICA, 11, Font.ITALIC);
+            }
+
             if (color == "unbold") {
                 font = FontFactory.GetFont (FontFactory.HELVETICA, 11);
             }
 
-             if (color == "sitetitle") {
+            if (color == "sitetitle") {
                 font = FontFactory.GetFont (FontFactory.HELVETICA, 16);
             }
 
@@ -883,10 +889,10 @@ namespace VaccineAPI.Controllers
             PdfPCell cell = new PdfPCell (new Phrase (value, font));
             cell.BorderColor = GrayColor.LightGray;
             if (color == "backgroudLightGray") {
-                
-                cell.BackgroundColor = new BaseColor(224, 218, 218);
-              //  cell.BackgroundColor = GrayColor.LightGray;
-                 cell.FixedHeight   = 20f;
+
+                cell.BackgroundColor = new BaseColor (224, 218, 218);
+                //  cell.BackgroundColor = GrayColor.LightGray;
+                cell.FixedHeight = 20f;
             }
             if (alignment == "right") {
                 cell.HorizontalAlignment = Element.ALIGN_RIGHT;
@@ -902,8 +908,12 @@ namespace VaccineAPI.Controllers
                 cell.Border = 0;
                 cell.Padding = 2f;
             }
-             if (table == "scheduleRecords") {
-                cell.FixedHeight   = 15f;
+            if (table == "scheduleRecords") {
+                cell.FixedHeight = 15f;
+            }
+
+            if (table == "invoiceRecords" || table == "inwordamount") {
+                cell.FixedHeight = 18f;
             }
 
             return cell;
@@ -917,21 +927,20 @@ namespace VaccineAPI.Controllers
                 font = FontFactory.GetFont (FontFactory.HELVETICA_BOLD, 11);
                 font.Size = 11;
             }
-            
+
             if (color == "unbold") {
                 font = FontFactory.GetFont (FontFactory.HELVETICA, 11);
             }
 
-             if (color == "sitetitle") {
+            if (color == "sitetitle") {
                 font = FontFactory.GetFont (FontFactory.HELVETICA, 16);
             }
 
-          
             PdfPCell cell = new PdfPCell (new Phrase (value, font));
             if (color == "backgroudLightGray") {
                 cell.BackgroundColor = GrayColor.LightGray;
-                 cell.FixedHeight   = 20f;
-               
+                cell.FixedHeight = 20f;
+
             }
             if (alignment == "right") {
                 cell.HorizontalAlignment = Element.ALIGN_RIGHT;
@@ -948,8 +957,7 @@ namespace VaccineAPI.Controllers
 
         }
 
-       
-       // old invoice pdf
+        // old invoice pdf
         [HttpGet ("{Id}/{IsBrand}/{IsConsultationFee}/{InvoiceDate}/{DoctorId}/Download-Invoice-PDF")]
         public IActionResult DownloadInvoicePDF (int Id, bool IsBrand, bool IsConsultationFee, DateTime InvoiceDate, int DoctorId) {
 
@@ -960,7 +968,6 @@ namespace VaccineAPI.Controllers
             int consultaionFee = 0;
             string childName = "";
             var document = new Document (PageSize.A4, 50, 50, 25, 25);
-
 
             var output = new MemoryStream ();
 
@@ -1134,11 +1141,11 @@ namespace VaccineAPI.Controllers
             var FileName = childName.Replace (" ", "") + "_Invoice" + "_" + DateTime.UtcNow.AddHours (5).Date.ToString ("MMMM-dd-yyyy") + ".pdf";
             return File (stream, "application/pdf", FileName);
         }
-// updated invoice pdf
-  [HttpGet ("{Id}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
-        public IActionResult DownloadInvoicePDFUpdated (int Id, DateTime InvoiceDate , int ConsultationFee) {
-        var IsConsultationFee = true;
-        var IsBrand = true;
+        // updated invoice pdf
+        [HttpGet ("{Id}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
+        public IActionResult DownloadInvoicePDFUpdated (int Id, DateTime InvoiceDate, int ConsultationFee) {
+            var IsConsultationFee = true;
+            var IsBrand = true;
             Stream stream;
             int amount = 0;
             int count = 0;
@@ -1155,13 +1162,13 @@ namespace VaccineAPI.Controllers
             //GetPDFHeading (document, "INVOICE");
 
             //Access db data
-            var dbChild = _db.Childs.Include (x=>x.Clinic).ThenInclude(x=>x.Doctor).ThenInclude(y=>y.User).Where (x => x.Id == Id).FirstOrDefault ();
+            var dbChild = _db.Childs.Include (x => x.Clinic).ThenInclude (x => x.Doctor).ThenInclude (y => y.User).Where (x => x.Id == Id).FirstOrDefault ();
             var dbDoctor = dbChild.Clinic.Doctor;
             var DoctorId = dbDoctor.Id;
             dbDoctor.InvoiceNumber = (dbDoctor.InvoiceNumber > 0) ? dbDoctor.InvoiceNumber + 1 : 1;
 
-            var dbSchedules = _db.Schedules.Include (x => x.Dose).ThenInclude (x => x.Vaccine).Include (x=> x.Brand)
-            .Where (x => x.ChildId == Id && x.Date.Date == InvoiceDate.Date && x.IsSkip != true && x.IsDone == true && x.IsDisease != true).ToList();
+            var dbSchedules = _db.Schedules.Include (x => x.Dose).ThenInclude (x => x.Vaccine).Include (x => x.Brand)
+                .Where (x => x.ChildId == Id && x.Date.Date == InvoiceDate.Date && x.IsSkip != true && x.IsDone == true && x.IsDisease != true).ToList ();
             childName = dbChild.Name;
             //Table 1 for description above amounts table
             PdfPTable upperTable = new PdfPTable (2);
@@ -1173,20 +1180,20 @@ namespace VaccineAPI.Controllers
             upperTable.SetWidths (upperTableWidths);
 
             upperTable.AddCell (CreateCell ("DR SALMAN AHMAD BAJWA", "bold", 1, "left", "description"));
-             //image code start
-                var imgPath = Path.Combine (_host.ContentRootPath, "Resources/Images/cliniclogo.png");
-                    Image img = Image.GetInstance (imgPath);
-                    img.ScaleAbsolute (160f, 50f);
-                    PdfPCell imageCell = new PdfPCell (img, false);
-                    imageCell.Colspan = 1; // either 1 if you need to insert one cell
-                    imageCell.Rowspan = 2;
-                    imageCell.Border = 0;
-                    imageCell.FixedHeight = 1f;
-                    imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                    upperTable.AddCell (imageCell);
-                //image code end
+            //image code start
+            var imgPath = Path.Combine (_host.ContentRootPath, "Resources/Images/cliniclogo.png");
+            Image img = Image.GetInstance (imgPath);
+            img.ScaleAbsolute (160f, 50f);
+            PdfPCell imageCell = new PdfPCell (img, false);
+            imageCell.Colspan = 1; // either 1 if you need to insert one cell
+            imageCell.Rowspan = 2;
+            imageCell.Border = 0;
+            imageCell.FixedHeight = 1f;
+            imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+            upperTable.AddCell (imageCell);
+            //image code end
 
-            upperTable.AddCell (CreateCell ("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert","unbold", 1, "left", "description"));
+            upperTable.AddCell (CreateCell ("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert", "unbold", 1, "left", "description"));
             upperTable.AddCell (CreateCell (" ", "", 1, "left", "description"));
             upperTable.AddCell (CreateCell ("info@vaccine.pk", "", 1, "right", "description"));
             upperTable.AddCell (CreateCell (" ", "", 1, "left", "description"));
@@ -1210,30 +1217,29 @@ namespace VaccineAPI.Controllers
             // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
 
             document.Add (upperTable);
-            Paragraph title = new Paragraph("INVOICE");
-            title.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+            Paragraph title = new Paragraph ("INVOICE");
+            title.Font = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
             title.Alignment = Element.ALIGN_CENTER;
             document.Add (title);
 
-           //2nd Table
-           float[] widths = new float[] { 170f, 300f};
-           PdfPTable childtable = new PdfPTable (2);
-           childtable.HorizontalAlignment = 0;
-           childtable.TotalWidth = 470f;
-           childtable.LockedWidth = true;
-           childtable.SetWidths (widths);
-           childtable.SpacingBefore = 10;
-           childtable.SpacingAfter = 10;
-           
-           childtable.AddCell (CreateCell ("Name of Kid/Patient", "backgroudLightGray", 1, "left", "invoiceRecords"));
-           childtable.AddCell (CreateCell (dbChild.Name, " ", 1, "left", "invoiceRecords"));
-         
+            //2nd Table
+            float[] widths = new float[] { 170f, 300f };
+            PdfPTable childtable = new PdfPTable (2);
+            childtable.HorizontalAlignment = 0;
+            childtable.TotalWidth = 470f;
+            childtable.LockedWidth = true;
+            childtable.SetWidths (widths);
+            childtable.SpacingBefore = 10;
+            childtable.SpacingAfter = 10;
+
+            childtable.AddCell (CreateCell ("Name of Kid/Patient", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            childtable.AddCell (CreateCell (dbChild.Name, " ", 1, "left", "invoiceRecords"));
 
             childtable.AddCell (CreateCell ("Father/Mother Name:", "backgroudLightGray", 1, "left", "invoiceRecords"));
             childtable.AddCell (CreateCell (dbChild.FatherName, "", 1, "left", "invoiceRecords"));
-            
+
             childtable.AddCell (CreateCell ("Date of Birth:", "backgroudLightGray", 1, "left", "invoiceRecords"));
-            childtable.AddCell (CreateCell (dbChild.DOB.ToString("dd/MM/yyyy"), "", 1, "left", "invoiceRecords"));
+            childtable.AddCell (CreateCell (dbChild.DOB.ToString ("dd/MM/yyyy"), "", 1, "left", "invoiceRecords"));
 
             childtable.AddCell (CreateCell ("City", "backgroudLightGray", 1, "left", "invoiceRecords"));
             childtable.AddCell (CreateCell (dbChild.City, " ", 1, "left", "invoiceRecords"));
@@ -1241,28 +1247,27 @@ namespace VaccineAPI.Controllers
             _db.SaveChanges ();
             document.Add (childtable);
 
-            Paragraph vaccinetitle = new Paragraph("VACCINATION DETAILS");
-            vaccinetitle.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+            Paragraph vaccinetitle = new Paragraph ("VACCINATION DETAILS");
+            vaccinetitle.Font = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
             vaccinetitle.Alignment = Element.ALIGN_CENTER;
             document.Add (vaccinetitle);
 
-           // table 3 for vaccination details
-           float[] vaccinationwidths = new float[] { 10f, 40, 70 ,30f , 30f, 30f};
-           PdfPTable vaccinetable = new PdfPTable (6);
-           vaccinetable.HorizontalAlignment = 0;
-           vaccinetable.TotalWidth = 470f;
-           vaccinetable.LockedWidth = true;
-           vaccinetable.SetWidths (vaccinationwidths);
-           vaccinetable.SpacingBefore = 10;
-           vaccinetable.SpacingAfter = 50;
-           
-           vaccinetable.AddCell (CreateCell ("#", " ", 1, "center", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ("Vaccine", "backgroudLightGray", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ("Brand", "backgroudLightGray", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ("Quantity", "backgroudLightGray", 1, "center", "invoiceRecords")); 
-           vaccinetable.AddCell (CreateCell ("Price", "backgroudLightGray", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ("Amount", "backgroudLightGray", 1, "center", "invoiceRecords")); 
-            
+            // table 3 for vaccination details
+            float[] vaccinationwidths = new float[] { 10f, 40, 70, 30f, 30f, 30f };
+            PdfPTable vaccinetable = new PdfPTable (6);
+            vaccinetable.HorizontalAlignment = 0;
+            vaccinetable.TotalWidth = 470f;
+            vaccinetable.LockedWidth = true;
+            vaccinetable.SetWidths (vaccinationwidths);
+            vaccinetable.SpacingBefore = 10;
+            vaccinetable.SpacingAfter = 50;
+
+            vaccinetable.AddCell (CreateCell ("#", " ", 1, "center", "invoiceRecords"));
+            vaccinetable.AddCell (CreateCell ("Vaccine", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            vaccinetable.AddCell (CreateCell ("Brand", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            vaccinetable.AddCell (CreateCell ("Quantity", "backgroudLightGray", 1, "center", "invoiceRecords"));
+            vaccinetable.AddCell (CreateCell ("Price", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            vaccinetable.AddCell (CreateCell ("Amount", "backgroudLightGray", 1, "center", "invoiceRecords"));
 
             // loop start
 
@@ -1275,30 +1280,26 @@ namespace VaccineAPI.Controllers
                         vaccinetable.AddCell (CreateCell (schedule.Dose.Vaccine.Name, "", 1, "left", "invoiceRecords"));
                         if (schedule.BrandId > 0) {
                             vaccinetable.AddCell (CreateCell (schedule.Brand.Name, "", 1, "left", "invoiceRecords"));
-                        }
-                        else {
+                        } else {
                             vaccinetable.AddCell (CreateCell (" ", "", 1, "center", "invoiceRecords"));
                         }
-            
-                       vaccinetable.AddCell (CreateCell ("1", " ", 1, "right", "invoiceRecords"));
+
+                        vaccinetable.AddCell (CreateCell ("1", " ", 1, "right", "invoiceRecords"));
 
                         var brandAmount = _db.BrandAmounts.Where (x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault ();
                         if (brandAmount != null && schedule.Amount == null) {
                             amount = amount + Convert.ToInt32 (brandAmount.Amount);
                             vaccinetable.AddCell (CreateCell (brandAmount.Amount.ToString (), "", 1, "right", "invoiceRecords"));
                             vaccinetable.AddCell (CreateCell (brandAmount.Amount.ToString (), "", 1, "right", "invoiceRecords"));
-                        } else if (brandAmount != null && schedule.Amount != null)  {
+                        } else if (brandAmount != null && schedule.Amount != null) {
                             amount = amount + Convert.ToInt32 (schedule.Amount);
-                            vaccinetable.AddCell (CreateCell (schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
-                            vaccinetable.AddCell (CreateCell (schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
-                        }
-                        else if (brandAmount == null && schedule.Amount != null)  {
+                            vaccinetable.AddCell (CreateCell (schedule.Amount.ToString (), "", 1, "right", "invoiceRecords"));
+                            vaccinetable.AddCell (CreateCell (schedule.Amount.ToString (), "", 1, "right", "invoiceRecords"));
+                        } else if (brandAmount == null && schedule.Amount != null) {
                             amount = amount + Convert.ToInt32 (schedule.Amount);
-                            vaccinetable.AddCell (CreateCell (schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
-                            vaccinetable.AddCell (CreateCell (schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
-                        }
-                        else 
-                        {
+                            vaccinetable.AddCell (CreateCell (schedule.Amount.ToString (), "", 1, "right", "invoiceRecords"));
+                            vaccinetable.AddCell (CreateCell (schedule.Amount.ToString (), "", 1, "right", "invoiceRecords"));
+                        } else {
                             vaccinetable.AddCell (CreateCell ("0", "", 1, "right", "invoiceRecords"));
                             vaccinetable.AddCell (CreateCell ("0", "", 1, "right", "invoiceRecords"));
                         }
@@ -1306,51 +1307,45 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-          if (consultaionFee != 0) {
-          count++;
-           vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ("Consultation / Visit Charges", "left", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ("1", " ", 1, "right", "invoiceRecords")); 
-           vaccinetable.AddCell (CreateCell ("", " ", 1, "right", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell (consultaionFee.ToString (), " ", 1, "right", "invoiceRecords")); 
-          }
+                if (consultaionFee != 0) {
+                    count++;
+                    vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
+                    vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
+                    vaccinetable.AddCell (CreateCell ("Consultation / Visit Charges", "left", 1, "left", "invoiceRecords"));
+                    vaccinetable.AddCell (CreateCell ("1", " ", 1, "right", "invoiceRecords"));
+                    vaccinetable.AddCell (CreateCell ("", " ", 1, "right", "invoiceRecords"));
+                    vaccinetable.AddCell (CreateCell (consultaionFee.ToString (), " ", 1, "right", "invoiceRecords"));
+                }
 
-           vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ("Total", "backgroudLightGray", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ((count).ToString (), "backgroudLightGray", 1, "right", "invoiceRecords")); 
-           vaccinetable.AddCell (CreateCell (" ", "backgroudLightGray", 1, "right", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ((amount + consultaionFee).ToString (), "backgroudLightGray", 1, "right", "invoiceRecords")); 
+                vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
+                vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
+                vaccinetable.AddCell (CreateCell ("Total", "backgroudLightGray", 1, "left", "invoiceRecords"));
+                vaccinetable.AddCell (CreateCell ((count).ToString (), "backgroudLightGray", 1, "right", "invoiceRecords"));
+                vaccinetable.AddCell (CreateCell (" ", "backgroudLightGray", 1, "right", "invoiceRecords"));
+                vaccinetable.AddCell (CreateCell ((amount + consultaionFee).ToString (), "backgroudLightGray", 1, "right", "invoiceRecords"));
 
-           vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell ("Amount in words", " ", 1, "left", "invoiceRecords"));
-           vaccinetable.AddCell (CreateCell (ConvertWholeNumber((amount + consultaionFee).ToString ()) + " Only", " ", 4, "left", "invoiceRecords"));
-        
+                vaccinetable.AddCell (CreateCell (" ", " ", 1, "left", "invoiceRecords"));
+                vaccinetable.AddCell (CreateCell ("Amount in words", " ", 1, "left", "invoiceRecords"));
+                vaccinetable.AddCell (CreateCell (ConvertWholeNumber ((amount + consultaionFee).ToString ()) + " Only", " ", 4, "left", "inwordamount"));
 
             }
 
             // loop end
 
+            document.Add (vaccinetable);
 
-
-           document.Add (vaccinetable);
-
-        //    Paragraph signatureheading = new Paragraph("AUTHORIZED SIGNATURES");
-        //     signatureheading.Font = FontFactory.GetFont(FontFactory.HELVETICA, 12);
-        //     signatureheading.Alignment = Element.ALIGN_LEFT;
-        //     document.Add (signatureheading);
-
-
+            //    Paragraph signatureheading = new Paragraph("AUTHORIZED SIGNATURES");
+            //     signatureheading.Font = FontFactory.GetFont(FontFactory.HELVETICA, 12);
+            //     signatureheading.Alignment = Element.ALIGN_LEFT;
+            //     document.Add (signatureheading);
 
             //Table 4 for description above amounts table
             PdfPTable bottomTable = new PdfPTable (2);
             float[] bottomTableWidths = new float[] { 235f, 235f };
-             bottomTable.HorizontalAlignment = 0;
+            bottomTable.HorizontalAlignment = 0;
             bottomTable.TotalWidth = 470f;
             bottomTable.LockedWidth = true;
             bottomTable.SetWidths (bottomTableWidths);
-
 
             bottomTable.AddCell (CreateCell (" ", "bold", 2, "left", "description"));
             bottomTable.AddCell (CreateCell ("Quick links: ", "", 2, "left", "description"));
@@ -1362,7 +1357,7 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell (CreateCell ("Vaccine.pk/pricing", "", 1, "left", "description"));
             bottomTable.AddCell (CreateCell ("Email: dr@salmanbajwa.com", "", 1, "right", "description"));
             bottomTable.WriteSelectedRows (0, -1, 65, 100, writer.DirectContent);
-            
+
             // var imgcellLeft = CreateCell ("", "", 1, "left", "description");
             // imgcellLeft.PaddingTop = 5;
             // bottomTable.AddCell (imgcellLeft);
@@ -1376,196 +1371,178 @@ namespace VaccineAPI.Controllers
             return File (stream, "application/pdf", FileName);
         }
 
+        // functions to convert amount to words
+        private static String ones (String Number) {
+            int _Number = Convert.ToInt32 (Number);
+            String name = "";
+            switch (_Number) {
 
- // functions to convert amount to words
- private static String ones(String Number)  
-{  
-    int _Number = Convert.ToInt32(Number);  
-    String name = "";  
-    switch (_Number)  
-    {  
-  
-        case 1:  
-            name = "One";  
-            break;  
-        case 2:  
-            name = "Two";  
-            break;  
-        case 3:  
-            name = "Three";  
-            break;  
-        case 4:  
-            name = "Four";  
-            break;  
-        case 5:  
-            name = "Five";  
-            break;  
-        case 6:  
-            name = "Six";  
-            break;  
-        case 7:  
-            name = "Seven";  
-            break;  
-        case 8:  
-            name = "Eight";  
-            break;  
-        case 9:  
-            name = "Nine";  
-            break;  
-    }  
-    return name;  
-}
+                case 1:
+                    name = "One";
+                    break;
+                case 2:
+                    name = "Two";
+                    break;
+                case 3:
+                    name = "Three";
+                    break;
+                case 4:
+                    name = "Four";
+                    break;
+                case 5:
+                    name = "Five";
+                    break;
+                case 6:
+                    name = "Six";
+                    break;
+                case 7:
+                    name = "Seven";
+                    break;
+                case 8:
+                    name = "Eight";
+                    break;
+                case 9:
+                    name = "Nine";
+                    break;
+            }
+            return name;
+        }
 
-private static String tens(String Number)  
-{  
-    int _Number = Convert.ToInt32(Number);  
-    String name = null;  
-    switch (_Number)  
-    {  
-        case 10:  
-            name = "Ten";  
-            break;  
-        case 11:  
-            name = "Eleven";  
-            break;  
-        case 12:  
-            name = "Twelve";  
-            break;  
-        case 13:  
-            name = "Thirteen";  
-            break;  
-        case 14:  
-            name = "Fourteen";  
-            break;  
-        case 15:  
-            name = "Fifteen";  
-            break;  
-        case 16:  
-            name = "Sixteen";  
-            break;  
-        case 17:  
-            name = "Seventeen";  
-            break;  
-        case 18:  
-            name = "Eighteen";  
-            break;  
-        case 19:  
-            name = "Nineteen";  
-            break;  
-        case 20:  
-            name = "Twenty";  
-            break;  
-        case 30:  
-            name = "Thirty";  
-            break;  
-        case 40:  
-            name = "Fourty";  
-            break;  
-        case 50:  
-            name = "Fifty";  
-            break;  
-        case 60:  
-            name = "Sixty";  
-            break;  
-        case 70:  
-            name = "Seventy";  
-            break;  
-        case 80:  
-            name = "Eighty";  
-            break;  
-        case 90:  
-            name = "Ninety";  
-            break;  
-        default:  
-            if (_Number > 0)  
-            {  
-                name = tens(Number.Substring(0, 1) + "0") + " " + ones(Number.Substring(1));  
-            }  
-            break;  
-    }  
-    return name;  
-}
-        private static String ConvertWholeNumber(String Number)  
-{  
-    string word = "";  
-    try  
-    {  
-        bool beginsZero = false;//tests for 0XX    
-        bool isDone = false;//test if already translated    
-        double dblAmt = (Convert.ToDouble(Number));  
-        //if ((dblAmt > 0) && number.StartsWith("0"))    
-        if (dblAmt > 0)  
-        {//test for zero or digit zero in a nuemric    
-            beginsZero = Number.StartsWith("0");  
-  
-            int numDigits = Number.Length;  
-            int pos = 0;//store digit grouping    
-            String place = "";//digit grouping name:hundres,thousand,etc...    
-            switch (numDigits)  
-            {  
-                case 1://ones' range    
-  
-                    word = ones(Number);  
-                    isDone = true;  
-                    break;  
-                case 2://tens' range    
-                    word = tens(Number);  
-                    isDone = true;  
-                    break;  
-                case 3://hundreds' range    
-                    pos = (numDigits % 3) + 1;  
-                    place = " Hundred ";  
-                    break;  
-                case 4://thousands' range    
-                case 5:  
-                case 6:  
-                    pos = (numDigits % 4) + 1;  
-                    place = " Thousand ";  
-                    break;  
-                case 7://millions' range    
-                case 8:  
-                case 9:  
-                    pos = (numDigits % 7) + 1;  
-                    place = " Million ";  
-                    break;  
-                case 10://Billions's range    
-                case 11:  
-                case 12:  
-  
-                    pos = (numDigits % 10) + 1;  
-                    place = " Billion ";  
-                    break;  
-                //add extra case options for anything above Billion...    
-                default:  
-                    isDone = true;  
-                    break;  
-            }  
-            if (!isDone)  
-            {//if transalation is not done, continue...(Recursion comes in now!!)    
-                if (Number.Substring(0, pos) != "0" && Number.Substring(pos) != "0")  
-                {  
-                    try  
-                    {  
-                        word = ConvertWholeNumber(Number.Substring(0, pos)) + place + ConvertWholeNumber(Number.Substring(pos));  
-                    }  
-                    catch { }  
-                }  
-                else  
-                {  
-                    word = ConvertWholeNumber(Number.Substring(0, pos)) + ConvertWholeNumber(Number.Substring(pos));  
-                }  
-  
-                //check for trailing zeros    
-                //if (beginsZero) word = " and " + word.Trim();    
-            }  
-            //ignore digit grouping names    
-            if (word.Trim().Equals(place.Trim())) word = "";  
-        }  
-    }  
-    catch { }  
-    return word.Trim();  
-}
+        private static String tens (String Number) {
+            int _Number = Convert.ToInt32 (Number);
+            String name = null;
+            switch (_Number) {
+                case 10:
+                    name = "Ten";
+                    break;
+                case 11:
+                    name = "Eleven";
+                    break;
+                case 12:
+                    name = "Twelve";
+                    break;
+                case 13:
+                    name = "Thirteen";
+                    break;
+                case 14:
+                    name = "Fourteen";
+                    break;
+                case 15:
+                    name = "Fifteen";
+                    break;
+                case 16:
+                    name = "Sixteen";
+                    break;
+                case 17:
+                    name = "Seventeen";
+                    break;
+                case 18:
+                    name = "Eighteen";
+                    break;
+                case 19:
+                    name = "Nineteen";
+                    break;
+                case 20:
+                    name = "Twenty";
+                    break;
+                case 30:
+                    name = "Thirty";
+                    break;
+                case 40:
+                    name = "Fourty";
+                    break;
+                case 50:
+                    name = "Fifty";
+                    break;
+                case 60:
+                    name = "Sixty";
+                    break;
+                case 70:
+                    name = "Seventy";
+                    break;
+                case 80:
+                    name = "Eighty";
+                    break;
+                case 90:
+                    name = "Ninety";
+                    break;
+                default:
+                    if (_Number > 0) {
+                        name = tens (Number.Substring (0, 1) + "0") + " " + ones (Number.Substring (1));
+                    }
+                    break;
+            }
+            return name;
+        }
+        private static String ConvertWholeNumber (String Number) {
+            string word = "";
+            try {
+                bool beginsZero = false; //tests for 0XX    
+                bool isDone = false; //test if already translated    
+                double dblAmt = (Convert.ToDouble (Number));
+                //if ((dblAmt > 0) && number.StartsWith("0"))    
+                if (dblAmt > 0) { //test for zero or digit zero in a nuemric    
+                    beginsZero = Number.StartsWith ("0");
 
+                    int numDigits = Number.Length;
+                    int pos = 0; //store digit grouping    
+                    String place = ""; //digit grouping name:hundres,thousand,etc...    
+                    switch (numDigits) {
+                        case 1: //ones' range    
+
+                            word = ones (Number);
+                            isDone = true;
+                            break;
+                        case 2: //tens' range    
+                            word = tens (Number);
+                            isDone = true;
+                            break;
+                        case 3: //hundreds' range    
+                            pos = (numDigits % 3) + 1;
+                            place = " Hundred ";
+                            break;
+                        case 4: //thousands' range    
+                        case 5:
+                        case 6:
+                            pos = (numDigits % 4) + 1;
+                            place = " Thousand ";
+                            break;
+                        case 7: //millions' range    
+                        case 8:
+                        case 9:
+                            pos = (numDigits % 7) + 1;
+                            place = " Million ";
+                            break;
+                        case 10: //Billions's range    
+                        case 11:
+                        case 12:
+
+                            pos = (numDigits % 10) + 1;
+                            place = " Billion ";
+                            break;
+                            //add extra case options for anything above Billion...    
+                        default:
+                            isDone = true;
+                            break;
+                    }
+                    if (!isDone) { //if transalation is not done, continue...(Recursion comes in now!!)    
+                        if (Number.Substring (0, pos) != "0" && Number.Substring (pos) != "0") {
+                            try {
+                                word = ConvertWholeNumber (Number.Substring (0, pos)) + place + ConvertWholeNumber (Number.Substring (pos));
+                            } catch { }
+                        } else {
+                            word = ConvertWholeNumber (Number.Substring (0, pos)) + ConvertWholeNumber (Number.Substring (pos));
+                        }
+
+                        //check for trailing zeros    
+                        //if (beginsZero) word = " and " + word.Trim();    
+                    }
+                    //ignore digit grouping names    
+                    if (word.Trim ().Equals (place.Trim ())) word = "";
+                }
+            } catch { }
+            return word.Trim ();
+        }
 
         [HttpPut]
         public Response<ChildDTO> Put ([FromBody] ChildDTO childDTO) {
@@ -1587,7 +1564,6 @@ private static String tens(String Number)
                 dbChild.PreferredSchedule = childDTO.PreferredSchedule;
                 dbChild.IsEPIDone = childDTO.IsEPIDone;
                 dbChild.IsVerified = childDTO.IsVerified;
-
                 var dbUser = dbChild.User;
                 dbUser.MobileNumber = childDTO.MobileNumber;
                 _db.SaveChanges ();
@@ -1672,8 +1648,8 @@ private static String tens(String Number)
 
             vaccine brand can be different for future doses. Disclaimer: This schedule provides recommended dates for immunisations for individual based date of birth, past history of immunisation and disease. Your consultant may update the due dates or add/remove vaccines. Vaccine.pk, 
             
-            its management or staﬀ holds no responsibility for any loss or damage due to any vaccine given. " + "  Printed On" + " " + DateTime.UtcNow.AddHours(5).ToString ("MMMM dd, yyyy");
-            
+            its management or staﬀ holds no responsibility for any loss or damage due to any vaccine given. " + "  Printed On" + " " + DateTime.UtcNow.AddHours (5).ToString ("MMMM dd, yyyy");
+
             footer = footer.Replace (Environment.NewLine, String.Empty).Replace ("  ", String.Empty);
             Font georgia = FontFactory.GetFont ("georgia", 9f);
 
@@ -1687,7 +1663,7 @@ private static String tens(String Number)
 
             cell.Border = 0;
             tabFot.AddCell (cell);
-            tabFot.WriteSelectedRows (0, -1, 50, 90, writer.DirectContent);   //tabFot.WriteSelectedRows (0, -1, 10, 50, writer.DirectContent);
+            tabFot.WriteSelectedRows (0, -1, 50, 90, writer.DirectContent); //tabFot.WriteSelectedRows (0, -1, 10, 50, writer.DirectContent);
         }
 
         //write on close of document

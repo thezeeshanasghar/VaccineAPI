@@ -17,8 +17,7 @@ namespace VaccineAPI.Controllers
         private readonly IMapper _mapper;
 
 //   public static string GetMessageFromExceptionObject(Exception ex)
-//         {
-            
+//         {           
 //             String message = ex.Message;
 //             if(ex is DbEntityValidationException)
 //             {

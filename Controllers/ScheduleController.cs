@@ -69,14 +69,14 @@ namespace VaccineAPI.Controllers {
                 schedules = db.Schedules.Include (x=>x.Child).ThenInclude(x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Date.Date == CurrentPakDateTime.Date)
-                    .Where (c => c.IsDone == false &&  c.IsSkip != true)
+                    .Where (c => c.IsDone != true &&  c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date).ToList<Schedule> ();
                
                 var sc = db.Schedules.Include (c=> c.Child).ThenInclude(c=>c.User).Include(c=> c.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Child.PreferredDayOfReminder != 0)
                     .Where (c => c.Date == (CurrentPakDateTime.AddDays (1)).Date)  //.AddDays (c.Child.PreferredDayOfReminder
-                    .Where (c => c.IsDone == false && c.IsSkip != true)
+                    .Where (c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date).ToList<Schedule> ();
                 schedules.AddRange (sc);
             } else if (GapDays > 0) {
@@ -84,7 +84,7 @@ namespace VaccineAPI.Controllers {
                 schedules = db.Schedules.Include (x=>x.Child).ThenInclude (x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Date.Date > CurrentPakDateTime.Date && c.Date.Date <= AddedDateTime.Date)
-                    .Where (c => c.IsDone == false && c.IsSkip != true)
+                    .Where (c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date)
                     .ToList<Schedule> ();
 
@@ -93,7 +93,7 @@ namespace VaccineAPI.Controllers {
                 schedules = db.Schedules.Include (x => x.Child).ThenInclude (x=>x.User).Include(x=>x.Dose)
                     .Where (c => ClinicIDs.Contains (c.Child.ClinicId))
                     .Where (c => c.Date < CurrentPakDateTime.Date && c.Date >= AddedDateTime)
-                    .Where (c => c.IsDone == false && c.IsSkip != true)
+                    .Where (c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy (x => x.Child.Id).ThenBy (x => x.Date)
                     .ToList<Schedule> ();
 
@@ -237,6 +237,7 @@ namespace VaccineAPI.Controllers {
                     }
                 }
 
+               // hpv doses skip and add
                 if (dbSchedule.Dose.Name.StartsWith ("HPV") && dbSchedule.Dose.DoseOrder == 1) {
                     var daysDifference = Convert.ToInt32 ((scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays);
                    // Console.WriteLine (daysDifference);
@@ -273,7 +274,26 @@ namespace VaccineAPI.Controllers {
                     }
 
                 }
+                
+                // // for flu and typhoid
+                //   if (dbSchedule.Dose.Name.StartsWith ("Flu") || dbSchedule.Dose.Name.StartsWith ("Typhoid")) {
+                    
+                //      var nextDose = _db.Doses.Where (x => x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == (dbSchedule.Dose.DoseOrder + 1)).ToList ();
+                //     if (nextDose != null){
+                //         var nextschedule = _db.Schedules.Where(x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
+                //     }
+                //   }
 
+              if (dbSchedule.Dose.DoseOrder != 1 && scheduleDTO.IsSkip != true)
+              {
+                var prevdose = _db.Doses.Where(x => x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == (dbSchedule.Dose.DoseOrder - 1)).FirstOrDefault ();
+                var previousSchedule = _db.Schedules.Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == prevdose.Id).FirstOrDefault ();
+                if (previousSchedule != null){
+                   if (previousSchedule.IsSkip != true && previousSchedule.IsDone == false)
+                     return new Response<ScheduleDTO> (false, "previous dose is not given", null);
+                }
+              }
+    
                 dbSchedule.BrandId = scheduleDTO.BrandId;
                 dbSchedule.Weight = scheduleDTO.Weight;
                 dbSchedule.Height = scheduleDTO.Height;
@@ -435,7 +455,7 @@ namespace VaccineAPI.Controllers {
                             }
                         }
                     }
-                    //ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
+                    ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
                 }
                 _db.SaveChanges ();
                 return new Response<ScheduleDTO> (true, "schedule updated successfully.", null);
@@ -454,14 +474,14 @@ namespace VaccineAPI.Controllers {
 
         //date Function
         public static DateTime calculateDate (DateTime date, int GapInDays) {
-            if (GapInDays == 30)
+            if (GapInDays == 30 || GapInDays == 31 )
                 return date.AddMonths (1);
 
-            if (GapInDays == 150)
+            else if (GapInDays == 150)
                 return date.AddMonths (5);
 
             // For 3 months
-            if (GapInDays == 84)
+            else if (GapInDays == 84)
                 return date.AddMonths (3);
             // For 9 Year 1 month
             else if (GapInDays == 3315)

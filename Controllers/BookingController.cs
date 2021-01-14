@@ -31,7 +31,7 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<BookingDTO> AddBooking (BookingDTO bookingDTO) {
             Init ();
-             Console.WriteLine(bookingDTO);
+            // Console.WriteLine(bookingDTO);
             AddRow (bookingDTO);
 
             return new Response<BookingDTO> (true, "Booking successfully.", null);
@@ -59,7 +59,7 @@ namespace VaccineAPI.Controllers
             var valueRange = new ValueRange ();
             // Data for new row 
             var oblist = new List<object>{data.ChildName , data.FatherName , data.DOB , data.Vaccines , data.Email , data.Phone , data.Address , data.Card , data.City , data.BookingDate, data.Status};//{ "Harry", "80" };
-            Console.WriteLine(oblist);
+           // Console.WriteLine(oblist);
            valueRange.Values = new List<IList<object>>{ oblist };
             // Append the above record...
             var appendRequest = service.Spreadsheets.Values.Append (valueRange, SpreadsheetId, range);

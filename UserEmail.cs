@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System;
+using System.Net;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
 
@@ -30,6 +31,20 @@ namespace VaccineAPI
 
             body += "Doctor Phone Number: <b>" + child.Clinic.Doctor.User.MobileNumber + "<b><br>";
             body += "Web Link: <a href=\"https://vaccine.pk\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccine.pk</a>";
+            //TODO: website and android link
+            SendEmail(child.Name, child.Email, body);
+        }
+
+
+
+        public static void ParentAlertEmail(string doseName, DateTime scheduleDate, Child child)
+        {
+            string body = "Reminder: Vaccination for " + child.Name + " is due on " + scheduleDate ;
+           
+                
+            body += " (" + doseName +")";
+
+           // body += "Web Link: <a href=\"https://vaccine.pk\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccine.pk</a>";
             //TODO: website and android link
             SendEmail(child.Name, child.Email, body);
         }

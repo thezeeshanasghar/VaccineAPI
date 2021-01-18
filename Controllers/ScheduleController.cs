@@ -142,6 +142,7 @@ namespace VaccineAPI.Controllers {
                 List<Schedule> Schedules = GetAlertData (GapDays, OnlineClinicId, _db);
                 var dbChildren = Schedules.Select (x => x.Child).Distinct ().ToList ();
                 foreach (var child in dbChildren) {
+                    if(child.Email != "") {
                     var dbSchedules = Schedules.Where (x => x.ChildId == child.Id).ToList ();
                     var doseName = "";
                     DateTime scheduleDate = new DateTime ();
@@ -149,9 +150,11 @@ namespace VaccineAPI.Controllers {
                         doseName += schedule.Dose.Name + ", ";
                         scheduleDate = schedule.Date;
                     }
-                    UserSMS u = new UserSMS (_db);
-                    u.ParentSMSAlert (doseName, scheduleDate, child);
-                    //  UserSMS.ParentSMSAlert(doseName, scheduleDate, child);
+                   // UserSMS u = new UserSMS (_db);
+                   // u.ParentSMSAlert (doseName, scheduleDate, child);
+                    
+                     UserEmail.ParentAlertEmail(doseName, scheduleDate, child);
+                }
                 }
 
                 List<ScheduleDTO> scheduleDtos = _mapper.Map<List<ScheduleDTO>> (Schedules);

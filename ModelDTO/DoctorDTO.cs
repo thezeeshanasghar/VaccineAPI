@@ -12,7 +12,7 @@ namespace VaccineAPI.ModelDTO
         public string FirstName { get; set; }
         public string LastName { get; set; }
         public string Email { get; set; }
-         public string CountryCode { get; set; }
+        public string CountryCode { get; set; }
         public string MobileNumber { get; set; }
         public string PhoneNo { get; set; }
         public string Password { get; set; }
@@ -35,8 +35,9 @@ namespace VaccineAPI.ModelDTO
         public string Qualification { get; set; }
         public string AdditionalInfo { get; set; }
         // public long UserId { get; set; }
-        //  [JsonIgnore]
-        // public UserDTO User { get; set; }
+        
+        // [JsonIgnore]
+        public UserDTO User { get; set; }
 
         public string[] Speciality { get; set; }
 

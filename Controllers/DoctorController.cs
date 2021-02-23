@@ -65,7 +65,7 @@ namespace VaccineAPI.Controllers
         [HttpGet ("approved")]
         public async Task<Response<List<DoctorDTO>>> GetApproved () {
 
-            var dbdoctor = await _db.Doctors.Where (x => x.IsApproved == true).Include (x => x.Clinics).ToListAsync ();
+            var dbdoctor = await _db.Doctors.Where (x => x.IsApproved == true).Include(x=>x.User).Include (x => x.Clinics).ToListAsync ();
             List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>> (dbdoctor);
 
             if (dbdoctor == null)
@@ -77,8 +77,8 @@ namespace VaccineAPI.Controllers
         [HttpGet ("unapproved")]
         public async Task<Response<List<DoctorDTO>>> GetUnApproved () {
 
-            var dbdoctor = await _db.Doctors.Where (x => x.IsApproved == false).Include (x => x.User).Include (x => x.Clinics).ToListAsync ();
-            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>> (dbdoctor);
+            var dbdoctor = await _db.Doctors.Where (x => x.IsApproved == false).Include (x => x.User).Include (x => x.Clinics).ToListAsync();
+            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
 
             if (dbdoctor == null)
                 return new Response<List<DoctorDTO>> (false, "Not Found", null);

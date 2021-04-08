@@ -8,7 +8,7 @@ using System.Web;
 namespace VaccineAPI.ModelDTO
 {
 
-    public class ScheduleDTO
+    public class ScheduleDTO 
     {
         public long Id { get; set; }
         public long ChildId { get; set; }

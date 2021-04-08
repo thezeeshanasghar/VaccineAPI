@@ -375,7 +375,7 @@ namespace VaccineAPI.Controllers {
                 var type1Date = "";
                 var type2Date = "";
                 var type3Date = "";
-                var type4Date = "";
+                // var type4Date = "";
                 var type1Brand = "";
                 var type2Brand = "";
                 var type3Brand = "";
@@ -1144,12 +1144,12 @@ namespace VaccineAPI.Controllers {
         // updated invoice pdf
         [HttpGet ("{Id}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
         public IActionResult DownloadInvoicePDFUpdated (int Id, DateTime InvoiceDate, int ConsultationFee) {
-            var IsConsultationFee = true;
-            var IsBrand = true;
+            // var IsConsultationFee = true;
+            // var IsBrand = true;
             Stream stream;
             int amount = 0;
             int count = 0;
-            int col = 3;
+            // int col = 3;
             int consultaionFee = ConsultationFee;
             string childName = "";
             var document = new Document (PageSize.A4, 60, 60, 30, 30);

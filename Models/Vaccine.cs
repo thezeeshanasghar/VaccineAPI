@@ -6,7 +6,7 @@ namespace VaccineAPI.Models
 
     public class Vaccine
     {
-          [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
         public Vaccine()
         {
             this.Brands = new HashSet<Brand>();
@@ -17,8 +17,10 @@ namespace VaccineAPI.Models
         public int MinAge { get; set; }
         public int? MaxAge { get; set; }
 
+        public bool isInfinite { get; set; }
+
         public virtual ICollection<Brand> Brands { get; set; }
-        public virtual ICollection <Dose> Doses { get; set; }
+        public virtual ICollection<Dose> Doses { get; set; }
     }
 
 }

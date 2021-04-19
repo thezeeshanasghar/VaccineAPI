@@ -8,6 +8,29 @@ namespace VaccineAPI.Models
 
     public class Schedule
     {
+        // override object.Equals
+        // public override bool Equals(object obj)
+        // {
+        //     if (obj == null || GetType() != obj.GetType())
+        //     {
+        //         return false;
+        //     }
+        //     Schedule tmp = (Schedule)obj;
+        //     if(this.Id==tmp.Id)
+        //         return false;
+            
+            
+        //     return base.Equals(obj);
+        // }
+        
+        // // override object.GetHashCode
+        // public override int GetHashCode()
+        // {
+        //     return base.GetHashCode();
+        // }
+        // public object Clone() {
+        //     return this.MemberwiseClone();
+        // }
         public long Id { get; set; }
        
         public DateTime Date { get; set; }

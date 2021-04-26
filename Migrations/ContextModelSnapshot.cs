@@ -540,6 +540,9 @@ namespace VaccineAPI.Migrations
                     b.Property<string>("Name")
                         .HasColumnType("text");
 
+                    b.Property<bool>("isInfinite")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.ToTable("Vaccines");

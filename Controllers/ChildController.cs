@@ -317,14 +317,19 @@ namespace VaccineAPI.Controllers {
                 upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "bold", 2, "left", "description"));
 
                 // upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "", 1, "left", "description"));
-                if (dbChild.Gender == "Girl") {
-                    upperTable.AddCell (CreateCell (dbChild.Name + "  D/O", "bold", 1, "right", "description"));
-                } else {
-                    upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
-                }
+               // if (dbChild.Gender == "Girl") {
+                    upperTable.AddCell (CreateCell (dbChild.Name , "bold", 1, "right", "description"));
+               // } else {
+               //     upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
+               // }
 
                 upperTable.AddCell (CreateCell (dbChild.Clinic.Address, "unbold", 2, "left", "description"));
-                upperTable.AddCell (CreateCell (dbChild.FatherName, "", 1, "right", "description"));
+               
+                 if (dbChild.Gender == "Girl") {
+                    upperTable.AddCell (CreateCell ("D/O "+dbChild.FatherName, "", 1, "right", "description"));
+                } else {
+                    upperTable.AddCell (CreateCell ("S/O "+dbChild.FatherName, "", 1, "right", "description"));
+                }
 
                 upperTable.AddCell (CreateCell ("Clinic Ph: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
                 upperTable.AddCell (CreateCell ("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right", "description"));
@@ -334,8 +339,9 @@ namespace VaccineAPI.Controllers {
                 // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
                 //  upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
                 document.Add (upperTable);
+               // iTextSharp.TEXT.Font myFont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
                 Paragraph title = new Paragraph ("IMMUNIZATION RECORD");
-                title.Font = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
+                title.Font = FontFactory.GetFont (FontFactory.HELVETICA_BOLD, 11);
                 title.Alignment = Element.ALIGN_CENTER;
 
                 document.Add (title);

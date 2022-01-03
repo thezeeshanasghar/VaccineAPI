@@ -37,6 +37,9 @@ namespace VaccineAPI.ModelDTO
         public DateTime FromDate { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime ToDate { get; set; }
+       // FOR INVOICE
+        [JsonConverter(typeof(OnlyDateConverter))]
+        public System.DateTime? InvoiceDate { get; set; }
         public List <ClinicDTO> Clinics { get; set; }
     }
 

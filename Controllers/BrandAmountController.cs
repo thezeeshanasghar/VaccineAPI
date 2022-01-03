@@ -24,7 +24,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{Id}")]
       public Response<List<BrandAmountDTO>> Get(int Id)
        {
-                    List<BrandAmount> brandAmountDBs = _db.BrandAmounts.Include("Brand").Include("Doctor").Where(x => x.DoctorId == Id).ToList();
+                    List<BrandAmount> brandAmountDBs = _db.BrandAmounts.Include(x=>x.Brand).Include(x => x.Doctor).Where(x => x.DoctorId == Id).ToList();
                     if (brandAmountDBs == null || brandAmountDBs.Count() == 0)
                         return new Response<List<BrandAmountDTO>>(false, "Brand not found", null);
                     List<BrandAmountDTO> brandAmountDTOs = _mapper.Map<List<BrandAmountDTO>>(brandAmountDBs);

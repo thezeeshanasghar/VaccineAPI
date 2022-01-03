@@ -25,6 +25,7 @@ namespace VaccineAPI.Models
         public DbSet<BrandInventory> BrandInventorys { get; set; }
         public DbSet<BrandAmount> BrandAmounts { get; set; }
         public DbSet<Brand> Brands { get; set; }
+        public DbSet<NormalRange> NormalRanges { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -102,7 +103,14 @@ namespace VaccineAPI.Models
                              
                             b.Property(r => r.IsVerified)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
+                             
+                              b.Property(r => r.IsInactive)
+                            .HasConversion(new BoolToZeroOneConverter<Int16>());
+
+                            //  b.Property(r => r.IsDivertAlert)
+                            // .HasConversion(new BoolToZeroOneConverter<Int16>());
                              });
+                             
 
                              modelBuilder.Entity< DoctorSchedule >(b=>{  
                             b.Property(r => r.IsActive)

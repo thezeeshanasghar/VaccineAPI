@@ -29,8 +29,9 @@ namespace VaccineAPI
             body += "ID: <b>" + child.User.MobileNumber + "</b><br>Password: <b>" + child.User.Password + "</b><br/>"
                 + "Clinic Phone Number <b>" + child.Clinic.PhoneNumber + "</b><br>";
 
-            body += "Doctor Phone Number: <b>" + child.Clinic.Doctor.User.MobileNumber + "<b><br>";
-            body += "Web Link: <a href=\"https://vaccine.pk\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccine.pk</a>";
+            body += "Doctor Phone Number: <b>+92" + child.Clinic.Doctor.User.MobileNumber + "<b><br>";
+            body += "Web Link: <a href=\"https://vaccine.pk\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccine.pk</a><br>";
+            body += "<a href=\"http://fernflowers.com/api/child/"+child.Id+"/Download-Schedule-PDF\" target=\"_blank\" rel=\"noopener noreferrer\">Click here</a>"+" to view vaccination schedule";
             //TODO: website and android link
             SendEmail(child.Name, child.Email, body);
         }

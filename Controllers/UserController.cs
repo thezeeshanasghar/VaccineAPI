@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
 using AutoMapper;
+using System;
 
 namespace VaccineAPI.Controllers
 {
@@ -39,6 +40,25 @@ namespace VaccineAPI.Controllers
                 return new Response<User>(false, "Not Found", null);
            
                 return new Response<User>(true, null, single);   
+        }
+
+
+         [HttpGet("{mobileNumber}/{dob}")]
+        public async Task<Response<User>> GetPassword(string mobileNumber , DateTime dob)
+        {
+            var user = await _db.Users.Where(x=> x.MobileNumber == mobileNumber).FirstOrDefaultAsync();
+            if (user == null)
+                return new Response<User>(false, "Not Found", null);
+            else {
+                Console.WriteLine(dob);
+                var c = await _db.Childs.Where(x=> x.UserId == user.Id).FirstOrDefaultAsync();
+                Console.WriteLine(c.DOB.Date);
+                var child = await _db.Childs.Where(x=> (x.UserId == user.Id && x.DOB.Date == dob)).FirstOrDefaultAsync();
+                if (child == null)
+                return new Response<User>(false, "Not Found", null);
+                else 
+                return new Response<User>(true, null, user);
+            }
         }
 
         //  [HttpGet("checkUniqueMobile")]
@@ -85,7 +105,7 @@ namespace VaccineAPI.Controllers
                         var doctorDb = _db.Doctors.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
                         if (doctorDb == null)
                             return new Response<UserDTO>(false, "Doctor not found.", null);
-                        if (!doctorDb.IsApproved)
+                        if (doctorDb.IsApproved != true)
                             return new Response<UserDTO>(false, "You are not approved. Contact admin for approval at 923335196658", null);
 
                         userDTO.DoctorId = doctorDb.Id;

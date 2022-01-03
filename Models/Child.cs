@@ -26,8 +26,11 @@ namespace VaccineAPI.Models
         public int PreferredDayOfReminder  { get; set; }
         public string PreferredDayOfWeek  { get; set; }
         public string PreferredSchedule  { get; set; }
+        //public string MobileNumber { get; set; }
         public bool? IsEPIDone  { get; set; }
         public bool? IsVerified  { get; set; }
+        public bool? IsInactive  { get; set; }
+        //public bool? IsDivertAlert  { get; set; }
         public long ClinicId  { get; set; }
         public virtual Clinic Clinic { get; set; }
        

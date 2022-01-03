@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using System.Net;
+using System.Text;
 
 namespace VaccineAPI.Controllers
 {
@@ -172,6 +174,42 @@ namespace VaccineAPI.Controllers
             var content = c.GetStringAsync(url).Result;
             return content.ToString();
         }
+
+        // public static string sendNewRequest (string url) {
+        //     string myURI = "https://api.bulksms.com/v1/messages";
+
+        // // change these values to match your own account
+        // string myUsername = "irfan001";
+        // string myPassword = "w?Zu-qjNd8c#Ta$";
+
+        // // the details of the message we want to send
+        // string myData = "{to: \"923205601570\", body:\"Hello Mr. Irfan!\"}";
+
+        // // build the request based on the supplied settings
+        // var request = WebRequest.Create(myURI);
+
+        // request.Credentials = new NetworkCredential(myUsername, myPassword);
+        // request.PreAuthenticate = true;
+        // // we want to use HTTP POST
+        // request.Method = "POST";
+        // // for this API, the type must always be JSON
+        // request.ContentType = "application/json";
+
+        // // Here we use Unicode encoding, but ASCIIEncoding would also work
+        // var encoding = new UnicodeEncoding();
+        // var encodedData = encoding.GetBytes(myData);
+
+        // // Write the data to the request stream
+        // var stream = request.GetRequestStream();
+        // stream.Write(encodedData, 0, encodedData.Length);
+        // stream.Close();
+        // var response = request.GetResponse();
+        // return response.ToString();
+
+        //     // read the response and print it to the console
+        //     //var reader = new StreamReader(response.GetResponseStream());
+        //    // Console.WriteLine(reader.ReadToEnd());
+        // }
 
     }
 

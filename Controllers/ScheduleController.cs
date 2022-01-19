@@ -628,6 +628,37 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                // for MENACWY Rules on brand Selection start
+                 if (
+                    dbSchedule.Dose.Name.StartsWith("MenACWY") &&
+                    dbSchedule.Dose.DoseOrder == 1
+                )
+                {
+                     var doseBrand = _db.Brands.Where(x=>x.Id == scheduleDTO.BrandId).FirstOrDefault();
+                     var daysDifference =
+                        Convert
+                            .ToInt32((
+                            scheduleDTO.GivenDate.Date -
+                            dbSchedule.Child.DOB.Date
+                            ).TotalDays);
+
+                     Console.WriteLine (daysDifference);
+                    if (daysDifference > 729 && doseBrand.Name.Equals("MENACTRA"))                    
+                    {
+                        var nextDose = _db.Doses.Where(x=>x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2).FirstOrDefault();
+                        var nextSchedule = _db.Schedules.Where(x =>x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
+                            nextSchedule.IsSkip = true;
+                    }
+                    else if (daysDifference > 364 && doseBrand.Name.Equals("NIMENRIX"))
+                    {
+                         var nextDose = _db.Doses.Where(x=>x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2).FirstOrDefault();
+                        var nextSchedule = _db.Schedules.Where(x =>x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
+                            nextSchedule.IsSkip = true;
+                    }
+                }
+
+          // for MENACWY Rules on brand Selection end
+          
                 // // for flu and typhoid
                 //   if (dbSchedule.Dose.Name.StartsWith ("Flu") || dbSchedule.Dose.Name.StartsWith ("Typhoid")) {
                 //      var nextDose = _db.Doses.Where (x => x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == (dbSchedule.Dose.DoseOrder + 1)).ToList ();

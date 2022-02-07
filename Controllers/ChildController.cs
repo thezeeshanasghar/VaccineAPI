@@ -3123,14 +3123,9 @@ namespace VaccineAPI.Controllers
         {
             base.OnEndPage(writer, document);
             string footer =
-                @"NOTE: 1. Vaccines may cause fever, localised redness and pain. 2. This schedule is valid to produce on demand at all airports, embassies and schools of the world. 3. We always use the best available vaccine brand/manufacturer. With time and continuous research 
-
-            vaccine brand can be different for future doses. Disclaimer: This schedule provides recommended dates for immunisations for individual based date of birth, past history of immunisation and disease. Your consultant may update the due dates or add/remove vaccines. Vaccine.pk, 
-            
-            its management or staﬀ holds no responsibility for any loss or damage due to any vaccine given. 4.*OHF = vaccine given at other health faculty (not by vaccine.pk) " +
-                "  Printed On" +
-                " " +
-                DateTime.UtcNow.AddHours(5).ToString("MMMM dd, yyyy");
+                @"NOTE: 1. Vaccines may cause fever, localised redness and pain. 2. This schedule is valid to produce on demand at all airports, embassies and schools of the world. 3. We always use the best available vaccine brand/manufacturer. With time and continuous research vaccine brand can be different for future doses. 
+                Disclaimer: This schedule provides recommended dates for immunisations for individual based date of birth, past history of immunisation and disease. Your consultant may update the due dates or add/remove vaccines. Vaccine.pk, its management or staﬀ holds no responsibility for any loss or damage due to any vaccine given. 4. *OHF = vaccine given at other health faculty (not by vaccine.pk) 
+                Printed on: " + DateTime.UtcNow.AddHours(5).ToString("MMMM dd, yyyy");
 
             footer =
                 footer

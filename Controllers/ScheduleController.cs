@@ -642,11 +642,12 @@ namespace VaccineAPI.Controllers
                             dbSchedule.Child.DOB.Date
                             ).TotalDays);
 
-                     Console.WriteLine (daysDifference);
+                     if(doseBrand != null)
                     if (daysDifference > 729 && doseBrand.Name.Equals("MENACTRA"))                    
                     {
                         var nextDose = _db.Doses.Where(x=>x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2).FirstOrDefault();
                         var nextSchedule = _db.Schedules.Where(x =>x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
+                            if(nextSchedule != null)
                             nextSchedule.IsSkip = true;
                     }
                     else if (daysDifference > 364 && doseBrand.Name.Equals("NIMENRIX"))

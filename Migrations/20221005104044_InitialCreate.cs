@@ -4,10 +4,30 @@ using MySql.Data.EntityFrameworkCore.Metadata;
 
 namespace VaccineAPI.Migrations
 {
-    public partial class first : Migration
+    public partial class InitialCreate : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "NormalRanges",
+                columns: table => new
+                {
+                    Id = table.Column<int>(nullable: false)
+                        .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
+                    Age = table.Column<int>(nullable: false),
+                    Gender = table.Column<int>(nullable: false),
+                    WeightMin = table.Column<float>(nullable: false),
+                    WeightMax = table.Column<float>(nullable: false),
+                    HeightMin = table.Column<float>(nullable: false),
+                    HeightMax = table.Column<float>(nullable: false),
+                    OfcMin = table.Column<float>(nullable: false),
+                    OfcMax = table.Column<float>(nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_NormalRanges", x => x.Id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
@@ -32,7 +52,8 @@ namespace VaccineAPI.Migrations
                         .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Name = table.Column<string>(nullable: true),
                     MinAge = table.Column<int>(nullable: false),
-                    MaxAge = table.Column<int>(nullable: true)
+                    MaxAge = table.Column<int>(nullable: true),
+                    isInfinite = table.Column<bool>(nullable: false)
                 },
                 constraints: table =>
                 {
@@ -237,7 +258,8 @@ namespace VaccineAPI.Migrations
                         .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     DoseId = table.Column<long>(nullable: false),
                     DoctorId = table.Column<long>(nullable: false),
-                    GapInDays = table.Column<int>(nullable: false)
+                    GapInDays = table.Column<int>(nullable: false),
+                    IsActive = table.Column<short>(nullable: true)
                 },
                 constraints: table =>
                 {
@@ -274,6 +296,7 @@ namespace VaccineAPI.Migrations
                     PreferredSchedule = table.Column<string>(nullable: true),
                     IsEPIDone = table.Column<short>(nullable: true),
                     IsVerified = table.Column<short>(nullable: true),
+                    IsInactive = table.Column<short>(nullable: true),
                     ClinicId = table.Column<long>(nullable: false),
                     UserId = table.Column<long>(nullable: false),
                     DoctorId = table.Column<long>(nullable: true)
@@ -528,6 +551,9 @@ namespace VaccineAPI.Migrations
 
             migrationBuilder.DropTable(
                 name: "Messages");
+
+            migrationBuilder.DropTable(
+                name: "NormalRanges");
 
             migrationBuilder.DropTable(
                 name: "Schedules");

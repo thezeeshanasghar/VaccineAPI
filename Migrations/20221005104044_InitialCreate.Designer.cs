@@ -9,8 +9,8 @@ using VaccineAPI.Models;
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    [Migration("20201112101416_first")]
-    partial class first
+    [Migration("20221005104044_InitialCreate")]
+    partial class InitialCreate
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
@@ -114,6 +114,9 @@ namespace VaccineAPI.Migrations
                         .HasColumnType("text");
 
                     b.Property<short?>("IsEPIDone")
+                        .HasColumnType("smallint");
+
+                    b.Property<short?>("IsInactive")
                         .HasColumnType("smallint");
 
                     b.Property<short?>("IsVerified")
@@ -316,6 +319,9 @@ namespace VaccineAPI.Migrations
                     b.Property<int>("GapInDays")
                         .HasColumnType("int");
 
+                    b.Property<short?>("IsActive")
+                        .HasColumnType("smallint");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DoctorId");
@@ -432,6 +438,41 @@ namespace VaccineAPI.Migrations
                     b.ToTable("Messages");
                 });
 
+            modelBuilder.Entity("VaccineAPI.Models.NormalRange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<int>("Age")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
+
+                    b.Property<float>("HeightMax")
+                        .HasColumnType("float");
+
+                    b.Property<float>("HeightMin")
+                        .HasColumnType("float");
+
+                    b.Property<float>("OfcMax")
+                        .HasColumnType("float");
+
+                    b.Property<float>("OfcMin")
+                        .HasColumnType("float");
+
+                    b.Property<float>("WeightMax")
+                        .HasColumnType("float");
+
+                    b.Property<float>("WeightMin")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NormalRanges");
+                });
+
             modelBuilder.Entity("VaccineAPI.Models.Schedule", b =>
                 {
                     b.Property<long>("Id")
@@ -538,6 +579,9 @@ namespace VaccineAPI.Migrations
 
                     b.Property<string>("Name")
                         .HasColumnType("text");
+
+                    b.Property<bool>("isInfinite")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 

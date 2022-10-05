@@ -114,6 +114,9 @@ namespace VaccineAPI.Migrations
                     b.Property<short?>("IsEPIDone")
                         .HasColumnType("smallint");
 
+                    b.Property<short?>("IsInactive")
+                        .HasColumnType("smallint");
+
                     b.Property<short?>("IsVerified")
                         .HasColumnType("smallint");
 
@@ -431,6 +434,41 @@ namespace VaccineAPI.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Messages");
+                });
+
+            modelBuilder.Entity("VaccineAPI.Models.NormalRange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<int>("Age")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
+
+                    b.Property<float>("HeightMax")
+                        .HasColumnType("float");
+
+                    b.Property<float>("HeightMin")
+                        .HasColumnType("float");
+
+                    b.Property<float>("OfcMax")
+                        .HasColumnType("float");
+
+                    b.Property<float>("OfcMin")
+                        .HasColumnType("float");
+
+                    b.Property<float>("WeightMax")
+                        .HasColumnType("float");
+
+                    b.Property<float>("WeightMin")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NormalRanges");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Schedule", b =>

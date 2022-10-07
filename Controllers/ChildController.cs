@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net.Mail;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -1649,7 +1650,6 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                //  Child c = _db.Childs.Include("User").Include("Clinic").Where(x => x.Id == childDTO.Id).FirstOrDefault();
                 Child c =
                     _db
                         .Childs
@@ -1658,8 +1658,11 @@ namespace VaccineAPI.Controllers
                         .Include(x => x.Clinic)
                         .Include(x => x.Clinic.Doctor.User)
                         .FirstOrDefault();
+                try {
                 if (c.Email != "") UserEmail.ParentEmail(c);
+                }catch(SmtpException e) {
 
+                }
                 // generate SMS and save it to the db
                 //  UserSMS u = new UserSMS(_db);
                 //  u.ParentSMS(c);

@@ -654,7 +654,7 @@ namespace VaccineAPI.Controllers
                 var flu1GivenDate = "";
                 var flu2GivenDate = "";
                 var flu3GivenDate = "";
-                var flustop = false;
+                // var flustop = false;
 
                 var type1Date = "";
                 var type2Date = "";
@@ -667,8 +667,8 @@ namespace VaccineAPI.Controllers
                 var type1GivenDate = "";
                 var type2GivenDate = "";
                 var type3GivenDate = "";
-                var type4GivenDate = "";
-                var typestop = false;
+                // var type4GivenDate = "";
+                // var typestop = false;
 
                 foreach (var dbSchedule in dbSchedules)
                 {
@@ -1661,7 +1661,7 @@ namespace VaccineAPI.Controllers
                 try {
                 if (c.Email != "") UserEmail.ParentEmail(c);
                 }catch(SmtpException e) {
-
+                    Console.WriteLine(e);
                 }
                 // generate SMS and save it to the db
                 //  UserSMS u = new UserSMS(_db);

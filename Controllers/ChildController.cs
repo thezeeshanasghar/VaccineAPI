@@ -49,7 +49,7 @@ namespace VaccineAPI.Controllers
                 ChildDTO childDTO = _mapper.Map<ChildDTO>(child);
                 childDTO.CountryCode = child.User.CountryCode;
                 childDTO.MobileNumber = child.User.MobileNumber;
-                childDTOs.Add (childDTO);
+                childDTOs.Add(childDTO);
             }
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
@@ -74,7 +74,7 @@ namespace VaccineAPI.Controllers
                 ChildDTO childDTO = _mapper.Map<ChildDTO>(child);
                 childDTO.CountryCode = child.User.CountryCode;
                 childDTO.MobileNumber = child.User.MobileNumber;
-                childDTOs.Add (childDTO);
+                childDTOs.Add(childDTO);
             }
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
@@ -96,7 +96,7 @@ namespace VaccineAPI.Controllers
                 ChildDTO childDTO = _mapper.Map<ChildDTO>(child);
                 childDTO.CountryCode = child.User.CountryCode;
                 childDTO.MobileNumber = child.User.MobileNumber;
-                childDTOs.Add (childDTO);
+                childDTOs.Add(childDTO);
             }
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
@@ -209,8 +209,8 @@ namespace VaccineAPI.Controllers
 
                 //csv.Configuration.RegisterClassMap<GroupReportCSVMap>();
 
-                csv.WriteRecords (progresses);
-                csv.WriteRecords (progresses);
+                csv.WriteRecords(progresses);
+                csv.WriteRecords(progresses);
             }
             stream.Position = 0; //reset stream
             return File(stream, "application/octet-stream", "Reports.csv");
@@ -262,7 +262,7 @@ namespace VaccineAPI.Controllers
                                     Phone = progress.User.MobileNumber,
                                     Email = progress.Email
                                 });
-                    csv.WriteRecords (progresses);
+                    csv.WriteRecords(progresses);
                 }
             }
             stream.Position = 0; //reset stream
@@ -402,7 +402,7 @@ namespace VaccineAPI.Controllers
 
             var Gender = 1;
             if (dbChild.Gender == "Girl")
-                 Gender = 2;
+                Gender = 2;
 
             foreach (var sch in dbSchedules)
             {
@@ -436,7 +436,7 @@ namespace VaccineAPI.Controllers
                 upperTable.HorizontalAlignment = 0;
                 upperTable.TotalWidth = 510f;
                 upperTable.LockedWidth = true;
-                upperTable.SetWidths (upperTableWidths);
+                upperTable.SetWidths(upperTableWidths);
                 upperTable
                     .AddCell(CreateCell(dbDoctor.DisplayName,
                     "bold",
@@ -445,9 +445,8 @@ namespace VaccineAPI.Controllers
                     "description"));
 
                 //image code start
-                var imgPath =
-                    Path
-                        .Combine(_host.ContentRootPath,dbChild.Clinic.MonogramImage); //Resources/Images/cliniclogo.png
+                // var imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage); //Resources/Images/cliniclogo.png
+                var imgPath = Path.Combine(_host.ContentRootPath, "Resources/Images/cliniclogo.png"); //Resources/Images/cliniclogo.png
 
                 // if (dbChild.Clinic.MonogramImage != null) {
                 // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
@@ -463,7 +462,7 @@ namespace VaccineAPI.Controllers
                 imageCell.Border = 0;
                 imageCell.FixedHeight = 1f;
                 imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                upperTable.AddCell (imageCell);
+                upperTable.AddCell(imageCell);
 
                 // } else {
                 //     PdfPCell imageCell = new PdfPCell ();
@@ -483,12 +482,12 @@ namespace VaccineAPI.Controllers
                     "left",
                     "description"));
 
-                    // upperTable
-                    // .AddCell(CreateCell("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert",
-                    // "unbold",
-                    // 2,
-                    // "left",
-                    // "description"));
+                // upperTable
+                // .AddCell(CreateCell("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and Immunization Expert",
+                // "unbold",
+                // 2,
+                // "left",
+                // "description"));
 
                 upperTable
                     .AddCell(CreateCell(dbChild.Clinic.Name,
@@ -563,6 +562,18 @@ namespace VaccineAPI.Controllers
                     "description"));
                 upperTable
                     .AddCell(CreateCell("", "", 2, "left", "description"));
+                
+                upperTable
+                    .AddCell(CreateCell("CNIC: " +
+                    dbChild.CNIC,
+                    "",
+                    1,
+                    "right",
+                    "description"));
+                    
+                upperTable
+                    .AddCell(CreateCell("", "", 2, "left", "description"));
+
                 upperTable
                     .AddCell(CreateCell("DOB: " +
                     dbChild.DOB.ToString("dd MMMM, yyyy"),
@@ -573,14 +584,14 @@ namespace VaccineAPI.Controllers
 
                 // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
                 //  upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
-                document.Add (upperTable);
+                document.Add(upperTable);
 
                 // iTextSharp.TEXT.Font myFont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
                 Paragraph title = new Paragraph("IMMUNIZATION RECORD");
                 title.Font =
                     FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
                 title.Alignment = Element.ALIGN_CENTER;
-                document.Add (title);
+                document.Add(title);
 
                 //  document.Add(new Paragraph(""));
                 // document.Add (new Chunk (""));
@@ -593,7 +604,7 @@ namespace VaccineAPI.Controllers
                 table.TotalWidth = 510f;
                 table.LockedWidth = true;
                 table.SpacingBefore = 5;
-                table.SetWidths (widths);
+                table.SetWidths(widths);
                 table
                     .AddCell(CreateCell("Sr",
                     "backgroudLightGray",
@@ -687,7 +698,7 @@ namespace VaccineAPI.Controllers
 
                         Font rangevaluefont =
                             FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                        
+
                         Font rangefont =
                             FontFactory.GetFont(FontFactory.HELVETICA, 6);
 
@@ -707,7 +718,7 @@ namespace VaccineAPI.Controllers
                             ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             ageCell.FixedHeight = 15f;
                             ageCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (ageCell);
+                            table.AddCell(ageCell);
 
                             PdfPCell dosenameCell =
                                 new PdfPCell(new Phrase(dbSchedule.Dose.Name,
@@ -715,7 +726,7 @@ namespace VaccineAPI.Controllers
                             dosenameCell.HorizontalAlignment =
                                 Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (dosenameCell);
+                            table.AddCell(dosenameCell);
 
                             if (
                                 dbSchedule.IsDone == true &&
@@ -728,7 +739,7 @@ namespace VaccineAPI.Controllers
                                 statusCell.HorizontalAlignment =
                                     Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell (statusCell);
+                                table.AddCell(statusCell);
                             }
                             else if (
                                 dbSchedule.IsDone == true &&
@@ -741,7 +752,7 @@ namespace VaccineAPI.Controllers
                                 statusCell.HorizontalAlignment =
                                     Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell (statusCell);
+                                table.AddCell(statusCell);
                             }
                             else if (
                                 dbSchedule.IsDone == false &&
@@ -754,7 +765,7 @@ namespace VaccineAPI.Controllers
                                 statusCell.HorizontalAlignment =
                                     Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell (statusCell);
+                                table.AddCell(statusCell);
                             }
                             else if (
                                 dbSchedule.IsDone == false &&
@@ -768,7 +779,7 @@ namespace VaccineAPI.Controllers
                                 statusCell.HorizontalAlignment =
                                     Element.ALIGN_RIGHT;
                                 statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell (statusCell);
+                                table.AddCell(statusCell);
                             }
                             else
                             {
@@ -778,7 +789,7 @@ namespace VaccineAPI.Controllers
                                 statusCell.HorizontalAlignment =
                                     Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell (statusCell);
+                                table.AddCell(statusCell);
                             }
 
                             if (
@@ -796,10 +807,10 @@ namespace VaccineAPI.Controllers
                                 dateCell.HorizontalAlignment =
                                     Element.ALIGN_CENTER;
                                 dateCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell (dateCell);
+                                table.AddCell(dateCell);
                             }
-                            
-                             else if( dbSchedule.IsDisease == true)
+
+                            else if (dbSchedule.IsDisease == true)
                             {
                                 PdfPCell dateCell =
                                     new PdfPCell(new Phrase(dbSchedule
@@ -810,7 +821,7 @@ namespace VaccineAPI.Controllers
                                 dateCell.HorizontalAlignment =
                                     Element.ALIGN_CENTER;
                                 dateCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell (dateCell);
+                                table.AddCell(dateCell);
                             }
 
                             else
@@ -824,14 +835,16 @@ namespace VaccineAPI.Controllers
                                 dateCell.HorizontalAlignment =
                                     Element.ALIGN_CENTER;
                                 dateCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell (dateCell);
+                                table.AddCell(dateCell);
                             }
                             string brandName = " ";
-                            if (dbSchedule.BrandId != null && dbSchedule.IsDone != false) {
+                            if (dbSchedule.BrandId != null && dbSchedule.IsDone != false)
+                            {
                                 brandName = dbSchedule.Brand.Name.ToString();
                             }
-                           
-                            else if(dbSchedule.BrandId == null && dbSchedule.IsDone != false && dbSchedule.IsDisease != true) {
+
+                            else if (dbSchedule.BrandId == null && dbSchedule.IsDone != false && dbSchedule.IsDisease != true)
+                            {
                                 brandName = "OHF*";
                             }
 
@@ -841,15 +854,15 @@ namespace VaccineAPI.Controllers
                             //                 : "OHF*",
                             //             font));
 
-                             PdfPCell brandCell =
-                                new PdfPCell(new Phrase( brandName, font));
+                            PdfPCell brandCell =
+                               new PdfPCell(new Phrase(brandName, font));
 
                             brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             brandCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (brandCell);
+                            table.AddCell(brandCell);
 
 
-                            
+
                             //normal ranges code start
                             if (
                                 dbSchedule.IsDone == true &&
@@ -857,99 +870,103 @@ namespace VaccineAPI.Controllers
                                 dbSchedule.Due2EPI != true
                             )
                             {
-                               DateTime currentDate =  DateTime.UtcNow.AddHours(5);
-                            var ageInMonths = Convert.ToInt32((
-                            dbSchedule.GivenDate?.Date.Year -
-                            dbChild.DOB.Date.Year
-                            )* 12 + dbSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month + (dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0 : -1));       
-                            NormalRange normalrange = _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
-                            //Console.WriteLine (normalrange);
-                           
-                           
-                           Paragraph pw = new Paragraph("" , rangevaluefont);
-                           if (dbSchedule.Weight > 0 && normalrange != null) {
-                                pw.Add(new Chunk(dbSchedule.Weight.ToString(), rangevaluefont));
-                                pw.Add(new Chunk(" ("+ normalrange.WeightMin+"-"+normalrange.WeightMax+ ")", rangefont));
-                           }
-                           
-                           PdfPCell weightCell =
-                                new PdfPCell(pw);
-                            weightCell.HorizontalAlignment =
-                                Element.ALIGN_CENTER;
-                            weightCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (weightCell); 
+                                DateTime currentDate = DateTime.UtcNow.AddHours(5);
+                                var ageInMonths = Convert.ToInt32((
+                                dbSchedule.GivenDate?.Date.Year -
+                                dbChild.DOB.Date.Year
+                                ) * 12 + dbSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month + (dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0 : -1));
+                                NormalRange normalrange = _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
+                                //Console.WriteLine (normalrange);
 
 
-                           
-                           Paragraph ph = new Paragraph("" , rangevaluefont);
-                           if (dbSchedule.Height > 0 && normalrange != null) {
-                                ph.Add(new Chunk(dbSchedule.Height.ToString(), rangevaluefont));
-                                ph.Add(new Chunk(" ("+ normalrange.HeightMin+"-"+normalrange.HeightMax+ ")", rangefont));
-                           }
-                            
-                            PdfPCell heightCell =
-                                new PdfPCell(ph);
-                            heightCell.HorizontalAlignment =
-                                Element.ALIGN_CENTER;
-                            heightCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (heightCell);
+                                Paragraph pw = new Paragraph("", rangevaluefont);
+                                if (dbSchedule.Weight > 0 && normalrange != null)
+                                {
+                                    pw.Add(new Chunk(dbSchedule.Weight.ToString(), rangevaluefont));
+                                    pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
+                                }
+
+                                PdfPCell weightCell =
+                                     new PdfPCell(pw);
+                                weightCell.HorizontalAlignment =
+                                    Element.ALIGN_CENTER;
+                                weightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(weightCell);
 
 
-                            
-                            Paragraph pc = new Paragraph("" , rangevaluefont);
-                           if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25) {
-                                pc.Add(new Chunk(dbSchedule.Circle.ToString(), rangevaluefont));
-                                pc.Add(new Chunk(" ("+ normalrange.OfcMin+"-"+normalrange.OfcMax+ ")", rangefont));
-                           }
 
-                          // FOR BMI
-                           if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24) {
-                               double BMI =(double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000)); 
-                               BMI = Math.Round(BMI, 1);
-                                pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
-                                pc.Add(new Chunk(" ("+ normalrange.OfcMin+"-"+normalrange.OfcMax+ ")", rangefont));
-                           }
+                                Paragraph ph = new Paragraph("", rangevaluefont);
+                                if (dbSchedule.Height > 0 && normalrange != null)
+                                {
+                                    ph.Add(new Chunk(dbSchedule.Height.ToString(), rangevaluefont));
+                                    ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
+                                }
 
-                            PdfPCell circleCell =
-                                new PdfPCell(pc);
-                            circleCell.HorizontalAlignment =
-                                Element.ALIGN_CENTER;
-                            circleCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (circleCell);
-                           
-                            
+                                PdfPCell heightCell =
+                                    new PdfPCell(ph);
+                                heightCell.HorizontalAlignment =
+                                    Element.ALIGN_CENTER;
+                                heightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(heightCell);
+
+
+
+                                Paragraph pc = new Paragraph("", rangevaluefont);
+                                if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
+                                {
+                                    pc.Add(new Chunk(dbSchedule.Circle.ToString(), rangevaluefont));
+                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                }
+
+                                // FOR BMI
+                                if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
+                                {
+                                    double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
+                                    BMI = Math.Round(BMI, 1);
+                                    pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
+                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                }
+
+                                PdfPCell circleCell =
+                                    new PdfPCell(pc);
+                                circleCell.HorizontalAlignment =
+                                    Element.ALIGN_CENTER;
+                                circleCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(circleCell);
+
+
                             }
 
                             else
-                            
+
                             {
-                                
-                               PdfPCell weightCell = new PdfPCell(new Phrase( "", font));                                                              
-                            weightCell.HorizontalAlignment =
-                                Element.ALIGN_CENTER;
-                            weightCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (weightCell); 
+
+                                PdfPCell weightCell = new PdfPCell(new Phrase("", font));
+                                weightCell.HorizontalAlignment =
+                                    Element.ALIGN_CENTER;
+                                weightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(weightCell);
 
 
-                            PdfPCell heightCell =
-                                new PdfPCell(new Phrase( "", font));
-                            heightCell.HorizontalAlignment =
-                                Element.ALIGN_CENTER;
-                            heightCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (heightCell);
+                                PdfPCell heightCell =
+                                    new PdfPCell(new Phrase("", font));
+                                heightCell.HorizontalAlignment =
+                                    Element.ALIGN_CENTER;
+                                heightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(heightCell);
 
 
-                            PdfPCell circleCell =
-                                new PdfPCell(new Phrase("", font));
-                            circleCell.HorizontalAlignment =
-                                Element.ALIGN_CENTER;
-                            circleCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell (circleCell);
+                                PdfPCell circleCell =
+                                    new PdfPCell(new Phrase("", font));
+                                circleCell.HorizontalAlignment =
+                                    Element.ALIGN_CENTER;
+                                circleCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(circleCell);
 
-                            
+
                             }
-                             
-                           
+
+
                             //normal ranges end                           
                         }
                     }
@@ -961,35 +978,38 @@ namespace VaccineAPI.Controllers
                     {
                         if (dbSchedule.IsDone == true)
                         {
-                            if (String.IsNullOrEmpty (flu1GivenDate)) 
+                            if (String.IsNullOrEmpty(flu1GivenDate))
                             {
-                            flu1GivenDate =
-                                dbSchedule
-                                    .GivenDate?
-                                    .Date
-                                    .ToString("dd/MM/yyyy");
-                            flu1Brand = dbSchedule.Brand?.Name.ToString();
+                                flu1GivenDate =
+                                    dbSchedule
+                                        .GivenDate?
+                                        .Date
+                                        .ToString("dd/MM/yyyy");
+                                flu1Brand = dbSchedule.Brand?.Name.ToString();
                             }
-    
-                            else if (String.IsNullOrEmpty (flu2GivenDate)) {
-                            flu2GivenDate =
-                                dbSchedule
-                                    .GivenDate?
-                                    .Date
-                                    .ToString("dd/MM/yyyy");
-                            flu2Brand = dbSchedule.Brand?.Name.ToString();
-                            }
-                            
 
-                            else if (String.IsNullOrEmpty (flu3GivenDate)) {
-                            flu3GivenDate =
-                                dbSchedule
-                                    .GivenDate?
-                                    .Date
-                                    .ToString("dd/MM/yyyy");
-                            flu3Brand = dbSchedule.Brand?.Name.ToString();
+                            else if (String.IsNullOrEmpty(flu2GivenDate))
+                            {
+                                flu2GivenDate =
+                                    dbSchedule
+                                        .GivenDate?
+                                        .Date
+                                        .ToString("dd/MM/yyyy");
+                                flu2Brand = dbSchedule.Brand?.Name.ToString();
                             }
-                            else{
+
+
+                            else if (String.IsNullOrEmpty(flu3GivenDate))
+                            {
+                                flu3GivenDate =
+                                    dbSchedule
+                                        .GivenDate?
+                                        .Date
+                                        .ToString("dd/MM/yyyy");
+                                flu3Brand = dbSchedule.Brand?.Name.ToString();
+                            }
+                            else
+                            {
                                 flu1GivenDate = flu2GivenDate;
                                 flu1Brand = flu2Brand;
 
@@ -1001,30 +1021,34 @@ namespace VaccineAPI.Controllers
                                     .GivenDate?
                                     .Date
                                     .ToString("dd/MM/yyyy");
-                            flu3Brand = dbSchedule.Brand?.Name.ToString();
-                            //flu3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                                flu3Brand = dbSchedule.Brand?.Name.ToString();
+                                //flu3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
                             }
 
                         }
                         else
                         {
                             //flustop = true;
-                           if (String.IsNullOrEmpty (flu1GivenDate)) {
-                               flu1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                           }
-                           else if (String.IsNullOrEmpty (flu2GivenDate)) {
-                               flu1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                           }
-                           else if (String.IsNullOrEmpty (flu3GivenDate)) {
-                               flu2Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                           }
-                           else{
-                               flu3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                           } 
-                            
+                            if (String.IsNullOrEmpty(flu1GivenDate))
+                            {
+                                flu1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                            }
+                            else if (String.IsNullOrEmpty(flu2GivenDate))
+                            {
+                                flu1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                            }
+                            else if (String.IsNullOrEmpty(flu3GivenDate))
+                            {
+                                flu2Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                            }
+                            else
+                            {
+                                flu3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                            }
+
                         }
                     }
-                   
+
 
                     //   //typhoid
 
@@ -1034,32 +1058,36 @@ namespace VaccineAPI.Controllers
                     {
                         if (dbSchedule.IsDone == true)
                         {
-                            if (String.IsNullOrEmpty (type1GivenDate)) {
+                            if (String.IsNullOrEmpty(type1GivenDate))
+                            {
                                 type1GivenDate =
                                 dbSchedule
                                     .GivenDate?
                                     .Date
                                     .ToString("dd/MM/yyyy");
-                            type1Brand = dbSchedule.Brand?.Name.ToString();
+                                type1Brand = dbSchedule.Brand?.Name.ToString();
                             }
 
-                            else if (String.IsNullOrEmpty (type2GivenDate)) {
+                            else if (String.IsNullOrEmpty(type2GivenDate))
+                            {
                                 type2GivenDate =
                                 dbSchedule
                                     .GivenDate?
                                     .Date
                                     .ToString("dd/MM/yyyy");
-                            type2Brand = dbSchedule.Brand?.Name.ToString();
+                                type2Brand = dbSchedule.Brand?.Name.ToString();
                             }
-                            else if (String.IsNullOrEmpty (type3GivenDate)) {
+                            else if (String.IsNullOrEmpty(type3GivenDate))
+                            {
                                 type3GivenDate =
                                 dbSchedule
                                     .GivenDate?
                                     .Date
                                     .ToString("dd/MM/yyyy");
-                            type3Brand = dbSchedule.Brand?.Name.ToString();
+                                type3Brand = dbSchedule.Brand?.Name.ToString();
                             }
-                            else {
+                            else
+                            {
                                 type1GivenDate = type2GivenDate;
                                 type1Brand = type2Brand;
                                 type2GivenDate = type3GivenDate;
@@ -1069,34 +1097,38 @@ namespace VaccineAPI.Controllers
                                     .GivenDate?
                                     .Date
                                     .ToString("dd/MM/yyyy");
-                            type3Brand = dbSchedule.Brand?.Name.ToString();
-                            //type3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                                type3Brand = dbSchedule.Brand?.Name.ToString();
+                                //type3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
 
                             }
-                           
+
                         }
                         else
                         {
-                             if (String.IsNullOrEmpty (type1GivenDate)) {
-                               type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                           }
-                           else if (String.IsNullOrEmpty (type2GivenDate)) {
-                               type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                           }
-                           else if (String.IsNullOrEmpty (type3GivenDate)) {
-                               type2Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                           }
-                           else {
-                               type3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                           } 
+                            if (String.IsNullOrEmpty(type1GivenDate))
+                            {
+                                type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                            }
+                            else if (String.IsNullOrEmpty(type2GivenDate))
+                            {
+                                type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                            }
+                            else if (String.IsNullOrEmpty(type3GivenDate))
+                            {
+                                type2Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                            }
+                            else
+                            {
+                                type3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
+                            }
                             //type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
                         }
                     }
-                    
-                   
+
+
                 }
 
-                document.Add (table);
+                document.Add(table);
 
                 // special vaccines table start
                 float[] lowerwidths = new float[] { 255f, 255f };
@@ -1105,7 +1137,7 @@ namespace VaccineAPI.Controllers
                 lowertable.TotalWidth = 510f;
                 lowertable.LockedWidth = true;
                 lowertable.SpacingBefore = 10;
-                lowertable.SetWidths (lowerwidths);
+                lowertable.SetWidths(lowerwidths);
                 lowertable
                     .AddCell(CreateCell("Typhoid (Every 2-3 years)",
                     "bold",
@@ -1118,7 +1150,7 @@ namespace VaccineAPI.Controllers
                     1,
                     "center",
                     "scheduleRecords"));
-                document.Add (lowertable);
+                document.Add(lowertable);
 
                 float[] lowerwidths2 =
                     new float[] { 85f, 85f, 85f, 85f, 85f, 85f };
@@ -1126,7 +1158,7 @@ namespace VaccineAPI.Controllers
                 lowertable2.HorizontalAlignment = 0;
                 lowertable2.TotalWidth = 510f;
                 lowertable2.LockedWidth = true;
-                lowertable2.SetWidths (lowerwidths2);
+                lowertable2.SetWidths(lowerwidths2);
 
                 //header
                 lowertable2
@@ -1290,7 +1322,7 @@ namespace VaccineAPI.Controllers
                     "scheduleRecords"));
 
                 // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
-                document.Add (lowertable2);
+                document.Add(lowertable2);
 
                 //special vaccines table end
                 document.Close();
@@ -1472,7 +1504,7 @@ namespace VaccineAPI.Controllers
                     userDB.Password = childDTO.Password;
                     userDB.CountryCode = childDTO.CountryCode;
                     userDB.UserType = "PARENT";
-                    _db.Users.Add (userDB);
+                    _db.Users.Add(userDB);
                     _db.SaveChanges();
 
                     childDB.UserId = userDB.Id;
@@ -1481,12 +1513,12 @@ namespace VaccineAPI.Controllers
                     // foreach(VaccineDTO vaccineDTO in childDTO.ChildVaccines) {
                     //     childDB.ChildVaccines.Add(_db.Vaccines.Where(x=>x.Id==vaccineDTO.Id).FirstOrDefault());
                     // }
-                    _db.Childs.Add (childDB);
+                    _db.Childs.Add(childDB);
                     _db.SaveChanges();
                 }
                 else
                 {
-                   childDTO.Password = user.Password;
+                    childDTO.Password = user.Password;
                     Child existingChild =
                         _db
                             .Childs
@@ -1498,7 +1530,7 @@ namespace VaccineAPI.Controllers
                             "Children with same name & number already exists. Parent should login and start change doctor process.",
                             null);
                     childDB.UserId = user.Id;
-                    _db.Childs.Add (childDB);
+                    _db.Childs.Add(childDB);
                     _db.SaveChanges();
                 }
                 childDTO.Id = childDB.Id;
@@ -1644,7 +1676,7 @@ namespace VaccineAPI.Controllers
 
                             cvd.Date =
                                 calculateDate(childDTO.DOB, ds.GapInDays);
-                            _db.Schedules.Add (cvd);
+                            _db.Schedules.Add(cvd);
                             _db.SaveChanges();
                         }
                     }
@@ -1658,9 +1690,12 @@ namespace VaccineAPI.Controllers
                         .Include(x => x.Clinic)
                         .Include(x => x.Clinic.Doctor.User)
                         .FirstOrDefault();
-                try {
-                if (c.Email != "") UserEmail.ParentEmail(c);
-                }catch(SmtpException e) {
+                try
+                {
+                    if (c.Email != "") UserEmail.ParentEmail(c);
+                }
+                catch (SmtpException e)
+                {
                     Console.WriteLine(e);
                 }
                 // generate SMS and save it to the db
@@ -1708,8 +1743,8 @@ namespace VaccineAPI.Controllers
             Chunk chunkCols = new Chunk(headingText, ColFont);
             Paragraph chunkParagraph = new Paragraph();
             chunkParagraph.Alignment = Element.ALIGN_CENTER;
-            chunkParagraph.Add (chunkCols);
-            document.Add (chunkParagraph);
+            chunkParagraph.Add(chunkCols);
+            document.Add(chunkParagraph);
             document.Add(new Paragraph(""));
             document.Add(new Chunk("\n"));
         }
@@ -1904,7 +1939,7 @@ namespace VaccineAPI.Controllers
             upperTable.LockedWidth = true;
 
             // upperTable.DefaultCell.PaddingLeft = 4;
-            upperTable.SetWidths (upperTableWidths);
+            upperTable.SetWidths(upperTableWidths);
 
             upperTable
                 .AddCell(CreateCell("Dr " + dbDoctor.DisplayName,
@@ -1958,7 +1993,7 @@ namespace VaccineAPI.Controllers
 
             if (IsConsultationFee)
             {
-                consultaionFee = (int) dbChild.Clinic.ConsultationFee;
+                consultaionFee = (int)dbChild.Clinic.ConsultationFee;
             }
 
             upperTable.AddCell(CreateCell("", "", 1, "left", "description"));
@@ -1978,7 +2013,7 @@ namespace VaccineAPI.Controllers
                 "description"));
             upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
 
-            document.Add (upperTable);
+            document.Add(upperTable);
             document.Add(new Paragraph(""));
             document.Add(new Chunk("\n"));
 
@@ -1996,7 +2031,7 @@ namespace VaccineAPI.Controllers
             table.HorizontalAlignment = 0;
             table.TotalWidth = 500f;
             table.LockedWidth = true;
-            table.SetWidths (widths);
+            table.SetWidths(widths);
 
             table
                 .AddCell(CreateCell("#",
@@ -2133,11 +2168,11 @@ namespace VaccineAPI.Controllers
             //add consultancy fee
             if (IsConsultationFee)
             {
-                amount = amount + (int) dbChild.Clinic.ConsultationFee;
+                amount = amount + (int)dbChild.Clinic.ConsultationFee;
             }
 
             _db.SaveChanges();
-            document.Add (table);
+            document.Add(table);
 
             document.Add(new Paragraph(""));
             document.Add(new Chunk("\n"));
@@ -2148,7 +2183,7 @@ namespace VaccineAPI.Controllers
             bottomTable.HorizontalAlignment = 0;
             bottomTable.TotalWidth = 400f;
             bottomTable.LockedWidth = true;
-            bottomTable.SetWidths (bottomTableWidths);
+            bottomTable.SetWidths(bottomTableWidths);
 
             bottomTable
                 .AddCell(CreateCell("Thank you for your visit",
@@ -2165,7 +2200,7 @@ namespace VaccineAPI.Controllers
 
             var imgcellLeft = CreateCell("", "", 1, "left", "description");
             imgcellLeft.PaddingTop = 5;
-            bottomTable.AddCell (imgcellLeft);
+            bottomTable.AddCell(imgcellLeft);
 
             //var imgPath = System.Web.Hosting.HostingEnvironment.MapPath("~/Content/UserImages");
             //  var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
@@ -2190,9 +2225,9 @@ namespace VaccineAPI.Controllers
             imageCell.Border = 0;
             imageCell.FixedHeight = 40f;
             imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-            bottomTable.AddCell (imageCell);
+            bottomTable.AddCell(imageCell);
 
-            document.Add (bottomTable);
+            document.Add(bottomTable);
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             stream = output;
@@ -2275,7 +2310,7 @@ namespace VaccineAPI.Controllers
             upperTable.LockedWidth = true;
 
             // upperTable.DefaultCell.PaddingLeft = 4;
-            upperTable.SetWidths (upperTableWidths);
+            upperTable.SetWidths(upperTableWidths);
 
             upperTable
                 .AddCell(CreateCell(dbDoctor.DisplayName,
@@ -2287,7 +2322,7 @@ namespace VaccineAPI.Controllers
             //image code start
             var imgPath =
                 Path
-                    .Combine(_host.ContentRootPath,dbChild.Clinic.MonogramImage);
+                    .Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);
             Image img = Image.GetInstance(imgPath);
             img.ScaleAbsolute(160f, 50f);
             PdfPCell imageCell = new PdfPCell(img, false);
@@ -2296,7 +2331,7 @@ namespace VaccineAPI.Controllers
             imageCell.Border = 0;
             imageCell.FixedHeight = 1f;
             imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-            upperTable.AddCell (imageCell);
+            upperTable.AddCell(imageCell);
 
             //image code end
             // upperTable
@@ -2306,12 +2341,12 @@ namespace VaccineAPI.Controllers
             //     "left",
             //     "description"));
 
-                 upperTable
-                .AddCell(CreateCell(dbDoctor.AdditionalInfo,
-                "unbold",
-                1,
-                "left",
-                "description"));
+            upperTable
+           .AddCell(CreateCell(dbDoctor.AdditionalInfo,
+           "unbold",
+           1,
+           "left",
+           "description"));
 
             upperTable
                 .AddCell(CreateCell(dbChild.Clinic.Name,
@@ -2364,12 +2399,12 @@ namespace VaccineAPI.Controllers
             // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
             // upperTable.AddCell (CreateCell ("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description"));
             // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
-            document.Add (upperTable);
+            document.Add(upperTable);
             Paragraph title = new Paragraph("INVOICE");
             title.Font =
                 FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
             title.Alignment = Element.ALIGN_CENTER;
-            document.Add (title);
+            document.Add(title);
 
             //2nd Table
             float[] widths = new float[] { 170f, 300f };
@@ -2377,7 +2412,7 @@ namespace VaccineAPI.Controllers
             childtable.HorizontalAlignment = 0;
             childtable.TotalWidth = 470f;
             childtable.LockedWidth = true;
-            childtable.SetWidths (widths);
+            childtable.SetWidths(widths);
             childtable.SpacingBefore = 10;
             childtable.SpacingAfter = 10;
 
@@ -2434,13 +2469,13 @@ namespace VaccineAPI.Controllers
                 "invoiceRecords"));
 
             _db.SaveChanges();
-            document.Add (childtable);
+            document.Add(childtable);
 
             Paragraph vaccinetitle = new Paragraph("VACCINATION DETAILS");
             vaccinetitle.Font =
                 FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
             vaccinetitle.Alignment = Element.ALIGN_CENTER;
-            document.Add (vaccinetitle);
+            document.Add(vaccinetitle);
 
             // table 3 for vaccination details
             float[] vaccinationwidths =
@@ -2449,7 +2484,7 @@ namespace VaccineAPI.Controllers
             vaccinetable.HorizontalAlignment = 0;
             vaccinetable.TotalWidth = 470f;
             vaccinetable.LockedWidth = true;
-            vaccinetable.SetWidths (vaccinationwidths);
+            vaccinetable.SetWidths(vaccinationwidths);
             vaccinetable.SpacingBefore = 10;
             vaccinetable.SpacingAfter = 50;
 
@@ -2674,7 +2709,7 @@ namespace VaccineAPI.Controllers
                     "right",
                     "invoiceRecords"));
                 vaccinetable
-                    .AddCell(CreateCell(("PKR "+ (amount + consultaionFee) + "/-").ToString(),
+                    .AddCell(CreateCell(("PKR " + (amount + consultaionFee) + "/-").ToString(),
                     "backgroudLightGray",
                     1,
                     "right",
@@ -2700,7 +2735,7 @@ namespace VaccineAPI.Controllers
             }
 
             // loop end
-            document.Add (vaccinetable);
+            document.Add(vaccinetable);
 
             //    Paragraph signatureheading = new Paragraph("AUTHORIZED SIGNATURES");
             //     signatureheading.Font = FontFactory.GetFont(FontFactory.HELVETICA, 12);
@@ -2712,7 +2747,7 @@ namespace VaccineAPI.Controllers
             bottomTable.HorizontalAlignment = 0;
             bottomTable.TotalWidth = 470f;
             bottomTable.LockedWidth = true;
-            bottomTable.SetWidths (bottomTableWidths);
+            bottomTable.SetWidths(bottomTableWidths);
 
             bottomTable
                 .AddCell(CreateCell(" ", "bold", 2, "left", "description"));
@@ -3042,7 +3077,7 @@ namespace VaccineAPI.Controllers
             _db.Schedules.RemoveRange(dbChild.Schedules);
             _db.FollowUps.RemoveRange(dbChild.FollowUps);
             if (dbChild.User.Childs.Count == 1) _db.Users.Remove(dbChild.User);
-            _db.Childs.Remove (dbChild);
+            _db.Childs.Remove(dbChild);
             _db.SaveChanges();
             return new Response<string>(true,
                 "Child is deleted successfully",
@@ -3144,7 +3179,7 @@ namespace VaccineAPI.Controllers
             cell = new PdfPCell(new Phrase(beginning));
 
             cell.Border = 0;
-            tabFot.AddCell (cell);
+            tabFot.AddCell(cell);
             tabFot.WriteSelectedRows(0, -1, 45, 90, writer.DirectContent); //tabFot.WriteSelectedRows (0, -1, 10, 50, writer.DirectContent);
         }
 

@@ -23,6 +23,7 @@ namespace VaccineAPI.Models
         public string Gender  { get; set; }
         public string Type  { get; set; }
         public string City  { get; set; }
+        public string CNIC  { get; set; }
         public int PreferredDayOfReminder  { get; set; }
         public string PreferredDayOfWeek  { get; set; }
         public string PreferredSchedule  { get; set; }

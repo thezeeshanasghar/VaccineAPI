@@ -13,6 +13,7 @@ namespace VaccineAPI.ModelDTO
         public string MobileNumber { get; set; }
         public string Password { get; set; }
         public string StreetAddress { get; set; }
+        public string Guardian { get; set; }
         public string FatherName { get; set; }
         public string Email { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]

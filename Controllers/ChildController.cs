@@ -515,10 +515,10 @@ namespace VaccineAPI.Controllers
                     "left",
                     "description"));
 
-                if (dbChild.Gender == "Girl")
+                if (dbChild.Guardian == "Father")
                 {
                     upperTable
-                        .AddCell(CreateCell("D/O " + dbChild.FatherName,
+                        .AddCell(CreateCell(dbChild.Gender == "Girl" ? "D/O " : "S/O " + dbChild.FatherName,
                         "",
                         1,
                         "right",
@@ -527,7 +527,7 @@ namespace VaccineAPI.Controllers
                 else
                 {
                     upperTable
-                        .AddCell(CreateCell("S/O " + dbChild.FatherName,
+                        .AddCell(CreateCell("W/O " + dbChild.FatherName,
                         "",
                         1,
                         "right",
@@ -3045,6 +3045,7 @@ namespace VaccineAPI.Controllers
                         null);
                 dbChild.Name = childDTO.Name;
                 dbChild.Email = childDTO.Email;
+                dbChild.Guardian = childDTO.Guardian;
                 dbChild.FatherName = childDTO.FatherName;
                 dbChild.PreferredDayOfWeek = childDTO.PreferredDayOfWeek;
                 dbChild.Gender = childDTO.Gender;

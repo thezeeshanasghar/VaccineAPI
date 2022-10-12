@@ -16,6 +16,7 @@ namespace VaccineAPI.Models
         }
         public long Id { get; set; }
         public string Name { get; set; }
+        public string Guardian { get; set; }
         public string FatherName { get; set; }
         public string Email { get; set; }
         public System.DateTime DOB { get; set; }

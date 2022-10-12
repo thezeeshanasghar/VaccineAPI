@@ -66,7 +66,7 @@ namespace VaccineAPI.Controllers
         public Response<ScheduleDTO> Insert([FromBody] ScheduleDTO scheduleDTO)
         {
             Schedule scheduleDb = _mapper.Map<Schedule>(scheduleDTO);
-            _db.Schedules.Add (scheduleDb);
+            _db.Schedules.Add(scheduleDb);
             _db.SaveChanges();
             return new Response<ScheduleDTO>(true, null, scheduleDTO);
         }
@@ -131,7 +131,7 @@ namespace VaccineAPI.Controllers
                                         x.DoseId == dose.Id)
                                     .FirstOrDefault();
                             if (childschedule != null)
-                            childschedule.IsSkip = true;
+                                childschedule.IsSkip = true;
                         }
                     }
                 }
@@ -212,37 +212,37 @@ namespace VaccineAPI.Controllers
                 }
 
                 // for MENACWY Rules on brand Selection start
-                 if (
-                    dbSchedule.Dose.Name.StartsWith("MenACWY") &&
-                    dbSchedule.Dose.DoseOrder == 1
-                )
+                if (
+                   dbSchedule.Dose.Name.StartsWith("MenACWY") &&
+                   dbSchedule.Dose.DoseOrder == 1
+               )
                 {
-                     var doseBrand = _db.Brands.Where(x=>x.Id == scheduleDTO.BrandId).FirstOrDefault();
-                     var daysDifference =
-                        Convert
-                            .ToInt32((
-                            scheduleDTO.GivenDate.Date -
-                            dbSchedule.Child.DOB.Date
-                            ).TotalDays);
+                    var doseBrand = _db.Brands.Where(x => x.Id == scheduleDTO.BrandId).FirstOrDefault();
+                    var daysDifference =
+                       Convert
+                           .ToInt32((
+                           scheduleDTO.GivenDate.Date -
+                           dbSchedule.Child.DOB.Date
+                           ).TotalDays);
 
-                     if(doseBrand != null)
-                    if (daysDifference > 729 && doseBrand.Name.Equals("MENACTRA"))                    
-                    {
-                        var nextDose = _db.Doses.Where(x=>x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2).FirstOrDefault();
-                        var nextSchedule = _db.Schedules.Where(x =>x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
-                            if(nextSchedule != null)
+                    if (doseBrand != null)
+                        if (daysDifference > 729 && doseBrand.Name.Equals("MENACTRA"))
+                        {
+                            var nextDose = _db.Doses.Where(x => x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2).FirstOrDefault();
+                            var nextSchedule = _db.Schedules.Where(x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
+                            if (nextSchedule != null)
+                                nextSchedule.IsSkip = true;
+                        }
+                        else if (daysDifference > 364 && doseBrand.Name.Equals("NIMENRIX"))
+                        {
+                            var nextDose = _db.Doses.Where(x => x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2).FirstOrDefault();
+                            var nextSchedule = _db.Schedules.Where(x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
                             nextSchedule.IsSkip = true;
-                    }
-                    else if (daysDifference > 364 && doseBrand.Name.Equals("NIMENRIX"))
-                    {
-                         var nextDose = _db.Doses.Where(x=>x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2).FirstOrDefault();
-                        var nextSchedule = _db.Schedules.Where(x =>x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
-                            nextSchedule.IsSkip = true;
-                    }
+                        }
                 }
 
-          // for MENACWY Rules on brand Selection end
-          
+                // for MENACWY Rules on brand Selection end
+
                 // // for flu and typhoid
                 //   if (dbSchedule.Dose.Name.StartsWith ("Flu") || dbSchedule.Dose.Name.StartsWith ("Typhoid")) {
                 //      var nextDose = _db.Doses.Where (x => x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == (dbSchedule.Dose.DoseOrder + 1)).ToList ();
@@ -287,7 +287,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                 dbSchedule.IsDisease = scheduleDTO.IsDisease;
-                ChangeDueDatesOfInjectedSchedule (scheduleDTO, dbSchedule);
+                ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
                 ScheduleDTO newData = _mapper.Map<ScheduleDTO>(dbSchedule);
                 _db.SaveChanges();
                 return new Response<ScheduleDTO>(true,
@@ -323,7 +323,7 @@ namespace VaccineAPI.Controllers
             var AllDoses = dbSchedule.Dose.Vaccine.Doses;
             AllDoses =
                 AllDoses
-                    .Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).OrderBy(x=>x.DoseOrder)
+                    .Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).OrderBy(x => x.DoseOrder)
                     .ToList();
             var previousdosedate = scheduleDTO.GivenDate.Date;
             foreach (var d in AllDoses)
@@ -348,8 +348,8 @@ namespace VaccineAPI.Controllers
                         // TargetSchedule.Date =
                         //     calculateDate(TargetSchedule.Date, Convert.ToInt32(d.MinGap)); //TargetSchedule.Date.AddDays(daysDifference); 
 
-                             TargetSchedule.Date =
-                            calculateDate(previousdosedate, Convert.ToInt32(minimumGap)); //TargetSchedule.Date.AddDays(daysDifference); 
+                        TargetSchedule.Date =
+                       calculateDate(previousdosedate, Convert.ToInt32(minimumGap)); //TargetSchedule.Date.AddDays(daysDifference); 
                         previousdosedate = TargetSchedule.Date.Date;
                     }
                 }
@@ -376,7 +376,7 @@ namespace VaccineAPI.Controllers
                 Schedule SchduleDB = _mapper.Map<Schedule>(SchedueDTO);
 
                 //  SchduleDB.Date = calculateDate(dbChild.DOB , dbDose.MinAge);
-                _db.Schedules.Add (SchduleDB);
+                _db.Schedules.Add(SchduleDB);
                 _db.SaveChanges();
                 SchedueDTO.Id = SchduleDB.Id;
             }
@@ -407,7 +407,7 @@ namespace VaccineAPI.Controllers
                 List<ScheduleDTO> scheduleDTOs = new List<ScheduleDTO>();
                 foreach (var schedule in dbSchedule)
                 {
-                    
+
                     ScheduleDTO scheduleDTO = new ScheduleDTO();
                     var dbBrands = schedule.Dose.Vaccine.Brands.ToList();
                     List<BrandDTO> brandDTOs =
@@ -428,7 +428,7 @@ namespace VaccineAPI.Controllers
                     scheduleDTO.Date = schedule.Date;
                     scheduleDTO.InvoiceDate = schedule.GivenDate;
                     scheduleDTO.IsDone = schedule.IsDone;
-                    scheduleDTOs.Add (scheduleDTO);
+                    scheduleDTOs.Add(scheduleDTO);
                 }
 
                 return new Response<List<ScheduleDTO>>(true,
@@ -466,7 +466,7 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPut("BulkReschedule")]
-public Response<ScheduleDTO> BulkReschedule(
+        public Response<ScheduleDTO> BulkReschedule(
             ScheduleDTO scheduleDTO,
             [FromQuery] bool ignoreMaxAgeRule = false,
             [FromQuery] bool ignoreMinAgeFromDOB = false,
@@ -578,7 +578,7 @@ public Response<ScheduleDTO> BulkReschedule(
                             }
                         }
                     }
-                    ChangeDueDatesOfInjectedSchedule (scheduleDTO, schedule);
+                    ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
                 }
                 _db.SaveChanges();
                 return new Response<ScheduleDTO>(true,
@@ -670,71 +670,73 @@ public Response<ScheduleDTO> BulkReschedule(
             if (AllDoses.Count == 1)
             {
                 // for flu and typhoid
-                if (dbSchedule.Dose.Vaccine.isInfinite) {
+                if (dbSchedule.Dose.Vaccine.isInfinite)
+                {
                     var TargetSchedule1 =
                     db
                         .Schedules
                         .Where(x => x.Id == dbSchedule.Id)
                         .FirstOrDefault();
-                      TargetSchedule1.Date = TargetSchedule1.Date.AddDays(daysDifference);
-                    
-                       _db.SaveChangesAsync();
-                      message = "ok";
-                      return message;   
-                }
-                else {
-                // check for reschedule backward from DateOfBirth
-                // if (scheduleDTO.Date < dbSchedule.Child.DOB)
-                //     throw new Exception("Cannot reschedule to your selected date: " +
-                //                 Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is less than date of birth of child.");
-                if (scheduleDTO.Date < dbSchedule.Child.DOB)
-                {
-                    message =
-                        "Cannot reschedule to your selected date: " +
-                        Convert
-                            .ToDateTime(scheduleDTO.Date.Date)
-                            .ToString("dd-MM-yyyy") +
-                        " because it is less than date of birth of child.";
+                    TargetSchedule1.Date = TargetSchedule1.Date.AddDays(daysDifference);
+
+                    _db.SaveChangesAsync();
+                    message = "ok";
                     return message;
                 }
-                Dose d = AllDoses.ElementAt<Dose>(0);
-                var TargetSchedule =
-                    db
-                        .Schedules
-                        .Where(x =>
-                            x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
-                        .FirstOrDefault();
-                if (daysDifference > d.MaxAge && !ignoreMaxAgeRule)
-                    if (mode.Equals("bulk"))
+                else
+                {
+                    // check for reschedule backward from DateOfBirth
+                    // if (scheduleDTO.Date < dbSchedule.Child.DOB)
+                    //     throw new Exception("Cannot reschedule to your selected date: " +
+                    //                 Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy") + " because it is less than date of birth of child.");
+                    if (scheduleDTO.Date < dbSchedule.Child.DOB)
                     {
                         message =
                             "Cannot reschedule to your selected date: " +
                             Convert
                                 .ToDateTime(scheduleDTO.Date.Date)
                                 .ToString("dd-MM-yyyy") +
-                            " because it is greater than the Max Age of dose. ";
-
-                        //    +
-                        //    "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>");
+                            " because it is less than date of birth of child.";
                         return message;
                     }
-                    else
-                    {
-                        message =
-                            "Cannot reschedule to your selected date: " +
-                            Convert
-                                .ToDateTime(scheduleDTO.Date.Date)
-                                .ToString("dd-MM-yyyy") +
-                            " because it is greater than the Max Age of dose. ";
+                    Dose d = AllDoses.ElementAt<Dose>(0);
+                    var TargetSchedule =
+                        db
+                            .Schedules
+                            .Where(x =>
+                                x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
+                            .FirstOrDefault();
+                    if (daysDifference > d.MaxAge && !ignoreMaxAgeRule)
+                        if (mode.Equals("bulk"))
+                        {
+                            message =
+                                "Cannot reschedule to your selected date: " +
+                                Convert
+                                    .ToDateTime(scheduleDTO.Date.Date)
+                                    .ToString("dd-MM-yyyy") +
+                                " because it is greater than the Max Age of dose. ";
 
-                        //     +
-                        //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>");
-                        return message;
-                    }
+                            //    +
+                            //    "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>");
+                            return message;
+                        }
+                        else
+                        {
+                            message =
+                                "Cannot reschedule to your selected date: " +
+                                Convert
+                                    .ToDateTime(scheduleDTO.Date.Date)
+                                    .ToString("dd-MM-yyyy") +
+                                " because it is greater than the Max Age of dose. ";
 
-                TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
-                  //  calculateDate(TargetSchedule.Date, daysDifference); // 
-            }
+                            //     +
+                            //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>");
+                            return message;
+                        }
+
+                    TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
+                    //  calculateDate(TargetSchedule.Date, daysDifference); // 
+                }
             }
             else
             {
@@ -775,8 +777,8 @@ public Response<ScheduleDTO> BulkReschedule(
                                         ).TotalDays);
                                 if (doseDaysDifference <= MinGap)
                                     TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
-                                       // calculateDate(TargetSchedule.Date,
-                                       // daysDifference); // 
+                                // calculateDate(TargetSchedule.Date,
+                                // daysDifference); // 
                             }
                             else
                             {
@@ -816,8 +818,8 @@ public Response<ScheduleDTO> BulkReschedule(
                                         return message;
                                     }
                                 TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
-                                    //calculateDate(TargetSchedule.Date,
-                                   // daysDifference); //
+                                //calculateDate(TargetSchedule.Date,
+                                // daysDifference); //
                             }
                             previousDate = TargetSchedule.Date;
                         }
@@ -892,9 +894,9 @@ public Response<ScheduleDTO> BulkReschedule(
                                 //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,true,false)'> Ignore Rule</ion-button>";
                             }
                         else
-                            FirstDoseSchedule.Date =  FirstDoseSchedule.Date.AddDays(daysDifference);
-                                // calculateDate(FirstDoseSchedule.Date,
-                                // daysDifference);
+                            FirstDoseSchedule.Date = FirstDoseSchedule.Date.AddDays(daysDifference);
+                        // calculateDate(FirstDoseSchedule.Date,
+                        // daysDifference);
                     }
                     else
                     // if we rescdule other than first dose of any vaccine
@@ -976,8 +978,8 @@ public Response<ScheduleDTO> BulkReschedule(
                             }
                         if (TargetSchedule != null)
                             TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
-                                // calculateDate(TargetSchedule.Date,
-                                // daysDifference);
+                        // calculateDate(TargetSchedule.Date,
+                        // daysDifference);
                     }
                 }
             }
@@ -1047,7 +1049,7 @@ public Response<ScheduleDTO> BulkReschedule(
 
             foreach (Schedule obj in listDTO)
             {
-                _db.Schedules.Remove (obj);
+                _db.Schedules.Remove(obj);
             }
             await _db.SaveChangesAsync();
 

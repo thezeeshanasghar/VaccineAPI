@@ -310,12 +310,7 @@ namespace VaccineAPI.Migrations
                         principalTable: "Clinics",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Childs_Doctors_DoctorId",
-                        column: x => x.DoctorId,
-                        principalTable: "Doctors",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                    
                     table.ForeignKey(
                         name: "FK_Childs_Users_UserId",
                         column: x => x.UserId,

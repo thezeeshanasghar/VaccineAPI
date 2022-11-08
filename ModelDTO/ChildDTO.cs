@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
-using System ;
+using System;
 
 namespace VaccineAPI.ModelDTO
 {
@@ -16,39 +16,38 @@ namespace VaccineAPI.ModelDTO
         public string Guardian { get; set; }
         public string FatherName { get; set; }
         public string Email { get; set; }
+
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime DOB { get; set; }
+
         public string CountryCode { get; set; }
-        public string Gender  { get; set; }
+        public string Gender { get; set; }
         public string Type { get; set; }
         public bool IsSkip { get; set; }
-        public string City  { get; set; }
-        public string CNIC  { get; set; }
-        public int PreferredDayOfReminder  { get; set; }
-        public string PreferredDayOfWeek  { get; set; }
-        public string PreferredSchedule  { get; set; }        
-        public bool IsEPIDone  { get; set; }
-        public bool IsVerified  { get; set; }
-        public bool IsInactive  { get; set; }
-
-       // public bool IsDivertAlert  { get; set; }
-        public long ClinicId  { get; set; }
-         [JsonIgnore]
+        public string City { get; set; }
+        public string CNIC { get; set; }
+        public int PreferredDayOfReminder { get; set; }
+        public string PreferredDayOfWeek { get; set; }
+        public string PreferredSchedule { get; set; }
+        public bool IsEPIDone { get; set; }
+        public bool IsVerified { get; set; }
+        public bool IsInactive { get; set; }
+        public long ClinicId { get; set; }
+        
+        [JsonIgnore]
         public ClinicDTO Clinic { get; set; }
-       
-        public long UserId  { get; set; }
-       //  [JsonIgnore]
+
+        public long UserId { get; set; }
         public UserDTO User { get; set; }
         public bool IsBrand { get; set; }
         public bool IsConsultationFee { get; set; }
 
         //To select Vaccine of the child on add-new-child page
         public List<VaccineDTO> ChildVaccines { get; set; }
+
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime InvoiceDate { get; set; }
 
-         public long DoctorId { get; set; }
-         
-    }
+   }
 
 }

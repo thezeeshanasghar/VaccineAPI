@@ -92,26 +92,6 @@ namespace VaccineAPI.Controllers
                         doctorSchduleDB.IsActive = DoctorScheduedTO.IsActive;
                        }
                       _db.SaveChanges();
-
-                    // var docschedules = _db.DoctorSchedules.Include(x=>x.Dose).Where(c => c.DoctorId == dsDTOS[0].DoctorId).OrderBy(x=>x.Dose.DoseOrder).ToList();                   
-                    // foreach (var DoctorScheduedTO in docschedules)
-                    // {
-                    //     var doctorSchduleDB2 = _db.DoctorSchedules.Where(c => c.Id == DoctorScheduedTO.Id).Include(x=>x.Dose).ThenInclude(y=>y.Vaccine).FirstOrDefault();
-                    //     var Previousscheduledose = _db.Doses.Where(c => (c.VaccineId == doctorSchduleDB2.Dose.VaccineId) && (c.DoseOrder == (doctorSchduleDB2.Dose.DoseOrder - 1))).FirstOrDefault();
-                    //     if(Previousscheduledose != null){
-                    //     var previousdoctorSchduleDB = _db.DoctorSchedules.Where(c => c.DoseId == Previousscheduledose.Id).FirstOrDefault();
-                    //     if(previousdoctorSchduleDB != null){
-                    //     var numofdays =  doctorSchduleDB2.GapInDays - previousdoctorSchduleDB.GapInDays;
-                    //     Console.WriteLine(numofdays);
-                    //     var days = Convert.ToInt32(previousdoctorSchduleDB.GapInDays + doctorSchduleDB2.Dose.MinGap);
-                    //     Console.WriteLine(days);
-                    //     if(numofdays < doctorSchduleDB2.Dose.MinGap)
-                    //     doctorSchduleDB2.GapInDays = days;
-                    //     }
-                    //     }
-                    // }
-
-                    // _db.SaveChanges();
                     return new Response<List<DoctorSchedule>>(true, null, dsDTOS);
                 }
             

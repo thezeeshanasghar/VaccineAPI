@@ -633,10 +633,6 @@ namespace VaccineAPI.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("VaccineAPI.Models.Doctor", null)
-                        .WithMany("Childs")
-                        .HasForeignKey("DoctorId");
-
                     b.HasOne("VaccineAPI.Models.User", "User")
                         .WithMany("Childs")
                         .HasForeignKey("UserId")

@@ -285,12 +285,14 @@ namespace VaccineAPI.Migrations
                     Id = table.Column<long>(nullable: false)
                         .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Name = table.Column<string>(nullable: true),
+                    Guardian = table.Column<string>(nullable: true),
                     FatherName = table.Column<string>(nullable: true),
                     Email = table.Column<string>(nullable: true),
                     DOB = table.Column<DateTime>(nullable: false),
                     Gender = table.Column<string>(nullable: true),
                     Type = table.Column<string>(nullable: true),
                     City = table.Column<string>(nullable: true),
+                    CNIC = table.Column<string>(nullable: true),
                     PreferredDayOfReminder = table.Column<int>(nullable: false),
                     PreferredDayOfWeek = table.Column<string>(nullable: true),
                     PreferredSchedule = table.Column<string>(nullable: true),
@@ -310,7 +312,12 @@ namespace VaccineAPI.Migrations
                         principalTable: "Clinics",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    
+                    table.ForeignKey(
+                        name: "FK_Childs_Doctors_DoctorId",
+                        column: x => x.DoctorId,
+                        principalTable: "Doctors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Childs_Users_UserId",
                         column: x => x.UserId,

@@ -9,7 +9,7 @@ using VaccineAPI.Models;
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    [Migration("20221005104044_InitialCreate")]
+    [Migration("20221213061908_InitialCreate")]
     partial class InitialCreate
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -92,6 +92,9 @@ namespace VaccineAPI.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("CNIC")
+                        .HasColumnType("text");
+
                     b.Property<string>("City")
                         .HasColumnType("text");
 
@@ -111,6 +114,9 @@ namespace VaccineAPI.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Gender")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Guardian")
                         .HasColumnType("text");
 
                     b.Property<short?>("IsEPIDone")
@@ -581,7 +587,7 @@ namespace VaccineAPI.Migrations
                         .HasColumnType("text");
 
                     b.Property<bool>("isInfinite")
-                        .HasColumnType("bit");
+                        .HasColumnType("tinyint(1)");
 
                     b.HasKey("Id");
 

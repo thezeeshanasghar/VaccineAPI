@@ -90,6 +90,9 @@ namespace VaccineAPI.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("CNIC")
+                        .HasColumnType("text");
+
                     b.Property<string>("City")
                         .HasColumnType("text");
 
@@ -109,6 +112,9 @@ namespace VaccineAPI.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Gender")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Guardian")
                         .HasColumnType("text");
 
                     b.Property<short?>("IsEPIDone")
@@ -579,7 +585,7 @@ namespace VaccineAPI.Migrations
                         .HasColumnType("text");
 
                     b.Property<bool>("isInfinite")
-                        .HasColumnType("bit");
+                        .HasColumnType("tinyint(1)");
 
                     b.HasKey("Id");
 
@@ -632,6 +638,10 @@ namespace VaccineAPI.Migrations
                         .HasForeignKey("ClinicId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("VaccineAPI.Models.Doctor", null)
+                        .WithMany("Childs")
+                        .HasForeignKey("DoctorId");
 
                     b.HasOne("VaccineAPI.Models.User", "User")
                         .WithMany("Childs")

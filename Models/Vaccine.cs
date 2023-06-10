@@ -6,7 +6,6 @@ namespace VaccineAPI.Models
 
     public class Vaccine
     {
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
         public Vaccine()
         {
             this.Brands = new HashSet<Brand>();

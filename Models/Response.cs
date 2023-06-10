@@ -1,15 +1,20 @@
-
-public class Response<T>
+namespace VaccineAPI.Models
 {
 
-    public T ResponseData { get; set; }
-    public bool IsSuccess {get;set;}
-    public string Message{get;set;}
+    public class Response<T>
+    {
 
-    public Response(bool status, string message, T data) {
-        IsSuccess = status;
-        Message = message;
-        ResponseData =  data;
+        public T ResponseData { get; set; }
+        public bool IsSuccess { get; set; }
+        public string Message { get; set; }
+
+        public Response(bool status, string message, T data)
+        {
+            IsSuccess = status;
+            Message = message;
+            ResponseData = data;
+        }
+
     }
 
 }

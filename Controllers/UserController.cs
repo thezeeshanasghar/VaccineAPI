@@ -24,40 +24,44 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-         public async Task<Response<List<UserDTO>>> GetAll()
+        public async Task<Response<List<UserDTO>>> GetAll()
         {
-            var list = await _db.Users.OrderBy(x=>x.Id).ToListAsync();
+            var list = await _db.Users.OrderBy(x => x.Id).ToListAsync();
             List<UserDTO> listDTO = _mapper.Map<List<UserDTO>>(list);
-           
+
             return new Response<List<UserDTO>>(true, null, listDTO);
         }
-        
+
         [HttpGet("{id}")]
         public async Task<Response<User>> GetSingle(long id)
         {
             var single = await _db.Users.FindAsync(id);
             if (single == null)
                 return new Response<User>(false, "Not Found", null);
-           
-                return new Response<User>(true, null, single);   
+
+            return new Response<User>(true, null, single);
         }
 
-
-         [HttpGet("{mobileNumber}/{dob}")]
-        public async Task<Response<User>> GetPassword(string mobileNumber , DateTime dob)
+        [HttpGet("{mobileNumber}/{dob}")]
+        public async Task<Response<User>> GetPassword(string mobileNumber, DateTime dob)
         {
-            var user = await _db.Users.Where(x=> x.MobileNumber == mobileNumber).FirstOrDefaultAsync();
+            var user = await _db.Users
+                .Where(x => x.MobileNumber == mobileNumber)
+                .FirstOrDefaultAsync();
             if (user == null)
                 return new Response<User>(false, "Not Found", null);
-            else {
+            else
+            {
                 Console.WriteLine(dob);
-                var c = await _db.Childs.Where(x=> x.UserId == user.Id).FirstOrDefaultAsync();
+                var c = await _db.Childs.Where(x => x.UserId == user.Id).FirstOrDefaultAsync();
                 Console.WriteLine(c.DOB.Date);
-                var child = await _db.Childs.Where(x=> (x.UserId == user.Id && x.DOB.Date == dob)).FirstOrDefaultAsync();
+                var child = await _db.Childs
+                    .Where(x => (x.UserId == user.Id && x.DOB.Date == dob))
+                    .FirstOrDefaultAsync();
                 if (child == null)
-                return new Response<User>(false, "Not Found", null);
-                else 
-                return new Response<User>(true, null, user);
+                    return new Response<User>(false, "Not Found", null);
+                else
+                    return new Response<User>(true, null, user);
             }
         }
 
@@ -71,7 +75,7 @@ namespace VaccineAPI.Controllers
         //              //   return Request.CreateResponse((HttpStatusCode)200);
         //             else
         //             {
-                        
+
         //                 int HTTPResponse = 400;
         //               //  var response = Request.CreateResponse((HttpStatusCode)HTTPResponse);
         //                 response.ReasonPhrase = "Mobile Number already in use";
@@ -85,121 +89,125 @@ namespace VaccineAPI.Controllers
         [HttpPost("login")]
         public Response<UserDTO> login(UserDTO userDTO)
         {
-        
-                {
-                    var dbUser = _db.Users.FirstOrDefault(x => 
-                                                                x.MobileNumber == userDTO.MobileNumber && 
-                                                                x.Password == userDTO.Password && 
-                                                                x.CountryCode==userDTO.CountryCode &&
-                                                                x.UserType == userDTO.UserType);
-                    if (dbUser == null)
-                        return new Response<UserDTO>(false, "Invalid Mobile Number and Password.", null);
+            var dbUser = _db.Users.FirstOrDefault(
+                x =>
+                    x.MobileNumber == userDTO.MobileNumber
+                    && x.Password == userDTO.Password
+                    && x.CountryCode == userDTO.CountryCode
+                    && x.UserType == userDTO.UserType
+            );
+            if (dbUser == null)
+                return new Response<UserDTO>(false, "Invalid Mobile Number and Password.", null);
 
-                    userDTO.Id = dbUser.Id;
+            userDTO.Id = dbUser.Id;
 
-                    if (userDTO.UserType.Equals("SUPERADMIN"))
-                        return new Response<UserDTO>(true, null, userDTO);
-                    else if (userDTO.UserType.Equals("DOCTOR"))
-                    {
+            if (userDTO.UserType.Equals("SUPERADMIN"))
+                return new Response<UserDTO>(true, null, userDTO);
+            else if (userDTO.UserType.Equals("DOCTOR"))
+            {
+                var doctorDb = _db.Doctors.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
+                if (doctorDb == null)
+                    return new Response<UserDTO>(false, "Doctor not found.", null);
+                if (doctorDb.IsApproved != true)
+                    return new Response<UserDTO>(
+                        false,
+                        "You are not approved. Contact admin for approval at 923335196658",
+                        null
+                    );
 
-                        var doctorDb = _db.Doctors.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
-                        if (doctorDb == null)
-                            return new Response<UserDTO>(false, "Doctor not found.", null);
-                        if (doctorDb.IsApproved != true)
-                            return new Response<UserDTO>(false, "You are not approved. Contact admin for approval at 923335196658", null);
+                userDTO.DoctorId = doctorDb.Id;
+                userDTO.AllowInventory = doctorDb.AllowInventory;
+                userDTO.AllowInvoice = doctorDb.AllowInvoice;
+                userDTO.ProfileImage = doctorDb.ProfileImage;
+                userDTO.DoctorType = doctorDb.DoctorType;
+            }
+            else if (userDTO.UserType.Equals("PARENT"))
+            {
+                var childDB = _db.Childs.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
+                if (childDB == null)
+                    return new Response<UserDTO>(false, "Child not found.", null);
+                else
+                    userDTO.ChildId = childDB.Id;
+            }
 
-                        userDTO.DoctorId = doctorDb.Id;
-                        userDTO.AllowInventory = doctorDb.AllowInventory;
-                        userDTO.AllowInvoice = doctorDb.AllowInvoice;
-                        userDTO.ProfileImage = doctorDb.ProfileImage;
-                        userDTO.DoctorType = doctorDb.DoctorType;
-
-                    }
-                    else if (userDTO.UserType.Equals("PARENT"))
-                    {
-                        var childDB = _db.Childs.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
-                        if (childDB == null)
-                            return new Response<UserDTO>(false, "Child not found.", null);
-                        else
-                            userDTO.ChildId = childDB.Id;
-                    }
-
-                    return new Response<UserDTO>(true, null, userDTO);
-                }
+            return new Response<UserDTO>(true, null, userDTO);
         }
 
-
-         [HttpPost("forgot-password")]
+        [HttpPost("forgot-password")]
         public Response<UserDTO> ForgotPassword(UserDTO userDTO)
         {
+            {
+                var dbUser = _db.Users
+                    .Where(x => x.MobileNumber == userDTO.MobileNumber)
+                    .Where(x => x.CountryCode == userDTO.CountryCode)
+                    .Where(ut => ut.UserType == userDTO.UserType)
+                    .FirstOrDefault();
+
+                if (dbUser == null)
+                    return new Response<UserDTO>(false, "Invalid Mobile Number", null);
+
+                if (dbUser.UserType.Equals("DOCTOR"))
                 {
-                    var dbUser = _db.Users.Where(x => x.MobileNumber == userDTO.MobileNumber)
-                        .Where(x => x.CountryCode == userDTO.CountryCode)
-                        .Where(ut =>ut.UserType==userDTO.UserType).FirstOrDefault();
-
-                    if (dbUser == null)
+                    var doctorDb = _db.Doctors.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
+                    if (doctorDb == null)
+                    {
                         return new Response<UserDTO>(false, "Invalid Mobile Number", null);
-
-                    if (dbUser.UserType.Equals("DOCTOR"))
-                    {
-                        var doctorDb = _db.Doctors.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
-                        if (doctorDb == null)
-                        {
-                            return new Response<UserDTO>(false, "Invalid Mobile Number", null);
-
-                        }
-                        else
-                        {
-                            UserEmail.DoctorForgotPassword(doctorDb);
-                            UserSMS u = new UserSMS(_db);
-                            u.DoctorForgotPasswordSMS(doctorDb);
-                            return new Response<UserDTO>(true, "your password has been sent to your mobile number and email address", null);
-
-                        }
-                    }
-                    else if (dbUser.UserType.Equals("PARENT"))
-                    {
-                        var childDB = _db.Childs.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
-                        if (childDB == null)
-                        {
-                            return new Response<UserDTO>(false, "Invalid Mobile Number", null);
-                        }
-                        else
-                        {
-                            UserEmail.ParentForgotPassword(childDB);
-                            UserSMS u = new UserSMS(_db);
-                            u.ParentForgotPasswordSMS(childDB);
-                            return new Response<UserDTO>(true, "your password has been sent to your mobile number and email address", null);
-                        }
                     }
                     else
                     {
-                        return new Response<UserDTO>(false, "Please contact with admin", null);
+                        UserEmail.DoctorForgotPassword(doctorDb);
+                        UserSMS u = new UserSMS(_db);
+                        u.DoctorForgotPasswordSMS(doctorDb);
+                        return new Response<UserDTO>(
+                            true,
+                            "your password has been sent to your mobile number and email address",
+                            null
+                        );
                     }
-
                 }
+                else if (dbUser.UserType.Equals("PARENT"))
+                {
+                    var childDB = _db.Childs.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
+                    if (childDB == null)
+                    {
+                        return new Response<UserDTO>(false, "Invalid Mobile Number", null);
+                    }
+                    else
+                    {
+                        UserEmail.ParentForgotPassword(childDB);
+                        UserSMS u = new UserSMS(_db);
+                        u.ParentForgotPasswordSMS(childDB);
+                        return new Response<UserDTO>(
+                            true,
+                            "your password has been sent to your mobile number and email address",
+                            null
+                        );
+                    }
+                }
+                else
+                {
+                    return new Response<UserDTO>(false, "Please contact with admin", null);
+                }
+            }
         }
-        
+
         [HttpPost("change-password")]
         public Response<UserDTO> ChangePassword(ChangePasswordRequestDTO user)
         {
-    
-            
-            
+            {
+                User userDB = _db.Users.Where(x => x.Id == user.UserId).FirstOrDefault();
+                if (userDB == null)
+                    return new Response<UserDTO>(false, "User not found.", null);
+                if (!userDB.Password.Equals(user.OldPassword))
+                    return new Response<UserDTO>(false, "Old password doesn't match.", null);
+                else
                 {
-                    User userDB = _db.Users.Where(x => x.Id == user.UserId).FirstOrDefault();
-                    if (userDB == null)
-                        return new Response<UserDTO>(false, "User not found.", null);
-                    if(!userDB.Password.Equals(user.OldPassword))
-                        return new Response<UserDTO>(false, "Old password doesn't match.", null);
-                    else
-                    {
-                        userDB.Password = user.NewPassword;
-                        _db.SaveChanges();
-                        return new Response<UserDTO>(true, "Password change successfully.", null);
-                    }
+                    userDB.Password = user.NewPassword;
+                    _db.SaveChanges();
+                    return new Response<UserDTO>(true, "Password change successfully.", null);
                 }
             }
+        }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Put(long id, User User)

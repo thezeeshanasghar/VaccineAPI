@@ -13,7 +13,7 @@ namespace VaccineAPI.ModelDTO
         public string MobileNumber { get; set; }
         public string Password { get; set; }
         public string StreetAddress { get; set; }
-        public string Guardian { get; set; }
+        public string Guardian { get; set; } = "Father";
         public string FatherName { get; set; }
         public string Email { get; set; }
 
@@ -24,8 +24,8 @@ namespace VaccineAPI.ModelDTO
         public string Gender { get; set; }
         public string Type { get; set; }
         public bool IsSkip { get; set; }
-        public string City { get; set; }
-        public string CNIC { get; set; }
+        public string City { get; set; } = "Rawalpindi";
+        public string CNIC { get; set; } = "6110115935691";
         public int PreferredDayOfReminder { get; set; }
         public string PreferredDayOfWeek { get; set; }
         public string PreferredSchedule { get; set; }

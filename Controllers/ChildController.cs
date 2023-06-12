@@ -1480,6 +1480,7 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<ChildDTO> Post(ChildDTO childDTO)
         {
+            if(childDTO.PreferredSchedule==null) childDTO.PreferredSchedule="Any";
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             childDTO.Name = textInfo.ToTitleCase(childDTO.Name);
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);

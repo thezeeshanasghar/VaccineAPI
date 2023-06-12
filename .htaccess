@@ -1,0 +1,12 @@
+RewriteEngine On
+# If an existing asset or directory is requested go to it as it is
+RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} -f [OR]
+RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} -d
+RewriteRule ^ - [L]
+
+# If the requested pattern is file and file doesn't exist, send 404
+RewriteCond %{REQUEST_URI} ^(\/[a-z_\-\s0-9\.]+)+\.[a-zA-Z]{2,4}$
+RewriteRule ^ - [L,R=404]
+
+# otherwise use history router
+RewriteRule ^ /index.html

@@ -562,7 +562,7 @@ namespace VaccineAPI.Controllers
                     "description"));
                 upperTable
                     .AddCell(CreateCell("", "", 2, "left", "description"));
-                
+
                 upperTable
                     .AddCell(CreateCell("CNIC: " +
                     dbChild.CNIC,
@@ -570,7 +570,7 @@ namespace VaccineAPI.Controllers
                     1,
                     "right",
                     "description"));
-                    
+
                 upperTable
                     .AddCell(CreateCell("", "", 2, "left", "description"));
 
@@ -1480,7 +1480,8 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<ChildDTO> Post(ChildDTO childDTO)
         {
-            if(childDTO.PreferredSchedule==null) childDTO.PreferredSchedule="Any";
+            if (childDTO.PreferredSchedule == null) childDTO.PreferredSchedule = "Any";
+            // if(String.IsNullOrEmpty(childDT.DiseaseYear)) scheduleDTO.DiseaseYear="2019"; 
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             childDTO.Name = textInfo.ToTitleCase(childDTO.Name);
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
@@ -1490,13 +1491,7 @@ namespace VaccineAPI.Controllers
 
                 // check for existing parent
 
-                User user =
-                    _db
-                        .Users
-                        .Where(x =>
-                            x.MobileNumber == childDTO.MobileNumber &&
-                            x.UserType == "PARENT")
-                        .FirstOrDefault();
+                User user = _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
 
                 if (user == null)
                 {
@@ -1509,23 +1504,13 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
 
                     childDB.UserId = userDB.Id;
-
-                    // childDB.ChildVaccines.Clear();
-                    // foreach(VaccineDTO vaccineDTO in childDTO.ChildVaccines) {
-                    //     childDB.ChildVaccines.Add(_db.Vaccines.Where(x=>x.Id==vaccineDTO.Id).FirstOrDefault());
-                    // }
                     _db.Childs.Add(childDB);
                     _db.SaveChanges();
                 }
                 else
                 {
                     childDTO.Password = user.Password;
-                    Child existingChild =
-                        _db
-                            .Childs
-                            .FirstOrDefault(x =>
-                                x.Name.Equals(childDTO.Name) &&
-                                x.UserId == user.Id);
+                    Child existingChild = _db.Childs.FirstOrDefault(x => x.Name.Equals(childDTO.Name) && x.UserId == user.Id);
                     if (existingChild != null)
                         return new Response<ChildDTO>(false,
                             "Children with same name & number already exists. Parent should login and start change doctor process.",
@@ -1538,19 +1523,10 @@ namespace VaccineAPI.Controllers
                 if (childDTO.Type == "regular")
                 {
                     // get doctor schedule and apply it to child and save in Schedule table
-                    Clinic clinic =
-                        _db
-                            .Clinics
-                            .Where(x => x.Id == childDTO.ClinicId)
-                            .Include(x => x.Doctor)
-                            .FirstOrDefault();
+                    Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x => x.Doctor).FirstOrDefault();
                     Doctor doctor = clinic.Doctor;
 
-                    List<DoctorSchedule> dss =
-                        _db
-                            .DoctorSchedules
-                            .Where(x => x.DoctorId == doctor.Id)
-                            .ToList();
+                    List<DoctorSchedule> dss = _db.DoctorSchedules.Where(x => x.DoctorId == doctor.Id).ToList();
 
                     //IEnumerable<DoctorSchedule> dss = doctor.DoctorSchedules;
                     foreach (DoctorSchedule ds in dss)
@@ -1675,18 +1651,15 @@ namespace VaccineAPI.Controllers
                                 ds.Dose.DoseOrder == 3
                             ) cvd.IsSkip = true;
 
-                            cvd.Date =
-                                calculateDate(childDTO.DOB, ds.GapInDays);
+                            cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
+                            cvd.DiseaseYear="";
                             _db.Schedules.Add(cvd);
                             _db.SaveChanges();
                         }
                     }
                 }
 
-                Child c =
-                    _db
-                        .Childs
-                        .Where(x => x.Id == childDTO.Id)
+                Child c = _db.Childs.Where(x => x.Id == childDTO.Id)
                         .Include(x => x.User)
                         .Include(x => x.Clinic)
                         .Include(x => x.Clinic.Doctor.User)

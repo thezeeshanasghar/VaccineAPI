@@ -22,7 +22,7 @@ namespace VaccineAPI.ModelDTO
         public bool Due2EPI { get; set; }
         public bool? IsSkip { get; set; }
         public bool? IsDisease { get; set; }
-        public string DiseaseYear {get; set;}
+        public string DiseaseYear {get; set;} = "";
          public DoseDTO Dose { get; set; }
         public virtual ChildDTO Child { get; set; }
         public List<BrandDTO> Brands { get; set; }

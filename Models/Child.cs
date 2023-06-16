@@ -16,14 +16,14 @@ namespace VaccineAPI.Models
         }
         public long Id { get; set; }
         public string Name { get; set; }
-        public string Guardian { get; set; } = "Father";
+        public string Guardian { get; set; } = "";
         public string FatherName { get; set; }
         public string Email { get; set; }
         public System.DateTime DOB { get; set; }
         public string Gender { get; set; }
         public string Type { get; set; }
-        public string City { get; set; } = "Rawalpindi";
-        public string CNIC { get; set; } = "6110115935691";
+        public string City { get; set; } = "";
+        public string CNIC { get; set; } = "";
         public int PreferredDayOfReminder { get; set; }
         public string PreferredDayOfWeek { get; set; }
         public string PreferredSchedule { get; set; }  = "Any";

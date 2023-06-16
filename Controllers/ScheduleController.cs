@@ -74,6 +74,7 @@ namespace VaccineAPI.Controllers
         [HttpPut("child-schedule")]
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
         {
+            if(String.IsNullOrEmpty(scheduleDTO.DiseaseYear)) scheduleDTO.DiseaseYear=""; 
             {
                 var dbSchedule =
                     _db
@@ -296,35 +297,13 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        //    private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Context entities, Schedule dbSchedule)
-        // {
-        //     var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
-        //     var dbDose = _db.Doses.Include(x=>x.Vaccine).ToList();
-        //     var dbVacc = _db.Vaccines.Include(x=>x.Doses).ToList();
-        //     var AllDoses = dbSchedule.Dose.Vaccine.Doses;
-        //     AllDoses = AllDoses.Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).ToList();
-        //     foreach (var d in AllDoses)
-        //     {
-        //         var TargetSchedule = entities.Schedules.Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id).FirstOrDefault();
-        //         TargetSchedule.Date = calculateDate(TargetSchedule.Date, daysDifference); //TargetSchedule.Date.AddDays(daysDifference);
-        //     }
-        // }
-        private void ChangeDueDatesOfInjectedSchedule(
-            ScheduleDTO scheduleDTO,
-            Schedule dbSchedule
-        )
+        private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Schedule dbSchedule)
         {
-            var daysDifference =
-                Convert
-                    .ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date)
-                        .TotalDays);
+            var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
             var dbDose = _db.Doses.Include(x => x.Vaccine).ToList();
             var dbVacc = _db.Vaccines.Include(x => x.Doses).ToList();
             var AllDoses = dbSchedule.Dose.Vaccine.Doses;
-            AllDoses =
-                AllDoses
-                    .Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).OrderBy(x => x.DoseOrder)
-                    .ToList();
+            AllDoses = AllDoses.Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).OrderBy(x => x.DoseOrder).ToList();
             var previousdosedate = scheduleDTO.GivenDate.Date;
             foreach (var d in AllDoses)
             {

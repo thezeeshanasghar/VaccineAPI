@@ -518,7 +518,7 @@ namespace VaccineAPI.Controllers
                 if (dbChild.Guardian == "Father")
                 {
                     upperTable
-                        .AddCell(CreateCell(dbChild.Gender == "Girl" ? "D/O " : "S/O " + dbChild.FatherName,
+                        .AddCell(CreateCell(dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName,
                         "",
                         1,
                         "right",
@@ -526,61 +526,19 @@ namespace VaccineAPI.Controllers
                 }
                 else
                 {
-                    upperTable
-                        .AddCell(CreateCell("W/O " + dbChild.FatherName,
-                        "",
-                        1,
-                        "right",
-                        "description"));
+                    upperTable.AddCell(CreateCell("W/O " + dbChild.FatherName, "", 1, "right", "description"));
                 }
+                upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
+                upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right", "description"));
+                upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
 
-                // if (dbChild.Gender == "Girl")
-                // {
-                //     upperTable.AddCell(CreateCell(dbChild.Name + "  D/O", "bold", 1, "right", "description"));
-                // }
-                // else
-                // {
-                //     upperTable.AddCell(CreateCell(dbChild.Name + "  S/O", "bold", 1, "right", "description"));
-                // }
-                // upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
-                //upperTable.AddCell(CreateCell(dbChild.FatherName, "", 1, "right", "description"));
-                upperTable
-                    .AddCell(CreateCell("Phone: " +
-                    dbChild.Clinic.PhoneNumber,
-                    "",
-                    2,
-                    "left",
-                    "description"));
-                upperTable
-                    .AddCell(CreateCell("+" +
-                    dbChild.User.CountryCode +
-                    "-" +
-                    dbChild.User.MobileNumber,
-                    "",
-                    1,
-                    "right",
-                    "description"));
-                upperTable
-                    .AddCell(CreateCell("", "", 2, "left", "description"));
+                if (!String.IsNullOrEmpty(dbChild.CNIC))
+                    upperTable.AddCell(CreateCell("CNIC: " + dbChild.CNIC, "", 1, "right", "description"));
+                else
+                    upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
 
-                upperTable
-                    .AddCell(CreateCell("CNIC: " +
-                    dbChild.CNIC,
-                    "",
-                    1,
-                    "right",
-                    "description"));
-
-                upperTable
-                    .AddCell(CreateCell("", "", 2, "left", "description"));
-
-                upperTable
-                    .AddCell(CreateCell("DOB: " +
-                    dbChild.DOB.ToString("dd MMMM, yyyy"),
-                    "",
-                    1,
-                    "right",
-                    "description"));
+                upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
+                upperTable.AddCell(CreateCell("DOB: " + dbChild.DOB.ToString("dd MMMM, yyyy"), "", 1, "right", "description"));
 
                 // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
                 //  upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
@@ -588,16 +546,14 @@ namespace VaccineAPI.Controllers
 
                 // iTextSharp.TEXT.Font myFont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
                 Paragraph title = new Paragraph("IMMUNIZATION RECORD");
-                title.Font =
-                    FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
+                title.Font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
 
                 //  document.Add(new Paragraph(""));
                 // document.Add (new Chunk (""));
                 //Schedule Table
-                float[] widths =
-                    new float[] { 20f, 145f, 50f, 70, 70f, 60f, 60f, 60f };
+                float[] widths = new float[] { 20f, 145f, 50f, 70, 70f, 60f, 60f, 60f };
 
                 PdfPTable table = new PdfPTable(8);
                 table.HorizontalAlignment = 0;
@@ -605,54 +561,14 @@ namespace VaccineAPI.Controllers
                 table.LockedWidth = true;
                 table.SpacingBefore = 5;
                 table.SetWidths(widths);
-                table
-                    .AddCell(CreateCell("Sr",
-                    "backgroudLightGray",
-                    1,
-                    "center",
-                    "scheduleRecords"));
-                table
-                    .AddCell(CreateCell("Vaccine",
-                    "backgroudLightGray",
-                    1,
-                    "center",
-                    "scheduleRecords"));
-                table
-                    .AddCell(CreateCell("Status",
-                    "backgroudLightGray",
-                    1,
-                    "center",
-                    "scheduleRecords"));
-                table
-                    .AddCell(CreateCell("Date",
-                    "backgroudLightGray",
-                    1,
-                    "center",
-                    "scheduleRecords"));
-                table
-                    .AddCell(CreateCell("Brand",
-                    "backgroudLightGray",
-                    1,
-                    "center",
-                    "scheduleRecords"));
-                table
-                    .AddCell(CreateCell("Weight",
-                    "backgroudLightGray",
-                    1,
-                    "center",
-                    "scheduleRecords"));
-                table
-                    .AddCell(CreateCell("Height",
-                    "backgroudLightGray",
-                    1,
-                    "center",
-                    "scheduleRecords"));
-                table
-                    .AddCell(CreateCell("OFC/BMI",
-                    "backgroudLightGray",
-                    1,
-                    "center",
-                    "scheduleRecords"));
+                table.AddCell(CreateCell("Sr", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Vaccine", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Status", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Date", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Brand", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Weight", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Height", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("OFC/BMI", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
                 //table.AddCell(CreateCell("Injected", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 // for typhoid and flu
@@ -693,38 +609,24 @@ namespace VaccineAPI.Controllers
                         Paragraph p = new Paragraph();
                         count++;
                         doseCount++;
-                        Font font =
-                            FontFactory.GetFont(FontFactory.HELVETICA, 10);
+                        Font font = FontFactory.GetFont(FontFactory.HELVETICA, 10);
 
-                        Font rangevaluefont =
-                            FontFactory.GetFont(FontFactory.HELVETICA, 8);
+                        Font rangevaluefont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
 
-                        Font rangefont =
-                            FontFactory.GetFont(FontFactory.HELVETICA, 6);
+                        Font rangefont = FontFactory.GetFont(FontFactory.HELVETICA, 6);
 
-                        Font boldfont =
-                            FontFactory
-                                .GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
-                        Font italicfont =
-                            FontFactory
-                                .GetFont(FontFactory.HELVETICA,
-                                10,
-                                Font.ITALIC);
+                        Font boldfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+                        Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
 
                         {
-                            PdfPCell ageCell =
-                                new PdfPCell(new Phrase(count.ToString(),
-                                        font));
+                            PdfPCell ageCell = new PdfPCell(new Phrase(count.ToString(), font));
                             ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             ageCell.FixedHeight = 15f;
                             ageCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(ageCell);
 
-                            PdfPCell dosenameCell =
-                                new PdfPCell(new Phrase(dbSchedule.Dose.Name,
-                                        font));
-                            dosenameCell.HorizontalAlignment =
-                                Element.ALIGN_LEFT;
+                            PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, font));
+                            dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(dosenameCell);
 
@@ -1652,7 +1554,7 @@ namespace VaccineAPI.Controllers
                             ) cvd.IsSkip = true;
 
                             cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
-                            cvd.DiseaseYear="";
+                            cvd.DiseaseYear = "";
                             _db.Schedules.Add(cvd);
                             _db.SaveChanges();
                         }

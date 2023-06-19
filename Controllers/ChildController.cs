@@ -515,7 +515,7 @@ namespace VaccineAPI.Controllers
                     "left",
                     "description"));
 
-                if (dbChild.Guardian == "Father")
+                if (dbChild.Guardian=="" || dbChild.Guardian == "Father")
                 {
                     upperTable
                         .AddCell(CreateCell(dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName,

@@ -9,3 +9,6 @@ dotnet ef database update
 
 dotnet tool install --global dotnet-ef
 
+select * from childs where city is null;
+
+update childs set city='' where city is null

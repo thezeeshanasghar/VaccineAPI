@@ -255,10 +255,10 @@ namespace VaccineAPI.Controllers
                                     FatherName = progress.FatherName,
                                     DOB = progress.DOB.ToShortDateString(),
                                     City = progress.City,
-                                    Next_Due_Date =
-                                        nextvisitDate.ToString("yyyy/MM/dd"),
-                                    Next_Due_Vaccines =
-                                        getNextVaccine(schedule, nextvisitDate),
+                                    Due_Date = DateTime.UtcNow.AddHours(5).ToString("yyyy/MM/dd"),
+                                    Due_Vaccines = getDueVaccine(schedule, DateTime.UtcNow.AddHours(5)),
+                                    Next_Due_Date = nextvisitDate.ToString("yyyy/MM/dd"),
+                                    Next_Due_Vaccines = getNextVaccine(schedule, nextvisitDate),
                                     Phone = progress.User.MobileNumber,
                                     Email = progress.Email
                                 });
@@ -282,6 +282,15 @@ namespace VaccineAPI.Controllers
                 if (sch.Date > Now) return sch.Date;
             }
             return Now;
+        }
+
+        private string getDueVaccine(List<Schedule> schedu, DateTime dueDate)
+        {
+            string dueVaccines = "";
+            foreach (var sch in schedu)
+                if (sch.Date == dueDate.Date)
+                    dueVaccines += sch.Dose.Name + ",";
+            return dueVaccines;
         }
 
         private string getNextVaccine(List<Schedule> schedu, DateTime nextDate)
@@ -515,7 +524,7 @@ namespace VaccineAPI.Controllers
                     "left",
                     "description"));
 
-                if (dbChild.Guardian=="" || dbChild.Guardian == "Father")
+                if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
                 {
                     upperTable
                         .AddCell(CreateCell(dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName,

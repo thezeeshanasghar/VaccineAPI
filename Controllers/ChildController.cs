@@ -455,7 +455,7 @@ namespace VaccineAPI.Controllers
 
                 //image code start
                 // var imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage); //Resources/Images/cliniclogo.png
-                var imgPath = Path.Combine(_host.ContentRootPath, "Resources/Images/cliniclogo.png"); //Resources/Images/cliniclogo.png
+                var imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage); //Resources/Images/cliniclogo.png
 
                 // if (dbChild.Clinic.MonogramImage != null) {
                 // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);

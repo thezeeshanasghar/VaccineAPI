@@ -187,7 +187,7 @@ namespace VaccineAPI.Controllers
             {
                 var httpPostedProfileImage = HttpContext.Request.Form.Files["ProfileImage"];
                 var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
-
+                
                 if (httpPostedProfileImage != null)
                 {
 
@@ -226,8 +226,8 @@ namespace VaccineAPI.Controllers
             dbDoctor.PhoneNo = doctorDTO.PhoneNo;
             dbDoctor.ShowPhone = doctorDTO.ShowPhone;
             dbDoctor.ShowMobile = doctorDTO.ShowMobile;
-            dbDoctor.Qualification = doctorDTO.Qualification;
-            dbDoctor.AdditionalInfo = doctorDTO.AdditionalInfo;
+            // dbDoctor.Qualification = doctorDTO.Qualification;
+            // dbDoctor.AdditionalInfo = doctorDTO.AdditionalInfo;
             dbDoctor.ProfileImage = doctorDTO.ProfileImage;
             dbDoctor.SignatureImage = doctorDTO.SignatureImage;
 

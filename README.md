@@ -12,3 +12,5 @@ dotnet tool install --global dotnet-ef
 select * from childs where city is null;
 
 update childs set city='' where city is null
+dotnet watch run --launch-profile https
+D:\dotnet\VaccineAPI\Resources\Images\1.png

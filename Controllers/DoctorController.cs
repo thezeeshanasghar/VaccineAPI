@@ -187,10 +187,8 @@ namespace VaccineAPI.Controllers
             {
                 var httpPostedProfileImage = HttpContext.Request.Form.Files["ProfileImage"];
                 var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
-
                 if (httpPostedProfileImage != null)
                 {
-
                     var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedProfileImage.FileName);
                     using (var fileStream = new FileStream(fileSavePath, FileMode.Create))
                         httpPostedProfileImage.CopyToAsync(fileStream);

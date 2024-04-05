@@ -25,88 +25,58 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public async Task<Response<List<DoctorScheduleDTO>>> GetAll()
         {
-            var list = await _db.DoctorSchedules.OrderBy(x=>x.Id).ToListAsync();
+            var list = await _db.DoctorSchedules.OrderBy(x => x.Id).ToListAsync();
             List<DoctorScheduleDTO> listDTO = _mapper.Map<List<DoctorScheduleDTO>>(list);
-           
             return new Response<List<DoctorScheduleDTO>>(true, null, listDTO);
         }
 
         [HttpGet("{id}")]
-       public Response<List<DoctorScheduleDTO>> GetSingle(int Id)
-        
-           
-                {
+        public Response<List<DoctorScheduleDTO>> GetSingle(int Id)
+        {
+            List<DoctorSchedule> doctorSchduleDBs = _db.DoctorSchedules.Include("Dose").Include("Dose.Vaccine")
+                .Include("Doctor").Where(x => x.DoctorId == Id).OrderBy(x => x.Dose.MinAge).ThenBy(x => x.Dose.Name).ToList();
+            if (doctorSchduleDBs == null || doctorSchduleDBs.Count() == 0)
+                return new Response<List<DoctorScheduleDTO>>(false, "DoctorSchedule not found", null);
+            List<DoctorScheduleDTO> DoctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(doctorSchduleDBs);
+            return new Response<List<DoctorScheduleDTO>>(true, null, DoctorScheduleDTOs);
+        }
 
-                    List<DoctorSchedule> doctorSchduleDBs = _db.DoctorSchedules.Include("Dose").Include("Doctor").Where(x => x.DoctorId == Id)
-                        .OrderBy(x => x.Dose.MinAge).ThenBy(x => x.Dose.Name).ToList();
-                    if (doctorSchduleDBs == null || doctorSchduleDBs.Count() == 0)
-                        return new Response<List<DoctorScheduleDTO>>(false, "DoctorSchedule not found", null);
-
-                    List<DoctorScheduleDTO> DoctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(doctorSchduleDBs);
-                    return new Response<List<DoctorScheduleDTO>>(true, null, DoctorScheduleDTOs);
-                }
-            
 
         [HttpPost]
         public Response<IEnumerable<DoctorScheduleDTO>> Post(IEnumerable<DoctorScheduleDTO> dsDTOS)
         {
-            // min age is treating as gap in days
-                
-                    foreach (var DoctorSchedueDTO in dsDTOS)
-                    {
-                        DoctorSchedule doctorSchduleDB = _mapper.Map<DoctorSchedule>(DoctorSchedueDTO);
-                        _db.DoctorSchedules.Add(doctorSchduleDB);
-                        _db.SaveChanges();
-                        DoctorSchedueDTO.Id = doctorSchduleDB.Id;
-                    }
-                    return new Response<IEnumerable<DoctorScheduleDTO>>(true, null, dsDTOS);
-                
+            foreach (var DoctorSchedueDTO in dsDTOS)
+            {
+                DoctorSchedule doctorSchduleDB = _mapper.Map<DoctorSchedule>(DoctorSchedueDTO);
+                _db.DoctorSchedules.Add(doctorSchduleDB);
+                _db.SaveChanges();
+                DoctorSchedueDTO.Id = doctorSchduleDB.Id;
             }
+            return new Response<IEnumerable<DoctorScheduleDTO>>(true, null, dsDTOS);
 
-    
-        // [HttpPut]
-        // public Response<List<DoctorScheduleDTO>> Put(List<DoctorScheduleDTO> dsDTOS)
-        
-                
-        //         {
-        //             foreach (var DoctorScheduedTO in dsDTOS)
-        //             {
-        //                 var doctorSchduleDB = _db.DoctorSchedules.Where(c => c.Id == DoctorScheduedTO.Id).FirstOrDefault();
-        //                 doctorSchduleDB.GapInDays = DoctorScheduedTO.GapInDays;
-        //                 Console.WriteLine("loop");
-        //                // _db.SaveChanges();
-        //             }
-        //              _db.SaveChanges();
-        //             return new Response<List<DoctorScheduleDTO>>(true, null, dsDTOS);
-        //         }
+        }
 
-         [HttpPut]
-        public Response<List<DoctorSchedule>> Put([FromBody]List<DoctorSchedule> dsDTOS)
-        
-                // min age is treating as gap in days
-                {
-                    foreach (var DoctorScheduedTO in dsDTOS)
-                       {
-                        var doctorSchduleDB = _db.DoctorSchedules.Where(c => c.Id == DoctorScheduedTO.Id).FirstOrDefault();
-                        doctorSchduleDB.GapInDays = DoctorScheduedTO.GapInDays;
-                        doctorSchduleDB.IsActive = DoctorScheduedTO.IsActive;
-                       }
-                      _db.SaveChanges();
-                    return new Response<List<DoctorSchedule>>(true, null, dsDTOS);
-                }
-            
+        [HttpPut]
+        public Response<List<DoctorSchedule>> Put([FromBody] List<DoctorSchedule> dsDTOS)
+        {
+            foreach (var DoctorScheduedTO in dsDTOS)
+            {
+                var doctorSchduleDB = _db.DoctorSchedules.Where(c => c.Id == DoctorScheduedTO.Id).FirstOrDefault();
+                doctorSchduleDB.GapInDays = DoctorScheduedTO.GapInDays;
+                doctorSchduleDB.IsActive = DoctorScheduedTO.IsActive;
+            }
+            _db.SaveChanges();
+            return new Response<List<DoctorSchedule>>(true, null, dsDTOS);
+        }
+
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
             var obj = await _db.DoctorSchedules.FindAsync(id);
-
-            if (obj == null)
-                return NotFound();
-
+            if (obj == null) return NotFound();
             _db.DoctorSchedules.Remove(obj);
             await _db.SaveChangesAsync();
-
             return NoContent();
         }
     }

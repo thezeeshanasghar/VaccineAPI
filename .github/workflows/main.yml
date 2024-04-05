@@ -26,31 +26,22 @@ jobs:
       - name: Publish
         run: dotnet publish --configuration Release --no-restore --output publish
 
-      - name: Set FTP credentials for staging
+      - name: Deploy for staging
         if: github.ref == 'refs/heads/staging'
-        run: |
-          echo "FTP_SERVER=stage.skintechno.com" >> $GITHUB_ENV
-          echo "FTP_USERNAME=${{ secrets.STAGING_FTP_USERNAME }}" >> $GITHUB_ENV
-          echo "FTP_PASSWORD=${{ secrets.STAGING_FTP_PASSWORD }}" >> $GITHUB_ENV
-
-      - name: Set FTP credentials for master
-        if: github.ref == 'refs/heads/master'
-        run: |
-          echo "FTP_SERVER=skintechno.com" >> $GITHUB_ENV
-          echo "FTP_USERNAME=${{ secrets.PROD_FTP_USERNAME }}" >> $GITHUB_ENV
-          echo "FTP_PASSWORD=${{ secrets.PROD_FTP_PASSWORD }}" >> $GITHUB_ENV
-
-      - name: Debug - Print FTP Credentials
-        run: |
-          echo "FTP_SERVER=${{ env.FTP_SERVER }}"
-          echo "FTP_USERNAME=${{ env.FTP_USERNAME }}"
-          echo "FTP_PASSWORD=${{ env.FTP_PASSWORD }}"
-
-      - name: Deploy to .NET Hosting via FTP
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
-          server: ${{ env.FTP_SERVER }}
-          username: ${{ env.FTP_USERNAME }}
-          password: ${{ env.FTP_PASSWORD }}
+          server: ${{ secrets.STAGING_FTP_SERVER }}
+          username: ${{ secrets.STAGING_FTP_USERNAME }}
+          password: ${{ secrets.STAGING_FTP_USERNAME }}
+          local-dir: publish/
+          server-dir: /
+
+      - name: Deploy for master
+        if: github.ref == 'refs/heads/master'
+        uses: SamKirkland/FTP-Deploy-Action@4.2.0
+        with:
+          server: ${{ secrets.PROD_FTP_SERVER }}
+          username: ${{ secrets.PROD_FTP_USERNAME }}
+          password: ${{ secrets.PROD_FTP_USERNAME }}
           local-dir: publish/
           server-dir: /

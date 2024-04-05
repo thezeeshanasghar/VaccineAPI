@@ -2,7 +2,7 @@ name: Build and Deploy .NET Application
 
 on:
   push:
-    branches: [master] # Trigger on push to main branch, adjust as needed
+    branches: [staging] # Trigger on push to main branch, adjust as needed
 
 jobs:
   build-and-deploy:

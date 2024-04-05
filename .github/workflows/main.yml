@@ -40,6 +40,9 @@ jobs:
           echo "FTP_USERNAME=${{ secrets.PROD_FTP_USERNAME }}" >> $GITHUB_ENV
           echo "FTP_PASSWORD=${{ secrets.PROD_FTP_PASSWORD }}" >> $GITHUB_ENV
 
+      - name: Debug - Print FTP_SERVER
+        run: echo "FTP_SERVER=${{ env.FTP_SERVER }}"
+
       - name: Deploy to .NET Hosting via FTP
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:

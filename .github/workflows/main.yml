@@ -26,13 +26,11 @@ jobs:
       - name: Publish
         run: dotnet publish --configuration Release --no-restore --output publish
 
-      # Add any other steps needed for tests or other pre-deployment checks
-
-      - name: Deploy to .NET Hosting
-        run: |
-          # Use FTP, SSH, or any other command to copy the files to your hosting server
-          # This is an example using FTP
-          curl -T publish/* ftp://yourftpserver.com/wwwroot/ --user ${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}
-        env:
-          FTP_USERNAME: ${{ secrets.STAGING_FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.STAGING_FTP_PASSWORD }}
+      - name: Deploy to .NET Hosting via FTP
+        uses: SamKirkland/FTP-Deploy-Action@4.2.0
+        with:
+          server: stage.skintechno.com
+          username: ${{ secrets.STAGING_FTP_USERNAME }}
+          password: ${{ secrets.STAGING_FTP_PASSWORD }}
+          local-dir: publish/
+          server-dir: /

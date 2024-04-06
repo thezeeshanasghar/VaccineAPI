@@ -36,7 +36,6 @@ app.UseSwaggerUI();
 // }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
 app.UseStaticFiles(new StaticFileOptions
 {

@@ -35,6 +35,11 @@ jobs:
           password: ${{ secrets.STAGING_FTP_PASSWORD }}
           local-dir: publish/
           server-dir: /
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            web.config
 
       - name: Deploy for master
         if: github.ref == 'refs/heads/master'
@@ -45,3 +50,8 @@ jobs:
           password: ${{ secrets.PROD_FTP_PASSWORD }}
           local-dir: publish/
           server-dir: /
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            web.config

@@ -401,16 +401,16 @@ namespace VaccineAPI.Controllers
                 // }
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
 
-                if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
+                if (dbChild.Guardian == "" || dbChild.Guardian == "Guardian")
                 {
                     upperTable.AddCell(
-                        CreateCell(dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName, "", 1,
+                        CreateCell("S/D/W/O " + dbChild.FatherName, "", 1,
                                    "right", "description"));
                 }
-                else
-                {
-                    upperTable.AddCell(CreateCell("W/O " + dbChild.FatherName, "", 1, "right", "description"));
-                }
+                // else
+                // {
+                //     upperTable.AddCell(CreateCell("W/O " + dbChild.FatherName, "", 1, "right", "description"));
+                // }
                 upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
                                               "description"));
@@ -975,6 +975,7 @@ namespace VaccineAPI.Controllers
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             childDTO.Name = textInfo.ToTitleCase(childDTO.Name);
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
+            
 
             {
                 Child childDB = _mapper.Map<Child>(childDTO);
@@ -995,6 +996,7 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
 
                     childDB.UserId = userDB.Id;
+                    
                     _db.Childs.Add(childDB);
                     _db.SaveChanges();
                 }

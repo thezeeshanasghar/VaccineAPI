@@ -150,6 +150,8 @@ namespace VaccineAPI.Controllers
                 // 2- save Doctor 
                 Doctor doctorDB = _mapper.Map<Doctor>(doctorDTO);
                 doctorDB.ValidUpto = null;
+                doctorDB.ProfileImage = "";
+                doctorDB.SignatureImage = "";
                 doctorDB.UserId = userDB.Id;
                 _db.Doctors.Add(doctorDB);
                 _db.SaveChanges();

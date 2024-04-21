@@ -162,6 +162,13 @@ namespace VaccineAPI.Controllers
                 // u.DoctorSMS (doctorDTO);
                 // UserEmail.DoctorEmail (doctorDTO);
 
+                var body = "Hi " + "<b>" + doctorDTO.FirstName + " " + doctorDTO.LastName + "</b>, <br />"
+        + "You are successfully registered in vaccine.pk. <br /><br />"
+        + "Your account credentials are: <br />"
+        + "ID/Mobile Number: " + doctorDTO.MobileNumber + "<br />"
+        + "Password: " + doctorDTO.Password + "<br />"
+        + "Web Link: <a href=\"https://doctor.vaccine.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccine.pk/</a>";
+                UserEmail.SendEmail(doctorDTO.FirstName, doctorDTO.Email, body);
                 // 4- check if clinicDto exsist; then save clinic as well
                 if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))
                 {

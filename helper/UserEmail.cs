@@ -154,17 +154,17 @@ namespace VaccineAPI
           public static void SendEmail(string userName, string userEmail, string body)
         {
 
-            using (System.Net.Mail.MailMessage mm = new System.Net.Mail.MailMessage ("info@vaccine.pk", userEmail)) {
+            using (System.Net.Mail.MailMessage mm = new System.Net.Mail.MailMessage ("sender@skintechno.com", userEmail)) {
                 mm.Subject = "vaccine.pk";   
                 mm.Body = body;
                 mm.IsBodyHtml = true;
                 System.Net.Mail.SmtpClient smtp = new System.Net.Mail.SmtpClient();
                 //smtp.Host = "smtp.gmail.com";
                 //smtp.Host = "premium55.web-hosting.com";
-                smtp.Host =   "fernflowers.com";//"mail.vaccine.pk";    //"mail.vaccines.pk";
+                smtp.Host =   "skintechno.com";//"mail.vaccine.pk";    //"mail.vaccines.pk";
                 smtp.EnableSsl = false;
                 //NetworkCredential NetworkCred = new NetworkCredential ("info@vaccine.pk", "XDQ0@73GvLKJ");
-                NetworkCredential NetworkCred = new NetworkCredential ("sender@fernflowers.com", "XDQ0@73GvLKJ");
+                NetworkCredential NetworkCred = new NetworkCredential ("sender@skintechno.com", "XDQ0@73GvLKJ");
                 smtp.UseDefaultCredentials = false;
                 smtp.Credentials = NetworkCred;
                 //smtp.Port = 465; // 587 // 26 // 25

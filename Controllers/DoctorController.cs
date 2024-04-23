@@ -28,6 +28,7 @@ namespace VaccineAPI.Controllers
             _host = host;
         }
 
+
         [HttpGet]
         public async Task<Response<List<DoctorDTO>>> GetAll()
         {
@@ -351,7 +352,7 @@ namespace VaccineAPI.Controllers
                         if (dbChild.User.Childs.Count == 1)
                             _db.Users.Remove(dbChild.User);
                         _db.Childs.Remove(dbChild);
-                    }
+                    } 
                     _db.ClinicTimings.RemoveRange(clinic.ClinicTimings);
                 }
                 _db.DoctorSchedules.RemoveRange(dbDoctor.DoctorSchedules);
@@ -362,6 +363,167 @@ namespace VaccineAPI.Controllers
                 return new Response<string>(true, "Doctor is deleted successfully", null);
             }
         }
+
+        [HttpGet("{id}/appointments")]
+        public async Task<ActionResult<string>> GetDoctorAppointmentsWithinDateRange(long id, DateTime fromDate, DateTime toDate)
+        {
+            // Query the database to find the clinics associated with the provided doctor ID
+            var clinics = await _db.Clinics.Where(c => c.DoctorId == id).ToListAsync();
+
+            // Print the provided parameters and clinic data
+            string result = $"Doctor ID: {id}, From Date: {fromDate}, To Date: {toDate}\n";
+            foreach (var clinic in clinics)
+            {
+                result += $"Clinic ID: {clinic.Id}, Clinic Name: {clinic.Name}\n";
+            }
+
+            // Return the result
+            return result;
+        }
+
+
+
+
+
+        [HttpGet("{id}/children/{childId}/schedules")]
+        public async Task<ActionResult<IEnumerable<Schedule>>> GetSchedulesForChild(long id, long childId, DateTime fromDate, DateTime toDate)
+        {
+            try
+            {
+                // Query the database to find the schedules for the specified child ID within the provided date range
+                var schedules = await _db.Schedules
+                    .Where(s => s.ChildId == childId && s.Date >= fromDate && s.Date <= toDate)
+                    .ToListAsync();
+
+                if (schedules == null || !schedules.Any())
+                {
+                    return NotFound($"No schedules found for child ID {childId} within the provided date range");
+                }
+
+                return Ok(schedules);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"An error occurred while retrieving schedules for child ID {childId}: {ex.Message}");
+            }
+        }
+
+
+        [HttpPatch]
+        [Route("/update_date_for_Vacations")]
+        public async Task<IActionResult> UpdateSchedulesForChild(long childId, [FromQuery] string fromDate, [FromQuery] string toDate)
+        {
+            try
+            {
+                var parsedFromDate = DateTime.Parse(fromDate);
+                var parsedToDate = DateTime.Parse(toDate);
+
+                // Fetch schedules for the specified child ID
+                var schedules = await _db.Schedules
+                    .Where(s => s.ChildId == childId && s.Date >= parsedFromDate && s.Date <= parsedToDate)
+                    .ToListAsync();
+
+                if (schedules == null || !schedules.Any())
+                {
+                    return NotFound($"No schedules found for child ID {childId} to update");
+                }
+
+                // Update the dates in the fetched schedules
+                var updatedDate = parsedToDate.AddDays(1);
+                foreach (var schedule in schedules)
+                {
+                    schedule.Date = updatedDate;
+                }
+
+                // Save changes to the database
+                await _db.SaveChangesAsync();
+
+                return Ok("Schedules updated successfully");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"An error occurred while updating schedules for child ID {childId}: {ex.Message}");
+            }
+        }
+
+        // fetching child ids in array
+        //[HttpGet("{id}/children/schedules")]
+        // public async Task<ActionResult<IEnumerable<long>>> GetChildIdsWithSchedulesFromClinic(long id)
+        // {
+        //     try
+        //     {
+        //         // Query the database to find the children IDs associated with the clinic ID
+        //         var childIds = await _db.Childs
+        //                                 .Where(c => c.ClinicId == id)
+        //                                 .Select(c => c.Id)
+        //                                 .ToListAsync();
+
+        //         if (childIds == null || !childIds.Any())
+        //         {
+        //             return NotFound("No children found for the provided clinic ID");
+        //         }
+
+        //         return Ok(childIds);
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         return StatusCode(500, $"An error occurred while retrieving child IDs: {ex.Message}");
+        //     }
+        // }
+
+        //////////////////////////////////////////////////
+
+        [HttpPost("{id}/children/schedules")]
+        public async Task<ActionResult<IEnumerable<long>>> GetChildIdsWithSchedulesFromClinic(long id, [FromQuery] string fromDate, [FromQuery] string toDate)
+        {
+            try
+            {
+                var parsedFromDate = DateTime.Parse(fromDate);
+                var parsedToDate = DateTime.Parse(toDate);
+
+                // Query the database to find the children IDs associated with the clinic ID
+                var childIds = await _db.Childs
+                                        .Where(c => c.ClinicId == id)
+                                        .Select(c => c.Id)
+                                        .ToListAsync();
+
+                if (childIds == null || !childIds.Any())
+                {
+                    return NotFound("No children found for the provided clinic ID");
+                }
+
+                List<long> childIdsWithSchedules = new List<long>();
+
+                // Loop through each child ID
+                foreach (var childId in childIds)
+                {
+                    var schedules = await _db.Schedules
+                                            .Where(c => c.ChildId == childId && c.Date >= parsedFromDate && c.Date <= parsedToDate)
+                                            .ToListAsync();
+                    if (schedules.Any())
+                    {
+                        var daysToAdd = (parsedToDate - parsedFromDate).Days + 1;
+                        foreach (var schedule in schedules)
+                        {
+                            schedule.Date = schedule.Date.AddDays(daysToAdd);
+                        }
+                        await _db.SaveChangesAsync();
+                    }
+
+                    // For now, let's just add the child ID to the list
+                    childIdsWithSchedules.Add(childId);
+                }
+
+                return Ok(childIdsWithSchedules);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"An error occurred while retrieving child IDs: {ex.Message}");
+            }
+        }
+
+
+
     }
 }
 //}

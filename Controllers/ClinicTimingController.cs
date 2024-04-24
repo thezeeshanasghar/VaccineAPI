@@ -77,6 +77,51 @@ namespace VaccineAPI.Controllers
             await _db.SaveChangesAsync();
 
             return NoContent();
+    
+        }
+        [Route("api/clintimings/{clinicId}")]
+        [HttpPatch]
+        public async Task<IActionResult> UpdateClinicTimings(long clinicId, [FromBody] List<ClinicTiming> updatedTimings)
+        {
+            try
+            {
+                if (updatedTimings == null || !updatedTimings.Any())
+                {
+                    return BadRequest("No updated clinic timings provided.");
+                }
+
+                var timingIds = updatedTimings.Select(t => t.Id).ToList();
+
+                var existingTimings = await _db.ClinicTimings.Where(t => timingIds.Contains(t.Id) && t.ClinicId == clinicId).ToListAsync();
+
+                if (existingTimings == null || existingTimings.Count == 0)
+                {
+                    return NotFound();
+                }
+
+                foreach (var updatedTiming in updatedTimings)
+                {
+                    var existingTiming = existingTimings.FirstOrDefault(t => t.Id == updatedTiming.Id);
+
+                    if (existingTiming != null)
+                    {
+                        existingTiming.Day = updatedTiming.Day;
+                        existingTiming.Session = updatedTiming.Session;
+                        existingTiming.StartTime = updatedTiming.StartTime;
+                        existingTiming.EndTime = updatedTiming.EndTime;
+                        existingTiming.ClinicId = updatedTiming.ClinicId;
+                    }
+                }
+
+                await _db.SaveChangesAsync();
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
         }
     }
+
 }

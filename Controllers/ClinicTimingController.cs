@@ -190,6 +190,64 @@ namespace VaccineAPI.Controllers
         }
 
 
+
+        public class ClinicUpdateRequest
+        {
+            public ClinicDTO Clinic { get; set; }
+            public List<ClinicTiming> ClinicTimings { get; set; }
+        }
+
+        [Route("api/clinic/update")]
+        [HttpPut]
+        public async Task<IActionResult> UpdateClinicAndTimings(long clinicId, [FromBody] ClinicUpdateRequest request)
+        {
+            try
+            {
+                // Update clinic data
+                var dbClinic = await _db.Clinics.FindAsync(clinicId);
+                if (dbClinic == null)
+                {
+                    return NotFound("Clinic not found.");
+                }
+
+                dbClinic.Name = request.Clinic.Name;
+                dbClinic.ConsultationFee = request.Clinic.ConsultationFee;
+                dbClinic.PhoneNumber = request.Clinic.PhoneNumber;
+                dbClinic.Address = request.Clinic.Address;
+                dbClinic.MonogramImage = request.Clinic.MonogramImage;
+                dbClinic.IsOnline = request.Clinic.IsOnline;
+
+                // Update clinic timings
+                var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();
+                var existingTimings = await _db.ClinicTimings
+                    .Where(t => timingIds.Contains(t.Id) && t.ClinicId == dbClinic.Id)
+                    .ToListAsync();
+
+                foreach (var updatedTiming in request.ClinicTimings)
+                {
+                    var existingTiming = existingTimings.FirstOrDefault(t => t.Id == updatedTiming.Id);
+
+                    if (existingTiming != null)
+                    {
+                        existingTiming.Day = updatedTiming.Day;
+                        existingTiming.Session = updatedTiming.Session;
+                        existingTiming.StartTime = updatedTiming.StartTime;
+                        existingTiming.EndTime = updatedTiming.EndTime;
+                        existingTiming.ClinicId = dbClinic.Id;
+                    }
+                }
+
+                await _db.SaveChangesAsync();
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
+
+
     }
 
 }

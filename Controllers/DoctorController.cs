@@ -454,36 +454,7 @@ namespace VaccineAPI.Controllers
             {
                 return StatusCode(500, $"An error occurred while updating schedules for child ID {childId}: {ex.Message}");
             }
-        }
-
-        // fetching child ids in array
-        //[HttpGet("{id}/children/schedules")]
-        // public async Task<ActionResult<IEnumerable<long>>> GetChildIdsWithSchedulesFromClinic(long id)
-        // {
-        //     try
-        //     {
-        //         // Query the database to find the children IDs associated with the clinic ID
-        //         var childIds = await _db.Childs
-        //                                 .Where(c => c.ClinicId == id)
-        //                                 .Select(c => c.Id)
-        //                                 .ToListAsync();
-
-        //         if (childIds == null || !childIds.Any())
-        //         {
-        //             return NotFound("No children found for the provided clinic ID");
-        //         }
-
-        //         return Ok(childIds);
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         return StatusCode(500, $"An error occurred while retrieving child IDs: {ex.Message}");
-        //     }
-        // }
-
-        //////////////////////////////////////////////////
-
-        
+        }  
 
     }
 }

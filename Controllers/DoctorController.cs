@@ -179,7 +179,6 @@ namespace VaccineAPI.Controllers
 
                     Clinic clinicDB = _mapper.Map<Clinic>(doctorDTO.ClinicDTO);
                     clinicDB.IsOnline = true;
-                    clinicDB.OffDays = "";
                     _db.Clinics.Add(clinicDB);
                     _db.SaveChanges();
 

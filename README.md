@@ -13,7 +13,7 @@ select \* from childs where city is null;
 
 update childs set city='' where city is null
 dotnet watch run --launch-profile https
-
+dotnet watch run --environment Development
 Step 1: 
 ALTER TABLE clinics
 DROP COLUMN OffDays;

@@ -1446,16 +1446,16 @@ namespace VaccineAPI.Controllers
             // }
             // Image img = Image.GetInstance(imgPath + "//" + signatureImage);
 
-            img.ScaleAbsolute(2f, 2f);
-            PdfPCell imageCell = new PdfPCell(img, true);
-            imageCell.PaddingTop = 5;
-            imageCell.Colspan = 1;  // either 1 if you need to insert one cell
-            imageCell.Border = 0;
-            imageCell.FixedHeight = 40f;
-            imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-            bottomTable.AddCell(imageCell);
+            // img.ScaleAbsolute(2f, 2f);
+            // PdfPCell imageCell = new PdfPCell(img, true);
+            // imageCell.PaddingTop = 5;
+            // imageCell.Colspan = 1;  // either 1 if you need to insert one cell
+            // imageCell.Border = 0;
+            // imageCell.FixedHeight = 40f;
+            // imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+            // bottomTable.AddCell(imageCell);
 
-            document.Add(bottomTable);
+            // document.Add(bottomTable);
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             stream = output;

@@ -32,6 +32,14 @@ namespace VaccineAPI.Controllers
 
             return new Response<List<DoseDTO>>(true, null, listDTO);
         }
+        [HttpGet("special")]
+        public async Task<Response<List<DoseDTO>>> GetAllSpecialDoses()
+        {
+            var specialDoses = await _db.Doses.Where(x => x.IsSpecial==true).OrderBy(x => x.MinAge).ToListAsync();
+            List<DoseDTO> specialDoseDTOs = _mapper.Map<List<DoseDTO>>(specialDoses);
+
+            return new Response<List<DoseDTO>>(true, null, specialDoseDTOs);
+        }
 
         //to add new dose in doctor schedule
         [HttpGet("newdoctor/{id}")]
@@ -73,6 +81,100 @@ namespace VaccineAPI.Controllers
 
             return new Response<List<DoseDTO>>(true, null, listDTO);
         }
+        // [HttpGet("newchild2/{id}")]
+        // public async Task<Response<List<DoseDTO>>> GetNewChildDoses2(long id)
+        // {
+        //     // Step 1: Fetch the clinic ID based on the child ID from the child table
+        //     var child = await _db.Childs.FirstOrDefaultAsync(c => c.Id == id);
+            
+
+        //     var clinicId = child.ClinicId;
+
+        //     // Step 2: Retrieve the doctor ID associated with the clinic
+        //     var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == clinicId);
+      
+
+        //     var doctorId = clinic.DoctorId;
+
+        //     // Step 3: Fetch the doctor's schedule based on the doctor ID
+        //    var doctorSchedule = await _db.DoctorSchedules
+        //     .Where(ds => ds.DoctorId == doctorId) 
+        //     .Select(ds => ds.DoseId) // Select only DoseId from the DoctorSchedule
+        //     .ToListAsync();
+
+        //     var childDoses = await _db.Schedules
+        // .Where(s => s.ChildId == id)
+        // .Select(s => s.DoseId)
+        // .ToListAsync();
+
+
+        //    var newDoses = doctorSchedule.Where(ds => !childDoses.Contains(ds)).ToList();
+        
+        //     var newDoseEntities = await _db.Doses
+        // .Where(d => newDoses.Contains(d.Id))
+        // .ToListAsync();
+        //    var newDoseDTOs = _mapper.Map<List<DoseDTO>>(newDoseEntities);
+
+        //     // Return the list of new doses mapped to DoseDTO objects
+        //     return new Response<List<DoseDTO>>(true, null, newDoseDTOs);
+        // }
+                public class NewDoseResponse
+                {
+                    public DoseDTO Dose { get; set; }
+                    public bool IsActive { get; set; }
+                }
+                [HttpGet("newchild2/{id}")]
+                public async Task<Response<List<NewDoseResponse>>> GetNewChildDoses2(long id)
+                {
+                    // Step 1: Fetch the clinic ID based on the child ID from the child table
+                    var child = await _db.Childs.FirstOrDefaultAsync(c => c.Id == id);
+                    if (child == null)
+                    {
+                        return new Response<List<NewDoseResponse>>(false, "Child not found.", null);
+                    }
+
+                    var clinicId = child.ClinicId;
+
+                    // Step 2: Retrieve the doctor ID associated with the clinic
+                    var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == clinicId);
+                    if (clinic == null || clinic.DoctorId == null)
+                    {
+                        return new Response<List<NewDoseResponse>>(false, "Clinic or doctor not found.", null);
+                    }
+
+                    var doctorId = clinic.DoctorId;
+
+                    // Step 3: Fetch the doctor's schedule based on the doctor ID
+                    var doctorSchedule = await _db.DoctorSchedules
+                        .Where(ds => ds.DoctorId == doctorId)
+                        .Select(ds => new { DoseId = ds.DoseId, IsActive = ds.IsActive }) // Select DoseId and IsActive
+                        .ToListAsync();
+
+                    // Step 4: Fetch doses from the schedule table based on the child ID
+                    var childDoses = await _db.Schedules
+                        .Where(s => s.ChildId == id)
+                        .Select(s => s.DoseId)
+                        .ToListAsync();
+
+                    // Step 5: Filter doses from the doctor's schedule that are not present in child's doses
+                    var newDoses = doctorSchedule.Where(ds => !childDoses.Contains(ds.DoseId)).ToList();
+
+                    // Step 6: Fetch the corresponding Dose entities from the database
+                    var newDoseEntities = await _db.Doses
+                        .Where(d => newDoses.Select(nd => nd.DoseId).Contains(d.Id))
+                        .ToListAsync();
+
+                    // Step 7: Create NewDoseResponse objects with DoseDTO and IsActive properties
+                    var responseObjects = newDoseEntities.Select(dose => new NewDoseResponse
+                    {
+                        Dose = _mapper.Map<DoseDTO>(dose),
+                        IsActive = newDoses.FirstOrDefault(nd => nd.DoseId == dose.Id)?.IsActive ?? false
+                    }).ToList();
+
+                    // Return the list of NewDoseResponse objects
+                    return new Response<List<NewDoseResponse>>(true, null, responseObjects);
+                }
+
 
         [HttpGet("{id}")]
         public async Task<Response<DoseDTO>> GetSingle(long id)

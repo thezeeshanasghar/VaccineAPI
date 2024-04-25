@@ -1439,12 +1439,12 @@ namespace VaccineAPI.Controllers
 
             // httpPostedSignatureImage.CopyToAsync(fileStream);
             // dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
-            var signatureImage = dbDoctor.SignatureImage;
-            if (signatureImage == null)
-            {
-                signatureImage = "avatar.png";
-            }
-            Image img = Image.GetInstance(imgPath + "//" + signatureImage);
+            // var signatureImage = dbDoctor.SignatureImage;
+            // if (signatureImage == null)
+            // {
+            //     signatureImage = "avatar.png";
+            // }
+            // Image img = Image.GetInstance(imgPath + "//" + signatureImage);
 
             img.ScaleAbsolute(2f, 2f);
             PdfPCell imageCell = new PdfPCell(img, true);

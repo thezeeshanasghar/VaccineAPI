@@ -152,7 +152,7 @@ namespace VaccineAPI.Controllers
                 Doctor doctorDB = _mapper.Map<Doctor>(doctorDTO);
                 doctorDB.ValidUpto = null;
                 doctorDB.ProfileImage = "";
-                doctorDB.SignatureImage = "";
+                // doctorDB.SignatureImage = "";
                 doctorDB.UserId = userDB.Id;
                 _db.Doctors.Add(doctorDB);
                 _db.SaveChanges();
@@ -168,7 +168,7 @@ namespace VaccineAPI.Controllers
         + "Your account credentials are: <br />"
         + "ID/Mobile Number: " + doctorDTO.MobileNumber + "<br />"
         + "Password: " + doctorDTO.Password + "<br />"
-        + "Web Link: <a href=\"https://doctor.vaccine.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccine.pk/</a>";
+        + "Web Link: <a href=\"https://doctor.echowhite.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.echowhite.pk/</a>";
                 UserEmail.SendEmail(doctorDTO.FirstName, doctorDTO.Email, body);
                 // 4- check if clinicDto exsist; then save clinic as well
                 if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))
@@ -197,7 +197,7 @@ namespace VaccineAPI.Controllers
             if (HttpContext.Request.Form.Files.Any())
             {
                 var httpPostedProfileImage = HttpContext.Request.Form.Files["ProfileImage"];
-                var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
+                // var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
                 if (httpPostedProfileImage != null)
                 {
                     var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedProfileImage.FileName);
@@ -206,13 +206,13 @@ namespace VaccineAPI.Controllers
                     dbDoctor.ProfileImage = httpPostedProfileImage.FileName;
                 }
 
-                if (httpPostedSignatureImage != null)
-                {
-                    var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedSignatureImage.FileName);
-                    using (var fileStream = new FileStream(fileSavePath, FileMode.Create))
-                        httpPostedSignatureImage.CopyToAsync(fileStream);
-                    dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
-                }
+                // if (httpPostedSignatureImage != null)
+                // {
+                //     var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedSignatureImage.FileName);
+                //     using (var fileStream = new FileStream(fileSavePath, FileMode.Create))
+                //         httpPostedSignatureImage.CopyToAsync(fileStream);
+                //     dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
+                // }
                 _db.SaveChanges();
                 return new Response<DoctorDTO>(true, null, null);
             }
@@ -238,7 +238,7 @@ namespace VaccineAPI.Controllers
             dbDoctor.Qualification = doctorDTO.Qualification;
             dbDoctor.AdditionalInfo = doctorDTO.AdditionalInfo;
             dbDoctor.ProfileImage = doctorDTO.ProfileImage;
-            dbDoctor.SignatureImage = doctorDTO.SignatureImage;
+            // dbDoctor.SignatureImage = doctorDTO.SignatureImage;
 
             //dbDoctor = Mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
             //entities.Entry<Doctor>(dbDoctor).State = System.Data.Entity.EntityState.Modified;

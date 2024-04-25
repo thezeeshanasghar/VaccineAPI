@@ -28,7 +28,7 @@ namespace VaccineAPI.Models
     public DateTime? ValidUpto { get; set; }
     public int? InvoiceNumber { get; set; }
     public string ProfileImage { get; set; } = "Resources/Images/avatar.png";
-    public string SignatureImage { get; set; } = "Resources/Images/avatar.png";
+    public string SignatureImage { get; set; } = "";
     public string DisplayName { get; set; }
     public bool AllowInvoice { get; set; }
     public bool AllowChart { get; set; }

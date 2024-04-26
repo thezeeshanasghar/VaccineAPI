@@ -354,24 +354,41 @@ namespace VaccineAPI.Controllers
                 // image code start
                 // var imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);
                 // //Resources/Images/cliniclogo.png
-                var imgPath =
-                    Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);  // Resources/Images/cliniclogo.png
+                // var imgPath =
+                //     Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);  // Resources/Images/cliniclogo.png
 
-                // if (dbChild.Clinic.MonogramImage != null) {
-                // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
-                Image img = Image.GetInstance(imgPath);
-                img.ScaleAbsolute(160f, 50f);
+                // // if (dbChild.Clinic.MonogramImage != null) {
+                // // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
+                // Image img = Image.GetInstance(imgPath);
+                // img.ScaleAbsolute(160f, 50f);
 
-                // img.ScaleToFit(40f, 40f);
-                PdfPCell imageCell = new PdfPCell(img, false);
+                // // img.ScaleToFit(40f, 40f);
+                // PdfPCell imageCell = new PdfPCell(img, false);
 
-                // imageCell.PaddingTop = 5;
-                imageCell.Colspan = 1;  // either 1 if you need to insert one cell
-                imageCell.Rowspan = 2;
-                imageCell.Border = 0;
-                imageCell.FixedHeight = 1f;
-                imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                upperTable.AddCell(imageCell);
+                // // imageCell.PaddingTop = 5;
+                // imageCell.Colspan = 1;  // either 1 if you need to insert one cell
+                // imageCell.Rowspan = 2;
+                // imageCell.Border = 0;
+                // imageCell.FixedHeight = 1f;
+                // imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                // upperTable.AddCell(imageCell);
+                var imgPath = dbChild.Clinic.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
+
+                // Add Image Cell
+                if (imgPath != null)
+                {
+                    Image img = Image.GetInstance(imgPath);
+                    img.ScaleAbsolute(160f, 50f);
+                    PdfPCell imageCell = new PdfPCell(img, false);
+                    imageCell.Colspan = 1;
+                    imageCell.Rowspan = 2;
+                    imageCell.Border = 0;
+                    imageCell.FixedHeight = 50f; // Set a fixed height for the image cell
+                    imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                    upperTable.AddCell(imageCell);
+                }
+             
+
 
                 // } else {
                 //     PdfPCell imageCell = new PdfPCell ();

@@ -1286,45 +1286,52 @@ namespace VaccineAPI.Controllers
             return new Response<List<Messages>>(true, null, listMessages);
         }
 
-        [HttpPatch("{id}")]
-        public async Task<ActionResult<IEnumerable<long>>> GetChildIdsWithSchedulesFromClinic(long id, [FromQuery] string fromDate, [FromQuery] string toDate)
+
+
+        [HttpPatch("schedules")]
+        public async Task<ActionResult<IEnumerable<long>>> GetChildIdsWithSchedulesFromClinics([FromBody] long[] clinicIds, [FromQuery] string fromDate, [FromQuery] string toDate)
         {
             try
             {
                 var parsedFromDate = DateTime.Parse(fromDate);
                 var parsedToDate = DateTime.Parse(toDate);
 
-                // Query the database to find the children IDs associated with the clinic ID
-                var childIds = await _db.Childs
-                                        .Where(c => c.ClinicId == id)
-                                        .Select(c => c.Id)
-                                        .ToListAsync();
-
-                if (childIds == null || !childIds.Any())
+                if (clinicIds == null || clinicIds.Length == 0)
                 {
-                    return NotFound("No children found for the provided clinic ID");
+                    return BadRequest("No clinic IDs provided");
                 }
 
                 List<long> childIdsWithSchedules = new List<long>();
 
-                // Loop through each child ID
-                foreach (var childId in childIds)
+                foreach (var clinicId in clinicIds)
                 {
-                    var schedules = await _db.Schedules
-                                            .Where(c => c.ChildId == childId && c.Date >= parsedFromDate && c.Date <= parsedToDate)
+                    // Query the database to find the children IDs associated with each clinic ID
+                    var childIds = await _db.Childs
+                                            .Where(c => c.ClinicId == clinicId)
+                                            .Select(c => c.Id)
                                             .ToListAsync();
-                    if (schedules.Any())
-                    {
-                        var daysToAdd = (parsedToDate - parsedFromDate).Days + 1;
-                        foreach (var schedule in schedules)
-                        {
-                            schedule.Date = schedule.Date.AddDays(daysToAdd);
-                        }
-                        await _db.SaveChangesAsync();
-                    }
 
-                    // For now, let's just add the child ID to the list
-                    childIdsWithSchedules.Add(childId);
+                    if (childIds != null && childIds.Any())
+                    {
+                        foreach (var childId in childIds)
+                        {
+                            var schedules = await _db.Schedules
+                                                    .Where(s => s.ChildId == childId && s.Date >= parsedFromDate && s.Date <= parsedToDate)
+                                                    .ToListAsync();
+                            if (schedules.Any())
+                            {
+                                var daysToAdd = parsedToDate.AddDays(1);
+                                foreach (var schedule in schedules)
+                                {
+                                    schedule.Date = daysToAdd;
+                                }
+                                await _db.SaveChangesAsync();
+                            }
+
+                            // Add the child ID to the list
+                            childIdsWithSchedules.Add(childId);
+                        }
+                    }
                 }
 
                 return Ok(childIdsWithSchedules);
@@ -1334,6 +1341,7 @@ namespace VaccineAPI.Controllers
                 return StatusCode(500, $"An error occurred while retrieving child IDs: {ex.Message}");
             }
         }
+
 
 
     }

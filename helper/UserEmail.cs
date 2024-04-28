@@ -7,11 +7,6 @@ namespace VaccineAPI
 {
     public class UserEmail
     {
-      //  public static string teamEmail = WebConfigurationManager.AppSettings["TeamEmail"];
-        //public static string teamEmailPassword = WebConfigurationManager.AppSettings["TeamEmailPassword"];
-        public static string userName { get; set; }
-        public static string userEmail { get; set; }
-
         #region Parent Email
 
         public static void ParentEmail(Child child)
@@ -31,7 +26,7 @@ namespace VaccineAPI
 
             body += "Doctor Phone Number: <b>+92" + child.Clinic.Doctor.User.MobileNumber + "<b><br>";
             body += "Web Link: <a href=\"https://vaccine.pk\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccine.pk</a><br>";
-            body += "<a href=\"http://fernflowers.com/api/child/"+child.Id+"/Download-Schedule-PDF\" target=\"_blank\" rel=\"noopener noreferrer\">Click here</a>"+" to view vaccination schedule";
+            body += "<a href=\"http://fernflowers.com/api/child/" + child.Id + "/Download-Schedule-PDF\" target=\"_blank\" rel=\"noopener noreferrer\">Click here</a>" + " to view vaccination schedule";
             //TODO: website and android link
             SendEmail(child.Name, child.Email, body);
         }
@@ -40,17 +35,11 @@ namespace VaccineAPI
 
         public static void ParentAlertEmail(string doseName, DateTime scheduleDate, Child child)
         {
-            string body = "Reminder: Vaccination for " + child.Name + " is due on " + scheduleDate ;
-           
-                
-            body += " (" + doseName +")";
-
-           // body += "Web Link: <a href=\"https://vaccine.pk\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccine.pk</a>";
+            string body = "Reminder: Vaccination for " + child.Name + " is due on " + scheduleDate;
+            body += " (" + doseName + ")";
             //TODO: website and android link
             SendEmail(child.Name, child.Email, body);
         }
-
-
         #endregion
 
         #region Child Email
@@ -83,7 +72,6 @@ namespace VaccineAPI
             SendEmail(child.Clinic.Doctor.FirstName, child.Clinic.Doctor.Email, body);
         }
         //Forgot Password Email
-
         public static void DoctorForgotPassword(Doctor doctor)
         {
             string body = ""
@@ -103,77 +91,47 @@ namespace VaccineAPI
 
         #endregion
 
-        // public static void SendEmail(string userName, string userEmail, string body)
-        // {
-
-        //     //using (MailMessage mail = new MailMessage("admin@vaccs.io", userEmail))
-        //     //{
-        //     //    mail.Subject = "Registered into Vaccs.io";
-        //     //    mail.Body = body;
-        //     //    mail.IsBodyHtml = true;
-
-        //     //    SmtpClient smtp = new SmtpClient("mail.vaccs.io");
-        //     //    smtp.EnableSsl = false;
-        //     //    smtp.UseDefaultCredentials = false;
-        //     //    smtp.Credentials = new NetworkCredential("admin@vaccs.io", "wIm7d1@3");
-        //     //    smtp.Port = 25;
-        //     //    try
-        //     //    {
-        //     //        smtp.Send(mail);
-        //     //    }
-        //     //    catch (Exception ex)
-        //     //    {
-        //     //        throw ex;
-        //     //    }
-        //     //}
-
-
-        //    // using (MailMessage mail = new MailMessage(teamEmail, userEmail))
-        //     {
-        //       //  mail.Subject = "Registered into Vaccs.io";
-        //         //mail.Body = body;
-        //         //mail.IsBodyHtml = true;
-        //         SmtpClient smtp = new SmtpClient();
-        //         smtp.Host = "smtp.gmail.com";
-        //         smtp.EnableSsl = true;
-        //       //  NetworkCredential NetworkCred = new NetworkCredential(teamEmail, teamEmailPassword);
-        //         smtp.UseDefaultCredentials = true;
-        //     //    smtp.Credentials = NetworkCred;
-        //         smtp.Port = 587;
-        //         // try
-        //         // {
-        //         //     smtp.Send(mail);
-        //         // }
-        //         // catch (Exception ex)
-        //         // {
-        //         //     throw ex;
-        //         // }
-        //     }
-
-        // }
-          public static void SendEmail(string userName, string userEmail, string body)
+        public static void SendEmail(string userName, string userEmail, string body)
         {
-
-            using (System.Net.Mail.MailMessage mm = new System.Net.Mail.MailMessage ("sender@skintechno.com", userEmail)) {
-                mm.Subject = "vaccine.pk";   
+            using (System.Net.Mail.MailMessage mm = new System.Net.Mail.MailMessage("sender@skintechno.com", userEmail))
+            {
+                mm.Subject = "vaccine.pk";
                 mm.Body = body;
                 mm.IsBodyHtml = true;
+
                 System.Net.Mail.SmtpClient smtp = new System.Net.Mail.SmtpClient();
-                //smtp.Host = "smtp.gmail.com";
-                //smtp.Host = "premium55.web-hosting.com";
-                smtp.Host =   "skintechno.com";//"mail.vaccine.pk";    //"mail.vaccines.pk";
-                smtp.EnableSsl = false;
-                //NetworkCredential NetworkCred = new NetworkCredential ("info@vaccine.pk", "XDQ0@73GvLKJ");
-                NetworkCredential NetworkCred = new NetworkCredential ("sender@skintechno.com", "XDQ0@73GvLKJ");
-                smtp.UseDefaultCredentials = false;
-                smtp.Credentials = NetworkCred;
-                //smtp.Port = 465; // 587 // 26 // 25
-                smtp.Port = 587;
-                smtp.Send (mm);
 
+                // Check if running in local development environment
+                if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
+                {
+                    // Use Gmail SMTP settings for local development
+                    smtp.Host = "smtp.gmail.com";
+                    smtp.EnableSsl = true;
+                    smtp.UseDefaultCredentials = false;
+                    smtp.Credentials = new NetworkCredential("majliscom482@gmail.com", "123Pakistan@");
+                    smtp.Port = 587; // Gmail uses port 587 for TLS
+                }
+                else
+                {
+                    // Use skintechno.com SMTP settings for production
+                    smtp.Host = "skintechno.com";
+                    smtp.EnableSsl = false;
+                    smtp.UseDefaultCredentials = false;
+                    smtp.Credentials = new NetworkCredential("sender@skintechno.com", "XDQ0@73GvLKJ");
+                    smtp.Port = 587; // Adjust if different for skintechno.com
+                }
+
+                try
+                {
+                    smtp.Send(mm);
+                }
+                catch (Exception ex)
+                {
+                    // Handle the exception here
+                    Console.WriteLine("Error sending email: " + ex.Message);
+                }
             }
-
         }
-        
+
     }
 }

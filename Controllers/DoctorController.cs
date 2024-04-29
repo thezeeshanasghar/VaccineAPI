@@ -124,6 +124,30 @@ namespace VaccineAPI.Controllers
                 return new Response<IEnumerable<ClinicDTO>>(true, null, clinicDTOs);
             }
         }
+        [HttpPost("doctor/forget")]
+        public ActionResult<DoctorDTO> GetDoctorDetailsByEmail([FromBody]string email)
+        {
+            var doctor = _db.Doctors.FirstOrDefault(d => d.Email == email);
+            var userDetails = _db.Users.FirstOrDefault(u => u.Id == doctor.UserId);
+            if (userDetails != null)
+            {
+            
+                var body = "Hi " + "<b>" + doctor.FirstName + " " + doctor.LastName + "</b>, <br />"
+                + "Welcome to vaccine.pk. <br /><br />"
+                + "Your account credentials are: <br />"
+                + "ID/Mobile Number: " + userDetails.MobileNumber + "<br />"
+                + "Password: " + userDetails.Password + "<br />"
+                + "Web Link: <a href=\"https://doctor.echowhite.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.echowhite.pk/</a>";
+                try{
+                    UserEmail.SendEmail(doctor.FirstName, doctor.Email, body);
+                }
+                catch(Exception ex)
+                {
+                    return BadRequest();
+                }   
+            }
+            return Ok();
+        }
 
         [HttpPost]
         public Response<DoctorDTO> Post(DoctorDTO doctorDTO)

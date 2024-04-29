@@ -102,24 +102,24 @@ namespace VaccineAPI
                 System.Net.Mail.SmtpClient smtp = new System.Net.Mail.SmtpClient();
 
                 // Check if running in local development environment
-                if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
-                {
-                    // Use Gmail SMTP settings for local development
-                    smtp.Host = "smtp.gmail.com";
-                    smtp.EnableSsl = true;
-                    smtp.UseDefaultCredentials = false;
-                    smtp.Credentials = new NetworkCredential("majliscom482@gmail.com", "123Pakistan@");
-                    smtp.Port = 587; // Gmail uses port 587 for TLS
-                }
-                else
-                {
+                // if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
+                // {
+                //     // Use Gmail SMTP settings for local development
+                //     smtp.Host = "smtp.gmail.com";
+                //     smtp.EnableSsl = true;
+                //     smtp.UseDefaultCredentials = false;
+                //     smtp.Credentials = new NetworkCredential("majliscom482@gmail.com", "123Pakistan@");
+                //     smtp.Port = 587; // Gmail uses port 587 for TLS
+                // }
+                // else
+                // {
                     // Use skintechno.com SMTP settings for production
                     smtp.Host = "skintechno.com";
                     smtp.EnableSsl = false;
                     smtp.UseDefaultCredentials = false;
                     smtp.Credentials = new NetworkCredential("sender@skintechno.com", "XDQ0@73GvLKJ");
                     smtp.Port = 587; // Adjust if different for skintechno.com
-                }
+                // }
 
                 try
                 {

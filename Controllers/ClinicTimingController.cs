@@ -189,17 +189,9 @@ namespace VaccineAPI.Controllers
             }
         }
 
-
-
-        public class ClinicUpdateRequest
-        {
-            public ClinicDTO Clinic { get; set; }
-            public List<ClinicTiming> ClinicTimings { get; set; }
-        }
-
         [Route("api/clinic/update")]
         [HttpPut]
-        public async Task<IActionResult> UpdateClinicAndTimings(long clinicId, [FromBody] ClinicUpdateRequest request)
+        public async Task<IActionResult> UpdateClinicAndTimings(long clinicId, [FromBody] ClinicDTO request)
         {
             try
             {
@@ -210,12 +202,12 @@ namespace VaccineAPI.Controllers
                     return NotFound("Clinic not found.");
                 }
 
-                dbClinic.Name = request.Clinic.Name;
-                dbClinic.ConsultationFee = request.Clinic.ConsultationFee;
-                dbClinic.PhoneNumber = request.Clinic.PhoneNumber;
-                dbClinic.Address = request.Clinic.Address;
-                dbClinic.MonogramImage = request.Clinic.MonogramImage;
-                dbClinic.IsOnline = request.Clinic.IsOnline;
+                dbClinic.Name = request.Name;
+                dbClinic.ConsultationFee = request.ConsultationFee;
+                dbClinic.PhoneNumber = request.PhoneNumber;
+                dbClinic.Address = request.Address;
+                dbClinic.MonogramImage = request.MonogramImage;
+                dbClinic.IsOnline = request.IsOnline;
 
                 // Update clinic timings
                 var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();

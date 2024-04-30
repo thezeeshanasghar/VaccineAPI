@@ -189,18 +189,16 @@ namespace VaccineAPI.Controllers
             }
         }
 
+      
         [Route("api/clinic/update")]
         [HttpPut]
         public async Task<IActionResult> UpdateClinicAndTimings(long clinicId, [FromBody] ClinicDTO request)
         {
             try
             {
-                // Update clinic data
+                    // Update clinic data
                 var dbClinic = await _db.Clinics.FindAsync(clinicId);
-                if (dbClinic == null)
-                {
-                    return NotFound("Clinic not found.");
-                }
+               
 
                 dbClinic.Name = request.Name;
                 dbClinic.ConsultationFee = request.ConsultationFee;
@@ -208,6 +206,7 @@ namespace VaccineAPI.Controllers
                 dbClinic.Address = request.Address;
                 dbClinic.MonogramImage = request.MonogramImage;
                 dbClinic.IsOnline = request.IsOnline;
+
 
                 // Update clinic timings
                 var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();
@@ -227,8 +226,21 @@ namespace VaccineAPI.Controllers
                         existingTiming.EndTime = updatedTiming.EndTime;
                         existingTiming.ClinicId = dbClinic.Id;
                     }
-                }
+                    else
+                    {
+                        // If the timing is new, add it to the database
+                        var newTiming = new ClinicTiming
+                        {
+                            Day = updatedTiming.Day,
+                            Session = updatedTiming.Session,
+                            StartTime = updatedTiming.StartTime,
+                            EndTime = updatedTiming.EndTime,
+                            ClinicId = dbClinic.Id
+                        };
 
+                        _db.ClinicTimings.Add(newTiming);
+                    }
+                }
                 await _db.SaveChangesAsync();
 
                 return NoContent();

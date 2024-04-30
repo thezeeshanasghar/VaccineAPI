@@ -143,7 +143,10 @@ namespace VaccineAPI.Controllers
                 }
                 catch(Exception ex)
                 {
-                    return BadRequest();
+                    Console.WriteLine("Error sending email: " + ex.Message);
+
+                    // Return a 500 status code
+                    return StatusCode(500);
                 }   
             }
             return Ok();

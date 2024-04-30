@@ -2,6 +2,7 @@
 using System.Net;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
+using Microsoft.AspNetCore.Mvc;
 
 namespace VaccineAPI
 {
@@ -101,7 +102,8 @@ namespace VaccineAPI
 
                 System.Net.Mail.SmtpClient smtp = new System.Net.Mail.SmtpClient();
 
-                // Check if running in local development environment
+                // // Check if running in local development environment
+                // Console.WriteLine(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"));
                 // if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
                 // {
                 //     // Use Gmail SMTP settings for local development
@@ -129,6 +131,8 @@ namespace VaccineAPI
                 {
                     // Handle the exception here
                     Console.WriteLine("Error sending email: " + ex.Message);
+                    throw;
+                
                 }
             }
         }

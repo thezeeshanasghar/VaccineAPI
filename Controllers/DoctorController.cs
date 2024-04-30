@@ -124,8 +124,8 @@ namespace VaccineAPI.Controllers
                 return new Response<IEnumerable<ClinicDTO>>(true, null, clinicDTOs);
             }
         }
-        [HttpPost("/forget")]
-        public ActionResult<DoctorDTO> GetDoctorDetailsByEmail([FromBody]string email)
+        [HttpGet("/forget/{email}")]
+        public ActionResult<DoctorDTO> GetDoctorDetailsByEmail(string email)
         {
             var doctor = _db.Doctors.FirstOrDefault(d => d.Email == email);
             var userDetails = _db.Users.FirstOrDefault(u => u.Id == doctor.UserId);
@@ -146,7 +146,7 @@ namespace VaccineAPI.Controllers
                     Console.WriteLine("Error sending email: " + ex.Message);
 
                     // Return a 500 status code
-                    return StatusCode(500);
+                    return StatusCode(500,ex.Message);
                 }   
             }
             return Ok();

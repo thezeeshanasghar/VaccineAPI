@@ -139,7 +139,7 @@ namespace VaccineAPI.Controllers
                 + "Password: " + userDetails.Password + "<br />"
                 + "Web Link: <a href=\"https://doctor.echowhite.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.echowhite.pk/</a>";
                 try{
-                    UserEmail.SendEmail(doctor.FirstName, doctor.Email, body);
+                    UserEmail.SendEmail2( doctor.Email, body);
                 }
                 catch(Exception ex)
                 {

@@ -124,7 +124,7 @@ namespace VaccineAPI.Controllers
                 return new Response<IEnumerable<ClinicDTO>>(true, null, clinicDTOs);
             }
         }
-        [HttpPost("doctor/forget")]
+        [HttpPost("/forget")]
         public ActionResult<DoctorDTO> GetDoctorDetailsByEmail([FromBody]string email)
         {
             var doctor = _db.Doctors.FirstOrDefault(d => d.Email == email);

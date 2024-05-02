@@ -195,60 +195,76 @@ namespace VaccineAPI.Controllers
         public async Task<IActionResult> UpdateClinicAndTimings(long clinicId, [FromBody] ClinicDTO request)
         {
             try
+    {
+        // Update clinic data
+        var dbClinic = await _db.Clinics.FindAsync(clinicId);
+
+        dbClinic.Name = request.Name;
+        dbClinic.ConsultationFee = request.ConsultationFee;
+        dbClinic.PhoneNumber = request.PhoneNumber;
+        dbClinic.Address = request.Address;
+        dbClinic.MonogramImage = request.MonogramImage;
+        // dbClinic.IsOnline = request.IsOnline;
+
+        // Update clinic timings
+        var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();
+        var existingTimings = await _db.ClinicTimings
+            .Where(t => timingIds.Contains(t.Id) && t.ClinicId == dbClinic.Id)
+            .ToListAsync();
+
+        foreach (var updatedTiming in request.ClinicTimings)
+        {
+            var existingTiming = existingTimings.FirstOrDefault(t => t.Id == updatedTiming.Id);
+
+            if (existingTiming != null)
             {
-                    // Update clinic data
-                var dbClinic = await _db.Clinics.FindAsync(clinicId);
-               
-
-                dbClinic.Name = request.Name;
-                dbClinic.ConsultationFee = request.ConsultationFee;
-                dbClinic.PhoneNumber = request.PhoneNumber;
-                dbClinic.Address = request.Address;
-                dbClinic.MonogramImage = request.MonogramImage;
-                dbClinic.IsOnline = request.IsOnline;
-
-
-                // Update clinic timings
-                var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();
-                var existingTimings = await _db.ClinicTimings
-                    .Where(t => timingIds.Contains(t.Id) && t.ClinicId == dbClinic.Id)
-                    .ToListAsync();
-
-                foreach (var updatedTiming in request.ClinicTimings)
+                existingTiming.Day = updatedTiming.Day;
+                // existingTiming.Session = updatedTiming.Session;
+                existingTiming.StartTime = updatedTiming.StartTime;
+                existingTiming.EndTime = updatedTiming.EndTime;
+                existingTiming.ClinicId = dbClinic.Id;
+            }
+            else
+            {
+                // If the timing is new, add it to the database
+                var newTiming = new ClinicTiming
                 {
-                    var existingTiming = existingTimings.FirstOrDefault(t => t.Id == updatedTiming.Id);
+                    Day = updatedTiming.Day,
+                    Session = updatedTiming.Session,
+                    StartTime = updatedTiming.StartTime,
+                    EndTime = updatedTiming.EndTime,
+                    ClinicId = dbClinic.Id
+                };
 
-                    if (existingTiming != null)
-                    {
-                        existingTiming.Day = updatedTiming.Day;
-                        existingTiming.Session = updatedTiming.Session;
-                        existingTiming.StartTime = updatedTiming.StartTime;
-                        existingTiming.EndTime = updatedTiming.EndTime;
-                        existingTiming.ClinicId = dbClinic.Id;
-                    }
-                    else
-                    {
-                        // If the timing is new, add it to the database
-                        var newTiming = new ClinicTiming
-                        {
-                            Day = updatedTiming.Day,
-                            Session = updatedTiming.Session,
-                            StartTime = updatedTiming.StartTime,
-                            EndTime = updatedTiming.EndTime,
-                            ClinicId = dbClinic.Id
-                        };
-
-                        _db.ClinicTimings.Add(newTiming);
-                    }
-                }
-                await _db.SaveChangesAsync();
-
-                return NoContent();
+                _db.ClinicTimings.Add(newTiming);
             }
-            catch (Exception ex)
+        }
+        await _db.SaveChangesAsync();
+
+        // Return the updated clinic data
+        return Ok(new ClinicDTO
+        {
+            Id = dbClinic.Id,
+            Name = dbClinic.Name,
+            ConsultationFee = dbClinic.ConsultationFee,
+            PhoneNumber = dbClinic.PhoneNumber,
+            Address = dbClinic.Address,
+            MonogramImage = dbClinic.MonogramImage,
+            IsOnline = dbClinic.IsOnline,
+            ClinicTimings = existingTimings.Select(t => new ClinicTimingDTO
             {
-                return StatusCode(500, ex.Message);
-            }
+                Id = t.Id,
+                Day = t.Day,
+                Session = t.Session,
+                StartTime = t.StartTime,
+                EndTime = t.EndTime
+            }).ToList()
+        });
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, ex.Message);
+    }
         }
 
 

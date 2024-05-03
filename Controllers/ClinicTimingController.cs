@@ -219,7 +219,7 @@ namespace VaccineAPI.Controllers
             if (existingTiming != null)
             {
                 existingTiming.Day = updatedTiming.Day;
-                // existingTiming.Session = updatedTiming.Session;
+                existingTiming.Session = updatedTiming.Session;
                 existingTiming.StartTime = updatedTiming.StartTime;
                 existingTiming.EndTime = updatedTiming.EndTime;
                 existingTiming.ClinicId = dbClinic.Id;
@@ -232,6 +232,7 @@ namespace VaccineAPI.Controllers
                     Day = updatedTiming.Day,
                     Session = updatedTiming.Session,
                     StartTime = updatedTiming.StartTime,
+                    IsOpen=updatedTiming.IsOpen,
                     EndTime = updatedTiming.EndTime,
                     ClinicId = dbClinic.Id
                 };
@@ -250,7 +251,7 @@ namespace VaccineAPI.Controllers
             PhoneNumber = dbClinic.PhoneNumber,
             Address = dbClinic.Address,
             MonogramImage = dbClinic.MonogramImage,
-            IsOnline = dbClinic.IsOnline,
+            // IsOnline = dbClinic.IsOnline,
             ClinicTimings = existingTimings.Select(t => new ClinicTimingDTO
             {
                 Id = t.Id,

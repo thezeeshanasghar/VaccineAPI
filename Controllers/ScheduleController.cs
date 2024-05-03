@@ -81,20 +81,44 @@ namespace VaccineAPI.Controllers
                     )
                     .FirstOrDefault();
 
+                  var dbSchedule2 = _db.Schedules
+                    .Include(x => x.Dose)
+                        .ThenInclude(x => x.Vaccine)
+                    .Include(x => x.Child)
+                        .ThenInclude(x => x.Clinic)
+                    .Where(c => c.Id == scheduleDTO.Id)
+                    .FirstOrDefault();
+                var dbBrandInventory2 = _db.BrandInventorys
+                    .Where(
+                        b => b.BrandId == dbSchedule2.BrandId && b.DoctorId == dbSchedule2.Child.Clinic.DoctorId
+                    )
+                    .FirstOrDefault();
+
                 if (scheduleDTO.IsDone == false)
                 {
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
                     dbSchedule.BrandId = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
+                    
+                    
 
                     ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
+                    if (dbBrandInventory2 != null)
+                    {
+                        dbBrandInventory2.Count = dbBrandInventory2.Count + 1;
+                    }
+
                     _db.SaveChanges();
+                    
                     return new Response<ScheduleDTO>(true, "congratulations", newData2);
                 }
                 if (dbBrandInventory != null && dbBrandInventory.Count > 0)
-                    if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
-                        dbBrandInventory.Count--;
+                {
+                    dbBrandInventory.Count=dbBrandInventory.Count-1;
+                }
+                    // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
+                        
 
                 // to hide next doses if disease appeared
                 if (scheduleDTO.IsDisease == true)

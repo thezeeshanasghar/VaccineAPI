@@ -538,8 +538,8 @@ namespace VaccineAPI.Controllers
                         if (scheduleBrand != null)
                         {
                             schedule.BrandId = scheduleBrand.BrandId;
-                            if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
-                            {
+                            // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
+                            // {
                                 var brandInventory = _db.BrandInventorys
                                     .Where(
                                         b =>
@@ -549,7 +549,7 @@ namespace VaccineAPI.Controllers
                                     .FirstOrDefault();
                                 if (brandInventory != null)
                                     brandInventory.Count--;
-                            }
+                            // }
                         }
                     }
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);

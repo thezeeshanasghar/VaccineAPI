@@ -15,7 +15,7 @@ using VaccineAPI.Models;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 
-// using WebApi.OutputCache.V2;
+// using WebApi.Out3Cache.V2;
 namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
@@ -387,7 +387,7 @@ namespace VaccineAPI.Controllers
                     imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
                     upperTable.AddCell(imageCell);
                 }
-             
+
 
 
                 // } else {
@@ -1967,6 +1967,8 @@ namespace VaccineAPI.Controllers
                 dbChild.IsVerified = childDTO.IsVerified;
                 dbChild.IsInactive = childDTO.IsInactive;
                 var dbUser = dbChild.User;
+                dbUser.CountryCode = childDTO.CountryCode
+                + 55rrrrrrrrrrrrrrrrrr;
                 dbUser.MobileNumber = childDTO.MobileNumber;
                 _db.SaveChanges();
                 return new Response<ChildDTO>(true, null, childDTO);

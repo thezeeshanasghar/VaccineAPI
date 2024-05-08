@@ -1967,8 +1967,7 @@ namespace VaccineAPI.Controllers
                 dbChild.IsVerified = childDTO.IsVerified;
                 dbChild.IsInactive = childDTO.IsInactive;
                 var dbUser = dbChild.User;
-                dbUser.CountryCode = childDTO.CountryCode
-                + 55rrrrrrrrrrrrrrrrrr;
+                dbUser.CountryCode = childDTO.CountryCode;
                 dbUser.MobileNumber = childDTO.MobileNumber;
                 _db.SaveChanges();
                 return new Response<ChildDTO>(true, null, childDTO);

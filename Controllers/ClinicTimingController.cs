@@ -220,6 +220,7 @@ namespace VaccineAPI.Controllers
             {
                 existingTiming.Day = updatedTiming.Day;
                 existingTiming.Session = updatedTiming.Session;
+                existingTiming.IsOpen = updatedTiming.IsOpen;
                 existingTiming.StartTime = updatedTiming.StartTime;
                 existingTiming.EndTime = updatedTiming.EndTime;
                 existingTiming.ClinicId = dbClinic.Id;

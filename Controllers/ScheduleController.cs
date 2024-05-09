@@ -1335,7 +1335,7 @@ namespace VaccineAPI.Controllers
                 foreach (var childId in childIds)
                 {
                     var schedules = await _db.Schedules
-                                            .Where(c => c.ChildId == childId && c.Date >= parsedFromDate && c.Date <= parsedToDate)
+                                            .Where(c => c.ChildId == childId && c.IsDone==false && c.Date >= parsedFromDate && c.Date <= parsedToDate)
                                             .ToListAsync();
                     if (schedules.Any())
                     {

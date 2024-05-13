@@ -24,3 +24,12 @@ DROP COLUMN SignatureImage;
 Step 2:
 dotnet ef migrations add InitialCreate
 dotnet ef database update
+
+ALTER TABLE childs
+DROP COLUMN PreferredSchedule;
+
+ALTER TABLE childs
+DROP COLUMN PreferredDayOfReminder;
+
+ALTER TABLE childs
+DROP COLUMN PreferredDayOfWeek;

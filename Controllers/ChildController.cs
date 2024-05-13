@@ -987,8 +987,7 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<ChildDTO> Post(ChildDTO childDTO)
         {
-            // if (childDTO.PreferredSchedule == null) childDTO.PreferredSchedule = "Any";
-            // if(String.IsNullOrEmpty(childDT.DiseaseYear)) scheduleDTO.DiseaseYear="2019";
+
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             childDTO.Name = textInfo.ToTitleCase(childDTO.Name);
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
@@ -1958,11 +1957,8 @@ namespace VaccineAPI.Controllers
                 dbChild.Email = childDTO.Email;
                 dbChild.Guardian = childDTO.Guardian;
                 dbChild.FatherName = childDTO.FatherName;
-                // dbChild.PreferredDayOfWeek = childDTO.PreferredDayOfWeek;
                 dbChild.Gender = childDTO.Gender;
                 dbChild.City = childDTO.City;
-                // dbChild.PreferredDayOfReminder = childDTO.PreferredDayOfReminder;
-                // dbChild.PreferredSchedule = childDTO.PreferredSchedule;
                 dbChild.IsEPIDone = childDTO.IsEPIDone;
                 dbChild.IsVerified = childDTO.IsVerified;
                 dbChild.IsInactive = childDTO.IsInactive;

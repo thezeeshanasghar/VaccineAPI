@@ -1011,8 +1011,6 @@ namespace VaccineAPI.Controllers
                     .ThenInclude(c => c.User)
                     .Include(c => c.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                    .Where(c => c.Child.PreferredDayOfReminder != 0)
-                    .Where(c => c.Date == NextDayTime.AddMinutes(-1)) //.AddDays (c.Child.PreferredDayOfReminder
                     .Where(c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
@@ -1254,8 +1252,6 @@ namespace VaccineAPI.Controllers
                     .ThenInclude(c => c.User)
                     .Include(c => c.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                    .Where(c => c.Child.PreferredDayOfReminder != 0)
-                    .Where(c => c.Date == NextDayTime.AddMinutes(-1)) //.AddDays (c.Child.PreferredDayOfReminder
                     .Where(c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)

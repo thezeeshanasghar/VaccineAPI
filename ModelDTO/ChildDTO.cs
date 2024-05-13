@@ -26,9 +26,6 @@ namespace VaccineAPI.ModelDTO
         public bool IsSkip { get; set; }
         public string City { get; set; } = "Rawalpindi";
         public string CNIC { get; set; } = "";
-        public int PreferredDayOfReminder { get; set; }
-        public string PreferredDayOfWeek { get; set; }
-        public string PreferredSchedule { get; set; } = "Any";
         public bool IsEPIDone { get; set; }
         public bool IsVerified { get; set; }
         public bool IsInactive { get; set; }

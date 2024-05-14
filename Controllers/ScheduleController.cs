@@ -106,7 +106,17 @@ namespace VaccineAPI.Controllers
                     ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
                     if (dbBrandInventory2 != null)
                     {
-                        dbBrandInventory2.Count = dbBrandInventory2.Count + 1;
+                        DateTime currentDate = DateTime.Now.Date;
+                        if(currentDate==dbSchedule.Date)
+                        {
+                            dbBrandInventory2.Count = dbBrandInventory2.Count + 1;
+
+                        }
+                        else
+                        {
+                            dbBrandInventory2.Count = dbBrandInventory2.Count;
+                        }
+                       
                     }
 
                     _db.SaveChanges();
@@ -115,7 +125,16 @@ namespace VaccineAPI.Controllers
                 }
                 if (dbBrandInventory != null && dbBrandInventory.Count > 0)
                 {
-                    dbBrandInventory.Count=dbBrandInventory.Count-1;
+                    DateTime currentDate = DateTime.Now.Date;
+                        if(currentDate==dbSchedule.Date)
+                        {
+                            dbBrandInventory.Count = dbBrandInventory.Count - 1;
+
+                        }
+                        else
+                        {
+                            dbBrandInventory.Count = dbBrandInventory.Count;
+                        }
                 }
                     // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                         

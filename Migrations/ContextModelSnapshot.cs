@@ -139,16 +139,16 @@ namespace VaccineAPI.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    // b.Property<int>("PreferredDayOfReminder")
-                    //     .HasColumnType("int");
+                    b.Property<int>("PreferredDayOfReminder")
+                        .HasColumnType("int");
 
-                    // b.Property<string>("PreferredDayOfWeek")
-                    //     .IsRequired()
-                    //     .HasColumnType("longtext");
+                    b.Property<string>("PreferredDayOfWeek")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
-                    // b.Property<string>("PreferredSchedule")
-                    //     .IsRequired()
-                    //     .HasColumnType("longtext");
+                    b.Property<string>("PreferredSchedule")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Type")
                         .IsRequired()

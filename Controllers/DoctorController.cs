@@ -482,6 +482,21 @@ namespace VaccineAPI.Controllers
             }
         }  
 
+
+        [HttpGet("allDoc")]
+        public async Task<Response<List<DoctorDTO>>> GetDoc()
+        {
+
+            var dbdoctor = await _db.Doctors.Include(x => x.User).Include(x => x.Clinics).ToListAsync();
+            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
+
+            if (dbdoctor == null)
+                return new Response<List<DoctorDTO>>(false, "Not Found", null);
+
+            return new Response<List<DoctorDTO>>(true, null, doctorDTO);
+        }
+
     }
+
 }
 //}

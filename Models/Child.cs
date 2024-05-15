@@ -21,7 +21,6 @@ namespace VaccineAPI.Models
         public string Email { get; set; }
         public System.DateTime DOB { get; set; }
         public string Gender { get; set; }
-        public string Type { get; set; }
         public string City { get; set; } = "";
         public string CNIC { get; set; } = "";
         public bool? IsEPIDone { get; set; }

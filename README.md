@@ -33,3 +33,9 @@ DROP COLUMN PreferredDayOfReminder;
 
 ALTER TABLE childs
 DROP COLUMN PreferredDayOfWeek;
+
+ALTER TABLE doses
+DROP COLUMN IsSpecial;
+
+ALTER TABLE childs
+DROP COLUMN Type;

@@ -225,5 +225,26 @@ namespace VaccineAPI.Controllers
             _db.SaveChanges();
             return new Response<string>(true, null, "record deleted");
         }
+        [HttpGet("doses/{childId}")]
+        public async Task<Response<List<DoseDTO>>> GetSDosesForChild(int childId)
+        {
+            // Retrieve the scheduled doses for the specified child
+            var scheduledDosesIds = await _db.Schedules
+                                            .Where(s => s.ChildId == childId)
+                                            .Select(s => s.DoseId)
+                                            .ToListAsync();
+
+            // Retrieve special doses that are not already scheduled for the child
+            var Doses = await _db.Doses
+                                        .Where(x => !scheduledDosesIds.Contains(x.Id))
+                                        .OrderBy(x => x.MinAge)
+                                        .ToListAsync();
+
+            // Map the special doses to DTOs
+            List<DoseDTO> specialDoseDTOs = _mapper.Map<List<DoseDTO>>(Doses);
+
+            return new Response<List<DoseDTO>>(true, null, specialDoseDTOs);
+        }
+
     }
 }

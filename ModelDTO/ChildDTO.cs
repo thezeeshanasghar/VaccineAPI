@@ -22,7 +22,6 @@ namespace VaccineAPI.ModelDTO
 
         public string CountryCode { get; set; }
         public string Gender { get; set; }
-        public string Type { get; set; }
         public bool IsSkip { get; set; }
         public string City { get; set; } = "Rawalpindi";
         public string CNIC { get; set; } = "";

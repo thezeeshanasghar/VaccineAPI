@@ -32,14 +32,7 @@ namespace VaccineAPI.Controllers
 
             return new Response<List<DoseDTO>>(true, null, listDTO);
         }
-        [HttpGet("special")]
-        public async Task<Response<List<DoseDTO>>> GetAllSpecialDoses()
-        {
-            var specialDoses = await _db.Doses.Where(x => x.IsSpecial==true).OrderBy(x => x.MinAge).ToListAsync();
-            List<DoseDTO> specialDoseDTOs = _mapper.Map<List<DoseDTO>>(specialDoses);
-
-            return new Response<List<DoseDTO>>(true, null, specialDoseDTOs);
-        }
+      
 
         //to add new dose in doctor schedule
         [HttpGet("newdoctor/{id}")]
@@ -220,7 +213,6 @@ namespace VaccineAPI.Controllers
             dbDose.MaxAge = doseDTO.MaxAge;
             dbDose.MinGap = doseDTO.MinGap;
             dbDose.DoseOrder = doseDTO.DoseOrder;
-            dbDose.IsSpecial = doseDTO.IsSpecial;
             _db.SaveChanges();
             return new Response<DoseDTO>(true, null, doseDTO);
         }

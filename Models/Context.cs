@@ -64,10 +64,6 @@ namespace VaccineAPI.Models
                             .HasConversion(new BoolToZeroOneConverter<Int16>());
 
 
-                            modelBuilder.Entity< Dose>()
-                            .Property(r => r.IsSpecial)
-                            .HasConversion(new BoolToZeroOneConverter<Int16>());
-
                              modelBuilder.Entity< ClinicTiming>()
                             .Property(r => r.IsOpen)
                             .HasConversion(new BoolToZeroOneConverter<Int16>());

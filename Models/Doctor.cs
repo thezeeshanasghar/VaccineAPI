@@ -21,7 +21,6 @@ namespace VaccineAPI.Models
     public string LastName { get; set; }
     public string Email { get; set; }
     public string PMDC { get; set; }
-    public bool IsApproved { get; set; }
     public bool ShowPhone { get; set; }
     public bool ShowMobile { get; set; }
     public string PhoneNo { get; set; }

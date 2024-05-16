@@ -68,31 +68,6 @@ namespace VaccineAPI.Controllers
 
         }
 
-        [HttpGet("approved")]
-        public async Task<Response<List<DoctorDTO>>> GetApproved()
-        {
-
-            var dbdoctor = await _db.Doctors.Where(x => x.IsApproved == true).Include(x => x.User).Include(x => x.Clinics).ToListAsync();
-            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
-
-            if (dbdoctor == null)
-                return new Response<List<DoctorDTO>>(false, "Not Found", null);
-
-            return new Response<List<DoctorDTO>>(true, null, doctorDTO);
-        }
-
-        [HttpGet("unapproved")]
-        public async Task<Response<List<DoctorDTO>>> GetUnApproved()
-        {
-
-            var dbdoctor = await _db.Doctors.Where(x => x.IsApproved == false).Include(x => x.User).Include(x => x.Clinics).ToListAsync();
-            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
-
-            if (dbdoctor == null)
-                return new Response<List<DoctorDTO>>(false, "Not Found", null);
-
-            return new Response<List<DoctorDTO>>(true, null, doctorDTO);
-        }
 
         // [HttpPost]
         // public async Task<ActionResult<Doctor>> Post(Doctor Doctor)
@@ -255,7 +230,6 @@ namespace VaccineAPI.Controllers
             dbDoctor.FirstName = doctorDTO.FirstName;
             dbDoctor.LastName = doctorDTO.LastName;
             dbDoctor.DisplayName = doctorDTO.DisplayName;
-            dbDoctor.IsApproved = doctorDTO.IsApproved;
             dbDoctor.Email = doctorDTO.Email;
             dbDoctor.PMDC = doctorDTO.PMDC;
             dbDoctor.PhoneNo = doctorDTO.PhoneNo;
@@ -293,17 +267,6 @@ namespace VaccineAPI.Controllers
             var dbDoctor = _db.Doctors.Where(x => x.Id == Id).FirstOrDefault();
             dbDoctor.ValidUpto = doctorDTO.ValidUpto;
             _db.SaveChanges();
-            DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
-            return new Response<DoctorDTO>(true, null, doctorDTOs);
-        }
-
-        [HttpGet("approve/{id}")]
-        public Response<string> ApproveDoctor(int id)
-        {
-            var dbDoctor = _db.Doctors.Where(x => x.Id == id).FirstOrDefault();
-            dbDoctor.IsApproved = true;
-            dbDoctor.ValidUpto = DateTime.UtcNow.AddHours(5).AddMonths(3);
-            _db.SaveChanges();
             var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
             foreach (var vaccine in vaccines)
             {
@@ -325,8 +288,8 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
                 }
             }
-            // DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
-            return new Response<string>(true, null, "approved");
+            DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
+            return new Response<DoctorDTO>(true, null, doctorDTOs);
         }
 
         [HttpGet("{id}/{currentPage}/childs/")]

@@ -108,6 +108,9 @@ namespace VaccineAPI.Controllers
                 var doctorDb = _db.Doctors.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
                 if (doctorDb == null)
                     return new Response<UserDTO>(false, "Doctor not found.", null);
+                if(doctorDb.ValidUpto==null){
+                    return new Response<UserDTO>(false, "You are not approved. Contact admin for approval at 923335196658.", null);
+                }
                 
                 userDTO.DoctorId = doctorDb.Id;
                 userDTO.AllowInventory = doctorDb.AllowInventory;

@@ -431,8 +431,14 @@ namespace VaccineAPI.Controllers
                     scheduleDTO.Id = schedule.Id;
                     scheduleDTO.Brands = brandDTOs;
                     scheduleDTO.BrandId = schedule.BrandId;
+                    var child=_db.Childs.Where(x =>x.Id==schedule.ChildId).FirstOrDefault(); //child
+                    var ClinicId = child.ClinicId;
+                    var clinic=_db.Clinics.Where(x=>x.Id==ClinicId).FirstOrDefault(); //clinic
+                    var doctorId=clinic.DoctorId;
+                    
+                    
                     var brandAmount = _db.BrandAmounts
-                        .Where(x => x.BrandId == schedule.BrandId)
+                        .Where(x => x.BrandId == schedule.BrandId && x.DoctorId ==doctorId)
                         .FirstOrDefault();
                     if (brandAmount != null && schedule.Amount == null)
                         scheduleDTO.Amount = brandAmount.Amount;

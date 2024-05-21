@@ -39,3 +39,5 @@ DROP COLUMN IsSpecial;
 
 ALTER TABLE childs
 DROP COLUMN Type;
+
+

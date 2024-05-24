@@ -1028,7 +1028,8 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
                 }
                 childDTO.Id = childDB.Id;
-                
+                 if (childDTO.Type == "regular")
+                {
                     // get doctor schedule and apply it to child and save in Schedule table
                     Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x => x.Doctor).FirstOrDefault();
                     Doctor doctor = clinic.Doctor;
@@ -1106,8 +1107,7 @@ namespace VaccineAPI.Controllers
                             _db.SaveChanges();
                         }
                     }
-                
-
+                }
                 Child c = _db.Childs.Where(x => x.Id == childDTO.Id)
                               .Include(x => x.User)
                               .Include(x => x.Clinic)

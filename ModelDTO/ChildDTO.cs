@@ -36,6 +36,7 @@ namespace VaccineAPI.ModelDTO
         public long UserId { get; set; }
         public UserDTO User { get; set; }
         public bool IsBrand { get; set; }
+        public string Type { get; set; }
         public bool IsConsultationFee { get; set; }
 
         //To select Vaccine of the child on add-new-child page

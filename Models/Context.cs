@@ -6,11 +6,11 @@ namespace VaccineAPI.Models
 {
     public class Context : DbContext
     {
-        public  Context(DbContextOptions<Context> options) : base(options)
+        public Context(DbContextOptions<Context> options) : base(options)
         {
 
         }
-        
+
         public DbSet<Vaccine> Vaccines { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<Schedule> Schedules { get; set; }
@@ -26,14 +26,12 @@ namespace VaccineAPI.Models
         public DbSet<BrandAmount> BrandAmounts { get; set; }
         public DbSet<Brand> Brands { get; set; }
         public DbSet<NormalRange> NormalRanges { get; set; }
+        public DbSet<City> Cities { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-                    base.OnModelCreating(modelBuilder);
-                    modelBuilder.Entity<User>().HasData(new User() {Id = 1, MobileNumber= "3331231231" , Password = "1234" , UserType  = "SUPERADMIN" , CountryCode = "92"});
-                    
-                            
-            
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<User>().HasData(new User() { Id = 1, MobileNumber = "3331231231", Password = "1234", UserType = "SUPERADMIN", CountryCode = "92" });
         }
     }
 }

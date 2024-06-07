@@ -39,10 +39,17 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.ContentRootPath, "Resources")),
-    RequestPath = "/Resources"
+   FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.ContentRootPath, "Resources")),
+   RequestPath = "/Resources"
 });
 
 app.MapControllers();
 app.UseCors("corsapp");
+using (var scope = app.Services.CreateScope())
+{
+    var serviceProvider = scope.ServiceProvider;
+    var dbContext = serviceProvider.GetRequiredService<VaccineAPI.Models.Context>();
+    dbContext.Database.EnsureCreated(); // Optional: Ensure the database is created before applying the changes
+    dbContext.Database.Migrate(); // Optional: Apply pending migrations before applying the changes
+}
 app.Run();

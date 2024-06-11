@@ -102,6 +102,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("/forget/{email}")]
         public ActionResult<DoctorDTO> GetDoctorDetailsByEmail(string email)
         {
+            
             var doctor = _db.Doctors.FirstOrDefault(d => d.Email == email);
             var userDetails = _db.Users.FirstOrDefault(u => u.Id == doctor.UserId);
             if (userDetails != null)

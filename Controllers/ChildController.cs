@@ -35,6 +35,59 @@ namespace VaccineAPI.Controllers
             _host = host;
         }
 
+        [HttpGet("/forget/{email}2")]
+        public ActionResult ForgetChildDetailsByEmail(string email)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(email))
+                {
+                    return BadRequest("Email cannot be null or empty");
+                }
+
+                var child = _db.Childs.FirstOrDefault(c => c.Email == email);
+                if (child == null)
+                {
+                    return NotFound("Child not found");
+                }
+
+
+                var userDetails = _db.Users.FirstOrDefault(u => u.Id == child.UserId);
+                if (userDetails != null)
+                {
+
+                    var body = "Hi " + "<b>" + child.Name + " " + child.FatherName + "</b>, <br />" +
+                        "Welcome to vaccine.pk. <br /><br />" +
+                        "Your account credentials are: <br />" +
+                        "ID/Mobile Number: " + userDetails.MobileNumber + "<br />" +
+                        "Password: " + userDetails.Password + "<br />" +
+                        "Web Link: <a href=\"https://doctor.skintechno.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.skintechno.pk/</a>";
+
+
+                    try
+                    {
+                        UserEmail.SendEmail2(child.Email, body);
+                        return Ok("Email sent successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Error sending email: " + ex.Message);
+                        return StatusCode(500, "Error sending email: " + ex.Message);
+                    }
+                }
+                else
+                {
+                    return StatusCode(500, "User details not found for the child");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+                return StatusCode(500, "Internal server error: " + ex.Message);
+            }
+        }
+
+
         [HttpGet]
         public Response<IEnumerable<ChildDTO>> Get()
         {
@@ -71,6 +124,7 @@ namespace VaccineAPI.Controllers
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
+        
 
         [HttpGet("user/{id}")]
         public Response<IEnumerable<ChildDTO>> GetChildByUser(long id)

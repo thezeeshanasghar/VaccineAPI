@@ -35,7 +35,7 @@ namespace VaccineAPI.Controllers
             _host = host;
         }
 
-        [HttpGet("/forget/{email}2")]
+        [HttpGet("/forgetemail/{email}")]
         public ActionResult ForgetChildDetailsByEmail(string email)
         {
             try
@@ -66,7 +66,7 @@ namespace VaccineAPI.Controllers
 
                     try
                     {
-                        UserEmail.SendEmail2(child.Email, body);
+                        UserEmail.SendEmail3(child.Email, body);
                         return Ok("Email sent successfully");
                     }
                     catch (Exception ex)

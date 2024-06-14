@@ -174,19 +174,19 @@ namespace VaccineAPI.Controllers
         + "Web Link: <a href=\"https://doctor.echowhite.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.echowhite.pk/</a>";
                 UserEmail.SendEmail(doctorDTO.FirstName, doctorDTO.Email, body);
                 // 4- check if clinicDto exsist; then save clinic as well
-                if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))
-                {
-                    doctorDTO.ClinicDTO.Name = textInfo.ToTitleCase(doctorDTO.ClinicDTO.Name);
+                // if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))
+                // {
+                //     doctorDTO.ClinicDTO.Name = textInfo.ToTitleCase(doctorDTO.ClinicDTO.Name);
 
-                    doctorDTO.ClinicDTO.DoctorId = doctorDB.Id;
+                //     doctorDTO.ClinicDTO.DoctorId = doctorDB.Id;
 
-                    Clinic clinicDB = _mapper.Map<Clinic>(doctorDTO.ClinicDTO);
-                    clinicDB.IsOnline = true;
-                    _db.Clinics.Add(clinicDB);
-                    _db.SaveChanges();
+                //     Clinic clinicDB = _mapper.Map<Clinic>(doctorDTO.ClinicDTO);
+                //     clinicDB.IsOnline = true;
+                //     _db.Clinics.Add(clinicDB);
+                //     _db.SaveChanges();
 
-                    doctorDTO.ClinicDTO.Id = clinicDB.Id;
-                }
+                //     doctorDTO.ClinicDTO.Id = clinicDB.Id;
+                // }
             }
             return new Response<DoctorDTO>(true, null, doctorDTO);
         }

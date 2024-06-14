@@ -18,16 +18,17 @@ update Doctors set ProfileImage = "" where ProfileImage is null;
 update childs set city='' where city is null
 dotnet watch run --launch-profile https
 dotnet watch run --environment Development
+
+Step 2:
+dotnet ef migrations add InitialCreate
+dotnet ef database update
+
 Step 1: 
 ALTER TABLE clinics
 DROP COLUMN OffDays;
 
 ALTER TABLE doctors
 DROP COLUMN SignatureImage;
-
-Step 2:
-dotnet ef migrations add InitialCreate
-dotnet ef database update
 
 ALTER TABLE childs
 DROP COLUMN PreferredSchedule;
@@ -41,8 +42,6 @@ DROP COLUMN PreferredDayOfWeek;
 ALTER TABLE doses
 DROP COLUMN IsSpecial;
 
-ALTER TABLE childs
-DROP COLUMN Type;
 
 
 

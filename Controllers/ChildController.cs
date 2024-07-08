@@ -124,7 +124,7 @@ namespace VaccineAPI.Controllers
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
-        
+
 
         [HttpGet("user/{id}")]
         public Response<IEnumerable<ChildDTO>> GetChildByUser(long id)
@@ -1082,7 +1082,7 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
                 }
                 childDTO.Id = childDB.Id;
-                 if (childDTO.Type == "regular")
+                if (childDTO.Type == "regular")
                 {
                     // get doctor schedule and apply it to child and save in Schedule table
                     Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x => x.Doctor).FirstOrDefault();
@@ -1108,49 +1108,90 @@ namespace VaccineAPI.Controllers
 
                             if (childDTO.IsEPIDone)
                             {
-                                if (ds.Dose.Name.StartsWith("BCG") || ds.Dose.Name.StartsWith("HBV") ||
-                                    ds.Dose.Name.Equals("OPV # 1"))
+
+                                var dob = childDTO.DOB.Date;
+                                DateTime comparisonDate2002 = DateTime.Parse("01/01/2002");
+                                DateTime comparisonDate2009 = DateTime.Parse("01/01/2009");
+                                DateTime comparisonDate2015 = DateTime.Parse("01/01/2015");
+
+                                if (dob < comparisonDate2002)
                                 {
-                                    cvd.IsDone = true;
-                                    cvd.Due2EPI = true;
-                                    cvd.GivenDate = childDB.DOB;
+                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1"))
+                                    {
+                                        cvd.DoseId = 130;
+                                        ds.GapInDays = 0;
+                                    }
                                 }
-                                else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase) ||
-                                           ds.Dose.Name.Equals("Pneumococcal # 1", StringComparison.OrdinalIgnoreCase) ||
-                                           ds.Dose.Name.Equals("Rota Virus GE # 1", StringComparison.OrdinalIgnoreCase))
-                                // ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
+
+
+                                else if (dob > comparisonDate2002 && dob < comparisonDate2009)
                                 {
-                                    cvd.IsDone = true;
-                                    cvd.Due2EPI = true;
-                                    DateTime d = childDB.DOB;
-                                    cvd.GivenDate = d.AddDays(42);
+                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1"))
+                                    {
+                                        cvd.DoseId = 131;
+                                        ds.GapInDays = 0;
+                                    }
                                 }
-                                else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase) ||
-                                           ds.Dose.Name.Equals("Pneumococcal # 2", StringComparison.OrdinalIgnoreCase) ||
-                                           ds.Dose.Name.Equals("Rota Virus GE # 2", StringComparison.OrdinalIgnoreCase))
-                                // ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
+
+                                else if (dob > comparisonDate2009 && dob < comparisonDate2015)
                                 {
-                                    cvd.IsDone = true;
-                                    cvd.Due2EPI = true;
-                                    DateTime d = childDB.DOB;
-                                    cvd.GivenDate = d.AddDays(70);
+                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1"))
+                                    {
+                                        cvd.DoseId = 132;
+                                        ds.GapInDays = 0;
+                                    }
                                 }
-                                else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase) ||
-                                           ds.Dose.Name.Equals("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase))
-                                // ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
+
+
+                                else
                                 {
-                                    cvd.IsDone = true;
-                                    cvd.Due2EPI = true;
-                                    DateTime d = childDB.DOB;
-                                    cvd.GivenDate = d.AddDays(98);
+                                    cvd.DoseId = ds.DoseId;
                                 }
-                                else if (ds.Dose.Name.Equals("Measles # 1", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    cvd.IsDone = true;
-                                    cvd.Due2EPI = true;
-                                    DateTime d = childDB.DOB;
-                                    cvd.GivenDate = d.AddMonths(9);
-                                }
+
+
+                                // if (ds.Dose.Name.StartsWith("BCG") || ds.Dose.Name.StartsWith("HBV") ||
+                                //     ds.Dose.Name.Equals("OPV # 1"))
+                                // {
+                                //     cvd.IsDone = true;
+                                //     cvd.Due2EPI = true;
+                                //     cvd.GivenDate = childDB.DOB;
+                                // }
+                                // else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase) ||
+                                //            ds.Dose.Name.Equals("Pneumococcal # 1", StringComparison.OrdinalIgnoreCase) ||
+                                //            ds.Dose.Name.Equals("Rota Virus GE # 1", StringComparison.OrdinalIgnoreCase))
+                                // // ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
+                                // {
+                                //     cvd.IsDone = true;
+                                //     cvd.Due2EPI = true;
+                                //     DateTime d = childDB.DOB;
+                                //     cvd.GivenDate = d.AddDays(42);
+                                // }
+                                // else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase) ||
+                                //            ds.Dose.Name.Equals("Pneumococcal # 2", StringComparison.OrdinalIgnoreCase) ||
+                                //            ds.Dose.Name.Equals("Rota Virus GE # 2", StringComparison.OrdinalIgnoreCase))
+                                // // ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
+                                // {
+                                //     cvd.IsDone = true;
+                                //     cvd.Due2EPI = true;
+                                //     DateTime d = childDB.DOB;
+                                //     cvd.GivenDate = d.AddDays(70);
+                                // }
+                                // else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase) ||
+                                //            ds.Dose.Name.Equals("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase))
+                                // // ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
+                                // {
+                                //     cvd.IsDone = true;
+                                //     cvd.Due2EPI = true;
+                                //     DateTime d = childDB.DOB;
+                                //     cvd.GivenDate = d.AddDays(98);
+                                // }
+                                // else if (ds.Dose.Name.Equals("Measles # 1", StringComparison.OrdinalIgnoreCase))
+                                // {
+                                //     cvd.IsDone = true;
+                                //     cvd.Due2EPI = true;
+                                //     DateTime d = childDB.DOB;
+                                //     cvd.GivenDate = d.AddMonths(9);
+                                // }
                             }
 
                             if (ds.Dose.Name.StartsWith("HPV") && ds.Dose.DoseOrder == 3) cvd.IsSkip = true;
@@ -1161,6 +1202,52 @@ namespace VaccineAPI.Controllers
                             _db.SaveChanges();
                         }
                     }
+
+                    var dob2 = childDTO.DOB.Date;
+                    DateTime comparisonDate2012 = DateTime.Parse("01/01/2012");
+                    DateTime comparisonDate2018 = DateTime.Parse("01/01/2018");
+                    DateTime comparisonDate2020 = DateTime.Parse("01/01/2020");
+
+                    if (childDTO.IsEPIDone)
+                    {
+                        if (dob2 > comparisonDate2020)
+                        {
+                            Schedule cvd3 = new Schedule();
+                            cvd3.DoseId = 136;
+                            var mingap = 0;
+                            cvd3.DiseaseYear = "";
+                            cvd3.Date = calculateDate(childDTO.DOB, mingap);
+                            cvd3.ChildId = childDTO.Id;
+                            _db.Schedules.Add(cvd3);
+                        }
+                        else if (dob2 > comparisonDate2018)
+                        {
+                            Schedule cvd2 = new Schedule();
+                            cvd2.DoseId = 134;
+                            var mingap = 0;
+                            cvd2.DiseaseYear = "";
+                            cvd2.Date = calculateDate(childDTO.DOB, mingap);
+                            cvd2.ChildId = childDTO.Id;
+                            _db.Schedules.Add(cvd2);
+                        }
+                        else if (dob2 > comparisonDate2012)
+                        {
+                            Schedule cvd1 = new Schedule();
+                            cvd1.DoseId = 133;
+                            var mingap = 0;
+                            cvd1.DiseaseYear = "";
+                            cvd1.Date = calculateDate(childDTO.DOB, mingap);
+                            cvd1.ChildId = childDTO.Id;
+                            _db.Schedules.Add(cvd1);
+                        }
+                        else
+                        {
+                            ;
+                        }
+                    }
+
+                    _db.SaveChanges();
+
                 }
                 Child c = _db.Childs.Where(x => x.Id == childDTO.Id)
                               .Include(x => x.User)
@@ -2043,6 +2130,7 @@ namespace VaccineAPI.Controllers
         // Date Function
         protected DateTime calculateDate(DateTime date, int GapInDays)
         {
+
             // For 3 months
             if (GapInDays == 84)
                 return date.AddMonths(3);

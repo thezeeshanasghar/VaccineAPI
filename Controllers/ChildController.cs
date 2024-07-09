@@ -1113,6 +1113,7 @@ namespace VaccineAPI.Controllers
                                 DateTime comparisonDate2002 = DateTime.Parse("01/01/2002");
                                 DateTime comparisonDate2009 = DateTime.Parse("01/01/2009");
                                 DateTime comparisonDate2015 = DateTime.Parse("01/01/2015");
+                                DateTime comparisonDate2021 = DateTime.Parse("01/04/2021");
 
                                 if (dob < comparisonDate2002)
                                 {
@@ -1123,6 +1124,14 @@ namespace VaccineAPI.Controllers
                                     }
                                 }
 
+                                else if (dob > comparisonDate2021)
+                                {
+                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1"))
+                                    {
+                                        cvd.DoseId = 135;
+                                        ds.GapInDays = 0;
+                                    }
+                                }
 
                                 else if (dob > comparisonDate2002 && dob < comparisonDate2009)
                                 {
@@ -1141,8 +1150,7 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
-
+                                
                                 else
                                 {
                                     cvd.DoseId = ds.DoseId;

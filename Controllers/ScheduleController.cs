@@ -107,7 +107,7 @@ namespace VaccineAPI.Controllers
                     if (dbBrandInventory2 != null)
                     {
                         DateTime currentDate = DateTime.Now.Date;
-                        if(currentDate==dbSchedule.Date)
+                        if(currentDate==dbSchedule.Date && dbSchedule.Brand == null)
                         {
                             dbBrandInventory2.Count = dbBrandInventory2.Count + 1;
 
@@ -122,20 +122,17 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
                     
                     return new Response<ScheduleDTO>(true, "congratulations", newData2);
-                }
-                if (dbBrandInventory != null && dbBrandInventory.Count > 0)
+                }if (dbBrandInventory!= null)
+                 //not null
                 {
                     DateTime currentDate = DateTime.Now.Date;
-                        if(currentDate==dbSchedule.Date)
+                        if(currentDate==dbSchedule.Date  && dbSchedule.Brand == null)
                         {
                             dbBrandInventory.Count = dbBrandInventory.Count - 1;
 
                         }
-                        else
-                        {
-                            dbBrandInventory.Count = dbBrandInventory.Count;
-                        }
                 }
+                
                     // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                         
 

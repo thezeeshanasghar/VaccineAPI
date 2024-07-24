@@ -81,13 +81,13 @@ namespace VaccineAPI.Controllers
                     )
                     .FirstOrDefault();
 
-                  var dbSchedule2 = _db.Schedules
-                    .Include(x => x.Dose)
-                        .ThenInclude(x => x.Vaccine)
-                    .Include(x => x.Child)
-                        .ThenInclude(x => x.Clinic)
-                    .Where(c => c.Id == scheduleDTO.Id)
-                    .FirstOrDefault();
+                var dbSchedule2 = _db.Schedules
+                  .Include(x => x.Dose)
+                      .ThenInclude(x => x.Vaccine)
+                  .Include(x => x.Child)
+                      .ThenInclude(x => x.Clinic)
+                  .Where(c => c.Id == scheduleDTO.Id)
+                  .FirstOrDefault();
                 var dbBrandInventory2 = _db.BrandInventorys
                     .Where(
                         b => b.BrandId == dbSchedule2.BrandId && b.DoctorId == dbSchedule2.Child.Clinic.DoctorId
@@ -100,14 +100,14 @@ namespace VaccineAPI.Controllers
                     dbSchedule.GivenDate = null;
                     dbSchedule.BrandId = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
-                    
-                    
+
+
 
                     ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
                     if (dbBrandInventory2 != null)
                     {
                         DateTime currentDate = DateTime.Now.Date;
-                        if(currentDate==dbSchedule.Date && dbSchedule.Brand == null)
+                        if (currentDate == dbSchedule.Date && dbSchedule.Brand == null)
                         {
                             dbBrandInventory2.Count = dbBrandInventory2.Count + 1;
 
@@ -116,25 +116,26 @@ namespace VaccineAPI.Controllers
                         {
                             dbBrandInventory2.Count = dbBrandInventory2.Count;
                         }
-                       
+
                     }
 
                     _db.SaveChanges();
-                    
+
                     return new Response<ScheduleDTO>(true, "congratulations", newData2);
-                }if (dbBrandInventory!= null)
-                 //not null
+                }
+                if (dbBrandInventory != null)
+                //not null
                 {
                     DateTime currentDate = DateTime.Now.Date;
-                        if(currentDate==dbSchedule.Date  && dbSchedule.Brand == null)
-                        {
-                            dbBrandInventory.Count = dbBrandInventory.Count - 1;
+                    if (currentDate == dbSchedule.Date && dbSchedule.Brand == null)
+                    {
+                        dbBrandInventory.Count = dbBrandInventory.Count - 1;
 
-                        }
+                    }
                 }
-                
-                    // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
-                        
+
+                // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
+
 
                 // to hide next doses if disease appeared
                 if (scheduleDTO.IsDisease == true)
@@ -325,11 +326,10 @@ namespace VaccineAPI.Controllers
                     {
                         // TargetSchedule.Date =
                         //     calculateDate(TargetSchedule.Date, Convert.ToInt32(d.MinGap)); //TargetSchedule.Date.AddDays(daysDifference);
-
                         TargetSchedule.Date = calculateDate(
-                            previousdosedate,
-                            Convert.ToInt32(minimumGap)
-                        ); //TargetSchedule.Date.AddDays(daysDifference);
+                                previousdosedate,
+                                Convert.ToInt32(minimumGap)
+                            ); //TargetSchedule.Date.AddDays(daysDifference);
                         previousdosedate = TargetSchedule.Date.Date;
                     }
                 }
@@ -428,14 +428,14 @@ namespace VaccineAPI.Controllers
                     scheduleDTO.Id = schedule.Id;
                     scheduleDTO.Brands = brandDTOs;
                     scheduleDTO.BrandId = schedule.BrandId;
-                    var child=_db.Childs.Where(x =>x.Id==schedule.ChildId).FirstOrDefault(); //child
+                    var child = _db.Childs.Where(x => x.Id == schedule.ChildId).FirstOrDefault(); //child
                     var ClinicId = child.ClinicId;
-                    var clinic=_db.Clinics.Where(x=>x.Id==ClinicId).FirstOrDefault(); //clinic
-                    var doctorId=clinic.DoctorId;
-                    
-                    
+                    var clinic = _db.Clinics.Where(x => x.Id == ClinicId).FirstOrDefault(); //clinic
+                    var doctorId = clinic.DoctorId;
+
+
                     var brandAmount = _db.BrandAmounts
-                        .Where(x => x.BrandId == schedule.BrandId && x.DoctorId ==doctorId)
+                        .Where(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId)
                         .FirstOrDefault();
                     if (brandAmount != null && schedule.Amount == null)
                         scheduleDTO.Amount = brandAmount.Amount;
@@ -562,15 +562,15 @@ namespace VaccineAPI.Controllers
                             schedule.BrandId = scheduleBrand.BrandId;
                             // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                             // {
-                                var brandInventory = _db.BrandInventorys
-                                    .Where(
-                                        b =>
-                                            b.BrandId == scheduleBrand.BrandId
-                                            && b.DoctorId == scheduleDTO.DoctorId
-                                    )
-                                    .FirstOrDefault();
-                                if (brandInventory != null)
-                                    brandInventory.Count--;
+                            var brandInventory = _db.BrandInventorys
+                                .Where(
+                                    b =>
+                                        b.BrandId == scheduleBrand.BrandId
+                                        && b.DoctorId == scheduleDTO.DoctorId
+                                )
+                                .FirstOrDefault();
+                            if (brandInventory != null)
+                                brandInventory.Count--;
                             // }
                         }
                     }
@@ -1353,7 +1353,7 @@ namespace VaccineAPI.Controllers
                 foreach (var childId in childIds)
                 {
                     var schedules = await _db.Schedules
-                                            .Where(c => c.ChildId == childId && c.IsDone==false && c.Date >= parsedFromDate && c.Date <= parsedToDate)
+                                            .Where(c => c.ChildId == childId && c.IsDone == false && c.Date >= parsedFromDate && c.Date <= parsedToDate)
                                             .ToListAsync();
                     if (schedules.Any())
                     {
@@ -1379,5 +1379,5 @@ namespace VaccineAPI.Controllers
 
 
     }
-    
+
 }

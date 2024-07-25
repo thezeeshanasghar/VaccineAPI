@@ -1008,12 +1008,10 @@ namespace VaccineAPI.Controllers
                 .First<Clinic>()
                 .Doctor;
             var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
-
-            // long[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<long>();
             long[] ClinicIDs = clinics.Select(x => x.Id).ToArray<long>();
             DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
             DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
-            DateTime NextDayTime = (CurrentPakDateTime.AddDays(1)).Date;
+            DateTime NextDayTime = CurrentPakDateTime.AddDays(1).Date;
 
             if (GapDays == 0)
             {
@@ -1027,18 +1025,6 @@ namespace VaccineAPI.Controllers
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
                     .ToList<Schedule>();
-
-                var sc = db.Schedules
-                    .Include(c => c.Child)
-                    .ThenInclude(c => c.User)
-                    .Include(c => c.Dose)
-                    .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                    .Where(c => c.IsDone != true && c.IsSkip != true)
-                    .OrderBy(x => x.Child.Id)
-                    .ThenBy(x => x.Date)
-                    .ToList<Schedule>();
-
-                schedules.AddRange(sc);
             }
             else if (GapDays > 0)
             {
@@ -1048,11 +1034,7 @@ namespace VaccineAPI.Controllers
                     .ThenInclude(x => x.User)
                     .Include(x => x.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                    .Where(
-                        c =>
-                            c.Date.Date > CurrentPakDateTime.Date
-                            && c.Date.Date <= AddedDateTime.Date
-                    )
+                    .Where(c => c.Date.Date > CurrentPakDateTime.Date && c.Date.Date <= AddedDateTime.Date)
                     .Where(c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
@@ -1060,7 +1042,6 @@ namespace VaccineAPI.Controllers
             }
             else if (GapDays < 0)
             {
-                // schedules = db.Schedules.Include("Child")
                 schedules = db.Schedules
                     .Include(x => x.Child)
                     .ThenInclude(x => x.User)
@@ -1079,6 +1060,7 @@ namespace VaccineAPI.Controllers
 
             return listOfSchedules;
         }
+
 
         private static Dictionary<String, String> AddDoseNames(List<Schedule> schedules)
         {

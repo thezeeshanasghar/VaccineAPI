@@ -113,7 +113,7 @@ namespace VaccineAPI.Controllers
                 + "Your account credentials are: <br />"
                 + "ID/Mobile Number: " + userDetails.MobileNumber + "<br />"
                 + "Password: " + userDetails.Password + "<br />"
-                + "Web Link: <a href=\"https://doctor.echowhite.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.echowhite.pk/</a>";
+                + "Web Link: <a href=\"https://doctor.skintechno.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.skintechno.com/</a>";
                 try{
                     UserEmail.SendEmail2( doctor.Email, body);
                 }
@@ -171,7 +171,7 @@ namespace VaccineAPI.Controllers
         + "Your account credentials are: <br />"
         + "ID/Mobile Number: " + doctorDTO.MobileNumber + "<br />"
         + "Password: " + doctorDTO.Password + "<br />"
-        + "Web Link: <a href=\"https://doctor.echowhite.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.echowhite.pk/</a>";
+        + "Web Link: <a href=\"https://doctor.skintechno.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.skintechno.com/</a>";
                 UserEmail.SendEmail(doctorDTO.FirstName, doctorDTO.Email, body);
                 // 4- check if clinicDto exsist; then save clinic as well
                 // if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))

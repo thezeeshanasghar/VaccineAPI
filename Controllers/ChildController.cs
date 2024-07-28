@@ -472,16 +472,17 @@ namespace VaccineAPI.Controllers
                 // }
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
 
-                if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
-                {
-                    upperTable.AddCell(
-                        CreateCell(dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName, "", 1,
-                                   "right", "description"));
-                }
-                else
-                {
-                    upperTable.AddCell(CreateCell("W/O " + dbChild.FatherName, "", 1, "right", "description"));
-                }
+                // if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
+                // {
+                //     upperTable.AddCell(
+                //         CreateCell(dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName, "", 1,
+                //                    "right", "description"));
+                // }
+                // else
+                // {
+                //     upperTable.AddCell(CreateCell("W/O " + dbChild.FatherName, "", 1, "right", "description"));
+                // }
+                upperTable.AddCell(CreateCell("S/D/W/o " + dbChild.FatherName, "", 1, "right", "description"));
                 upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
                                               "description"));

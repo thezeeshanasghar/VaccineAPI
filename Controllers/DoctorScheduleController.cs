@@ -30,16 +30,46 @@ namespace VaccineAPI.Controllers
             return new Response<List<DoctorScheduleDTO>>(true, null, listDTO);
         }
 
+        // [HttpGet("{id}")]
+        // public Response<List<DoctorScheduleDTO>> GetSingle(int Id)
+        // {
+        //     List<DoctorSchedule> doctorSchduleDBs =
+        //      _db.DoctorSchedules.Include("Dose")
+        //      .Include("Dose.Vaccine")
+        //         .Include("Doctor")
+        //         .Where(x => x.DoctorId == Id)
+        //         .OrderBy(x => x.Dose.MinAge)
+        //         .ThenBy(x => x.Dose.Name).ToList();
+        //     if (doctorSchduleDBs == null || doctorSchduleDBs.Count() == 0)
+        //         return new Response<List<DoctorScheduleDTO>>(false, "DoctorSchedule not found", null);
+        //     List<DoctorScheduleDTO> DoctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(doctorSchduleDBs);
+        //     return new Response<List<DoctorScheduleDTO>>(true, null, DoctorScheduleDTOs);
+
+
+        // }
+
         [HttpGet("{id}")]
-        public Response<List<DoctorScheduleDTO>> GetSingle(int Id)
+        public Response<List<DoctorScheduleDTO>> GetSingle(long id)
         {
-            List<DoctorSchedule> doctorSchduleDBs = _db.DoctorSchedules.Include("Dose").Include("Dose.Vaccine")
-                .Include("Doctor").Where(x => x.DoctorId == Id).OrderBy(x => x.Dose.MinAge).ThenBy(x => x.Dose.Name).ToList();
-            if (doctorSchduleDBs == null || doctorSchduleDBs.Count() == 0)
+            var doctorSchedules = _db.DoctorSchedules
+                .Include(ds => ds.Dose)
+                .ThenInclude(d => d.Vaccine)
+                .Include(ds => ds.Doctor)
+                .Where(ds => ds.DoctorId == id)
+                .ToList();
+
+            if (doctorSchedules == null || doctorSchedules.Count == 0)
                 return new Response<List<DoctorScheduleDTO>>(false, "DoctorSchedule not found", null);
-            List<DoctorScheduleDTO> DoctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(doctorSchduleDBs);
-            return new Response<List<DoctorScheduleDTO>>(true, null, DoctorScheduleDTOs);
+
+            // Order the schedules by Dose Name
+            var sortedDoctorSchedules = doctorSchedules
+                .OrderBy(ds => ds.Dose.Name) // Ensure that Dose.Name is not null and sortable
+                .ToList();
+
+            var doctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(sortedDoctorSchedules);
+            return new Response<List<DoctorScheduleDTO>>(true, null, doctorScheduleDTOs);
         }
+
 
 
         [HttpPost]

@@ -42,6 +42,9 @@ DROP COLUMN PreferredDayOfWeek;
 ALTER TABLE doses
 DROP COLUMN IsSpecial;
 
+ALTER TABLE doctors
+DROP COLUMN IsApproved;
+
 
 
 

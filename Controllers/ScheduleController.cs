@@ -1063,11 +1063,53 @@ namespace VaccineAPI.Controllers
 
 
         ///////////////
-        [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
+        // [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
+        // public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
+        // {
+        //     List<Schedule> schedules = GetAlertData2(GapDays, OnlineClinicId, _db);
+
+        //     IEnumerable<ChildDTO> childInfoDTOs = schedules.Select(s => new ChildDTO
+        //     {
+        //         Id = s.Child.Id,
+        //         Name = s.Child.Name,
+        //         Email = s.Child.Email
+        //     });
+
+        //     foreach (var child in childInfoDTOs)
+        //     {
+        //         if (child.Email == "")
+        //         {
+        //             continue;
+        //         }
+        //         else
+        //         {
+        //             var body = "teesting ";
+
+        //             try
+        //             {
+        //                 UserEmail.SendEmail2(child.Email, body);
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 Console.WriteLine("Error sending email: " + ex.Message);
+
+
+        //             }
+
+        //         }
+
+        //     }
+
+        //     return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);
+        // }
+
+         [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
         {
+            // Get schedules based on the gap days and clinic ID
             List<Schedule> schedules = GetAlertData2(GapDays, OnlineClinicId, _db);
 
+            // Map schedules to child DTOs
             IEnumerable<ChildDTO> childInfoDTOs = schedules.Select(s => new ChildDTO
             {
                 Id = s.Child.Id,
@@ -1075,29 +1117,36 @@ namespace VaccineAPI.Controllers
                 Email = s.Child.Email
             });
 
+
             foreach (var child in childInfoDTOs)
             {
-                if (child.Email == "")
+                if (string.IsNullOrEmpty(child.Email))
                 {
                     continue;
                 }
                 else
                 {
-                    var body = "teesting ";
 
-                    try
+                    var doctor = _db.Doctors.FirstOrDefault(d => d.Id == schedules.First().Id);
+                    var clinic = _db.Clinics.FirstOrDefault(c => c.Id == schedules.First().Child.ClinicId);
+
+                    if (doctor != null && clinic != null)
                     {
-                        UserEmail.SendEmail2(child.Email, body);
+                        // Prepare email body
+                        string body = $"Reminder: <b>Vaccination {schedules.First().Dose.Name} for {child.Name}</b> is due today.<br /><br />" +
+                                      $"Kindly book an appointment at {clinic.PhoneNumber} with Dr. {doctor.FirstName} at {clinic.Name}.<br />" +
+                                      "Web Link: <a href=\"https://vaccs.io\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccs.io</a>";
+
+                        try
+                        {
+                            UserEmail.SendEmail2(child.Email, body);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("Error sending email: " + ex.Message);
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("Error sending email: " + ex.Message);
-
-
-                    }
-
                 }
-
             }
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);

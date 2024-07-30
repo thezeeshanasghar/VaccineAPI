@@ -1083,17 +1083,24 @@ namespace VaccineAPI.Controllers
         //         }
         //         else
         //         {
-        //             var body = "teesting ";
+        //             var doctor = _db.Doctors.FirstOrDefault(d => d.Id == schedules.First().FirstName);
+        //             var clinic = _db.Clinics.FirstOrDefault(c => c.Id == schedules.First().Child.ClinicId);
 
-        //             try
+        //             if (doctor != null && clinic != null)
         //             {
-        //                 UserEmail.SendEmail2(child.Email, body);
-        //             }
-        //             catch (Exception ex)
-        //             {
-        //                 Console.WriteLine("Error sending email: " + ex.Message);
+        //                 // Prepare email body
+        //                 string body = $"Reminder: <b>Vaccination {schedules.First().Dose.Name} for {child.Name}</b> is due today.<br /><br />" +
+        //                               $"Kindly book an appointment at {clinic.PhoneNumber} with Dr. {doctor.FirstName} at {clinic.Name}.<br />" +
+        //                               "Web Link: <a href=\"https://vaccs.io\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccs.io</a>";
 
-
+        //                 try
+        //                 {
+        //                     UserEmail.SendEmail2(child.Email, body);
+        //                 }
+        //                 catch (Exception ex)
+        //                 {
+        //                     Console.WriteLine("Error sending email: " + ex.Message);
+        //                 }
         //             }
 
         //         }
@@ -1103,13 +1110,11 @@ namespace VaccineAPI.Controllers
         //     return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);
         // }
 
-         [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
+        [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
         {
-            // Get schedules based on the gap days and clinic ID
             List<Schedule> schedules = GetAlertData2(GapDays, OnlineClinicId, _db);
 
-            // Map schedules to child DTOs
             IEnumerable<ChildDTO> childInfoDTOs = schedules.Select(s => new ChildDTO
             {
                 Id = s.Child.Id,
@@ -1117,22 +1122,33 @@ namespace VaccineAPI.Controllers
                 Email = s.Child.Email
             });
 
-
             foreach (var child in childInfoDTOs)
             {
-                if (string.IsNullOrEmpty(child.Email))
+                if (child.Email == "")
                 {
                     continue;
                 }
                 else
                 {
+                    var doctorId = schedules.First().Id;
 
-                    var doctor = _db.Doctors.FirstOrDefault(d => d.Id == schedules.First().Id);
+                    var doctor = _db.Doctors.FirstOrDefault(d => d.Id == doctorId);
+
+                    if (doctor != null)
+                    {
+                        string doctorName = doctor.FirstName;
+
+                    }
+                    else
+                    {
+
+                        Console.WriteLine("Doctor not found.");
+                    }
                     var clinic = _db.Clinics.FirstOrDefault(c => c.Id == schedules.First().Child.ClinicId);
 
                     if (doctor != null && clinic != null)
                     {
-                        // Prepare email body
+
                         string body = $"Reminder: <b>Vaccination {schedules.First().Dose.Name} for {child.Name}</b> is due today.<br /><br />" +
                                       $"Kindly book an appointment at {clinic.PhoneNumber} with Dr. {doctor.FirstName} at {clinic.Name}.<br />" +
                                       "Web Link: <a href=\"https://vaccs.io\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccs.io</a>";
@@ -1146,7 +1162,9 @@ namespace VaccineAPI.Controllers
                             Console.WriteLine("Error sending email: " + ex.Message);
                         }
                     }
+
                 }
+
             }
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);

@@ -489,7 +489,7 @@ namespace VaccineAPI.Controllers
                 upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
 
                 if (!String.IsNullOrEmpty(dbChild.CNIC))
-                    upperTable.AddCell(CreateCell("CNIC: " + dbChild.CNIC, "", 1, "right", "description"));
+                    upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
                 else
                     upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
 

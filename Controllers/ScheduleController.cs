@@ -1062,6 +1062,85 @@ namespace VaccineAPI.Controllers
         }
 
 
+        ///////////////
+        [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
+        public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
+        {
+            List<Schedule> schedules = GetAlertData2(GapDays, OnlineClinicId, _db);
+
+            IEnumerable<ChildDTO> childInfoDTOs = schedules.Select(s => new ChildDTO
+            {
+                Id = s.Child.Id,
+                Name = s.Child.Name,
+                Email = s.Child.Email
+            });
+
+            foreach (var child in childInfoDTOs)
+            {
+                if (child.Email == "")
+                {
+                    continue;
+                }
+                else
+                {
+                    var body = "teesting ";
+
+                    try
+                    {
+                        UserEmail.SendEmail2(child.Email, body);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Error sending email: " + ex.Message);
+
+
+                    }
+
+                }
+
+            }
+
+            return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);
+        }
+        private static List<Schedule> GetAlertData2(int GapDays, long OnlineClinicId, Context db)
+        {
+            var doctor = db.Clinics
+                .Where(x => x.Id == OnlineClinicId)
+                .Include(x => x.Doctor)
+                .First()
+                .Doctor;
+
+            var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
+            long[] ClinicIDs = clinics.Select(x => x.Id).ToArray();
+
+            DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+            DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
+            DateTime NextDayTime = CurrentPakDateTime.AddDays(1).Date;
+
+
+            List<Schedule> schedules = new List<Schedule>();
+
+            if (GapDays == 0)
+            {
+                schedules = db.Schedules
+                    .Include(x => x.Child)
+                    .ThenInclude(x => x.User)
+                    .Include(x => x.Dose)
+                    .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
+                    .Where(c => c.Date.Date == CurrentPakDateTime.Date)
+                    .Where(c => c.IsDone != true && c.IsSkip != true)
+                    .OrderBy(x => x.Child.Id)
+                    .ThenBy(x => x.Date)
+                    .ToList();
+            }
+
+            Dictionary<string, string> map = AddDoseNames(schedules);
+            List<Schedule> listOfSchedules = removeDuplicateRecords(schedules, map);
+
+            return listOfSchedules;
+        }
+
+
         private static Dictionary<String, String> AddDoseNames(List<Schedule> schedules)
         {
             Dictionary<String, String> map = new Dictionary<string, string>();

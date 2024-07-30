@@ -1151,7 +1151,7 @@ namespace VaccineAPI.Controllers
 
                         string body = $"Reminder: <b>Vaccination {schedules.First().Dose.Name} for {child.Name}</b> is due today.<br /><br />" +
                                       $"Kindly book an appointment at {clinic.PhoneNumber} with Dr. {doctor.FirstName} at {clinic.Name}.<br />" +
-                                      "Web Link: <a href=\"https://vaccs.io\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccs.io</a>";
+                                      "Web Link: <a href=\"https://vaccs.io\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccs.io</a> ";
 
                         try
                         {

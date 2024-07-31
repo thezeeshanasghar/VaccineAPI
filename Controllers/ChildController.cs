@@ -1662,6 +1662,8 @@ namespace VaccineAPI.Controllers
                               .FirstOrDefault();
             var dbDoctor = dbChild.Clinic.Doctor;
             var DoctorId = dbDoctor.Id;
+
+            
             dbDoctor.InvoiceNumber = (dbDoctor.InvoiceNumber > 0) ? dbDoctor.InvoiceNumber + 1 : 1;
 
             var dbSchedules = _db.Schedules.Include(x => x.Dose)
@@ -1670,6 +1672,9 @@ namespace VaccineAPI.Controllers
                                   .Where(x => x.ChildId == Id && x.Date.Date == ScheduleDate.Date && x.IsSkip != true &&
                                               x.IsDone == true && x.IsDisease != true)
                                   .ToList();
+            var latestSchedule = dbSchedules.OrderByDescending(s => s.GivenDate).FirstOrDefault();
+            DateTime givendate = latestSchedule.GivenDate.Value;
+
             childName = dbChild.Name;
 
             // Table 1 for description above amounts table
@@ -1706,7 +1711,7 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 1, "left", "description"));
             upperTable.AddCell(CreateCell("info@vaccine.pk", "", 1, "right", "description"));
             upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 1, "left", "description"));
-            upperTable.AddCell(CreateCell(InvoiceDate.ToString("dd-MM-yyyy"), "", 1, "right", "description"));
+            upperTable.AddCell(CreateCell(givendate.ToString("dd-MM-yyyy"), "", 1, "right", "description"));
             upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "unbold", 1, "left", "description"));
             upperTable.AddCell(CreateCell("#StayHome #GetVaccinated", "", 1, "right", "description"));
 

@@ -1068,12 +1068,17 @@ namespace VaccineAPI.Controllers
         {
             List<Schedule> schedules = GetAlertData2(GapDays, OnlineClinicId, _db);
 
+
             IEnumerable<ChildDTO> childInfoDTOs = schedules.Select(s => new ChildDTO
             {
                 Id = s.Child.Id,
                 Name = s.Child.Name,
-                Email = s.Child.Email
+                Email = s.Child.Email,
+                ClinicId = s.Child.ClinicId,
+
+
             });
+
 
             foreach (var child in childInfoDTOs)
             {
@@ -1083,7 +1088,37 @@ namespace VaccineAPI.Controllers
                 }
                 else
                 {
-                    var body = "Reminder: Vaccination !! ";
+
+                    var ChildId = child.Id;
+                    var ClinicId = child.ClinicId;
+
+                    var doctor = _db.Clinics
+                        .Where(x => x.Id == ClinicId)
+                        .Include(x => x.Doctor)
+                        .FirstOrDefault()
+                        ?.Doctor;
+
+                    var clinics = _db.Clinics.Where(x => x.Id == ClinicId).FirstOrDefault();
+
+                    var dbSchedules = _db.Schedules.Where(x => x.ChildId == ChildId).ToList();
+
+                    var specificDate = DateTime.Today;
+
+                    var specificSchedule = dbSchedules
+                        .FirstOrDefault(schedule => schedule.Date == specificDate);
+
+                    string body;
+                    if (specificSchedule != null)
+                    {
+                        var doseId = specificSchedule.DoseId;
+                        body = $"Reminder: Vaccination!! Doctor: {doctor.FirstName}, Clinic: {clinics.Name}, Phone: {clinics.PhoneNumber}, Child: {child.Name}, Dose ID: {doseId}";
+                    }
+                    else
+                    {
+                        body = "No schedule found for the specified date.";
+                    }
+
+                    // Use the 'body' variable as needed (e.g., send an email)
 
                     try
                     {
@@ -1102,6 +1137,8 @@ namespace VaccineAPI.Controllers
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);
         }
+
+
         private static List<Schedule> GetAlertData2(int GapDays, long OnlineClinicId, Context db)
         {
             var doctor = db.Clinics

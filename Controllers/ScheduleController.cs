@@ -1112,7 +1112,7 @@ namespace VaccineAPI.Controllers
                         var doseId = specificSchedule.DoseId;
                         var dose = _db.Doses.Where(x => x.Id == doseId).FirstOrDefault();
 
-                        body = $"Reminder: Vaccination  {dose.Name}, For Child: {child.Name},  is due today. Kindly Book an appointment at Clinic: {clinics.Name}, with Doctor: {doctor.FirstName}, at Phone: {clinics.PhoneNumber} ";
+                        body = $"Reminder: Vaccination  {dose.Name}, For Child: {child.Name},  is due today. Kindly Book an appointment at Clinic: {clinics.Name}, with Doctor: {doctor.FirstName} {doctor.LastName}, at Phone: {clinics.PhoneNumber} ";
                     }
                     else
                     {

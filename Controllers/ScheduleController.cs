@@ -1075,23 +1075,15 @@ namespace VaccineAPI.Controllers
                 Email = s.Child.Email
             });
 
-
             foreach (var child in childInfoDTOs)
             {
                 if (child.Email == "")
                 {
                     continue;
                 }
-
                 else
                 {
-                    var child1 = _db.Childs.FirstOrDefault(c => c.Id == c.Id);
-                    var Brand = _db.Vaccines.FirstOrDefault(c => c.Brands == c.Brands);
-                    var clinic = _db.Clinics.FirstOrDefault(c => c.PhoneNumber == c.PhoneNumber);
-                    var doctor = _db.Doctors.FirstOrDefault(c => c.DisplayName == c.DisplayName);
-
-                    var body = $"Dear {child1.Name}, Vaccination {Brand.Doses}. Kindly book an appointment at {clinic.PhoneNumber} with doctor {doctor.DisplayName}.";
-
+                    var body = "Reminder: Vaccination !! ";
 
                     try
                     {

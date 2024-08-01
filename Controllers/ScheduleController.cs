@@ -1113,7 +1113,7 @@ namespace VaccineAPI.Controllers
                     if (specificSchedule != null)
                     {
                         var doseId = specificSchedule.DoseId;
-                        body = $"Reminder: Vaccination!! Doctor: {doctor.FirstName}, Clinic: {clinics.Name}, Phone: {clinics.PhoneNumber}, Child: {child.Name}, Dose ID:" + doses.Name;
+                        body = $"Reminder: Vaccination!! Doctor: {doctor.FirstName}, Clinic: {clinics.Name}, Phone: {clinics.PhoneNumber}, Child: {child.Name}, Dose ID: {doses.Name}";
                     }
                     else
                     {

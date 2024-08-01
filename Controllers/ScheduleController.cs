@@ -1099,7 +1099,6 @@ namespace VaccineAPI.Controllers
                         ?.Doctor;
 
                     var clinics = _db.Clinics.Where(x => x.Id == ClinicId).FirstOrDefault();
-
                     var dbSchedules = _db.Schedules.Where(x => x.ChildId == ChildId).ToList();
 
                     var specificDate = DateTime.Today;
@@ -1111,7 +1110,9 @@ namespace VaccineAPI.Controllers
                     if (specificSchedule != null)
                     {
                         var doseId = specificSchedule.DoseId;
-                        body = $"Reminder: Vaccination!! Doctor: {doctor.FirstName}, Clinic: {clinics.Name}, Phone: {clinics.PhoneNumber}, Child: {child.Name}, Dose ID: {doseId}";
+                        var dose = _db.Doses.Where(x => x.Id == doseId).FirstOrDefault();
+
+                        body = $"Reminder: Vaccination  {dose.Name}, For Child: {child.Name},  is due today. Kindly Book an appointment at Clinic: {clinics.Name}, with Doctor: {doctor.FirstName}, at Phone: {clinics.PhoneNumber} ";
                     }
                     else
                     {

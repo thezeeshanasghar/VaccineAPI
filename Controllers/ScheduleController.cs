@@ -21,6 +21,7 @@ namespace VaccineAPI.Controllers
         private readonly IWebHostEnvironment _host;
 
         private readonly IMapper _mapper;
+        private long DoseId;
 
         public ScheduleController(Context context, IMapper mapper, IWebHostEnvironment host)
         {
@@ -1099,7 +1100,8 @@ namespace VaccineAPI.Controllers
                         ?.Doctor;
 
                     var clinics = _db.Clinics.Where(x => x.Id == ClinicId).FirstOrDefault();
-
+                    // Retrieve the dose information
+                    var doses = _db.Doses.Where(x => x.Id == DoseId).FirstOrDefault();
                     var dbSchedules = _db.Schedules.Where(x => x.ChildId == ChildId).ToList();
 
                     var specificDate = DateTime.Today;
@@ -1111,7 +1113,7 @@ namespace VaccineAPI.Controllers
                     if (specificSchedule != null)
                     {
                         var doseId = specificSchedule.DoseId;
-                        body = $"Reminder: Vaccination!! Doctor: {doctor.FirstName}, Clinic: {clinics.Name}, Phone: {clinics.PhoneNumber}, Child: {child.Name}, Dose ID: {doseId}";
+                        body = $"Reminder: Vaccination!! Doctor: {doctor.FirstName}, Clinic: {clinics.Name}, Phone: {clinics.PhoneNumber}, Child: {child.Name}, Dose ID:" + doses.Name;
                     }
                     else
                     {

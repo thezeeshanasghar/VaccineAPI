@@ -1151,7 +1151,7 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-                                
+
                                 else
                                 {
                                     cvd.DoseId = ds.DoseId;
@@ -1663,7 +1663,7 @@ namespace VaccineAPI.Controllers
             var dbDoctor = dbChild.Clinic.Doctor;
             var DoctorId = dbDoctor.Id;
 
-            
+
             dbDoctor.InvoiceNumber = (dbDoctor.InvoiceNumber > 0) ? dbDoctor.InvoiceNumber + 1 : 1;
 
             var dbSchedules = _db.Schedules.Include(x => x.Dose)
@@ -1860,18 +1860,15 @@ namespace VaccineAPI.Controllers
             // loop end
             document.Add(vaccinetable);
 
-            //    Paragraph signatureheading = new Paragraph("AUTHORIZED SIGNATURES");
-            //     signatureheading.Font = FontFactory.GetFont(FontFactory.HELVETICA, 12);
-            //     signatureheading.Alignment = Element.ALIGN_LEFT;
-            //     document.Add (signatureheading);
-            // Table 4 for description above amounts table
+            // First Table: Quick Links and Other Information
             PdfPTable bottomTable = new PdfPTable(2);
             float[] bottomTableWidths = new float[] { 235f, 235f };
-            bottomTable.HorizontalAlignment = 0;
+            bottomTable.HorizontalAlignment = Element.ALIGN_LEFT;
             bottomTable.TotalWidth = 470f;
             bottomTable.LockedWidth = true;
             bottomTable.SetWidths(bottomTableWidths);
 
+            // Adding cells to the bottom table
             bottomTable.AddCell(CreateCell(" ", "bold", 2, "left", "description"));
             bottomTable.AddCell(CreateCell("Quick links: ", "", 2, "left", "description"));
 
@@ -1881,20 +1878,53 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell(CreateCell("Phone/WhatsApp: +923335196658", "", 1, "right", "description"));
             bottomTable.AddCell(CreateCell("Vaccine.pk/pricing", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCell("Email: dr@salmanbajwa.com", "", 1, "right", "description"));
-            bottomTable.WriteSelectedRows(0, -1, 65, 100, writer.DirectContent);
 
-            // var imgcellLeft = CreateCell ("", "", 1, "left", "description");
-            // imgcellLeft.PaddingTop = 5;
-            // bottomTable.AddCell (imgcellLeft);
-            // document.Add (bottomTable);
+            // Positioning the first table
+            bottomTable.WriteSelectedRows(0, -1, 65, 200, writer.DirectContent); // Adjust y-position for table
+
+            PdfPTable footerTable = new PdfPTable(1);
+            footerTable.TotalWidth = 470f;
+            footerTable.LockedWidth = true;
+
+
+            Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+            var currentDate = DateTime.Now.ToString("MMMM dd, yyyy");
+
+            // Cell for the current date, aligned to the right
+            var dateText = $"Printed date: {currentDate}";
+            Phrase datePhrase = new Phrase(dateText, footerFont);
+            PdfPCell dateCell = new PdfPCell(datePhrase)
+            {
+                HorizontalAlignment = Element.ALIGN_RIGHT,
+                Border = Rectangle.NO_BORDER,
+                PaddingTop = 5f,
+                PaddingBottom = 2f
+            };
+
+            footerTable.AddCell(dateCell);
+            var footerText = $"Note! This electronically generated invoice is valid without physical signatures or stamps. For questions, contact info@skintechno.com.";
+
+            Phrase footerPhrase = new Phrase(footerText, footerFont);
+            PdfPCell footerCell = new PdfPCell(footerPhrase)
+            {
+                HorizontalAlignment = Element.ALIGN_LEFT,
+                Border = Rectangle.NO_BORDER,
+                PaddingTop = 5f,
+                PaddingBottom = 2f
+            };
+
+            footerTable.AddCell(footerCell);
+            footerTable.WriteSelectedRows(0, -1, 65, 50, writer.DirectContent);
+
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             stream = output;
 
-            //}
+            // Generate the filename and return the file
             var FileName = childName.Replace(" ", "") + "_Invoice" + "_" +
                            DateTime.UtcNow.AddHours(5).Date.ToString("MMMM-dd-yyyy") + ".pdf";
             return File(stream, "application/pdf", FileName);
+
         }
 
         // functions to convert amount to words

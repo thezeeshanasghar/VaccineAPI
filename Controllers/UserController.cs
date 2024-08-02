@@ -108,10 +108,11 @@ namespace VaccineAPI.Controllers
                 var doctorDb = _db.Doctors.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
                 if (doctorDb == null)
                     return new Response<UserDTO>(false, "Doctor not found.", null);
-                if(doctorDb.ValidUpto==null){
+                if (doctorDb.ValidUpto == null)
+                {
                     return new Response<UserDTO>(false, "You are not approved. Contact admin for approval at 923335196658.", null);
                 }
-                
+
                 userDTO.DoctorId = doctorDb.Id;
                 userDTO.AllowInventory = doctorDb.AllowInventory;
                 userDTO.AllowInvoice = doctorDb.AllowInvoice;
@@ -187,6 +188,82 @@ namespace VaccineAPI.Controllers
                 }
             }
         }
+
+        // [HttpPost("verify")]
+        // public ActionResult<Response<bool>> VerifyChild(string childname, string fathername, DateTime DOB, string Email)
+        // {
+        //     var child = _db.Childs
+        //         .Where(x => x.Name == childname &&
+        //                     x.FatherName == fathername &&
+        //                     x.DOB.Date == DOB)
+        //         .FirstOrDefault();
+        //     if (child == null)
+        //     {
+
+
+        //         return new Response<bool>(false, "No matching record found", false);
+        //     }
+
+        //     if (string.IsNullOrEmpty(child.Email))
+        //     {
+        //         child.Email = Email;
+        //         _db.Childs.Update(child); // Mark the entity as updated
+        //         _db.SaveChanges();
+
+
+        //     }
+        //     return new Response<bool>(true, "Record matches", true);
+        // }
+
+        [HttpPost("verify")]
+        public ActionResult<Response<bool>> VerifyChild(ChildDTO childDTO)
+        {
+            var child = _db.Childs
+                .Where(x => x.Name == childDTO.Name &&
+                            x.FatherName == childDTO.FatherName &&
+                            x.DOB.Date == childDTO.DOB.Date)
+                .FirstOrDefault();
+
+            if (child == null)
+            {
+                return new Response<bool>(false, "No matching record found", false);
+            }
+
+            if (string.IsNullOrEmpty(child.Email))
+            {
+                child.Email = childDTO.Email;
+                _db.Childs.Update(child); // Mark the entity as updated
+                _db.SaveChanges();
+
+                // Retrieve user data based on child ID
+                var user = _db.Users
+                    .Where(u => u.Id == child.Id)
+                    .Select(u => new { u.MobileNumber, u.Password })
+                    .FirstOrDefault();
+
+                if (user == null)
+                {
+                    return new Response<bool>(false, "No matching user record found", false);
+                }
+
+                // Prepare email body
+                string body = $"Phone Number: {user.MobileNumber}\nPassword: {user.Password}";
+
+                // Send email
+                try
+                {
+                    UserEmail.SendEmail2(child.Email, body);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error sending email: " + ex.Message);
+                    return new Response<bool>(false, "Error sending email", false);
+                }
+            }
+
+            return new Response<bool>(true, "Record matches and email sent", true);
+        }
+
 
         [HttpPost("change-password")]
         public Response<UserDTO> ChangePassword(ChangePasswordRequestDTO user)

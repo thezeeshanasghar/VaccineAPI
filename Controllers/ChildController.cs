@@ -1697,7 +1697,7 @@ namespace VaccineAPI.Controllers
             imageCell.Colspan = 1;  // either 1 if you need to insert one cell
             imageCell.Rowspan = 2;
             imageCell.Border = 0;
-            imageCell.FixedHeight = 1f;
+            imageCell.FixedHeight = 50f;
             imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
             upperTable.AddCell(imageCell);
 

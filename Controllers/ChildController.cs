@@ -2146,6 +2146,7 @@ namespace VaccineAPI.Controllers
                 dbChild.IsEPIDone = childDTO.IsEPIDone;
                 dbChild.IsVerified = childDTO.IsVerified;
                 dbChild.IsInactive = childDTO.IsInactive;
+                dbChild.CNIC = childDTO.CNIC;
                 var dbUser = dbChild.User;
                 dbUser.CountryCode = childDTO.CountryCode;
                 dbUser.MobileNumber = childDTO.MobileNumber;

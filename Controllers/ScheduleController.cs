@@ -988,10 +988,10 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
-        public Response<IEnumerable<ScheduleDTO>> GetAlert(int GapDays, long OnlineClinicId)
+        public Response<IEnumerable<ScheduleDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId)
         {
             {
-                List<Schedule> schedules = GetAlertData(GapDays, OnlineClinicId, _db);
+                List<Schedule> schedules = GetAlertData(inputDate, GapDays, OnlineClinicId, _db);
                 IEnumerable<ScheduleDTO> scheduleDTO = _mapper.Map<IEnumerable<ScheduleDTO>>(
                     schedules
                 );
@@ -999,7 +999,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        private static List<Schedule> GetAlertData(int GapDays, long OnlineClinicId, Context db)
+        private static List<Schedule> GetAlertData(DateTime inputDate, int GapDays, long OnlineClinicId, Context db)
         {
             List<Schedule> schedules = new List<Schedule>();
             var doctor = db.Clinics
@@ -1009,9 +1009,9 @@ namespace VaccineAPI.Controllers
                 .Doctor;
             var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
             long[] ClinicIDs = clinics.Select(x => x.Id).ToArray<long>();
-            DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
-            DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
-            DateTime NextDayTime = CurrentPakDateTime.AddDays(1).Date;
+            // DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+            DateTime AddedDateTime = inputDate.AddDays(GapDays);
+            DateTime NextDayTime = inputDate.AddDays(1).Date;
 
             if (GapDays == 0)
             {
@@ -1020,7 +1020,7 @@ namespace VaccineAPI.Controllers
                     .ThenInclude(x => x.User)
                     .Include(x => x.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                    .Where(c => c.Date.Date == CurrentPakDateTime.Date)
+                    .Where(c => c.Date.Date == inputDate.Date)
                     .Where(c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
@@ -1034,7 +1034,7 @@ namespace VaccineAPI.Controllers
                     .ThenInclude(x => x.User)
                     .Include(x => x.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                    .Where(c => c.Date.Date > CurrentPakDateTime.Date && c.Date.Date <= AddedDateTime.Date)
+                    .Where(c => c.Date.Date > inputDate.Date && c.Date.Date <= AddedDateTime.Date)
                     .Where(c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
@@ -1047,7 +1047,7 @@ namespace VaccineAPI.Controllers
                     .ThenInclude(x => x.User)
                     .Include(x => x.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                    .Where(c => c.Date < CurrentPakDateTime.Date && c.Date >= AddedDateTime)
+                    .Where(c => c.Date < inputDate.Date && c.Date >= AddedDateTime)
                     .Where(c => c.IsDone != true && c.IsSkip != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
@@ -1239,12 +1239,13 @@ namespace VaccineAPI.Controllers
 
         [HttpGet("sms-alert/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ScheduleDTO>> SendSMSAlertToParent(
+            DateTime inputDate,
             int GapDays,
             int OnlineClinicId
         )
         {
             {
-                List<Schedule> Schedules = GetAlertData(GapDays, OnlineClinicId, _db);
+                List<Schedule> Schedules = GetAlertData(inputDate, GapDays, OnlineClinicId, _db);
                 var dbChildren = Schedules.Select(x => x.Child).Distinct().ToList();
                 foreach (var child in dbChildren)
                 {

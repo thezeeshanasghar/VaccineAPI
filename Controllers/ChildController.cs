@@ -1118,7 +1118,7 @@ namespace VaccineAPI.Controllers
 
                                 if (dob < comparisonDate2002)
                                 {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1"))
+                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
                                     {
                                         cvd.DoseId = 130;
                                         ds.GapInDays = 0;
@@ -1127,7 +1127,7 @@ namespace VaccineAPI.Controllers
 
                                 else if (dob > comparisonDate2021)
                                 {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1"))
+                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
                                     {
                                         cvd.DoseId = 135;
                                         ds.GapInDays = 0;
@@ -1136,7 +1136,7 @@ namespace VaccineAPI.Controllers
 
                                 else if (dob > comparisonDate2002 && dob < comparisonDate2009)
                                 {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1"))
+                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
                                     {
                                         cvd.DoseId = 131;
                                         ds.GapInDays = 0;
@@ -1145,7 +1145,7 @@ namespace VaccineAPI.Controllers
 
                                 else if (dob > comparisonDate2009 && dob < comparisonDate2015)
                                 {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1"))
+                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
                                     {
                                         cvd.DoseId = 132;
                                         ds.GapInDays = 0;

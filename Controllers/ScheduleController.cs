@@ -1021,7 +1021,7 @@ namespace VaccineAPI.Controllers
                     .Include(x => x.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                     .Where(c => c.Date.Date == inputDate.Date)
-                    .Where(c => c.IsDone != true && c.IsSkip != true)
+                    .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
                     .ToList<Schedule>();
@@ -1035,7 +1035,7 @@ namespace VaccineAPI.Controllers
                     .Include(x => x.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                     .Where(c => c.Date.Date > inputDate.Date && c.Date.Date <= AddedDateTime.Date)
-                    .Where(c => c.IsDone != true && c.IsSkip != true)
+                    .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
                     .ToList<Schedule>();
@@ -1048,7 +1048,7 @@ namespace VaccineAPI.Controllers
                     .Include(x => x.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                     .Where(c => c.Date < inputDate.Date && c.Date >= AddedDateTime)
-                    .Where(c => c.IsDone != true && c.IsSkip != true)
+                    .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
                     .ToList<Schedule>();
@@ -1166,7 +1166,7 @@ namespace VaccineAPI.Controllers
                     .Include(x => x.Dose)
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                     .Where(c => c.Date.Date == CurrentPakDateTime.Date)
-                    .Where(c => c.IsDone != true && c.IsSkip != true)
+                    .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
                     .OrderBy(x => x.Child.Id)
                     .ThenBy(x => x.Date)
                     .ToList();

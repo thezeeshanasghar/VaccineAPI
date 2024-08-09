@@ -35,6 +35,46 @@ namespace VaccineAPI.Controllers
             _host = host;
         }
 
+        [HttpPut("{id:long}/toggle-active")]
+        public ActionResult<Response<ChildDTO>> ToggleActiveStatus(long id)
+        {
+            try
+            {
+                var child = _db.Childs
+                    .FirstOrDefault(c => c.Id == id);
+
+                if (child == null)
+                {
+                    return NotFound(new Response<ChildDTO>(false, $"Child not found with ID: {id}", null));
+                }
+
+                // Toggle the IsInactive status
+                child.IsInactive = !child.IsInactive;
+                
+                // Track changes explicitly
+                _db.Entry(child).State = EntityState.Modified;
+                
+                // Save changes and capture the number of affected rows
+                var affectedRows = _db.SaveChanges();
+
+                if (affectedRows > 0)
+                {
+                    var childDTO = _mapper.Map<ChildDTO>(child);
+                    return Ok(new Response<ChildDTO>(true, $"Active status updated successfully for child ID: {id}", childDTO));
+                }
+                else
+                {
+                    return StatusCode(500, new Response<ChildDTO>(false, $"Failed to update child with ID: {id}", null));
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the full exception details
+                Console.WriteLine($"Error in ToggleActiveStatus: {ex}");
+                return StatusCode(500, new Response<ChildDTO>(false, $"An error occurred: {ex.Message}", null));
+            }
+        }
+
         [HttpGet("/forgetemail/{email}")]
         public ActionResult ForgetChildDetailsByEmail(string email)
         {

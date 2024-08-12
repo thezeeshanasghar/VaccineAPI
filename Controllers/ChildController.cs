@@ -1713,7 +1713,7 @@ namespace VaccineAPI.Controllers
                                               x.IsDone == true && x.IsDisease != true)
                                   .ToList();
             var latestSchedule = dbSchedules.OrderByDescending(s => s.GivenDate).FirstOrDefault();
-            DateTime givendate = latestSchedule.GivenDate.Value;
+            DateTime givendate = latestSchedule?.GivenDate ?? DateTime.Now;
 
             childName = dbChild.Name;
 
@@ -1940,9 +1940,17 @@ namespace VaccineAPI.Controllers
                 PaddingTop = 5f,
                 PaddingBottom = 2f
             };
+            var clinicPhoneNumber = _db.Clinics
+                .Where(c => c.DoctorId == DoctorId)
+                .Select(c => c.PhoneNumber)
+                .FirstOrDefault();
 
+            if (clinicPhoneNumber == null)
+            {
+                clinicPhoneNumber = "Phone number not available";
+            }
             footerTable.AddCell(dateCell);
-            var footerText = $"Note! This electronically generated invoice is valid without physical signatures or stamps. For questions, contact info@skintechno.com.";
+            var footerText = $"Note! This electronically generated invoice is valid without physical signatures or stamps. For questions, contact {clinicPhoneNumber}.";
 
             Phrase footerPhrase = new Phrase(footerText, footerFont);
             PdfPCell footerCell = new PdfPCell(footerPhrase)

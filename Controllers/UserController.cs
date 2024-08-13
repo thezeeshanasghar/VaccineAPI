@@ -248,7 +248,9 @@ namespace VaccineAPI.Controllers
             }
 
             // Prepare email body
-            string body = $"Phone Number: {user.MobileNumber}\nPassword: {user.Password}";
+            string body = $"We have reset your password, please use the following details to login Your Account \n" +
+                          $"Username: {user.MobileNumber}\n" +
+                          $"Password: {user.Password}\n";
 
             // Send email
             try
@@ -279,6 +281,58 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
                     return new Response<UserDTO>(true, "Password change successfully.", null);
                 }
+            }
+        }
+
+
+        [HttpPost("change-parent-password")]
+        public ActionResult<Response<UserDTO>> ChangeParentPassword([FromBody] ChangePasswordRequestDTO request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.OldPassword) || string.IsNullOrEmpty(request.NewPassword) || string.IsNullOrEmpty(request.ConfirmPassword))
+                {
+                    return BadRequest(new Response<UserDTO>(false, "All password fields are required.", null));
+                }
+
+                if (request.NewPassword != request.ConfirmPassword)
+                {
+                    return BadRequest(new Response<UserDTO>(false, "New password and confirm password do not match.", null));
+                }
+
+                var user = _db.Users
+                    .Include(u => u.Childs)
+                    .FirstOrDefault(x => x.UserType == "PARENT" && x.Password == request.OldPassword);
+
+                if (user == null)
+                {
+                    return NotFound(new Response<UserDTO>(false, "Parent user not found or old password is incorrect.", null));
+                }
+
+                // Update the password
+                user.Password = request.NewPassword;
+
+                // If you want to update the Child's password as well (assuming it's stored there)
+                if (user.Childs != null && user.Childs.Any())
+                {
+                    foreach (var child in user.Childs)
+                    {
+                        user.Password = request.NewPassword;
+                    }
+                }
+
+                _db.SaveChanges();
+
+                // Map the updated user to UserDTO if needed
+                var userDTO = _mapper.Map<UserDTO>(user);
+
+                return Ok(new Response<UserDTO>(true, "Password changed successfully.", userDTO));
+            }
+            catch (Exception ex)
+            {
+                // Log the exception
+                Console.WriteLine($"Error in ChangeParentPassword: {ex}");
+                return StatusCode(500, new Response<UserDTO>(false, "An error occurred while changing the password.", null));
             }
         }
 

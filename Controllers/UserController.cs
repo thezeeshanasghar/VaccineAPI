@@ -214,7 +214,6 @@ namespace VaccineAPI.Controllers
         //     }
         //     return new Response<bool>(true, "Record matches", true);
         // }
-
         [HttpPost("verify")]
         public ActionResult<Response<bool>> VerifyChild(ChildDTO childDTO)
         {
@@ -229,39 +228,39 @@ namespace VaccineAPI.Controllers
                 return new Response<bool>(false, "No matching record found", false);
             }
 
+            // Retrieve user data based on child's UserId
+            var user = _db.Users
+                .Where(u => u.Id == child.UserId)
+                .Select(u => new { u.MobileNumber, u.Password })
+                .FirstOrDefault();
+
+            if (user == null)
+            {
+                return new Response<bool>(false, "No matching user record found", false);
+            }
+
+            // Update child's email if it's empty
             if (string.IsNullOrEmpty(child.Email))
             {
                 child.Email = childDTO.Email;
-                _db.Childs.Update(child); // Mark the entity as updated
+                _db.Childs.Update(child);
                 _db.SaveChanges();
-
-                // Retrieve user data based on child ID
-                var user = _db.Users
-                    .Where(u => u.Id == child.Id)
-                    .Select(u => new { u.MobileNumber, u.Password })
-                    .FirstOrDefault();
-
-                if (user == null)
-                {
-                    return new Response<bool>(false, "No matching user record found", false);
-                }
-
-                // Prepare email body
-                string body = $"Phone Number: {user.MobileNumber}\nPassword: {user.Password}";
-
-                // Send email
-                try
-                {
-                    UserEmail.SendEmail2(child.Email, body);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Error sending email: " + ex.Message);
-                    return new Response<bool>(false, "Error sending email", false);
-                }
             }
 
-            return new Response<bool>(true, "Record matches and email sent", true);
+            // Prepare email body
+            string body = $"Phone Number: {user.MobileNumber}\nPassword: {user.Password}";
+
+            // Send email
+            try
+            {
+                UserEmail.SendEmail2(child.Email, body);
+                return new Response<bool>(true, "Your login credentials have been sent to your email address", true);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error sending email: " + ex.Message);
+                return new Response<bool>(false, $"Record matches but error sending email: {ex.Message}", false);
+            }
         }
 
 

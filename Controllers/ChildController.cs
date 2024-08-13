@@ -1950,19 +1950,24 @@ namespace VaccineAPI.Controllers
                 clinicPhoneNumber = "Phone number not available";
             }
             footerTable.AddCell(dateCell);
-            var footerText = $"Note! This electronically generated invoice is valid without physical signatures or stamps. For questions, contact {clinicPhoneNumber}.";
 
-            Phrase footerPhrase = new Phrase(footerText, footerFont);
+            // Create a bold font for the "Note!" text
+            Font boldFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+            Chunk noteChunk = new Chunk("Note! ", boldFont);
+            Phrase footerPhrase = new Phrase();
+            footerPhrase.Add(noteChunk);
+            footerPhrase.Add(new Chunk("This is electronically generated invoice. It does not require physical signatures/stamp.\n\nFor questions, contact " + clinicPhoneNumber + ".\n\n", footerFont));
+
             PdfPCell footerCell = new PdfPCell(footerPhrase)
             {
                 HorizontalAlignment = Element.ALIGN_LEFT,
                 Border = Rectangle.NO_BORDER,
                 PaddingTop = 5f,
-                PaddingBottom = 2f
+                PaddingBottom = 10f  // Increased bottom padding for more margin
             };
 
             footerTable.AddCell(footerCell);
-            footerTable.WriteSelectedRows(0, -1, 65, 50, writer.DirectContent);
+            footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);  // Increased Y position to add bottom margin
 
             document.Close();
             output.Seek(0, SeekOrigin.Begin);

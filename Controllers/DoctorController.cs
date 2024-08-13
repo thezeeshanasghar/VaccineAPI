@@ -131,9 +131,27 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<DoctorDTO> Post(DoctorDTO doctorDTO)
         {
-            var edoctor = _db.Users.Where(x => x.MobileNumber == doctorDTO.MobileNumber && x.UserType == "DOCTOR").FirstOrDefault();
-            if (edoctor != null)
-                return new Response<DoctorDTO>(false, "Account already exist", null);
+            var existingUser = _db.Users.FirstOrDefault(x => x.MobileNumber == doctorDTO.MobileNumber);
+            var existingDoctorWithEmail = _db.Doctors.FirstOrDefault(d => d.Email == doctorDTO.Email);
+            var existingDoctorWithPhone = _db.Doctors.FirstOrDefault(d => d.PhoneNo == doctorDTO.PhoneNo);
+
+            if (existingUser != null && (existingDoctorWithEmail != null || existingDoctorWithPhone != null))
+            {
+                return new Response<DoctorDTO>(false, "Both email and phone number are already in use. Please use different email and phone number.", null);
+            }
+            else if (existingUser != null)
+            {
+                return new Response<DoctorDTO>(false, "Phone number is already in use. Please try a different phone number.", null);
+            }
+            else if (existingDoctorWithEmail != null)
+            {
+                return new Response<DoctorDTO>(false, "Email already exists. Please try another email.", null);
+            }
+            else if (existingDoctorWithPhone != null)
+            {
+                return new Response<DoctorDTO>(false, "Phone number is already in use. Please try a different phone number.", null);
+            }
+
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.FirstName);
             doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);

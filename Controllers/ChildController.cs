@@ -1940,15 +1940,8 @@ namespace VaccineAPI.Controllers
                 PaddingTop = 5f,
                 PaddingBottom = 2f
             };
-            var clinicPhoneNumber = _db.Clinics
-                .Where(c => c.DoctorId == DoctorId)
-                .Select(c => c.PhoneNumber)
-                .FirstOrDefault();
 
-            if (clinicPhoneNumber == null)
-            {
-                clinicPhoneNumber = "Phone number not available";
-            }
+
             footerTable.AddCell(dateCell);
 
             // Create a bold font for the "Note!" text
@@ -1956,13 +1949,13 @@ namespace VaccineAPI.Controllers
             Chunk noteChunk = new Chunk("Note! ", boldFont);
             Phrase footerPhrase = new Phrase();
             footerPhrase.Add(noteChunk);
-            footerPhrase.Add(new Chunk("This is electronically generated invoice. It does not require physical signatures/stamp.\n\nFor questions, contact " + clinicPhoneNumber + ".\n\n", footerFont));
+            footerPhrase.Add(new Chunk("This is electronically generated invoice. It does not require physical signatures/stamp . ", footerFont));
 
             PdfPCell footerCell = new PdfPCell(footerPhrase)
             {
                 HorizontalAlignment = Element.ALIGN_LEFT,
                 Border = Rectangle.NO_BORDER,
-                PaddingTop = 5f,
+                PaddingTop = 25f,
                 PaddingBottom = 10f  // Increased bottom padding for more margin
             };
 

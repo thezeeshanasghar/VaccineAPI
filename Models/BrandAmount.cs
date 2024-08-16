@@ -9,6 +9,7 @@ namespace VaccineAPI.Models
     {
         public long Id { get; set; }
         public int Amount { get; set; }
+        public int Count { get; set; }
         public long BrandId { get; set; }
          [JsonIgnore]
         public virtual Brand Brand { get; set; }

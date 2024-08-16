@@ -22,7 +22,7 @@ namespace VaccineAPI.Models
         public DbSet<ClinicTiming> ClinicTimings { get; set; }
         public DbSet<Clinic> Clinics { get; set; }
         public DbSet<Child> Childs { get; set; }
-        public DbSet<BrandInventory> BrandInventorys { get; set; }
+        // public DbSet<BrandInventory> BrandInventorys { get; set; }
         public DbSet<BrandAmount> BrandAmounts { get; set; }
         public DbSet<Brand> Brands { get; set; }
         public DbSet<NormalRange> NormalRanges { get; set; }

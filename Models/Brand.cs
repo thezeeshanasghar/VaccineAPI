@@ -11,7 +11,7 @@ namespace VaccineAPI.Models
         public Brand()
         {
             this.BrandAmounts = new HashSet<BrandAmount>();
-            this.BrandInventories = new HashSet<BrandInventory>();
+            // this.BrandInventories = new HashSet<BrandInventory>();
             this.Schedules = new HashSet<Schedule>();
         }
         public long Id { get; set; }
@@ -19,7 +19,7 @@ namespace VaccineAPI.Models
         public long VaccineId { get; set; }
         public virtual Vaccine Vaccine { get; set; }
         public virtual ICollection<BrandAmount> BrandAmounts { get; set; }
-        public virtual ICollection<BrandInventory> BrandInventories { get; set; }
+        // public virtual ICollection<BrandInventory> BrandInventories { get; set; }
         public virtual ICollection<Schedule> Schedules { get; set; }
     }
 

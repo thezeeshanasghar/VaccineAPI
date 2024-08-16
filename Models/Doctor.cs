@@ -11,7 +11,7 @@ namespace VaccineAPI.Models
     public Doctor()
     {
       this.BrandAmounts = new HashSet<BrandAmount>();
-      this.BrandInventories = new HashSet<BrandInventory>();
+      // this.BrandInventories = new HashSet<BrandInventory>();
       this.DoctorSchedules = new HashSet<DoctorSchedule>();
       this.FollowUps = new HashSet<FollowUp>();
       this.Clinics = new HashSet<Clinic>();
@@ -42,7 +42,7 @@ namespace VaccineAPI.Models
     public virtual ICollection<Child> Childs { get; set; }
     public ICollection<DoctorSchedule> DoctorSchedules { get; set; }
     public virtual ICollection<BrandAmount> BrandAmounts { get; set; }
-    public virtual ICollection<BrandInventory> BrandInventories { get; set; }
+    // public virtual ICollection<BrandInventory> BrandInventories { get; set; }
     public virtual ICollection<FollowUp> FollowUps { get; set; }
   }
 }

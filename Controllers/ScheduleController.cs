@@ -75,7 +75,7 @@ namespace VaccineAPI.Controllers
                     .Include(x => x.Child)
                     .Where(c => c.Id == scheduleDTO.Id)
                     .FirstOrDefault();
-                var dbBrandInventory = _db.BrandInventorys
+                var dbBrandInventory = _db.BrandAmounts
                     .Where(
                         b => b.BrandId == scheduleDTO.BrandId && b.DoctorId == scheduleDTO.DoctorId
                     )
@@ -88,7 +88,7 @@ namespace VaccineAPI.Controllers
                       .ThenInclude(x => x.Clinic)
                   .Where(c => c.Id == scheduleDTO.Id)
                   .FirstOrDefault();
-                var dbBrandInventory2 = _db.BrandInventorys
+                var dbBrandInventory2 = _db.BrandAmounts
                     .Where(
                         b => b.BrandId == dbSchedule2.BrandId && b.DoctorId == dbSchedule2.Child.Clinic.DoctorId
                     )
@@ -560,9 +560,9 @@ namespace VaccineAPI.Controllers
                         if (scheduleBrand != null)
                         {
                             schedule.BrandId = scheduleBrand.BrandId;
-                            // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
-                            // {
-                            var brandInventory = _db.BrandInventorys
+                            if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
+                            {
+                            var brandInventory = _db.BrandAmounts
                                 .Where(
                                     b =>
                                         b.BrandId == scheduleBrand.BrandId
@@ -571,7 +571,7 @@ namespace VaccineAPI.Controllers
                                 .FirstOrDefault();
                             if (brandInventory != null)
                                 brandInventory.Count--;
-                            // }
+                            }
                         }
                     }
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);

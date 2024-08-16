@@ -299,14 +299,15 @@ namespace VaccineAPI.Controllers
                         BrandAmount ba = new BrandAmount();
                         ba.Amount = 0;
                         ba.DoctorId = dbDoctor.Id;
+                        ba.Count = 0;
                         ba.BrandId = brand.Id;
                         _db.BrandAmounts.Add(ba);
 
-                        BrandInventory bi = new BrandInventory();
-                        bi.Count = 0;
-                        bi.DoctorId = dbDoctor.Id;
-                        bi.BrandId = brand.Id;
-                        _db.BrandInventorys.Add(bi);
+                        // BrandInventory bi = new BrandInventory();
+                        // bi.Count = 0;
+                        // bi.DoctorId = dbDoctor.Id;
+                        // bi.BrandId = brand.Id;
+                        // _db.BrandInventorys.Add(bi);
                         _db.SaveChanges();
                     }
                 }

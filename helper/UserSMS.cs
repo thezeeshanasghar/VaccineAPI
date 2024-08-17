@@ -21,10 +21,10 @@ namespace VaccineAPI
         public string DoctorSMS(DoctorDTO doctor)
         {
             string body = "Hi " + textInfo.ToTitleCase(doctor.FirstName) + " " + textInfo.ToTitleCase(doctor.LastName) + " \n"
-                + "You are Succesfully registered in registered in vaccine.pk\n\n"
+                + "You are Succesfully registered in registered in vaccinationcentre.com\n\n"
                 + "Id: " + doctor.MobileNumber + "\n"
                 + "Password: " + doctor.Password + "\n"
-                + "Weblink: https://vaccine.pk";
+                + "Weblink: https://vaccinationcentre.com";
             var response = SendSMS(doctor.CountryCode, doctor.MobileNumber, doctor.Email, body);
             addMessageToDB(doctor.MobileNumber, response, body, 1);
             return response;

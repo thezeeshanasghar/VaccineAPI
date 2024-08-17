@@ -97,11 +97,11 @@ namespace VaccineAPI.Controllers
                 {
 
                     var body = "Hi " + "<b>" + child.Name + " " + child.FatherName + "</b>, <br />" +
-                        "Welcome to vaccine.pk. <br /><br />" +
+                        "Welcome to vaccinationcentre.com <br /><br />" +
                         "Your account credentials are: <br />" +
                         "ID/Mobile Number: " + userDetails.MobileNumber + "<br />" +
                         "Password: " + userDetails.Password + "<br />" +
-                        "Web Link: <a href=\"https://doctor.skintechno.pk/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.skintechno.pk/</a>";
+                        "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
 
 
                     try
@@ -1749,7 +1749,7 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 1, "left", "description"));
 
             upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 1, "left", "description"));
-            upperTable.AddCell(CreateCell("info@vaccine.pk", "", 1, "right", "description"));
+            upperTable.AddCell(CreateCell("info@vaccinationcentre.com", "", 1, "right", "description"));
             upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 1, "left", "description"));
             upperTable.AddCell(CreateCell(givendate.ToString("dd-MM-yyyy"), "", 1, "right", "description"));
             upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "unbold", 1, "left", "description"));
@@ -1912,11 +1912,11 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell(CreateCell(" ", "bold", 2, "left", "description"));
             bottomTable.AddCell(CreateCell("Quick links: ", "", 2, "left", "description"));
 
-            bottomTable.AddCell(CreateCell("Vaccine.pk", "", 1, "left", "description"));
+            bottomTable.AddCell(CreateCell("vaccinationcentre.com", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCell("Web: SalmanBajwa.com", "", 1, "right", "description"));
-            bottomTable.AddCell(CreateCell("Vaccine.pk/booking", "", 1, "left", "description"));
+            bottomTable.AddCell(CreateCell("vaccinationcentre.com/booking", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCell("Phone/WhatsApp: +923335196658", "", 1, "right", "description"));
-            bottomTable.AddCell(CreateCell("Vaccine.pk/pricing", "", 1, "left", "description"));
+            bottomTable.AddCell(CreateCell("vaccinationcentre.com/pricing", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCell("Email: dr@salmanbajwa.com", "", 1, "right", "description"));
 
             // Positioning the first table
@@ -2267,8 +2267,8 @@ namespace VaccineAPI.Controllers
                 2. This schedule is valid to produce on demand at all airports, embassies and schools of the world. 
                 3. We always use the best available vaccine brand/manufacturer. With time and continuous research vaccine brand can be different for future doses. 
                 Disclaimer: This schedule provides recommended dates for immunisations for individual based date of birth, past history of immunisation and disease. 
-                Your consultant may update the due dates or add/remove vaccines. Vaccine.pk, its management or staff holds no responsibility for any loss or damage due to any vaccine given. 
-                *OHF = vaccine given at other health faculty (not by vaccine.pk)  Printed
+                Your consultant may update the due dates or add/remove vaccines. vaccinationcentre.com, its management or staff holds no responsibility for any loss or damage due to any vaccine given. 
+                *OHF = vaccine given at other health faculty (not by vaccinationcentre.com)  Printed
               on : " + DateTime.UtcNow.AddHours(5).ToString(" MMMM dd,yyyy ");
             footer = footer.Replace(Environment.NewLine, String.Empty).Replace("  ", String.Empty);
             Font georgia = FontFactory.GetFont("georgia", 8f);

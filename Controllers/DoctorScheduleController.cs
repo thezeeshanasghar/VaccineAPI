@@ -77,10 +77,28 @@ namespace VaccineAPI.Controllers
         {
             foreach (var DoctorSchedueDTO in dsDTOS)
             {
+
+
                 DoctorSchedule doctorSchduleDB = _mapper.Map<DoctorSchedule>(DoctorSchedueDTO);
                 _db.DoctorSchedules.Add(doctorSchduleDB);
                 _db.SaveChanges();
                 DoctorSchedueDTO.Id = doctorSchduleDB.Id;
+
+                var dose = _db.Doses.SingleOrDefault(a => a.Id == DoctorSchedueDTO.DoseId);
+                var vac = _db.Vaccines.Where(a => a.Id == dose.VaccineId).FirstOrDefault();
+                var brand = _db.Brands.Where(a => a.VaccineId == vac.Id).FirstOrDefault();
+                var count = 0;
+                var amount = 0;
+                var brandAmount = new BrandAmount
+                {
+                    BrandId = brand.Id,
+                    Count = count,
+                    Amount = amount,
+                    DoctorId = DoctorSchedueDTO.DoctorId,
+                };
+                
+                _db.BrandAmounts.Add(brandAmount);
+                _db.SaveChanges();
             }
             return new Response<IEnumerable<DoctorScheduleDTO>>(true, null, dsDTOS);
 

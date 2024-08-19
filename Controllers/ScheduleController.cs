@@ -59,6 +59,7 @@ namespace VaccineAPI.Controllers
         public Response<ScheduleDTO> Insert([FromBody] ScheduleDTO scheduleDTO)
         {
             Schedule scheduleDb = _mapper.Map<Schedule>(scheduleDTO);
+            scheduleDb.BrandId = null;
             _db.Schedules.Add(scheduleDb);
             _db.SaveChanges();
             return new Response<ScheduleDTO>(true, null, scheduleDTO);

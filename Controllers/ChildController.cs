@@ -2263,12 +2263,12 @@ namespace VaccineAPI.Controllers
         {
             base.OnEndPage(writer, document);
             string footer =
-                @"1. Vaccines may cause fever, localized redness, and pain.\n
-                2. This schedule is valid for production on demand at all airports, embassies, and schools worldwide.\n
-                3. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses.\n
-                Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given.\n
-                *OHF = vaccine given at other health faculty (not by vaccinationcentre.com)\n
-                Printed " + DateTime.UtcNow.AddHours(5).ToString(" MMMM dd,yyyy ");
+                "1. Vaccines may cause fever, localized redness, and pain." + Environment.NewLine +
+                "2. This schedule is valid for production on demand at all airports, embassies, and schools worldwide." + Environment.NewLine +
+                "3. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses." + Environment.NewLine +
+                "Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given." + Environment.NewLine +
+                "*OHF = vaccine given at other health faculty (not by vaccinationcentre.com)" + Environment.NewLine +
+                "Printed " + DateTime.UtcNow.AddHours(5).ToString("MMMM dd, yyyy");
             footer = footer.Replace(Environment.NewLine, String.Empty).Replace("  ", String.Empty);
             Font georgia = FontFactory.GetFont("georgia", 8f);
             Chunk beginning = new Chunk(footer, georgia);

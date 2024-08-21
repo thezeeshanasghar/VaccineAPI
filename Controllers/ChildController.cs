@@ -1945,8 +1945,8 @@ namespace VaccineAPI.Controllers
             {
                 HorizontalAlignment = Element.ALIGN_RIGHT,
                 Border = Rectangle.NO_BORDER,
-                PaddingTop = 5f,
-                PaddingBottom = 2f
+                PaddingTop = 18f,
+                PaddingBottom = -16f
             };
 
 

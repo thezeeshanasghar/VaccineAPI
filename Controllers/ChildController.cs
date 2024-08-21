@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net.Mail;
-using System.IO;
-using System.Linq;
 using System.Text;
 using AutoMapper;
 using CsvHelper;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
@@ -15,13 +10,8 @@ using VaccineAPI.Models;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using QRCoder;
-using DrawingImage = System.Drawing.Image;
-using DrawingFont = System.Drawing.Font;
-using DrawingRectangle = System.Drawing.Rectangle;
 using iTextSharpImage = iTextSharp.text.Image;
 using iTextSharpFont = iTextSharp.text.Font;
-using iTextSharpRectangle = iTextSharp.text.Rectangle;
-using ZXing;
 
 // using WebApi.Out3Cache.V2;
 namespace VaccineAPI.Controllers
@@ -31,11 +21,8 @@ namespace VaccineAPI.Controllers
     public class ChildController : ControllerBase
     {
         private readonly Context _db;
-
         private readonly IMapper _mapper;
-
         private readonly IWebHostEnvironment _host;
-
         public ChildController(Context context, IMapper mapper, IWebHostEnvironment host)
         {
             _db = context;
@@ -50,7 +37,7 @@ namespace VaccineAPI.Controllers
             {
                 var child = _db.Childs
                     .FirstOrDefault(c => c.Id == id);
-
+                    
                 if (child == null)
                 {
                     return NotFound(new Response<ChildDTO>(false, $"Child not found with ID: {id}", null));
@@ -1970,68 +1957,46 @@ namespace VaccineAPI.Controllers
             footerTable.AddCell(footerCell);
             footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);
             
-                        var baseUrl = "https://myapi.skintechno.com/api";
+            var baseUrl = "https://myapi.skintechno.com/api";
             var childData = _db.Childs.Include(x => x.Clinic)
                             .ThenInclude(x => x.Doctor)
-
                             .ThenInclude(y => y.User)
-
                             .FirstOrDefault(x => x.Id == Id);
-            if (childData == null)
-            {
-                return NotFound();
-
-            }
-
-
-            // Use childData to create childDTO
 
             var childDTO = new ChildDTO
             {
                 Id = childData.Id, 
                 Name = childData.Name ?? "Unknown", 
-
                 FatherName = childData.FatherName ?? "Unknown",
             };
 
-
             var invoiceUrl = $"{baseUrl}/child/{childDTO.Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
-
             try
             {
 
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
                 using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(invoiceUrl, QRCodeGenerator.ECCLevel.Q))
-
                 {
-
                     var qrCode = new BitmapByteQRCode(qrCodeData);
                     byte[] qrCodeImage = qrCode.GetGraphic(20);
                     using (MemoryStream ms = new MemoryStream(qrCodeImage))
-
                     {
                         var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
                         pdfQrCode.ScaleAbsolute(80f, 80f);
-                        // Set position to the left side with a top margin of 50px
-
-                        pdfQrCode.SetAbsolutePosition(63, document.PageSize.Height - 800); // Adjusted position
+                        pdfQrCode.SetAbsolutePosition(63, document.PageSize.Height - 800);
                         writer.DirectContent.AddImage(pdfQrCode);
                         iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-
-                        // Set absolute position for the explanation text 25px below the QR code
                         ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_LEFT,
-                            new Phrase("Scan to download this invoice", explanationFont),
-                            67, document.PageSize.Height - 810, 0); // 25px below the QR code
+                        new Phrase("Scan to download this invoice", explanationFont),
+                        67, document.PageSize.Height - 810, 0);
                     }
                 }
 
             }
             catch (Exception ex)
-
             {
                 Console.WriteLine($"Error generating QR code: {ex.Message}");
             }
-
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             stream = output;

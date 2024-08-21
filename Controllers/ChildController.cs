@@ -1970,53 +1970,68 @@ namespace VaccineAPI.Controllers
             footerTable.AddCell(footerCell);
             footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);
             
-            var baseUrl = "https://myapi.skintechno.com/api";
+                        var baseUrl = "https://myapi.skintechno.com/api";
             var childData = _db.Childs.Include(x => x.Clinic)
                             .ThenInclude(x => x.Doctor)
+
                             .ThenInclude(y => y.User)
+
                             .FirstOrDefault(x => x.Id == Id);
             if (childData == null)
             {
                 return NotFound();
+
             }
 
+
             // Use childData to create childDTO
+
             var childDTO = new ChildDTO
             {
                 Id = childData.Id, 
                 Name = childData.Name ?? "Unknown", 
+
                 FatherName = childData.FatherName ?? "Unknown",
             };
+
 
             var invoiceUrl = $"{baseUrl}/child/{childDTO.Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
 
             try
             {
+
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
                 using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(invoiceUrl, QRCodeGenerator.ECCLevel.Q))
+
                 {
+
                     var qrCode = new BitmapByteQRCode(qrCodeData);
                     byte[] qrCodeImage = qrCode.GetGraphic(20);
                     using (MemoryStream ms = new MemoryStream(qrCodeImage))
+
                     {
                         var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
                         pdfQrCode.ScaleAbsolute(80f, 80f);
-                        pdfQrCode.SetAbsolutePosition(document.PageSize.Width - 100, 70);
+                        // Set position to the left side with a top margin of 50px
+
+                        pdfQrCode.SetAbsolutePosition(63, document.PageSize.Height - 800); // Adjusted position
                         writer.DirectContent.AddImage(pdfQrCode);
+                        iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+
+                        // Set absolute position for the explanation text 25px below the QR code
+                        ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_LEFT,
+                            new Phrase("Scan to download this invoice", explanationFont),
+                            67, document.PageSize.Height - 810, 0); // 25px below the QR code
                     }
                 }
+
             }
             catch (Exception ex)
+
             {
                 Console.WriteLine($"Error generating QR code: {ex.Message}");
             }
 
-            iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-            Paragraph qrExplanation = new Paragraph("Scan to download this invoice", explanationFont);
-            qrExplanation.Alignment = Element.ALIGN_RIGHT;
-            ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_RIGHT,
-                new Phrase(qrExplanation),
-                document.PageSize.Width - 10, 60, 0);
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             stream = output;

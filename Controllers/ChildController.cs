@@ -2263,12 +2263,12 @@ namespace VaccineAPI.Controllers
         {
             base.OnEndPage(writer, document);
             string footer =
-                @"NOTE: 1. Vaccines may cause fever, localised redness and pain. 
-                2. This schedule is valid to produce on demand at all airports, embassies and schools of the world. 
-                3. We always use the best available vaccine brand/manufacturer. With time and continuous research vaccine brand can be different for future doses. 
-                Disclaimer: This schedule provides recommended dates for immunisations for individual based date of birth, past history of immunisation and disease. 
-                Your consultant may update the due dates or add/remove vaccines. vaccinationcentre.com, its management or staff holds no responsibility for any loss or damage due to any vaccine given. 
-                *OHF = vaccine given at other health faculty (not by vaccinationcentre.com) Printed on: " + DateTime.UtcNow.AddHours(5).ToString(" MMMM dd,yyyy ");
+                @"1. Vaccines may cause fever, localized redness, and pain.\n
+                2. This schedule is valid for production on demand at all airports, embassies, and schools worldwide.\n
+                3. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses.\n
+                Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given.\n
+                *OHF = vaccine given at other health faculty (not by vaccinationcentre.com)\n
+                Printed " + DateTime.UtcNow.AddHours(5).ToString(" MMMM dd,yyyy ");
             footer = footer.Replace(Environment.NewLine, String.Empty).Replace("  ", String.Empty);
             Font georgia = FontFactory.GetFont("georgia", 8f);
             Chunk beginning = new Chunk(footer, georgia);

@@ -14,6 +14,14 @@ using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
+using QRCoder;
+using DrawingImage = System.Drawing.Image;
+using DrawingFont = System.Drawing.Font;
+using DrawingRectangle = System.Drawing.Rectangle;
+using iTextSharpImage = iTextSharp.text.Image;
+using iTextSharpFont = iTextSharp.text.Font;
+using iTextSharpRectangle = iTextSharp.text.Rectangle;
+using ZXing;
 
 // using WebApi.Out3Cache.V2;
 namespace VaccineAPI.Controllers
@@ -50,10 +58,10 @@ namespace VaccineAPI.Controllers
 
                 // Toggle the IsInactive status
                 child.IsInactive = !child.IsInactive;
-                
+
                 // Track changes explicitly
                 _db.Entry(child).State = EntityState.Modified;
-                
+
                 // Save changes and capture the number of affected rows
                 var affectedRows = _db.SaveChanges();
 
@@ -1956,17 +1964,63 @@ namespace VaccineAPI.Controllers
                 HorizontalAlignment = Element.ALIGN_LEFT,
                 Border = Rectangle.NO_BORDER,
                 PaddingTop = 25f,
-                PaddingBottom = 10f  // Increased bottom padding for more margin
+                PaddingBottom = 10f
             };
 
             footerTable.AddCell(footerCell);
-            footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);  // Increased Y position to add bottom margin
+            footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);
+            
+            var baseUrl = "https://myapi.skintechno.com/api";
+            var childData = _db.Childs.Include(x => x.Clinic)
+                            .ThenInclude(x => x.Doctor)
+                            .ThenInclude(y => y.User)
+                            .FirstOrDefault(x => x.Id == Id);
+            if (childData == null)
+            {
+                return NotFound();
+            }
 
+            // Use childData to create childDTO
+            var childDTO = new ChildDTO
+            {
+                Id = childData.Id, 
+                Name = childData.Name ?? "Unknown", 
+                FatherName = childData.FatherName ?? "Unknown",
+            };
+
+            var invoiceUrl = $"{baseUrl}/child/{childDTO.Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
+
+            try
+            {
+                using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+                using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(invoiceUrl, QRCodeGenerator.ECCLevel.Q))
+                {
+                    var qrCode = new BitmapByteQRCode(qrCodeData);
+                    byte[] qrCodeImage = qrCode.GetGraphic(20);
+                    using (MemoryStream ms = new MemoryStream(qrCodeImage))
+                    {
+                        var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
+                        pdfQrCode.ScaleAbsolute(80f, 80f);
+                        pdfQrCode.SetAbsolutePosition(document.PageSize.Width - 100, 70);
+                        writer.DirectContent.AddImage(pdfQrCode);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error generating QR code: {ex.Message}");
+            }
+
+            iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+            Paragraph qrExplanation = new Paragraph("Scan to download this invoice", explanationFont);
+            qrExplanation.Alignment = Element.ALIGN_RIGHT;
+            ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_RIGHT,
+                new Phrase(qrExplanation),
+                document.PageSize.Width - 10, 60, 0);
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             stream = output;
 
-            // Generate the filename and return the file
             var FileName = childName.Replace(" ", "") + "_Invoice" + "_" +
                            DateTime.UtcNow.AddHours(5).Date.ToString("MMMM-dd-yyyy") + ".pdf";
             return File(stream, "application/pdf", FileName);
@@ -2264,7 +2318,7 @@ namespace VaccineAPI.Controllers
             base.OnEndPage(writer, document);
             string footer =
                 "1. Vaccines may cause fever, localized redness, and pain.\n" +
-                "2. This schedule is valid for production on demand at all airports, embassies, and schools worldwide.\n" + 
+                "2. This schedule is valid for production on demand at all airports, embassies, and schools worldwide.\n" +
                 "3. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses.\n" +
                 "Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given." + Environment.NewLine +
                 "*OHF = vaccine given at other health faculty (not by vaccinationcentre.com)\n" +

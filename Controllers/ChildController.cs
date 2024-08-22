@@ -1672,9 +1672,9 @@ namespace VaccineAPI.Controllers
         }
 
         // updated invoice pdf
-        [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
+        [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/{InvoiceNumber}/Download-Invoice-PDF-updated")]
         public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate,
-                                                       int ConsultationFee)
+                                                       int ConsultationFee,string InvoiceNumber)
         {
             // var IsConsultationFee = true;
             // var IsBrand = true;
@@ -1771,10 +1771,31 @@ namespace VaccineAPI.Controllers
             // upperTable.AddCell (CreateCell ("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description"));
             // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
             document.Add(upperTable);
-            Paragraph title = new Paragraph("INVOICE");
-            title.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
-            title.Alignment = Element.ALIGN_CENTER;
-            document.Add(title);
+    // Create a new paragraph without any initial text
+Paragraph title = new Paragraph();
+
+// Set the font and style for the paragraph
+title.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+
+// Create a chunk for the "INVOICE" text
+Chunk invoiceText = new Chunk("INVOICE :", FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD));
+
+// Create a chunk for the invoice number (assumed to be a long or int)
+Chunk invoiceNumberChunk = new Chunk(" " + InvoiceNumber.ToString(), FontFactory.GetFont(FontFactory.HELVETICA, 10));
+
+// Add the chunks to the paragraph
+title.Add(invoiceText);
+title.Add(invoiceNumberChunk);
+
+// Center the paragraph
+title.Alignment = Element.ALIGN_CENTER;
+
+// Add the paragraph to the document
+document.Add(title);
+
+            // title.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+            // title.Alignment = Element.ALIGN_CENTER;
+            // document.Add(title);
 
             // 2nd Table
             float[] widths = new float[] { 170f, 300f };

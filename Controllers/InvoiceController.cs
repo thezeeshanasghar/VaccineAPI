@@ -96,5 +96,24 @@ public async Task<ActionResult<Invoice>> GetInvoice(long id)
     }
 }
 
+       // PATCH: api/Invoice/{id}/Amount
+       // PATCH: api/Invoice/{id}/Amount
+[HttpPut("{id}/Amount")]
+public Response<InvoiceDTO> UpdateInvoiceAmount(long id, InvoiceDTO dto)
+{
+    var invoice = _context.Invoices.FirstOrDefault(i => i.Id == id);
+
+    if (invoice == null)
+    {
+        return new Response<InvoiceDTO>(false, "Invoice not found", null);
+    }
+
+    invoice.Amount = dto.Amount;
+    _context.SaveChanges();
+
+    return new Response<InvoiceDTO>(true, null, dto);
+}
+
+
     }
 }

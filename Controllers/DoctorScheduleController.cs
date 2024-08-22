@@ -62,7 +62,89 @@ namespace VaccineAPI.Controllers
                     return new Response<IEnumerable<DoctorScheduleDTO>>(true, null, dsDTOS);
                 
             }
+[HttpPut("UpdateInvoiceId/{id}")]
+public async Task<IActionResult> UpdateInvoiceId(long id, [FromBody] long invoiceId)
+{
+    var doctorSchedule = await _db.DoctorSchedules.FindAsync(id);
+    if (doctorSchedule == null)
+    {
+        return NotFound(new { message = "DoctorSchedule not found." });
+    }
 
+    doctorSchedule.InvoiceId = invoiceId;
+    _db.Entry(doctorSchedule).State = EntityState.Modified;
+
+    try
+    {
+        await _db.SaveChangesAsync();
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+        if (!DoctorScheduleExists(id))
+        {
+             return NotFound(new { message = "DoctorSchedule not found during update." });
+        }
+        else
+        {
+            throw;
+        }
+    }
+
+     return Ok(new { message = "InvoiceId updated successfully.", doctorSchedule });
+}
+
+// [HttpPut("UpdateInvoiceId/{id}")]
+// public async Task<IActionResult> UpdateInvoiceId(long id, [FromBody] long? invoiceId)
+// {
+//     // Find the doctor schedule by ID
+//     var doctorSchedule = await _db.DoctorSchedules.FindAsync(id);
+//     if (doctorSchedule == null)
+//     {
+//         // Return 404 Not Found if the schedule does not exist
+//         return NotFound(new { message = "DoctorSchedule not found." });
+//     }
+
+//     // Update the InvoiceId
+//     doctorSchedule.Invoice = invoiceId.HasValue ? invoiceId.Value : (long?)null;
+//     _db.Entry(doctorSchedule).State = EntityState.Modified;
+
+//     try
+//     {
+//         // Save changes to the database
+//         await _db.SaveChangesAsync();
+//     }
+//     catch (DbUpdateConcurrencyException)
+//     {
+//         if (!DoctorScheduleExists(id))
+//         {
+//             // Return 404 Not Found if the schedule no longer exists
+//             return NotFound(new { message = "DoctorSchedule not found during update." });
+//         }
+//         else
+//         {
+//             // Re-throw the exception if it is a different concurrency issue
+//             throw;
+//         }
+//     }
+
+//     // Return 200 OK with the updated schedule
+//     return Ok(new { message = "InvoiceId updated successfully.", doctorSchedule });
+// }
+
+// private bool DoctorScheduleExists(long id)
+// {
+//     return _db.DoctorSchedules.Any(e => e.Id == id);
+// }
+
+
+
+
+
+
+private bool DoctorScheduleExists(long id)
+{
+    return _db.DoctorSchedules.Any(e => e.Id == id);
+}
     
         // [HttpPut]
         // public Response<List<DoctorScheduleDTO>> Put(List<DoctorScheduleDTO> dsDTOS)

@@ -1667,9 +1667,18 @@ namespace VaccineAPI.Controllers
         }
 
         // updated invoice pdf
-        [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/{InvoiceNumber}/Download-Invoice-PDF-updated")]
-        public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate,
-                                                       int ConsultationFee,string InvoiceNumber)
+        [
+            HttpGet(
+                "{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")
+        ]
+        public IActionResult
+        DownloadInvoicePDFUpdated(
+            int Id,
+            DateTime ScheduleDate,
+            DateTime InvoiceDate,
+            int ConsultationFee,
+            string InvoiceNumber
+        )
         {
             // var IsConsultationFee = true;
             // var IsBrand = true;

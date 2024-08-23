@@ -1969,7 +1969,7 @@ namespace VaccineAPI.Controllers
                 Name = childData.Name ?? "Unknown", 
                 FatherName = childData.FatherName ?? "Unknown",
             };
-                var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/{InvoiceNumber}/Download-Invoice-PDF-updated";
+                var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
             try
             {
 

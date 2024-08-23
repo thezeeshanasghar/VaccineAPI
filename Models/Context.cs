@@ -27,19 +27,11 @@ namespace VaccineAPI.Models
         public DbSet<Brand> Brands { get; set; }
         public DbSet<NormalRange> NormalRanges { get; set; }
         public DbSet<City> Cities { get; set; }
-<<<<<<< HEAD
-       
-=======
->>>>>>> parent of 894ff76 (invoice fix)
 
-         protected override void OnModelCreating(ModelBuilder modelBuilder)
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-                    base.OnModelCreating(modelBuilder);
-                    modelBuilder.Entity<User>().HasData(new User() {Id = 1, MobileNumber= "3331231231" , Password = "1234" , UserType  = "SUPERADMIN" , CountryCode = "92"});
-                   
-                            
-                            
-            
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<User>().HasData(new User() { Id = 1, MobileNumber = "3331231231", Password = "1234", UserType = "SUPERADMIN", CountryCode = "92" });
         }
     }
 }

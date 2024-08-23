@@ -9,7 +9,6 @@ namespace VaccineAPI.Models
         public long Id { get; set; }
         public long DoseId { get; set; }
         public virtual Dose Dose { get; set; }
-         public long InvoiceId { get; set; }
         public long DoctorId { get; set; }
         public virtual Doctor Doctor { get; set; }
         public int GapInDays { get; set; }  // min age is treating as gap in days

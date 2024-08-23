@@ -27,7 +27,10 @@ namespace VaccineAPI.Models
         public DbSet<Brand> Brands { get; set; }
         public DbSet<NormalRange> NormalRanges { get; set; }
         public DbSet<City> Cities { get; set; }
+<<<<<<< HEAD
        
+=======
+>>>>>>> parent of 894ff76 (invoice fix)
 
          protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -109,25 +109,60 @@ namespace VaccineAPI.Controllers
                 return new Response<List<BrandDTO>>(true, null, brandDTOs);
             }
         }
+  [HttpPost]
+public async Task<Response<VaccineDTO>> Post(VaccineDTO vaccineDTO)
+{
+    // Map the VaccineDTO to a Vaccine entity
+    Vaccine vaccinedb = _mapper.Map<Vaccine>(vaccineDTO);
+    
+    // Add the new Vaccine to the database
+    _db.Vaccines.Add(vaccinedb);
+    await _db.SaveChangesAsync();
 
-        [HttpPost]
-        public Response<VaccineDTO> Post(VaccineDTO vaccineDTO)
+    // Update the DTO with the new Vaccine ID
+    vaccineDTO.Id = vaccinedb.Id;
 
+    // Create a new Brand associated with the new Vaccine
+    Brand dbBrand = new Brand
+    {
+        VaccineId = vaccinedb.Id,
+        Name = "Local"  // Set the brand name as needed
+    };
+
+    // Add the new Brand to the database
+    _db.Brands.Add(dbBrand);
+    await _db.SaveChangesAsync();
+
+    // Fetch all doctors from the database
+    var doctors = await _db.Doctors.ToListAsync();
+
+    // Create a list to hold new BrandAmount entries
+    List<BrandAmount> brandAmounts = new List<BrandAmount>();
+
+    // Create a BrandAmount entry for each doctor
+    foreach (var doctor in doctors)
+    {
+        BrandAmount newBrandAmount = new BrandAmount
         {
-            Vaccine vaccinedb = _mapper.Map<Vaccine>(vaccineDTO);
-            _db.Vaccines.Add(vaccinedb);
-            _db.SaveChanges();
-            vaccineDTO.Id = vaccinedb.Id;
-            //add vaccine in brand
-            Brand dbBrand = new Brand();
-            dbBrand.VaccineId = vaccinedb.Id;
-            dbBrand.Name = "Local";
-            _db.Brands.Add(dbBrand);
-            _db.SaveChanges();
+            DoctorId = doctor.Id,
+            BrandId = dbBrand.Id,  // Correctly reference the newly created Brand ID
+            Amount = 0,  // Set default amount, adjust if needed
+            Count = 0    // Set default count, adjust if needed
+        };
+        brandAmounts.Add(newBrandAmount);
+    }
 
-            return new Response<VaccineDTO>(true, null, vaccineDTO);
+    // Add all new BrandAmount entries to the database
+    _db.BrandAmounts.AddRange(brandAmounts);
+    
+    // Save all changes to the database
+    await _db.SaveChangesAsync();
 
-        }
+    // Return a response with the created VaccineDTO
+    return new Response<VaccineDTO>(true, null, vaccineDTO);
+}
+
+
 
         [HttpPut("{id}")]
         public Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)

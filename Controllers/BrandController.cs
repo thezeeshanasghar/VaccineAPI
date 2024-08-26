@@ -24,10 +24,10 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
- public async Task<Response<List<BrandDTO>>> GetAll()
-        {
+         public async Task<Response<List<BrandDTO>>> GetAll()
+         {
             var list = await _db.Brands.Include(x=>x.Vaccine).OrderBy(x=>x.Id).ToListAsync();
-            List<BrandDTO> listDTO = _mapper.Map<List<BrandDTO>>(list);
+               List<BrandDTO> listDTO = _mapper.Map<List<BrandDTO>>(list);
            
             return new Response<List<BrandDTO>>(true, null, listDTO);
         }
@@ -59,16 +59,16 @@ namespace VaccineAPI.Controllers
         [HttpPost("{vaccineId}")]
         public async Task<Response<BrandDTO>> Post(BrandDTO vaccineBrandDTO)
         {
-    Brand dbVaccineBrand = _mapper.Map<Brand>(vaccineBrandDTO);
+         Brand dbVaccineBrand = _mapper.Map<Brand>(vaccineBrandDTO);
 
             _db.Brands.Add(dbVaccineBrand);
             await _db.SaveChangesAsync();
 
-    var doctors = await _db.Doctors.ToListAsync();
+         var doctors = await _db.Doctors.ToListAsync();
         List<BrandAmount> brandAmounts = new List<BrandAmount>();
 
-    foreach (var doctor in doctors)
-    {
+         foreach (var doctor in doctors)
+         {
         BrandAmount newBrandAmount = new BrandAmount
         {
             DoctorId = doctor.Id,
@@ -76,14 +76,14 @@ namespace VaccineAPI.Controllers
             Amount = 0, 
             Count = 0, 
         };
-        brandAmounts.Add(newBrandAmount);
-    }
+             brandAmounts.Add(newBrandAmount);
+         }
         _db.BrandAmounts.AddRange(brandAmounts);
 
-    await _db.SaveChangesAsync();
+         await _db.SaveChangesAsync();
 
                 vaccineBrandDTO.Id = dbVaccineBrand.Id;
-    return new Response<BrandDTO>(true, null, vaccineBrandDTO);
+         return new Response<BrandDTO>(true, null, vaccineBrandDTO);
         }
 
 
@@ -114,14 +114,5 @@ namespace VaccineAPI.Controllers
             return new Response<string>(true, null, "Brand and related BrandAmounts deleted");
         }
 
-
-        // [HttpDelete("{id}")]
-        // public Response<string> Delete(int Id)
-        // {
-        //    var dbVaccineBrand = _db.Brands.Where(c => c.Id == Id).FirstOrDefault();
-        //             _db.Brands.Remove(dbVaccineBrand);
-        //             _db.SaveChanges();
-        //             return new Response<string>(true, null, "record deleted");
-        // }
     }
 }

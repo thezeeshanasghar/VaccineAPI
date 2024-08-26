@@ -109,60 +109,42 @@ namespace VaccineAPI.Controllers
                 return new Response<List<BrandDTO>>(true, null, brandDTOs);
             }
         }
-  [HttpPost]
-public async Task<Response<VaccineDTO>> Post(VaccineDTO vaccineDTO)
-{
-    // Map the VaccineDTO to a Vaccine entity
-    Vaccine vaccinedb = _mapper.Map<Vaccine>(vaccineDTO);
-    
-    // Add the new Vaccine to the database
-    _db.Vaccines.Add(vaccinedb);
-    await _db.SaveChangesAsync();
-
-    // Update the DTO with the new Vaccine ID
-    vaccineDTO.Id = vaccinedb.Id;
-
-    // Create a new Brand associated with the new Vaccine
-    Brand dbBrand = new Brand
-    {
-        VaccineId = vaccinedb.Id,
-        Name = "Local"  // Set the brand name as needed
-    };
-
-    // Add the new Brand to the database
-    _db.Brands.Add(dbBrand);
-    await _db.SaveChangesAsync();
-
-    // Fetch all doctors from the database
-    var doctors = await _db.Doctors.ToListAsync();
-
-    // Create a list to hold new BrandAmount entries
-    List<BrandAmount> brandAmounts = new List<BrandAmount>();
-
-    // Create a BrandAmount entry for each doctor
-    foreach (var doctor in doctors)
-    {
-        BrandAmount newBrandAmount = new BrandAmount
+          [HttpPost]
+        public async Task<Response<VaccineDTO>> Post(VaccineDTO vaccineDTO)
         {
-            DoctorId = doctor.Id,
-            BrandId = dbBrand.Id,  // Correctly reference the newly created Brand ID
-            Amount = 0,  // Set default amount, adjust if needed
-            Count = 0    // Set default count, adjust if needed
-        };
-        brandAmounts.Add(newBrandAmount);
-    }
+            Vaccine vaccinedb = _mapper.Map<Vaccine>(vaccineDTO);
+            
+            _db.Vaccines.Add(vaccinedb);
+            await _db.SaveChangesAsync();
 
-    // Add all new BrandAmount entries to the database
-    _db.BrandAmounts.AddRange(brandAmounts);
-    
-    // Save all changes to the database
-    await _db.SaveChangesAsync();
+            vaccineDTO.Id = vaccinedb.Id;
 
-    // Return a response with the created VaccineDTO
-    return new Response<VaccineDTO>(true, null, vaccineDTO);
-}
+            Brand dbBrand = new Brand
+            {
+                VaccineId = vaccinedb.Id,
+                Name = "Local" 
+            };
+        
+            _db.Brands.Add(dbBrand);
+            await _db.SaveChangesAsync();
 
-
+            var doctors = await _db.Doctors.ToListAsync();
+            List<BrandAmount> brandAmounts = new List<BrandAmount>();
+            foreach (var doctor in doctors)
+            {
+                BrandAmount newBrandAmount = new BrandAmount
+                {
+                    DoctorId = doctor.Id,
+                    BrandId = dbBrand.Id,  
+                    Amount = 0,  
+                    Count = 0    
+                };
+                brandAmounts.Add(newBrandAmount);
+            }
+            _db.BrandAmounts.AddRange(brandAmounts);
+            await _db.SaveChangesAsync();
+            return new Response<VaccineDTO>(true, null, vaccineDTO);
+        }
 
         [HttpPut("{id}")]
         public Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)
@@ -177,8 +159,6 @@ public async Task<Response<VaccineDTO>> Post(VaccineDTO vaccineDTO)
             return new Response<VaccineDTO>(true, null, vaccineDTO);
 
         }
-
-
 
         [HttpDelete("{id}")]
         public Response<string> Delete(long id)
@@ -209,42 +189,6 @@ public async Task<Response<VaccineDTO>> Post(VaccineDTO vaccineDTO)
             var content = c.GetStringAsync(url).Result;
             return content.ToString();
         }
-
-        // public static string sendNewRequest (string url) {
-        //     string myURI = "https://api.bulksms.com/v1/messages";
-
-        // // change these values to match your own account
-        // string myUsername = "irfan001";
-        // string myPassword = "w?Zu-qjNd8c#Ta$";
-
-        // // the details of the message we want to send
-        // string myData = "{to: \"923205601570\", body:\"Hello Mr. Irfan!\"}";
-
-        // // build the request based on the supplied settings
-        // var request = WebRequest.Create(myURI);
-
-        // request.Credentials = new NetworkCredential(myUsername, myPassword);
-        // request.PreAuthenticate = true;
-        // // we want to use HTTP POST
-        // request.Method = "POST";
-        // // for this API, the type must always be JSON
-        // request.ContentType = "application/json";
-
-        // // Here we use Unicode encoding, but ASCIIEncoding would also work
-        // var encoding = new UnicodeEncoding();
-        // var encodedData = encoding.GetBytes(myData);
-
-        // // Write the data to the request stream
-        // var stream = request.GetRequestStream();
-        // stream.Write(encodedData, 0, encodedData.Length);
-        // stream.Close();
-        // var response = request.GetResponse();
-        // return response.ToString();
-
-        //     // read the response and print it to the console
-        //     //var reader = new StreamReader(response.GetResponseStream());
-        //    // Console.WriteLine(reader.ReadToEnd());
-        // }
 
     }
 

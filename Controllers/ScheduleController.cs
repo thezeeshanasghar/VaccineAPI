@@ -102,43 +102,25 @@ namespace VaccineAPI.Controllers
                     dbSchedule.BrandId = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
 
-
-
                     ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
                     if (dbBrandInventory2 != null)
                     {
-                        DateTime currentDate = DateTime.Now.Date;
-                        if (currentDate == dbSchedule.Date && dbSchedule.Brand == null)
+                        if (dbSchedule.Brand == null)
                         {
-                            dbBrandInventory2.Count = dbBrandInventory2.Count + 1;
-
+                            dbBrandInventory2.Count += 1;
                         }
-                        else
-                        {
-                            dbBrandInventory2.Count = dbBrandInventory2.Count;
-                        }
-
                     }
-
                     _db.SaveChanges();
-
-                    return new Response<ScheduleDTO>(true, "congratulations", newData2);
+                    return new Response<ScheduleDTO>(true, "Congratulations", newData2);
                 }
                 if (dbBrandInventory != null)
-                //not null
                 {
-                    DateTime currentDate = DateTime.Now.Date;
-                    if (currentDate == dbSchedule.Date && dbSchedule.Brand == null)
+                    if (dbSchedule.Brand == null)
                     {
-                        dbBrandInventory.Count = dbBrandInventory.Count - 1;
-
+                        dbBrandInventory.Count -= 1;
                     }
                 }
 
-                // if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
-
-
-                // to hide next doses if disease appeared
                 if (scheduleDTO.IsDisease == true)
                 {
                     var nextDoses = _db.Doses
@@ -563,15 +545,15 @@ namespace VaccineAPI.Controllers
                             schedule.BrandId = scheduleBrand.BrandId;
                             if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                             {
-                            var brandInventory = _db.BrandAmounts
-                                .Where(
-                                    b =>
-                                        b.BrandId == scheduleBrand.BrandId
-                                        && b.DoctorId == scheduleDTO.DoctorId
-                                )
-                                .FirstOrDefault();
-                            if (brandInventory != null)
-                                brandInventory.Count--;
+                                var brandInventory = _db.BrandAmounts
+                                    .Where(
+                                        b =>
+                                            b.BrandId == scheduleBrand.BrandId
+                                            && b.DoctorId == scheduleDTO.DoctorId
+                                    )
+                                    .FirstOrDefault();
+                                if (brandInventory != null)
+                                    brandInventory.Count--;
                             }
                         }
                     }

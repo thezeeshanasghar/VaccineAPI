@@ -37,7 +37,6 @@ namespace VaccineAPI.Controllers
             {
                 var child = _db.Childs
                     .FirstOrDefault(c => c.Id == id);
-                    
                 if (child == null)
                 {
                     return NotFound(new Response<ChildDTO>(false, $"Child not found with ID: {id}", null));
@@ -1903,48 +1902,47 @@ namespace VaccineAPI.Controllers
             bottomTable.LockedWidth = true;
             bottomTable.SetWidths(bottomTableWidths);
 
+            // Ensure `currentDate` and `footerFont` are properly initialized
+            var footerFont = new Font(Font.HELVETICA, 8, Font.NORMAL);
+            var currentDate = DateTime.Now.ToString("yyyy-MM-dd");
+
             // Adding cells to the bottom table
+            PdfPCell CreateCellWithMargin(string text, string style, int colspan, string alignment, string description, float topMargin = 0)
+            {
+                var cell = CreateCell(text, style, colspan, alignment, description);
+                cell.PaddingTop = topMargin;
+                return cell;
+            }
+
             bottomTable.AddCell(CreateCell(" ", "bold", 2, "left", "description"));
             bottomTable.AddCell(CreateCell("Quick links: ", "", 2, "left", "description"));
 
             bottomTable.AddCell(CreateCell("vaccinationcentre.com", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCell("Web: SalmanBajwa.com", "", 1, "right", "description"));
+            bottomTable.AddCell(CreateCellWithMargin("Web: SalmanBajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/booking", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCell("Phone/WhatsApp: +923335196658", "", 1, "right", "description"));
+            bottomTable.AddCell(CreateCellWithMargin("Phone/WhatsApp: +923335196658", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/pricing", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCell("Email: dr@salmanbajwa.com", "", 1, "right", "description"));
+            bottomTable.AddCell(CreateCellWithMargin("Email: dr@salmanbajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
 
-            // Positioning the first table
-            bottomTable.WriteSelectedRows(0, -1, 65, 200, writer.DirectContent); // Adjust y-position for table
+            var dateText = $"Printed date: {currentDate}";
+            var dateCell = CreateCellWithMargin(dateText, "", 2, "right", "description", topMargin: -14); // Add top margin to date cell
+            bottomTable.AddCell(dateCell);
+
+            // Adjust the Y-position if necessary
+            bottomTable.WriteSelectedRows(0, -1, 65, 125, writer.DirectContent);
 
             PdfPTable footerTable = new PdfPTable(1);
             footerTable.TotalWidth = 470f;
             footerTable.LockedWidth = true;
 
-
-            Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
-            var currentDate = DateTime.Now.ToString("MMMM dd, yyyy");
-
-            // Cell for the current date, aligned to the right
-            var dateText = $"Printed date: {currentDate}";
-            Phrase datePhrase = new Phrase(dateText, footerFont);
-            PdfPCell dateCell = new PdfPCell(datePhrase)
-            {
-                HorizontalAlignment = Element.ALIGN_RIGHT,
-                Border = Rectangle.NO_BORDER,
-                PaddingTop = 18f,
-                PaddingBottom = -16f
-            };
-
-
-            footerTable.AddCell(dateCell);
-
-            // Create a bold font for the "Note!" text
-            Font boldFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+            // Define fonts with specific sizes
+            Font boldFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12);
+            Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10); 
             Chunk noteChunk = new Chunk("Note! ", boldFont);
             Phrase footerPhrase = new Phrase();
             footerPhrase.Add(noteChunk);
-            footerPhrase.Add(new Chunk("This is electronically generated invoice. It does not require physical signatures/stamp . ", footerFont));
+            footerPhrase.Add(new Chunk("This is electronically generated invoice. It does not require physical signatures/stamp.", footerFont1));
+
 
             PdfPCell footerCell = new PdfPCell(footerPhrase)
             {
@@ -1956,7 +1954,7 @@ namespace VaccineAPI.Controllers
 
             footerTable.AddCell(footerCell);
             footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);
-            
+
             var baseUrl = "https://myapi.skintechno.com/api";
             var childData = _db.Childs.Include(x => x.Clinic)
                             .ThenInclude(x => x.Doctor)
@@ -1965,11 +1963,11 @@ namespace VaccineAPI.Controllers
 
             var childDTO = new ChildDTO
             {
-                Id = childData.Id, 
-                Name = childData.Name ?? "Unknown", 
+                Id = childData.Id,
+                Name = childData.Name ?? "Unknown",
                 FatherName = childData.FatherName ?? "Unknown",
             };
-                var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
+            var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
             try
             {
 
@@ -1982,14 +1980,23 @@ namespace VaccineAPI.Controllers
                     {
                         var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
                         pdfQrCode.ScaleAbsolute(80f, 80f);
-                        pdfQrCode.SetAbsolutePosition(63, document.PageSize.Height - 800);
+
+                        float pageWidth = document.PageSize.Width;
+                        float qrCodeXPosition = (pageWidth - pdfQrCode.ScaledWidth) / 2;
+
+                        float qrCodeYPosition = 61f;
+
+                        pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
+
                         iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                        ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_LEFT,
+                        ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
                         new Phrase("Scan to download this invoice", explanationFont),
-                        67, document.PageSize.Height - 810, 0);
+                        qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
                     }
                 }
+
+
 
             }
             catch (Exception ex)

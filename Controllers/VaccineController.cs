@@ -109,24 +109,41 @@ namespace VaccineAPI.Controllers
                 return new Response<List<BrandDTO>>(true, null, brandDTOs);
             }
         }
-
-        [HttpPost]
-        public Response<VaccineDTO> Post(VaccineDTO vaccineDTO)
-
+          [HttpPost]
+        public async Task<Response<VaccineDTO>> Post(VaccineDTO vaccineDTO)
         {
             Vaccine vaccinedb = _mapper.Map<Vaccine>(vaccineDTO);
+            
             _db.Vaccines.Add(vaccinedb);
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
+
             vaccineDTO.Id = vaccinedb.Id;
-            //add vaccine in brand
-            Brand dbBrand = new Brand();
-            dbBrand.VaccineId = vaccinedb.Id;
-            dbBrand.Name = "Local";
+
+            Brand dbBrand = new Brand
+            {
+                VaccineId = vaccinedb.Id,
+                Name = "Local" 
+            };
+        
             _db.Brands.Add(dbBrand);
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
 
+            var doctors = await _db.Doctors.ToListAsync();
+            List<BrandAmount> brandAmounts = new List<BrandAmount>();
+            foreach (var doctor in doctors)
+            {
+                BrandAmount newBrandAmount = new BrandAmount
+                {
+                    DoctorId = doctor.Id,
+                    BrandId = dbBrand.Id,  
+                    Amount = 0,  
+                    Count = 0    
+                };
+                brandAmounts.Add(newBrandAmount);
+            }
+            _db.BrandAmounts.AddRange(brandAmounts);
+            await _db.SaveChangesAsync();
             return new Response<VaccineDTO>(true, null, vaccineDTO);
-
         }
 
         [HttpPut("{id}")]
@@ -142,8 +159,6 @@ namespace VaccineAPI.Controllers
             return new Response<VaccineDTO>(true, null, vaccineDTO);
 
         }
-
-
 
         [HttpDelete("{id}")]
         public Response<string> Delete(long id)
@@ -174,42 +189,6 @@ namespace VaccineAPI.Controllers
             var content = c.GetStringAsync(url).Result;
             return content.ToString();
         }
-
-        // public static string sendNewRequest (string url) {
-        //     string myURI = "https://api.bulksms.com/v1/messages";
-
-        // // change these values to match your own account
-        // string myUsername = "irfan001";
-        // string myPassword = "w?Zu-qjNd8c#Ta$";
-
-        // // the details of the message we want to send
-        // string myData = "{to: \"923205601570\", body:\"Hello Mr. Irfan!\"}";
-
-        // // build the request based on the supplied settings
-        // var request = WebRequest.Create(myURI);
-
-        // request.Credentials = new NetworkCredential(myUsername, myPassword);
-        // request.PreAuthenticate = true;
-        // // we want to use HTTP POST
-        // request.Method = "POST";
-        // // for this API, the type must always be JSON
-        // request.ContentType = "application/json";
-
-        // // Here we use Unicode encoding, but ASCIIEncoding would also work
-        // var encoding = new UnicodeEncoding();
-        // var encodedData = encoding.GetBytes(myData);
-
-        // // Write the data to the request stream
-        // var stream = request.GetRequestStream();
-        // stream.Write(encodedData, 0, encodedData.Length);
-        // stream.Close();
-        // var response = request.GetResponse();
-        // return response.ToString();
-
-        //     // read the response and print it to the console
-        //     //var reader = new StreamReader(response.GetResponseStream());
-        //    // Console.WriteLine(reader.ReadToEnd());
-        // }
 
     }
 

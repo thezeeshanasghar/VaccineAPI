@@ -389,17 +389,17 @@ namespace VaccineAPI.Controllers
         {
             // Access db data
             var dbChild = _db.Childs.Include(x => x.User)
-                              .Include(x => x.Clinic)
-                              .ThenInclude(x => x.Doctor)
-                              .ThenInclude(x => x.User)
-                              .Where(x => x.Id == childId)
-                              .FirstOrDefault();
+                                  .Include(x => x.Clinic)
+                                  .ThenInclude(x => x.Doctor)
+                                  .ThenInclude(x => x.User)
+                                  .Where(x => x.Id == childId)
+                                  .FirstOrDefault();
             var dbDoctor = dbChild.Clinic.Doctor;
             var child = _db.Childs.Include(x => x.Schedules)
-                            .ThenInclude(x => x.Dose)
-                            .Include(x => x.Schedules)
-                            .ThenInclude(x => x.Brand)
-                            .FirstOrDefault(c => c.Id == childId);
+                                .ThenInclude(x => x.Dose)
+                                .Include(x => x.Schedules)
+                                .ThenInclude(x => x.Brand)
+                                .FirstOrDefault(c => c.Id == childId);
             var dbSchedules = child.Schedules.ToList();
 
             var Gender = 1;
@@ -428,6 +428,40 @@ namespace VaccineAPI.Controllers
                 // calling PDFFooter class to Include in document
                 writer.PageEvent = new PDFFooter(child);
                 document.Open();
+
+                // QR Code URL
+                var baseUrl = "https://myapi.skintechno.com/api";
+                var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
+
+                try
+                {
+                    using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+                    using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
+                    {
+                        var qrCode = new BitmapByteQRCode(qrCodeData);
+                        byte[] qrCodeImage = qrCode.GetGraphic(20);
+                        using (MemoryStream ms = new MemoryStream(qrCodeImage))
+                        {
+                            var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
+                            pdfQrCode.ScaleAbsolute(80f, 80f);
+                            float pageWidth = document.PageSize.Width;
+                            float qrCodeXPosition = 50f;
+                            float marginTop = 650f;
+                            float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
+                            pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
+                            writer.DirectContent.AddImage(pdfQrCode);
+                            iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+                            ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
+                            new Phrase("Scan to verify this schedule", explanationFont),
+                            qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error generating QR code: {ex.Message}");
+                }
+
 
                 // GetPDFHeading (document, "Immunization Record");
                 // Table 1 for description above Schedule table
@@ -1916,7 +1950,7 @@ namespace VaccineAPI.Controllers
 
             bottomTable.AddCell(CreateCell(" ", "bold", 2, "left", "description"));
             bottomTable.AddCell(CreateCell("Quick links: ", "", 2, "left", "description"));
-           
+
             bottomTable.AddCell(CreateCell("vaccinationcentre.com", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCellWithMargin("Web: SalmanBajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/vaccines", "", 1, "left", "description"));
@@ -1936,7 +1970,7 @@ namespace VaccineAPI.Controllers
             footerTable.LockedWidth = true;
 
             // Define fonts with specific sizes
-            Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10); 
+            Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10);
             Phrase footerPhrase = new Phrase();
             footerPhrase.Add(new Chunk("This is electronically generated invoice. It does not require physical signatures/stamp.", footerFont1));
 
@@ -2302,7 +2336,7 @@ namespace VaccineAPI.Controllers
             string footer =
                 "Vaccines may cause fever, localized redness, and pain. This schedule is valid for production on demand at all airports, embassies, and schools worldwide. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses.\n" +
                 "Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given." + Environment.NewLine +
-                "*OHF = vaccine given at other health faculty (not by vaccinationcentre.com)\n\n" +
+                "*OHF = vaccine given at other health faculty (not by vaccinationcentre.com)\n" +
                 "Printed " + DateTime.UtcNow.AddHours(5).ToString("MMMM dd, yyyy");
             footer = footer.Replace(Environment.NewLine, String.Empty).Replace("  ", String.Empty);
             Font georgia = FontFactory.GetFont("georgia", 8f);

@@ -1916,7 +1916,7 @@ namespace VaccineAPI.Controllers
 
             bottomTable.AddCell(CreateCell(" ", "bold", 2, "left", "description"));
             bottomTable.AddCell(CreateCell("Quick links: ", "", 2, "left", "description"));
-
+           
             bottomTable.AddCell(CreateCell("vaccinationcentre.com", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCellWithMargin("Web: SalmanBajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/booking", "", 1, "left", "description"));
@@ -1929,18 +1929,15 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell(dateCell);
 
             // Adjust the Y-position if necessary
-            bottomTable.WriteSelectedRows(0, -1, 65, 125, writer.DirectContent);
+            bottomTable.WriteSelectedRows(0, -1, 65, 85, writer.DirectContent);
 
             PdfPTable footerTable = new PdfPTable(1);
             footerTable.TotalWidth = 470f;
             footerTable.LockedWidth = true;
 
             // Define fonts with specific sizes
-            Font boldFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12);
             Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10); 
-            Chunk noteChunk = new Chunk("Note! ", boldFont);
             Phrase footerPhrase = new Phrase();
-            footerPhrase.Add(noteChunk);
             footerPhrase.Add(new Chunk("This is electronically generated invoice. It does not require physical signatures/stamp.", footerFont1));
 
 
@@ -1948,8 +1945,8 @@ namespace VaccineAPI.Controllers
             {
                 HorizontalAlignment = Element.ALIGN_LEFT,
                 Border = Rectangle.NO_BORDER,
-                PaddingTop = 25f,
-                PaddingBottom = 10f
+                PaddingTop = -49f,
+                PaddingBottom = 300f
             };
 
             footerTable.AddCell(footerCell);
@@ -1984,15 +1981,15 @@ namespace VaccineAPI.Controllers
                         float pageWidth = document.PageSize.Width;
                         float qrCodeXPosition = (pageWidth - pdfQrCode.ScaledWidth) / 2;
 
-                        float qrCodeYPosition = 61f;
+                        float qrCodeYPosition = 7f;
 
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
 
                         iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                        ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
-                        new Phrase("Scan to download this invoice", explanationFont),
-                        qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
+                        // ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
+                        // new Phrase("Scan to download this invoice", explanationFont),
+                        // qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
                     }
                 }
 

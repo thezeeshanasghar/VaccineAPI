@@ -1919,9 +1919,9 @@ namespace VaccineAPI.Controllers
            
             bottomTable.AddCell(CreateCell("vaccinationcentre.com", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCellWithMargin("Web: SalmanBajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
-            bottomTable.AddCell(CreateCell("vaccinationcentre.com/booking", "", 1, "left", "description"));
+            bottomTable.AddCell(CreateCell("vaccinationcentre.com/vaccines", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCellWithMargin("Phone/WhatsApp: +923335196658", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
-            bottomTable.AddCell(CreateCell("vaccinationcentre.com/pricing", "", 1, "left", "description"));
+            bottomTable.AddCell(CreateCell("vaccinationcentre.com/schedule", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCellWithMargin("Email: dr@salmanbajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
 
             var dateText = $"Printed On: {currentDate}";

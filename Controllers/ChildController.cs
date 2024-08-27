@@ -1924,7 +1924,7 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/pricing", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCellWithMargin("Email: dr@salmanbajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
 
-            var dateText = $"Printed date: {currentDate}";
+            var dateText = $"Printed On: {currentDate}";
             var dateCell = CreateCellWithMargin(dateText, "", 2, "right", "description", topMargin: -14); // Add top margin to date cell
             bottomTable.AddCell(dateCell);
 
@@ -1987,9 +1987,9 @@ namespace VaccineAPI.Controllers
                         writer.DirectContent.AddImage(pdfQrCode);
 
                         iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                        // ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
-                        // new Phrase("Scan to download this invoice", explanationFont),
-                        // qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
+                        ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
+                        new Phrase("Scan to Verify this invoice", explanationFont),
+                        qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
                     }
                 }
 

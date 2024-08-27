@@ -1988,7 +1988,7 @@ namespace VaccineAPI.Controllers
 
                         iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
                         ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
-                        new Phrase("Scan to Verify this invoice", explanationFont),
+                        new Phrase("Scan to verify this invoice", explanationFont),
                         qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
                     }
                 }

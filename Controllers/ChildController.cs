@@ -1945,7 +1945,7 @@ namespace VaccineAPI.Controllers
             {
                 HorizontalAlignment = Element.ALIGN_LEFT,
                 Border = Rectangle.NO_BORDER,
-                PaddingTop = -49f,
+                PaddingTop = -70f,
                 PaddingBottom = 300f
             };
 
@@ -1981,7 +1981,7 @@ namespace VaccineAPI.Controllers
                         float pageWidth = document.PageSize.Width;
                         float qrCodeXPosition = (pageWidth - pdfQrCode.ScaledWidth) / 2;
 
-                        float qrCodeYPosition = 7f;
+                        float qrCodeYPosition = 23f;
 
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);

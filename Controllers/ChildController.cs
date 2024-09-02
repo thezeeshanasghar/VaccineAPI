@@ -1952,7 +1952,7 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/vaccines", "", 1, "left", "description"));
             bottomTable.AddCell(CreateCellWithMargin("Phone/WhatsApp: +923335196658", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/schedule", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCellWithMargin("Email: @vaccinationcentre.com", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
+            bottomTable.AddCell(CreateCellWithMargin("Email: info@vaccinationcentre.com", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
             bottomTable.WriteSelectedRows(0, -1, 65, 85, writer.DirectContent);
 
             PdfPTable footerTable = new PdfPTable(1);
@@ -1961,24 +1961,20 @@ namespace VaccineAPI.Controllers
 
             Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10);
             Phrase footerPhrase = new Phrase();
-            footerPhrase.Add(new Chunk(" This is an electronically generated invoice. It does not require physical signatures/stamp.\n", footerFont1));
-            var dateText = $"\nPrinted On: {currentDate}";
-            Chunk dateChunk = new Chunk(dateText, footerFont1);
-            Chunk rightMarginChunk = new Chunk(" ", footerFont1); 
-            footerPhrase.Add(rightMarginChunk);
-            footerPhrase.Add(dateChunk);
-
+            var statementText = "This is an electronically generated invoice and doesn’t require signature/stamp. Printed On : " + currentDate;
+            Chunk statementChunk = new Chunk(statementText, footerFont1);
+            footerPhrase.Add(statementChunk);
             PdfPCell footerCell = new PdfPCell(footerPhrase)
             {
-                HorizontalAlignment = Element.ALIGN_RIGHT,
+                HorizontalAlignment = Element.ALIGN_LEFT,
                 Border = Rectangle.NO_BORDER,
                 PaddingTop = -70f,
                 PaddingBottom = 300f,
-                PaddingRight = 70f // Adjust this value for the desired right margin
             };
 
             // Add the footer cell to the table
             bottomTable.AddCell(footerCell);
+
 
 
             footerTable.AddCell(footerCell);

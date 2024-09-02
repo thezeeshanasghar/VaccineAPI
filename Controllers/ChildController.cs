@@ -424,7 +424,6 @@ namespace VaccineAPI.Controllers
                 writer.CloseStream = false;
                 writer.PageEvent = new PDFFooter(child);
                 document.Open();
-                
                 // QR Code URL
                 var baseUrl = "https://myapi.skintechno.com/api";
                 var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
@@ -447,7 +446,7 @@ namespace VaccineAPI.Controllers
                             pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                             writer.DirectContent.AddImage(pdfQrCode);
                             iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                            float marginLeft = 14f;
+                            float marginLeft = -0f;
                             ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
                             new Phrase("Scan to verify", explanationFont),
                             qrCodeXPosition + pdfQrCode.ScaledWidth / 2 + marginLeft, qrCodeYPosition - 7, 0);
@@ -1811,7 +1810,7 @@ namespace VaccineAPI.Controllers
             childtable.SpacingBefore = 10;
             childtable.SpacingAfter = 10;
 
-            childtable.AddCell(CreateCell("Name of Kid/Patient", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            childtable.AddCell(CreateCell("Name of Kid/Patient:", "backgroudLightGray", 1, "left", "invoiceRecords"));
             childtable.AddCell(CreateCell(dbChild.Name, " ", 1, "left", "invoiceRecords"));
 
             childtable.AddCell(CreateCell("Father/Mother Name:", "backgroudLightGray", 1, "left", "invoiceRecords"));
@@ -1820,7 +1819,7 @@ namespace VaccineAPI.Controllers
             childtable.AddCell(CreateCell("Date of Birth:", "backgroudLightGray", 1, "left", "invoiceRecords"));
             childtable.AddCell(CreateCell(dbChild.DOB.ToString("dd/MM/yyyy"), "", 1, "left", "invoiceRecords"));
 
-            childtable.AddCell(CreateCell("City", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            childtable.AddCell(CreateCell("City:", "backgroudLightGray", 1, "left", "invoiceRecords"));
             childtable.AddCell(CreateCell(dbChild.City, " ", 1, "left", "invoiceRecords"));
 
             _db.SaveChanges();
@@ -1949,36 +1948,38 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell(CreateCell("Quick links: ", "", 2, "left", "description"));
 
             bottomTable.AddCell(CreateCell("vaccinationcentre.com", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCellWithMargin("Web: SalmanBajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
+            bottomTable.AddCell(CreateCellWithMargin("Web: vaccinationcentre.com", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/vaccines", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCellWithMargin("Phone/WhatsApp: +923335196658", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
+            bottomTable.AddCell(CreateCellWithMargin("Phone/WhatsApp: +923335196658", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
             bottomTable.AddCell(CreateCell("vaccinationcentre.com/schedule", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCellWithMargin("Email: dr@salmanbajwa.com", "", 1, "right", "description", topMargin: -14)); // Adjust topMargin as needed
-
-            var dateText = $"Printed On: {currentDate}";
-            var dateCell = CreateCellWithMargin(dateText, "", 2, "right", "description", topMargin: -14); // Add top margin to date cell
-            bottomTable.AddCell(dateCell);
-
-            // Adjust the Y-position if necessary
+            bottomTable.AddCell(CreateCellWithMargin("Email: @vaccinationcentre.com", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
             bottomTable.WriteSelectedRows(0, -1, 65, 85, writer.DirectContent);
 
             PdfPTable footerTable = new PdfPTable(1);
             footerTable.TotalWidth = 470f;
             footerTable.LockedWidth = true;
 
-            // Define fonts with specific sizes
             Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10);
             Phrase footerPhrase = new Phrase();
-            footerPhrase.Add(new Chunk("This is electronically generated invoice. It does not require physical signatures/stamp.", footerFont1));
-
+            footerPhrase.Add(new Chunk(" This is an electronically generated invoice. It does not require physical signatures/stamp.\n", footerFont1));
+            var dateText = $"\nPrinted On: {currentDate}";
+            Chunk dateChunk = new Chunk(dateText, footerFont1);
+            Chunk rightMarginChunk = new Chunk(" ", footerFont1); 
+            footerPhrase.Add(rightMarginChunk);
+            footerPhrase.Add(dateChunk);
 
             PdfPCell footerCell = new PdfPCell(footerPhrase)
             {
-                HorizontalAlignment = Element.ALIGN_LEFT,
+                HorizontalAlignment = Element.ALIGN_RIGHT,
                 Border = Rectangle.NO_BORDER,
                 PaddingTop = -70f,
-                PaddingBottom = 300f
+                PaddingBottom = 300f,
+                PaddingRight = 70f // Adjust this value for the desired right margin
             };
+
+            // Add the footer cell to the table
+            bottomTable.AddCell(footerCell);
+
 
             footerTable.AddCell(footerCell);
             footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);
@@ -2019,7 +2020,7 @@ namespace VaccineAPI.Controllers
 
                         iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
                         ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
-                        new Phrase("Scan to verify this invoice", explanationFont),
+                        new Phrase("Scan to verify", explanationFont),
                         qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
                     }
                 }
@@ -2333,7 +2334,7 @@ namespace VaccineAPI.Controllers
             string footer =
                 "Vaccines may cause fever, localized redness, and pain. This schedule is valid for production on demand at all airports, embassies, and schools worldwide. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses. " +
                 "Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given. " +
-                "*OHF = vaccine given at other health faculty (not by vaccinationcentre.com)\n\n" +
+                "*OHF = vaccine given at other health facility (not by vaccinationcentre.com)\n\n" +
                 "Printed on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd");
             footer = footer.Replace(Environment.NewLine, String.Empty).Replace("  ", String.Empty);
             Font georgia = FontFactory.GetFont("georgia", 8f);
@@ -2344,8 +2345,8 @@ namespace VaccineAPI.Controllers
             tabFot.DefaultCell.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
             cell = new PdfPCell(new Phrase(beginning));
             cell.Border = 0;
-            cell.PaddingLeft = -21f; 
-             cell.PaddingTop = 8f;
+            cell.PaddingLeft = -21f;
+            cell.PaddingTop = 8f;
             tabFot.AddCell(cell);
             tabFot.WriteSelectedRows(0, -1, 65, 90, writer.DirectContent);
 

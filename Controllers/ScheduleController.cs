@@ -526,28 +526,6 @@ namespace VaccineAPI.Controllers
 
                 foreach (var schedule in dbChildSchedules)
                 {
-                    var doseName = _db.Doses.Where(x => x.Id == schedule.DoseId).FirstOrDefault();
-                    if (doseName.Name == "Flu" || doseName.Name == "Typhoid")
-                    {
-                        // Create an exact copy of the current schedule
-                        var clonedSchedule = new Schedule
-                        {
-                            ChildId = scheduleDTO.ChildId,
-                            DoseId = scheduleDTO.DoseId,
-                            Date = scheduleDTO.Date,
-                            IsDone = false,
-                            GivenDate = scheduleDTO.GivenDate,
-                            Weight = null,
-                            Height = null,
-                            Circle = null,
-                            IsSkip = false,
-                            BrandId = null,
-                            IsDisease = null,
-                            Due2EPI = false,
-                            DiseaseYear = "",
-                            Amount = null
-                        };
-                    }
                     schedule.Weight =
                         (scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
                     schedule.Height =

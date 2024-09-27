@@ -433,23 +433,21 @@ namespace VaccineAPI.Controllers
                     using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
                     {
                         var qrCode = new BitmapByteQRCode(qrCodeData);
-                        byte[] qrCodeImage = qrCode.GetGraphic(20);
+                        byte[] qrCodeImage = qrCode.GetGraphic(18);
                         using (MemoryStream ms = new MemoryStream(qrCodeImage))
                         {
                             var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
-                            pdfQrCode.ScaleAbsolute(80f, 80f);
-                            float pageWidth = document.PageSize.Width;
-                            float marginRight = 476f;
-                            float qrCodeXPosition = pageWidth - pdfQrCode.ScaledWidth - marginRight;
-                            float marginTop = 640f;
+                            pdfQrCode.ScaleAbsolute(60f, 60f);
+                            float marginLeft = 40f;
+                            float qrCodeXPosition = marginLeft;
+                            float marginTop = 665f - 4f;
                             float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
                             pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                             writer.DirectContent.AddImage(pdfQrCode);
                             iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                            float marginLeft = -0f;
                             ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
                             new Phrase("Scan to verify", explanationFont),
-                            qrCodeXPosition + pdfQrCode.ScaledWidth / 2 + marginLeft, qrCodeYPosition - 7, 0);
+                            qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 7, 0);
                         }
                     }
                 }
@@ -2342,7 +2340,7 @@ namespace VaccineAPI.Controllers
             cell = new PdfPCell(new Phrase(beginning));
             cell.Border = 0;
             cell.PaddingLeft = -21f;
-            cell.PaddingTop = 8f;
+            cell.PaddingTop = 28f;
             tabFot.AddCell(cell);
             tabFot.WriteSelectedRows(0, -1, 65, 90, writer.DirectContent);
 

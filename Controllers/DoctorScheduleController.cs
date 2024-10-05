@@ -69,8 +69,38 @@ namespace VaccineAPI.Controllers
             var doctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(sortedDoctorSchedules);
             return new Response<List<DoctorScheduleDTO>>(true, null, doctorScheduleDTOs);
         }
+        [HttpPut("UpdateInvoiceId/{id}")]
+        public async Task<IActionResult> UpdateInvoiceId(long id, [FromBody] long invoiceId)
+        {
+            var doctorSchedule = await _db.DoctorSchedules.FindAsync(id);
+            if (doctorSchedule == null)
+            {
+                return NotFound(new { message = "DoctorSchedule not found." });
+            }
+            doctorSchedule.InvoiceId = invoiceId;
+            _db.Entry(doctorSchedule).State = EntityState.Modified;
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!DoctorScheduleExists(id))
+                {
+                    return NotFound(new { message = "DoctorSchedule not found during update." });
+                }
+                else
+                {
+                    throw;
+                }
+            }
 
-
+            return Ok(new { message = "InvoiceId updated successfully.", doctorSchedule });
+        }
+        private bool DoctorScheduleExists(long id)
+        {
+            return _db.DoctorSchedules.Any(e => e.Id == id);
+        }
 
         [HttpPost]
         public Response<IEnumerable<DoctorScheduleDTO>> Post(IEnumerable<DoctorScheduleDTO> dsDTOS)

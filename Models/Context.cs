@@ -27,7 +27,7 @@ namespace VaccineAPI.Models
         public DbSet<Brand> Brands { get; set; }
         public DbSet<NormalRange> NormalRanges { get; set; }
         public DbSet<City> Cities { get; set; }
-
+        public DbSet<Invoice> Invoices { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

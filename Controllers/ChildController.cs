@@ -1693,6 +1693,13 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf", FileName);
         }
 
+        private string GenerateRandomInvoiceId(int length)
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            var random = new Random();
+            return new string(Enumerable.Repeat(chars, length)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+        }
         // updated invoice pdf
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
         public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate,
@@ -1793,10 +1800,16 @@ namespace VaccineAPI.Controllers
             // upperTable.AddCell (CreateCell ("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description"));
             // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
             document.Add(upperTable);
-            Paragraph title = new Paragraph("INVOICE");
-            title.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+            string invoiceNumber = GenerateRandomInvoiceId(25); // Generate your random invoice number
+            Paragraph title = new Paragraph();
+            Chunk invoiceText = new Chunk("INVOICE :", FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD));
+            title.Add(invoiceText);
+            Chunk invoiceNumberChunk = new Chunk(" " + invoiceNumber, FontFactory.GetFont(FontFactory.HELVETICA, 10));
+            title.Add(invoiceNumberChunk);
             title.Alignment = Element.ALIGN_CENTER;
+            // Add the title paragraph to the document
             document.Add(title);
+
 
             // 2nd Table
             float[] widths = new float[] { 170f, 300f };
@@ -1855,6 +1868,55 @@ namespace VaccineAPI.Controllers
                         count++;
                         vaccinetable.AddCell(CreateCell(count.ToString(), "", 1, "center", "invoiceRecords"));
                         vaccinetable.AddCell(CreateCell(schedule.Dose.Vaccine.Name, "", 1, "left", "invoiceRecords"));
+                        // Assuming 'schedule' is defined and contains the necessary properties
+                        var childId = schedule.ChildId; 
+                        var doctorId = schedule.Child.Clinic.DoctorId; 
+                        var clinicId = schedule.Child.ClinicId;
+
+                       // Retrieve the brand amount
+                var brandAmount = _db.BrandAmounts
+                    .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId);
+
+                // Check if the invoice already exists
+                var existingInvoice = _db.Invoices
+                    .FirstOrDefault(i => i.DoseId == schedule.Dose.Id
+                                        && i.ChildId == schedule.ChildId
+                                        && i.DoctorId == doctorId
+                                        && i.ClinicId == schedule.Child.ClinicId);
+
+                // If the invoice doesn't exist, create a new one
+                if (existingInvoice == null)
+                {
+                    existingInvoice = new Invoice
+                    {
+                        InvoiceId = invoiceNumber,
+                        DoseId = schedule.Dose.Id,
+                        ChildId = schedule.ChildId,
+                        DoctorId = doctorId,
+                        ClinicId = schedule.Child.ClinicId
+                    };
+                    _db.Invoices.Add(existingInvoice);
+                }
+
+                bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
+                if (brandAmount != null && isAmountEmptyOrZero)
+                {
+                    existingInvoice.Amount = brandAmount.Amount != 0 ? brandAmount.Amount : 0;
+                }
+                else if (brandAmount != null && schedule.Amount != null && schedule.Amount != 0)
+                {
+                    existingInvoice.Amount = (decimal)(brandAmount?.Amount ?? 0);
+                }
+                else if (brandAmount == null && !isAmountEmptyOrZero)
+                {
+                    existingInvoice.Amount = (decimal)(schedule?.Amount ?? 0);
+                }
+                else
+                {
+                    existingInvoice.Amount = 0;
+                }
+                    _db.SaveChanges();
+
                         if (schedule.BrandId > 0)
                         {
                             vaccinetable.AddCell(CreateCell(schedule.Brand.Name, "", 1, "left", "invoiceRecords"));
@@ -1866,7 +1928,7 @@ namespace VaccineAPI.Controllers
 
                         vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
 
-                        var brandAmount =
+                        var brandAmount1 =
                             _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault();
                         if (brandAmount != null && schedule.Amount == null)
                         {

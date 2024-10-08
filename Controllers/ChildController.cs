@@ -1869,53 +1869,49 @@ namespace VaccineAPI.Controllers
                         vaccinetable.AddCell(CreateCell(count.ToString(), "", 1, "center", "invoiceRecords"));
                         vaccinetable.AddCell(CreateCell(schedule.Dose.Vaccine.Name, "", 1, "left", "invoiceRecords"));
                         // Assuming 'schedule' is defined and contains the necessary properties
-                        var childId = schedule.ChildId; 
-                        var doctorId = schedule.Child.Clinic.DoctorId; 
+                        var childId = schedule.ChildId;
+                        var doctorId = schedule.Child.Clinic.DoctorId;
                         var clinicId = schedule.Child.ClinicId;
 
-                       // Retrieve the brand amount
-                var brandAmount = _db.BrandAmounts
-                    .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId);
+                        // Retrieve the brand amount
+                        var brandAmount = _db.BrandAmounts
+                            .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId);
 
-                // Check if the invoice already exists
-                var existingInvoice = _db.Invoices
-                    .FirstOrDefault(i => i.DoseId == schedule.Dose.Id
-                                        && i.ChildId == schedule.ChildId
-                                        && i.DoctorId == doctorId
-                                        && i.ClinicId == schedule.Child.ClinicId);
+                        // Check if the invoice already exists
+                        var existingInvoice = _db.Invoices
+                            .FirstOrDefault(i => i.DoseId == schedule.Dose.Id
+                                                && i.ChildId == schedule.ChildId
+                                                && i.DoctorId == doctorId
+                                                && i.ClinicId == schedule.Child.ClinicId);
 
-                // If the invoice doesn't exist, create a new one
-                if (existingInvoice == null)
-                {
-                    existingInvoice = new Invoice
-                    {
-                        InvoiceId = invoiceNumber,
-                        DoseId = schedule.Dose.Id,
-                        ChildId = schedule.ChildId,
-                        DoctorId = doctorId,
-                        ClinicId = schedule.Child.ClinicId
-                    };
-                    _db.Invoices.Add(existingInvoice);
-                }
+                        // If the invoice doesn't exist, create a new one
+                        if (existingInvoice == null)
+                        {
+                            existingInvoice = new Invoice
+                            {
+                                InvoiceId = invoiceNumber,
+                                DoseId = schedule.Dose.Id,
+                                ChildId = schedule.ChildId,
+                                DoctorId = doctorId,
+                                ClinicId = schedule.Child.ClinicId
+                            };
+                            _db.Invoices.Add(existingInvoice);
+                        }
 
-                bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
-                if (brandAmount != null && isAmountEmptyOrZero)
-                {
-                    existingInvoice.Amount = brandAmount.Amount != 0 ? brandAmount.Amount : 0;
-                }
-                else if (brandAmount != null && schedule.Amount != null && schedule.Amount != 0)
-                {
-                    existingInvoice.Amount = (decimal)(brandAmount?.Amount ?? 0);
-                }
-                else if (brandAmount == null && !isAmountEmptyOrZero)
-                {
-                    existingInvoice.Amount = (decimal)(schedule?.Amount ?? 0);
-                }
-                else
-                {
-                    existingInvoice.Amount = 0;
-                }
-                    _db.SaveChanges();
+                        // Determine if the schedule's amount is empty or zero
+                        bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
+
+                        // Update invoice amount logic
+                        if (brandAmount != null && isAmountEmptyOrZero)
+                        {
+                            existingInvoice.Amount = brandAmount.Amount != 0 ? brandAmount.Amount : 0;
+                        }
+                        else if (schedule.Amount != null && schedule.Amount != 0)
+                        {
+                            existingInvoice.Amount = (decimal)(schedule?.Amount ?? 0);
+                        }
+                        _db.SaveChanges();
+                        _db.Entry(existingInvoice).State = EntityState.Modified;
 
                         if (schedule.BrandId > 0)
                         {

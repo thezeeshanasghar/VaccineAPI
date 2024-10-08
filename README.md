@@ -64,9 +64,9 @@ CREATE TABLE Invoices (
     InvoiceId VARCHAR(255) NOT NULL,
     Amount DECIMAL(10, 2) NOT NULL,
     ChildId INT NOT NULL,
-    DoctorId INT NOT NULL,  -- Added DoctorId
-    ClinicId INT NOT NULL,   -- Added ClinicId
-    DoseId INT NOT NULL,     -- Added DoseId
+    DoctorId INT NOT NULL,
+    ClinicId INT NOT NULL,
+    DoseId INT NOT NULL,
     PRIMARY KEY (Id)
 );
 

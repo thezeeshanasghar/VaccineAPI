@@ -1460,7 +1460,45 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [HttpGet("doses-for-child/{childId}")]
+        public Response<List<DoseDTO>> GetAllDosesDueForChild(int childId, DateTime? date = null)
+        {
+            DateTime selectedDate = date?.Date ?? DateTime.Today;
+            var child = _db.Childs
+                .Include(c => c.Clinic)
+                .FirstOrDefault(c => c.Id == childId);
 
+            if (child == null)
+            {
+                return new Response<List<DoseDTO>>(false, "Child not found.", null);
+            }
+
+            var schedules = _db.Schedules
+                .Include(s => s.Dose)
+                .Include(s => s.Child.Clinic.Doctor)
+                .Where(s => s.ChildId == childId &&
+                            (s.IsDone == false || s.IsDone == null) &&
+                            (s.IsSkip == false || s.IsSkip == null) &&
+                            s.Date.Date == selectedDate)
+                .OrderBy(s => s.Date)
+                .ToList();
+            var doseDtos = schedules
+                .Select(s => new DoseDTO
+                {
+                    Id = s.Dose.Id,
+                    Name = s.Dose.Name,
+                    Vaccine = _mapper.Map<VaccineDTO>(s.Dose.Vaccine)
+                })
+                .ToList();
+            if (!doseDtos.Any())
+            {
+                return new Response<List<DoseDTO>>(false, $"No doses due on {selectedDate:yyyy-MM-dd} for the given child ID.", null);
+            }
+            var doctorName = schedules.FirstOrDefault()?.Child.Clinic.Doctor?.DisplayName ?? "Unknown Doctor";
+            var clinicName = child.Clinic?.Name ?? "Unknown Clinic";
+            var clinicPhoneNumber = child.Clinic?.PhoneNumber ?? "Unknown Phone Number";
+            var message = $"Doses due for {child.Name} at {clinicName} (Phone: {clinicPhoneNumber}) by Dr. {doctorName}.";
+            return new Response<List<DoseDTO>>(true, message, doseDtos);
+        }
     }
-
 }

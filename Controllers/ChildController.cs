@@ -532,13 +532,21 @@ namespace VaccineAPI.Controllers
                 // } else {
                 //     upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
                 // }
+                // Add the clinic address cell in a clean format
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
 
+                // Restore the commented-out code for Guardian handling
+                // Uncomment and clean the Guardian check
                 // if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
                 // {
-                //     upperTable.AddCell(
-                //         CreateCell(dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName, "", 1,
-                //                    "right", "description"));
+                //     upperTable.AddCell(CreateCell(
+                //         dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName, 
+                //         "", 
+                //         1, 
+                //         "right", 
+                //         "description"));
+                // }
+
                 // }
                 // else
                 // {

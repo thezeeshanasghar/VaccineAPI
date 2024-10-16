@@ -456,8 +456,6 @@ namespace VaccineAPI.Controllers
                     Console.WriteLine($"Error generating QR code: {ex.Message}");
                 }
 
-
-                // GetPDFHeading (document, "Immunization Record");
                 // Table 1 for description above Schedule table
                 PdfPTable upperTable = new PdfPTable(3);
                 float[] upperTableWidths = new float[] { 230f, 75f, 230f };
@@ -466,28 +464,6 @@ namespace VaccineAPI.Controllers
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths(upperTableWidths);
                 upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 2, "left", "description"));
-
-                // image code start
-                // var imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);
-                // //Resources/Images/cliniclogo.png
-                // var imgPath =
-                //     Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);  // Resources/Images/cliniclogo.png
-
-                // // if (dbChild.Clinic.MonogramImage != null) {
-                // // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
-                // Image img = Image.GetInstance(imgPath);
-                // img.ScaleAbsolute(160f, 50f);
-
-                // // img.ScaleToFit(40f, 40f);
-                // PdfPCell imageCell = new PdfPCell(img, false);
-
-                // // imageCell.PaddingTop = 5;
-                // imageCell.Colspan = 1;  // either 1 if you need to insert one cell
-                // imageCell.Rowspan = 2;
-                // imageCell.Border = 0;
-                // imageCell.FixedHeight = 1f;
-                // imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                // upperTable.AddCell(imageCell);
                 var imgPath = dbChild.Clinic.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
 
                 // Add Image Cell
@@ -504,54 +480,10 @@ namespace VaccineAPI.Controllers
                     upperTable.AddCell(imageCell);
                 }
 
-
-
-                // } else {
-                //     PdfPCell imageCell = new PdfPCell ();
-                //     // imageCell.PaddingTop = 5;
-                //     imageCell.Colspan = 1; // either 1 if you need to insert one cell
-                //     imageCell.Rowspan = 4;
-                //     imageCell.Border = 0;
-                //     imageCell.FixedHeight = 1f;
-                //     imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                //    // upperTable.AddCell (imageCell);
-                // }
-                // image code end
                 upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 2, "left", "description"));
-
-                // upperTable
-                // .AddCell(CreateCell("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and
-                // Immunization Expert", "unbold", 2, "left", "description"));
-
-                upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));
-
-                // upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "", 1, "left", "description"));
-                // if (dbChild.Gender == "Girl") {
+                upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));{
                 upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));
-
-                // } else {
-                //     upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
-                // }
-                // Add the clinic address cell in a clean format
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
-
-                // Restore the commented-out code for Guardian handling
-                // Uncomment and clean the Guardian check
-                // if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
-                // {
-                //     upperTable.AddCell(CreateCell(
-                //         dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName, 
-                //         "", 
-                //         1, 
-                //         "right", 
-                //         "description"));
-                // }
-
-                // }
-                // else
-                // {
-                //     upperTable.AddCell(CreateCell("W/O " + dbChild.FatherName, "", 1, "right", "description"));
-                // }
                 upperTable.AddCell(CreateCell("S/D/W/o " + dbChild.FatherName, "", 1, "right", "description"));
                 upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
@@ -575,10 +507,6 @@ namespace VaccineAPI.Controllers
                 title.Font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
-
-                //  document.Add(new Paragraph(""));
-                // document.Add (new Chunk (""));
-                // Schedule Table
                 float[] widths = new float[] { 20f, 145f, 50f, 70, 70f, 60f, 60f, 60f };
 
                 PdfPTable table = new PdfPTable(8);

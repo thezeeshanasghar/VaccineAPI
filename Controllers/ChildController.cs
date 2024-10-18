@@ -456,8 +456,6 @@ namespace VaccineAPI.Controllers
                     Console.WriteLine($"Error generating QR code: {ex.Message}");
                 }
 
-
-                // GetPDFHeading (document, "Immunization Record");
                 // Table 1 for description above Schedule table
                 PdfPTable upperTable = new PdfPTable(3);
                 float[] upperTableWidths = new float[] { 230f, 75f, 230f };
@@ -466,28 +464,6 @@ namespace VaccineAPI.Controllers
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths(upperTableWidths);
                 upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 2, "left", "description"));
-
-                // image code start
-                // var imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);
-                // //Resources/Images/cliniclogo.png
-                // var imgPath =
-                //     Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);  // Resources/Images/cliniclogo.png
-
-                // // if (dbChild.Clinic.MonogramImage != null) {
-                // // imgPath = Path.Combine (_host.ContentRootPath, dbChild.Clinic.MonogramImage);
-                // Image img = Image.GetInstance(imgPath);
-                // img.ScaleAbsolute(160f, 50f);
-
-                // // img.ScaleToFit(40f, 40f);
-                // PdfPCell imageCell = new PdfPCell(img, false);
-
-                // // imageCell.PaddingTop = 5;
-                // imageCell.Colspan = 1;  // either 1 if you need to insert one cell
-                // imageCell.Rowspan = 2;
-                // imageCell.Border = 0;
-                // imageCell.FixedHeight = 1f;
-                // imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                // upperTable.AddCell(imageCell);
                 var imgPath = dbChild.Clinic.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
 
                 // Add Image Cell
@@ -504,54 +480,21 @@ namespace VaccineAPI.Controllers
                     upperTable.AddCell(imageCell);
                 }
 
-
-
-                // } else {
-                //     PdfPCell imageCell = new PdfPCell ();
-                //     // imageCell.PaddingTop = 5;
-                //     imageCell.Colspan = 1; // either 1 if you need to insert one cell
-                //     imageCell.Rowspan = 4;
-                //     imageCell.Border = 0;
-                //     imageCell.FixedHeight = 1f;
-                //     imageCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                //    // upperTable.AddCell (imageCell);
-                // }
-                // image code end
                 upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 2, "left", "description"));
-
-                // upperTable
-                // .AddCell(CreateCell("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and
-                // Immunization Expert", "unbold", 2, "left", "description"));
-
-                upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));
-
-                // upperTable.AddCell (CreateCell (dbChild.Clinic.Name, "", 1, "left", "description"));
-                // if (dbChild.Gender == "Girl") {
+                upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));{
                 upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));
 
-                // } else {
-                //     upperTable.AddCell (CreateCell (dbChild.Name + "  S/O", "bold", 1, "right", "description"));
-                // }
-                // Add the clinic address cell in a clean format
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
+                if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
+                {
+                    upperTable.AddCell(CreateCell(
+                        dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName, 
+                        "", 
+                        1, 
+                        "right", 
+                        "description"));
+                }
 
-                // Restore the commented-out code for Guardian handling
-                // Uncomment and clean the Guardian check
-                // if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
-                // {
-                //     upperTable.AddCell(CreateCell(
-                //         dbChild.Gender == "Girl" ? "D/O " + dbChild.FatherName : "S/O " + dbChild.FatherName, 
-                //         "", 
-                //         1, 
-                //         "right", 
-                //         "description"));
-                // }
-
-                // }
-                // else
-                // {
-                //     upperTable.AddCell(CreateCell("W/O " + dbChild.FatherName, "", 1, "right", "description"));
-                // }
                 upperTable.AddCell(CreateCell("S/D/W/o " + dbChild.FatherName, "", 1, "right", "description"));
                 upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
@@ -575,10 +518,6 @@ namespace VaccineAPI.Controllers
                 title.Font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
-
-                //  document.Add(new Paragraph(""));
-                // document.Add (new Chunk (""));
-                // Schedule Table
                 float[] widths = new float[] { 20f, 145f, 50f, 70, 70f, 60f, 60f, 60f };
 
                 PdfPTable table = new PdfPTable(8);
@@ -1701,6 +1640,13 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf", FileName);
         }
 
+        private string GenerateRandomInvoiceId(int length)
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            var random = new Random();
+            return new string(Enumerable.Repeat(chars, length)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+        }
         // updated invoice pdf
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
         public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate,
@@ -1801,10 +1747,16 @@ namespace VaccineAPI.Controllers
             // upperTable.AddCell (CreateCell ("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description"));
             // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
             document.Add(upperTable);
-            Paragraph title = new Paragraph("INVOICE");
-            title.Font = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+            string invoiceNumber = GenerateRandomInvoiceId(25); // Generate your random invoice number
+            Paragraph title = new Paragraph();
+            Chunk invoiceText = new Chunk("INVOICE :", FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD));
+            title.Add(invoiceText);
+            Chunk invoiceNumberChunk = new Chunk(" " + invoiceNumber, FontFactory.GetFont(FontFactory.HELVETICA, 10));
+            title.Add(invoiceNumberChunk);
             title.Alignment = Element.ALIGN_CENTER;
+            // Add the title paragraph to the document
             document.Add(title);
+
 
             // 2nd Table
             float[] widths = new float[] { 170f, 300f };
@@ -1863,6 +1815,51 @@ namespace VaccineAPI.Controllers
                         count++;
                         vaccinetable.AddCell(CreateCell(count.ToString(), "", 1, "center", "invoiceRecords"));
                         vaccinetable.AddCell(CreateCell(schedule.Dose.Vaccine.Name, "", 1, "left", "invoiceRecords"));
+                        // Assuming 'schedule' is defined and contains the necessary properties
+                        var childId = schedule.ChildId;
+                        var doctorId = schedule.Child.Clinic.DoctorId;
+                        var clinicId = schedule.Child.ClinicId;
+
+                        // Retrieve the brand amount
+                        var brandAmount = _db.BrandAmounts
+                            .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId);
+
+                        // Check if the invoice already exists
+                        var existingInvoice = _db.Invoices
+                            .FirstOrDefault(i => i.DoseId == schedule.Dose.Id
+                                                && i.ChildId == schedule.ChildId
+                                                && i.DoctorId == doctorId
+                                                && i.ClinicId == schedule.Child.ClinicId);
+
+                        // If the invoice doesn't exist, create a new one
+                        if (existingInvoice == null)
+                        {
+                            existingInvoice = new Invoice
+                            {
+                                InvoiceId = invoiceNumber,
+                                DoseId = schedule.Dose.Id,
+                                ChildId = schedule.ChildId,
+                                DoctorId = doctorId,
+                                ClinicId = schedule.Child.ClinicId
+                            };
+                            _db.Invoices.Add(existingInvoice);
+                        }
+
+                        // Determine if the schedule's amount is empty or zero
+                        bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
+
+                        // Update invoice amount logic
+                        if (brandAmount != null && isAmountEmptyOrZero)
+                        {
+                            existingInvoice.Amount = brandAmount.Amount != 0 ? brandAmount.Amount : 0;
+                        }
+                        else if (schedule.Amount != null && schedule.Amount != 0)
+                        {
+                            existingInvoice.Amount = (decimal)(schedule?.Amount ?? 0);
+                        }
+                        _db.SaveChanges();
+                        _db.Entry(existingInvoice).State = EntityState.Modified;
+
                         if (schedule.BrandId > 0)
                         {
                             vaccinetable.AddCell(CreateCell(schedule.Brand.Name, "", 1, "left", "invoiceRecords"));
@@ -1874,7 +1871,7 @@ namespace VaccineAPI.Controllers
 
                         vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
 
-                        var brandAmount =
+                        var brandAmount1 =
                             _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault();
                         if (brandAmount != null && schedule.Amount == null)
                         {

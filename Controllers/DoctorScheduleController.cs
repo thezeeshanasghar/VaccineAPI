@@ -71,7 +71,6 @@ namespace VaccineAPI.Controllers
         }
 
 
-
         [HttpPost]
         public Response<IEnumerable<DoctorScheduleDTO>> Post(IEnumerable<DoctorScheduleDTO> dsDTOS)
         {

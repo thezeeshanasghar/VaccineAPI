@@ -483,6 +483,7 @@ namespace VaccineAPI.Controllers
                 upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 2, "left", "description"));
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));{
                 upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));
+
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
                 if (dbChild.Guardian == "" || dbChild.Guardian == "Father")
                 {

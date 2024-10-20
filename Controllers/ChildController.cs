@@ -1685,11 +1685,6 @@ namespace VaccineAPI.Controllers
             imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
             upperTable.AddCell(imageCell);
 
-            // image code end
-            // upperTable
-            //     .AddCell(CreateCell("MBBS, RMP, FCPS (Peads) \nConsultant Paediatrician & Neonatologist\nVaccinology and
-            //     Immunization Expert", "unbold", 1, "left", "description"));
-
             upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 1, "left", "description"));
 
             upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 1, "left", "description"));
@@ -1699,32 +1694,15 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "unbold", 1, "left", "description"));
             upperTable.AddCell(CreateCell("#StayHome #GetVaccinated", "", 1, "right", "description"));
 
-            // upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));
-            // upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
-            // upperTable.AddCell(CreateCell("Clinic Ph: " + dbChild.Clinic.PhoneNumber, "unbold", 2, "left", "description"));
-            // upperTable.AddCell(CreateCell("Clinic Ph: " + dbChild.Clinic.PhoneNumber, "noColor", 1, "left",
-            // "description"));
-            // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
-            // // if (IsConsultationFee) {
-            // //     consultaionFee = (int) dbChild.Clinic.ConsultationFee;
-            // // }
-            // upperTable.AddCell (CreateCell ("", "", 1, "left", "description"));
-            // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
-            // upperTable.AddCell (CreateCell ("P: " + dbDoctor.PhoneNo, "", 1, "left", "description"));
-            // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
-            // upperTable.AddCell (CreateCell ("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description"));
-            // upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
             document.Add(upperTable);
-            string invoiceNumber = GenerateRandomInvoiceId(25); // Generate your random invoice number
-            Paragraph title = new Paragraph();
-            Chunk invoiceText = new Chunk("INVOICE :", FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD));
-            title.Add(invoiceText);
+            string invoiceNumber = GenerateRandomInvoiceId(25);
+            Paragraph invoiceNoParagraph = new Paragraph();
+            Chunk invoiceText = new Chunk("Invoice # ", FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD));
+            invoiceNoParagraph.Add(invoiceText);
             Chunk invoiceNumberChunk = new Chunk(" " + invoiceNumber, FontFactory.GetFont(FontFactory.HELVETICA, 10));
-            title.Add(invoiceNumberChunk);
-            title.Alignment = Element.ALIGN_CENTER;
-            // Add the title paragraph to the document
-            document.Add(title);
-
+            invoiceNoParagraph.Add(invoiceNumberChunk);
+            invoiceNoParagraph.Alignment = Element.ALIGN_RIGHT;
+            document.Add(invoiceNoParagraph);
 
             // 2nd Table
             float[] widths = new float[] { 170f, 300f };

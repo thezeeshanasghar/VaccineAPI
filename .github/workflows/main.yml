@@ -26,7 +26,7 @@ jobs:
         run: dotnet publish --configuration Release --no-restore --output publish
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: published-files
           path: publish/
@@ -37,7 +37,7 @@ jobs:
     if: github.ref == 'refs/heads/staging'
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: published-files
 
@@ -61,7 +61,7 @@ jobs:
     if: github.ref == 'refs/heads/master'
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: published-files
 

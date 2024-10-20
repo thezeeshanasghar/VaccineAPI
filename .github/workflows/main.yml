@@ -5,8 +5,9 @@ on:
     branches: [staging, master]
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build-and-deploy:
+    runs-on: windows-latest # Use a Windows runner to build .NET project
+
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -14,7 +15,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: "6.0"
+          dotnet-version: "6.0" # Specify your .NET version here
 
       - name: Restore dependencies
         run: dotnet restore
@@ -25,32 +26,14 @@ jobs:
       - name: Publish
         run: dotnet publish --configuration Release --no-restore --output publish
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: published-files
-          path: publish/
-
-  deploy-staging:
-    runs-on: windows-latest
-    needs: build
-    if: github.ref == 'refs/heads/staging'
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: published-files
-
-      - name: List directory contents
-        run: dir published-files
-
       - name: Deploy for staging
+        if: github.ref == 'refs/heads/staging'
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
           server: ${{ secrets.STAGING_FTP_SERVER }}
           username: ${{ secrets.STAGING_FTP_USERNAME }}
           password: ${{ secrets.STAGING_FTP_PASSWORD }}
-          local-dir: published-files/
+          local-dir: publish/
           server-dir: /
           exclude: |
             **/.git*
@@ -58,26 +41,14 @@ jobs:
             **/node_modules/**
             web.config
 
-  deploy-production:
-    runs-on: windows-latest
-    needs: build
-    if: github.ref == 'refs/heads/master'
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: published-files
-
-      - name: List directory contents
-        run: dir published-files
-
       - name: Deploy for master
+        if: github.ref == 'refs/heads/master'
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
           server: ${{ secrets.PROD_FTP_SERVER }}
           username: ${{ secrets.PROD_FTP_USERNAME }}
           password: ${{ secrets.PROD_FTP_PASSWORD }}
-          local-dir: published-files/
+          local-dir: publish/
           server-dir: /
           exclude: |
             **/.git*

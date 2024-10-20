@@ -5,9 +5,8 @@ on:
     branches: [staging, master]
 
 jobs:
-  build-and-deploy:
-    runs-on: windows-latest # Use a Windows runner to build .NET project
-
+  build:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -15,7 +14,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: "6.0" # Specify your .NET version here
+          dotnet-version: "6.0"
 
       - name: Restore dependencies
         run: dotnet restore
@@ -26,8 +25,23 @@ jobs:
       - name: Publish
         run: dotnet publish --configuration Release --no-restore --output publish
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: published-files
+          path: publish/
+
+  deploy-staging:
+    runs-on: windows-latest
+    needs: build
+    if: github.ref == 'refs/heads/staging'
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: published-files
+
       - name: Deploy for staging
-        if: github.ref == 'refs/heads/staging'
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
           server: ${{ secrets.STAGING_FTP_SERVER }}
@@ -41,8 +55,17 @@ jobs:
             **/node_modules/**
             web.config
 
+  deploy-production:
+    runs-on: windows-latest
+    needs: build
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: published-files
+
       - name: Deploy for master
-        if: github.ref == 'refs/heads/master'
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
           server: ${{ secrets.PROD_FTP_SERVER }}

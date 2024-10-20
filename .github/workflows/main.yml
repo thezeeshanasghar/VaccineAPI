@@ -41,6 +41,9 @@ jobs:
         with:
           name: published-files
 
+      - name: List directory contents
+        run: dir publish
+
       - name: Deploy for staging
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
@@ -64,6 +67,9 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: published-files
+
+      - name: List directory contents
+        run: dir publish
 
       - name: Deploy for master
         uses: SamKirkland/FTP-Deploy-Action@4.2.0

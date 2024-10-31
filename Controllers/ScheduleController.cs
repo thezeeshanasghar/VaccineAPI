@@ -67,7 +67,7 @@ namespace VaccineAPI.Controllers
         [HttpPut("child-schedule")]
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
         {
-            if(String.IsNullOrEmpty(scheduleDTO.DiseaseYear)){ scheduleDTO.DiseaseYear=""; }
+            if (String.IsNullOrEmpty(scheduleDTO.DiseaseYear)) { scheduleDTO.DiseaseYear = ""; }
             {
                 var dbSchedule = _db.Schedules
                     .Include(x => x.Dose)
@@ -391,7 +391,7 @@ namespace VaccineAPI.Controllers
                     var brandAmount = _db.BrandAmounts
                         .Where(x => x.BrandId == schedule.BrandId)
                         .FirstOrDefault();
-                    if (brandAmount != null && schedule.Amount == null)
+                    if (brandAmount != null)
                         scheduleDTO.Amount = brandAmount.Amount;
                     else
                         scheduleDTO.Amount = schedule.Amount;

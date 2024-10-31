@@ -420,7 +420,7 @@ namespace VaccineAPI.Controllers
                     var brandAmount = _db.BrandAmounts
                         .Where(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId)
                         .FirstOrDefault();
-                    if (brandAmount != null && schedule.Amount == null)
+                    if (brandAmount != null)
                         scheduleDTO.Amount = brandAmount.Amount;
                     else
                         scheduleDTO.Amount = schedule.Amount;

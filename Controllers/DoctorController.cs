@@ -127,9 +127,24 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<DoctorDTO> Post(DoctorDTO doctorDTO)
         {
-            var edoctor = _db.Users.Where(x => x.MobileNumber == doctorDTO.MobileNumber && x.UserType == "DOCTOR").FirstOrDefault();
-            if (edoctor != null)
-                return new Response<DoctorDTO>(false, "Account already exist", null);
+            // Check if the phone number exists in either Users or Doctors table
+            var existingUserWithPhone = _db.Users.FirstOrDefault(x => x.MobileNumber == doctorDTO.MobileNumber);
+            var existingDoctorWithPhone = _db.Doctors.FirstOrDefault(d => d.PhoneNo == doctorDTO.PhoneNo);
+            var existingDoctorWithEmail = _db.Doctors.FirstOrDefault(d => d.Email == doctorDTO.Email);
+
+            if ((existingUserWithPhone != null || existingDoctorWithPhone != null) && existingDoctorWithEmail != null)
+            {
+                return new Response<DoctorDTO>(false, "Both phone number and email are already in use. Please try different ones.", null);
+            }
+            else if (existingDoctorWithPhone != null)
+            {
+                return new Response<DoctorDTO>(false, "Phone number is already in use. Please try a different phone number.", null);
+            }
+            else if (existingDoctorWithEmail != null)
+            {
+                return new Response<DoctorDTO>(false, "Email already exists. Please try another email.", null);
+            }
+
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.FirstName);
             doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);
@@ -150,6 +165,8 @@ namespace VaccineAPI.Controllers
                 // 2- save Doctor 
                 Doctor doctorDB = _mapper.Map<Doctor>(doctorDTO);
                 doctorDB.ValidUpto = null;
+                doctorDB.ProfileImage = "";
+                // doctorDB.SignatureImage = "";
                 doctorDB.UserId = userDB.Id;
                 _db.Doctors.Add(doctorDB);
                 _db.SaveChanges();
@@ -160,20 +177,27 @@ namespace VaccineAPI.Controllers
                 // u.DoctorSMS (doctorDTO);
                 // UserEmail.DoctorEmail (doctorDTO);
 
+                var body = "Hi " + "<b>" + doctorDTO.FirstName + " " + doctorDTO.LastName + "</b>, <br />"
+        + "You are successfully registered in vaccinationcentre.com <br /><br />"
+        + "Your account credentials are: <br />"
+        + "ID/Mobile Number: " + doctorDTO.MobileNumber + "<br />"
+        + "Password: " + doctorDTO.Password + "<br />"
+        + "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
+                UserEmail.SendEmail(doctorDTO.FirstName, doctorDTO.Email, body);
                 // 4- check if clinicDto exsist; then save clinic as well
-                if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))
-                {
-                    doctorDTO.ClinicDTO.Name = textInfo.ToTitleCase(doctorDTO.ClinicDTO.Name);
+                // if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))
+                // {
+                //     doctorDTO.ClinicDTO.Name = textInfo.ToTitleCase(doctorDTO.ClinicDTO.Name);
 
-                    doctorDTO.ClinicDTO.DoctorId = doctorDB.Id;
+                //     doctorDTO.ClinicDTO.DoctorId = doctorDB.Id;
 
-                    Clinic clinicDB = _mapper.Map<Clinic>(doctorDTO.ClinicDTO);
-                    clinicDB.IsOnline = true;
-                    _db.Clinics.Add(clinicDB);
-                    _db.SaveChanges();
+                //     Clinic clinicDB = _mapper.Map<Clinic>(doctorDTO.ClinicDTO);
+                //     clinicDB.IsOnline = true;
+                //     _db.Clinics.Add(clinicDB);
+                //     _db.SaveChanges();
 
-                    doctorDTO.ClinicDTO.Id = clinicDB.Id;
-                }
+                //     doctorDTO.ClinicDTO.Id = clinicDB.Id;
+                // }
             }
             return new Response<DoctorDTO>(true, null, doctorDTO);
         }

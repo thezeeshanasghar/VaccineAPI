@@ -131,25 +131,22 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<DoctorDTO> Post(DoctorDTO doctorDTO)
         {
-            var existingUser = _db.Users.FirstOrDefault(x => x.MobileNumber == doctorDTO.MobileNumber);
-            var existingDoctorWithEmail = _db.Doctors.FirstOrDefault(d => d.Email == doctorDTO.Email);
+            // Check if the phone number exists in either Users or Doctors table
+            var existingUserWithPhone = _db.Users.FirstOrDefault(x => x.MobileNumber == doctorDTO.MobileNumber);
             var existingDoctorWithPhone = _db.Doctors.FirstOrDefault(d => d.PhoneNo == doctorDTO.PhoneNo);
+            var existingDoctorWithEmail = _db.Doctors.FirstOrDefault(d => d.Email == doctorDTO.Email);
 
-            if (existingUser != null && (existingDoctorWithEmail != null || existingDoctorWithPhone != null))
+            if ((existingUserWithPhone != null || existingDoctorWithPhone != null) && existingDoctorWithEmail != null)
             {
-                return new Response<DoctorDTO>(false, "Both email and phone number are already in use. Please use different email and phone number.", null);
+                return new Response<DoctorDTO>(false, "Both phone number and email are already in use. Please try different ones.", null);
             }
-            else if (existingUser != null)
+            else if (existingDoctorWithPhone != null)
             {
                 return new Response<DoctorDTO>(false, "Phone number is already in use. Please try a different phone number.", null);
             }
             else if (existingDoctorWithEmail != null)
             {
                 return new Response<DoctorDTO>(false, "Email already exists. Please try another email.", null);
-            }
-            else if (existingDoctorWithPhone != null)
-            {
-                return new Response<DoctorDTO>(false, "Phone number is already in use. Please try a different phone number.", null);
             }
 
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;

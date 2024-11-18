@@ -21,15 +21,12 @@ namespace VaccineAPI.Models
         public string Email { get; set; }
         public System.DateTime DOB { get; set; }
         public string Gender { get; set; }
-        public string Type { get; set; }
         public string City { get; set; } = "";
         public string CNIC { get; set; } = "";
-        public int PreferredDayOfReminder { get; set; }
-        public string PreferredDayOfWeek { get; set; }
-        public string PreferredSchedule { get; set; }  = "Any";
         public bool? IsEPIDone { get; set; }
         public bool? IsVerified { get; set; }
         public bool? IsInactive { get; set; }
+        public string Type { get; set; }
         public long ClinicId { get; set; }
         public virtual Clinic Clinic { get; set; }
 

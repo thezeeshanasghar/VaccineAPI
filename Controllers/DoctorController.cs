@@ -28,6 +28,7 @@ namespace VaccineAPI.Controllers
             _host = host;
         }
 
+
         [HttpGet]
         public async Task<Response<List<DoctorDTO>>> GetAll()
         {
@@ -67,31 +68,6 @@ namespace VaccineAPI.Controllers
 
         }
 
-        [HttpGet("approved")]
-        public async Task<Response<List<DoctorDTO>>> GetApproved()
-        {
-
-            var dbdoctor = await _db.Doctors.Where(x => x.IsApproved == true).Include(x => x.User).Include(x => x.Clinics).ToListAsync();
-            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
-
-            if (dbdoctor == null)
-                return new Response<List<DoctorDTO>>(false, "Not Found", null);
-
-            return new Response<List<DoctorDTO>>(true, null, doctorDTO);
-        }
-
-        [HttpGet("unapproved")]
-        public async Task<Response<List<DoctorDTO>>> GetUnApproved()
-        {
-
-            var dbdoctor = await _db.Doctors.Where(x => x.IsApproved == false).Include(x => x.User).Include(x => x.Clinics).ToListAsync();
-            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
-
-            if (dbdoctor == null)
-                return new Response<List<DoctorDTO>>(false, "Not Found", null);
-
-            return new Response<List<DoctorDTO>>(true, null, doctorDTO);
-        }
 
         // [HttpPost]
         // public async Task<ActionResult<Doctor>> Post(Doctor Doctor)
@@ -122,6 +98,34 @@ namespace VaccineAPI.Controllers
                 //var clinicDTOs = Mapper.Map<List<ClinicDTO>>(dbClinics);
                 return new Response<IEnumerable<ClinicDTO>>(true, null, clinicDTOs);
             }
+        }
+        [HttpGet("/forget/{email}")]
+        public ActionResult<DoctorDTO> GetDoctorDetailsByEmail(string email)
+        {
+            
+            var doctor = _db.Doctors.FirstOrDefault(d => d.Email == email);
+            var userDetails = _db.Users.FirstOrDefault(u => u.Id == doctor.UserId);
+            if (userDetails != null)
+            {
+            
+                var body = "Hi " + "<b>" + doctor.FirstName + " " + doctor.LastName + "</b>, <br />"
+                + "Welcome to vaccinationcentre.com <br /><br />"
+                + "Your account credentials are: <br />"
+                + "ID/Mobile Number: " + userDetails.MobileNumber + "<br />"
+                + "Password: " + userDetails.Password + "<br />"
+                + "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
+                try{
+                    UserEmail.SendEmail2( doctor.Email, body);
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine("Error sending email: " + ex.Message);
+
+                    // Return a 500 status code
+                    return StatusCode(500,ex.Message);
+                }   
+            }
+            return Ok();
         }
 
         [HttpPost]
@@ -210,7 +214,7 @@ namespace VaccineAPI.Controllers
             if (HttpContext.Request.Form.Files.Any())
             {
                 var httpPostedProfileImage = HttpContext.Request.Form.Files["ProfileImage"];
-                var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
+                // var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
                 if (httpPostedProfileImage != null)
                 {
                     var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedProfileImage.FileName);
@@ -219,13 +223,13 @@ namespace VaccineAPI.Controllers
                     dbDoctor.ProfileImage = httpPostedProfileImage.FileName;
                 }
 
-                if (httpPostedSignatureImage != null)
-                {
-                    var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedSignatureImage.FileName);
-                    using (var fileStream = new FileStream(fileSavePath, FileMode.Create))
-                        httpPostedSignatureImage.CopyToAsync(fileStream);
-                    dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
-                }
+                // if (httpPostedSignatureImage != null)
+                // {
+                //     var fileSavePath = Path.Combine(_host.ContentRootPath, "Content/UserImages", httpPostedSignatureImage.FileName);
+                //     using (var fileStream = new FileStream(fileSavePath, FileMode.Create))
+                //         httpPostedSignatureImage.CopyToAsync(fileStream);
+                //     dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
+                // }
                 _db.SaveChanges();
                 return new Response<DoctorDTO>(true, null, null);
             }
@@ -242,7 +246,6 @@ namespace VaccineAPI.Controllers
             dbDoctor.FirstName = doctorDTO.FirstName;
             dbDoctor.LastName = doctorDTO.LastName;
             dbDoctor.DisplayName = doctorDTO.DisplayName;
-            dbDoctor.IsApproved = doctorDTO.IsApproved;
             dbDoctor.Email = doctorDTO.Email;
             dbDoctor.PMDC = doctorDTO.PMDC;
             dbDoctor.PhoneNo = doctorDTO.PhoneNo;
@@ -251,7 +254,7 @@ namespace VaccineAPI.Controllers
             dbDoctor.Qualification = doctorDTO.Qualification;
             dbDoctor.AdditionalInfo = doctorDTO.AdditionalInfo;
             dbDoctor.ProfileImage = doctorDTO.ProfileImage;
-            dbDoctor.SignatureImage = doctorDTO.SignatureImage;
+            // dbDoctor.SignatureImage = doctorDTO.SignatureImage;
 
             //dbDoctor = Mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
             //entities.Entry<Doctor>(dbDoctor).State = System.Data.Entity.EntityState.Modified;
@@ -280,40 +283,36 @@ namespace VaccineAPI.Controllers
             var dbDoctor = _db.Doctors.Where(x => x.Id == Id).FirstOrDefault();
             dbDoctor.ValidUpto = doctorDTO.ValidUpto;
             _db.SaveChanges();
-            DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
-            return new Response<DoctorDTO>(true, null, doctorDTOs);
-        }
-
-        [HttpGet("approve/{id}")]
-        public Response<string> ApproveDoctor(int id)
-        {
-            var dbDoctor = _db.Doctors.Where(x => x.Id == id).FirstOrDefault();
-            dbDoctor.IsApproved = true;
-            dbDoctor.ValidUpto = DateTime.UtcNow.AddHours(5).AddMonths(3);
-            _db.SaveChanges();
             var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
-            foreach (var vaccine in vaccines)
+            bool brandamount=_db.BrandAmounts.Any(x=>x.DoctorId==Id);
+            if(brandamount==false)
             {
-                // add default brands amount and inventory count of doctor
-                var brands = vaccine.Brands;
-                foreach (var brand in brands)
+                foreach (var vaccine in vaccines)
                 {
-                    BrandAmount ba = new BrandAmount();
-                    ba.Amount = 0;
-                    ba.DoctorId = dbDoctor.Id;
-                    ba.BrandId = brand.Id;
-                    _db.BrandAmounts.Add(ba);
+                    // add default brands amount and inventory count of doctor
+                    var brands = vaccine.Brands;
+                    foreach (var brand in brands)
+                    {
+                        BrandAmount ba = new BrandAmount();
+                        ba.Amount = 0;
+                        ba.DoctorId = dbDoctor.Id;
+                        ba.Count = 0;
+                        ba.BrandId = brand.Id;
+                        _db.BrandAmounts.Add(ba);
 
-                    BrandInventory bi = new BrandInventory();
-                    bi.Count = 0;
-                    bi.DoctorId = dbDoctor.Id;
-                    bi.BrandId = brand.Id;
-                    _db.BrandInventorys.Add(bi);
-                    _db.SaveChanges();
+                        // BrandInventory bi = new BrandInventory();
+                        // bi.Count = 0;
+                        // bi.DoctorId = dbDoctor.Id;
+                        // bi.BrandId = brand.Id;
+                        // _db.BrandInventorys.Add(bi);
+                        _db.SaveChanges();
+                    }
                 }
             }
-            // DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
-            return new Response<string>(true, null, "approved");
+            
+           
+            DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
+            return new Response<DoctorDTO>(true, null, doctorDTOs);
         }
 
         [HttpGet("{id}/{currentPage}/childs/")]
@@ -375,7 +374,7 @@ namespace VaccineAPI.Controllers
                         if (dbChild.User.Childs.Count == 1)
                             _db.Users.Remove(dbChild.User);
                         _db.Childs.Remove(dbChild);
-                    }
+                    } 
                     _db.ClinicTimings.RemoveRange(clinic.ClinicTimings);
                 }
                 _db.DoctorSchedules.RemoveRange(dbDoctor.DoctorSchedules);
@@ -386,6 +385,104 @@ namespace VaccineAPI.Controllers
                 return new Response<string>(true, "Doctor is deleted successfully", null);
             }
         }
+
+        [HttpGet("{id}/appointments")]
+        public async Task<ActionResult<string>> GetDoctorAppointmentsWithinDateRange(long id, DateTime fromDate, DateTime toDate)
+        {
+            // Query the database to find the clinics associated with the provided doctor ID
+            var clinics = await _db.Clinics.Where(c => c.DoctorId == id).ToListAsync();
+
+            // Print the provided parameters and clinic data
+            string result = $"Doctor ID: {id}, From Date: {fromDate}, To Date: {toDate}\n";
+            foreach (var clinic in clinics)
+            {
+                result += $"Clinic ID: {clinic.Id}, Clinic Name: {clinic.Name}\n";
+            }
+
+            // Return the result
+            return result;
+        }
+
+
+
+
+
+        [HttpGet("{id}/children/{childId}/schedules")]
+        public async Task<ActionResult<IEnumerable<Schedule>>> GetSchedulesForChild(long id, long childId, DateTime fromDate, DateTime toDate)
+        {
+            try
+            {
+                // Query the database to find the schedules for the specified child ID within the provided date range
+                var schedules = await _db.Schedules
+                    .Where(s => s.ChildId == childId && s.Date >= fromDate && s.Date <= toDate)
+                    .ToListAsync();
+
+                if (schedules == null || !schedules.Any())
+                {
+                    return NotFound($"No schedules found for child ID {childId} within the provided date range");
+                }
+
+                return Ok(schedules);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"An error occurred while retrieving schedules for child ID {childId}: {ex.Message}");
+            }
+        }
+
+
+        [HttpPatch]
+        [Route("/update_date_for_Vacations")]
+        public async Task<IActionResult> UpdateSchedulesForChild(long childId, [FromQuery] string fromDate, [FromQuery] string toDate)
+        {
+            try
+            {
+                var parsedFromDate = DateTime.Parse(fromDate);
+                var parsedToDate = DateTime.Parse(toDate);
+
+                // Fetch schedules for the specified child ID
+                var schedules = await _db.Schedules
+                    .Where(s => s.ChildId == childId && s.Date >= parsedFromDate && s.Date <= parsedToDate)
+                    .ToListAsync();
+
+                if (schedules == null || !schedules.Any())
+                {
+                    return NotFound($"No schedules found for child ID {childId} to update");
+                }
+
+                // Update the dates in the fetched schedules
+                var updatedDate = parsedToDate.AddDays(1);
+                foreach (var schedule in schedules)
+                {
+                    schedule.Date = updatedDate;
+                }
+
+                // Save changes to the database
+                await _db.SaveChangesAsync();
+
+                return Ok("Schedules updated successfully");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"An error occurred while updating schedules for child ID {childId}: {ex.Message}");
+            }
+        }  
+
+
+        [HttpGet("allDoc")]
+        public async Task<Response<List<DoctorDTO>>> GetDoc()
+        {
+
+            var dbdoctor = await _db.Doctors.Include(x => x.User).Include(x => x.Clinics).ToListAsync();
+            List<DoctorDTO> doctorDTO = _mapper.Map<List<DoctorDTO>>(dbdoctor);
+
+            if (dbdoctor == null)
+                return new Response<List<DoctorDTO>>(false, "Not Found", null);
+
+            return new Response<List<DoctorDTO>>(true, null, doctorDTO);
+        }
+
     }
+
 }
 //}

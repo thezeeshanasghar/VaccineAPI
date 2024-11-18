@@ -22,16 +22,16 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("{Id}")]
-      public Response<List<BrandAmountDTO>> Get(int Id)
-       {
-                    List<BrandAmount> brandAmountDBs = _db.BrandAmounts.Include(x=>x.Brand).Include(x => x.Doctor).Where(x => x.DoctorId == Id).ToList();
-                    if (brandAmountDBs == null || brandAmountDBs.Count() == 0)
-                        return new Response<List<BrandAmountDTO>>(false, "Brand not found", null);
-                    List<BrandAmountDTO> brandAmountDTOs = _mapper.Map<List<BrandAmountDTO>>(brandAmountDBs);
-                    foreach (BrandAmountDTO baDTO in brandAmountDTOs)
-                        baDTO.VaccineName = _db.Brands.Include(x=>x.Vaccine).Where(x => x.Id == baDTO.BrandId).First().Vaccine.Name;
-                    return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
-                }
+        public Response<List<BrandAmountDTO>> Get(int Id)
+        {
+            List<BrandAmount> brandAmountDBs = _db.BrandAmounts.Include(x => x.Brand).Include(x => x.Doctor).Where(x => x.DoctorId == Id).ToList();
+            if (brandAmountDBs == null || brandAmountDBs.Count() == 0)
+                return new Response<List<BrandAmountDTO>>(false, "Brand not found", null);
+            List<BrandAmountDTO> brandAmountDTOs = _mapper.Map<List<BrandAmountDTO>>(brandAmountDBs);
+            foreach (BrandAmountDTO baDTO in brandAmountDTOs)
+                baDTO.VaccineName = _db.Brands.Include(x => x.Vaccine).Where(x => x.Id == baDTO.BrandId).First().Vaccine.Name;
+            return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
+        }
 
 
         // [HttpPost]
@@ -43,19 +43,34 @@ namespace VaccineAPI.Controllers
         //     return CreatedAtAction(nameof(GetSingle), new { id = BrandAmount.Id }, BrandAmount);
         // }
 
-        [HttpPut]
-       public Response<List<BrandAmountDTO>> Put([FromBody] List<BrandAmountDTO> brandAmountDTOs)
-       
+        [HttpPut("inventory")]
+        public Response<List<BrandAmountDTO>> Putinventory([FromBody] List<BrandAmountDTO> brandAmountDTOs)
+
+        {
+            foreach (var brandAmountDTO in brandAmountDTOs)
             {
-                    foreach (var brandAmountDTO in brandAmountDTOs)
-                    {
-                        var brandAmoundDB = _db.BrandAmounts.Where(b => b.Id == brandAmountDTO.Id).FirstOrDefault();
-                        brandAmoundDB.Amount = brandAmountDTO.Amount;
-                        _db.SaveChanges();
-                    }
-                    return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
-                }
-       
+                var brandAmoundDB = _db.BrandAmounts.Where(b => b.Id == brandAmountDTO.Id).FirstOrDefault();
+                brandAmoundDB.Count = brandAmountDTO.Count;
+                _db.SaveChanges();
+            }
+            return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
+        }
+
+
+        [HttpPut]
+        public Response<List<BrandAmountDTO>> Put([FromBody] List<BrandAmountDTO> brandAmountDTOs)
+
+        {
+            foreach (var brandAmountDTO in brandAmountDTOs)
+            {
+                var brandAmoundDB = _db.BrandAmounts.Where(b => b.Id == brandAmountDTO.Id).FirstOrDefault();
+                brandAmoundDB.Amount = brandAmountDTO.Amount;
+                brandAmoundDB.Count = brandAmountDTO.Count;
+                _db.SaveChanges();
+            }
+            return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
+        }
+
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)

@@ -19,10 +19,6 @@ namespace VaccineAPI.ModelDTO
         public bool IsOnline { get; set; }
         [JsonIgnore]
         public DoctorDTO Doctor { get; set; }
-        // public string OffDays { get; set; }
-        // public string StartTime { get; set; }
-        // public string EndTime { get; set; } 
-        
         
       //  [JsonIgnore]
         public int childrenCount { get; set; }

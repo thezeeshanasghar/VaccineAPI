@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.002.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VaccineAPI", "VaccineAPI.csproj", "{42F9D284-2445-46A8-A02C-2DBA015C2AF6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VaccineAPI", "VaccineAPI.csproj", "{1887495C-E255-4C5A-91D7-5D1352DEDFF4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,15 +11,15 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{42F9D284-2445-46A8-A02C-2DBA015C2AF6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{42F9D284-2445-46A8-A02C-2DBA015C2AF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{42F9D284-2445-46A8-A02C-2DBA015C2AF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{42F9D284-2445-46A8-A02C-2DBA015C2AF6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1887495C-E255-4C5A-91D7-5D1352DEDFF4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1887495C-E255-4C5A-91D7-5D1352DEDFF4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1887495C-E255-4C5A-91D7-5D1352DEDFF4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1887495C-E255-4C5A-91D7-5D1352DEDFF4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {F8CBDF91-846E-43E6-AF73-8DE9A02A6224}
+		SolutionGuid = {F2F636BE-D1B5-4BD0-B86F-F06A92937E6B}
 	EndGlobalSection
 EndGlobal

@@ -77,6 +77,199 @@ namespace VaccineAPI.Controllers
             await _db.SaveChangesAsync();
 
             return NoContent();
+    
         }
+
+        [Route("api/clintimings/{clinicId}")]
+        [HttpPatch]
+        public async Task<IActionResult> UpdateClinicTimings(long clinicId, [FromBody] List<ClinicTiming> updatedTimings)
+        {
+            try
+            {
+                if (updatedTimings == null || !updatedTimings.Any())
+                {
+                    return BadRequest("No updated clinic timings provided.");
+                }
+
+                var timingIds = updatedTimings.Select(t => t.Id).ToList();
+
+                var existingTimings = await _db.ClinicTimings.Where(t => timingIds.Contains(t.Id) && t.ClinicId == clinicId).ToListAsync();
+
+                if (existingTimings == null || existingTimings.Count == 0)
+                {
+                    return NotFound();
+                }
+
+                foreach (var updatedTiming in updatedTimings)
+                {
+                    var existingTiming = existingTimings.FirstOrDefault(t => t.Id == updatedTiming.Id);
+
+                    if (existingTiming != null)
+                    {
+                        existingTiming.Day = updatedTiming.Day;
+                        existingTiming.Session = updatedTiming.Session;
+                        existingTiming.StartTime = updatedTiming.StartTime;
+                        existingTiming.EndTime = updatedTiming.EndTime;
+                        existingTiming.ClinicId = updatedTiming.ClinicId;
+                    }
+                }
+
+                await _db.SaveChangesAsync();
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
+
+
+
+
+        ////////// Updated APi
+        public class ClinicIdsRequestModel
+        {
+            public List<long> ClinicIds { get; set; }
+        }
+        [HttpPatch("children/schedules")]
+        public async Task<ActionResult<IEnumerable<long>>> GetChildIdsWithSchedulesFromClinic([FromBody] ClinicIdsRequestModel model, [FromQuery] string fromDate, [FromQuery] string toDate)
+        {
+            try
+            {
+                var parsedFromDate = DateTime.Parse(fromDate);
+                var parsedToDate = DateTime.Parse(toDate);
+
+                if (model == null || model.ClinicIds == null || !model.ClinicIds.Any())
+                {
+                    return BadRequest("No clinic IDs provided in the request.");
+                }
+
+                List<long> childIdsWithSchedules = new List<long>();
+
+
+                foreach (var id in model.ClinicIds)
+                {
+                    var childIds = await _db.Childs
+                                            .Where(c => c.ClinicId == id)
+                                            .Select(c => c.Id)
+                                            .ToListAsync();
+
+                    if (childIds == null || !childIds.Any())
+                    {
+
+                        continue;
+                    }
+
+
+                    foreach (var childId in childIds)
+                    {
+                        var schedules = await _db.Schedules
+                                                .Where(c => c.ChildId == childId && c.Date >= parsedFromDate && c.Date <= parsedToDate)
+                                                .ToListAsync();
+                        if (schedules.Any())
+                        {
+                            var daysToAdd = (parsedToDate - parsedFromDate).Days + 1;
+                            foreach (var schedule in schedules)
+                            {
+                                schedule.Date = schedule.Date.AddDays(daysToAdd);
+                            }
+                            await _db.SaveChangesAsync();
+                        }
+
+                        childIdsWithSchedules.Add(childId);
+                    }
+                }
+
+                return Ok(childIdsWithSchedules);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"An error occurred while retrieving child IDs: {ex.Message}");
+            }
+        }
+
+      
+        [Route("api/clinic/update")]
+        [HttpPut]
+        public async Task<IActionResult> UpdateClinicAndTimings(long clinicId, [FromBody] ClinicDTO request)
+        {
+            try
+    {
+        // Update clinic data
+        var dbClinic = await _db.Clinics.FindAsync(clinicId);
+
+        dbClinic.Name = request.Name;
+        dbClinic.ConsultationFee = request.ConsultationFee;
+        dbClinic.PhoneNumber = request.PhoneNumber;
+        dbClinic.Address = request.Address;
+        dbClinic.MonogramImage = request.MonogramImage;
+        // dbClinic.IsOnline = request.IsOnline;
+
+        // Update clinic timings
+        var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();
+        var existingTimings = await _db.ClinicTimings
+            .Where(t => timingIds.Contains(t.Id) && t.ClinicId == dbClinic.Id)
+            .ToListAsync();
+
+        foreach (var updatedTiming in request.ClinicTimings)
+        {
+            var existingTiming = existingTimings.FirstOrDefault(t => t.Id == updatedTiming.Id);
+
+            if (existingTiming != null)
+            {
+                existingTiming.Day = updatedTiming.Day;
+                existingTiming.Session = updatedTiming.Session;
+                existingTiming.IsOpen = updatedTiming.IsOpen;
+                existingTiming.StartTime = updatedTiming.StartTime;
+                existingTiming.EndTime = updatedTiming.EndTime;
+                existingTiming.ClinicId = dbClinic.Id;
+            }
+            else
+            {
+                // If the timing is new, add it to the database
+                var newTiming = new ClinicTiming
+                {
+                    Day = updatedTiming.Day,
+                    Session = updatedTiming.Session,
+                    StartTime = updatedTiming.StartTime,
+                    IsOpen=updatedTiming.IsOpen,
+                    EndTime = updatedTiming.EndTime,
+                    ClinicId = dbClinic.Id
+                };
+
+                _db.ClinicTimings.Add(newTiming);
+            }
+        }
+        await _db.SaveChangesAsync();
+
+        // Return the updated clinic data
+        return Ok(new ClinicDTO
+        {
+            Id = dbClinic.Id,
+            Name = dbClinic.Name,
+            ConsultationFee = dbClinic.ConsultationFee,
+            PhoneNumber = dbClinic.PhoneNumber,
+            Address = dbClinic.Address,
+            MonogramImage = dbClinic.MonogramImage,
+            // IsOnline = dbClinic.IsOnline,
+            ClinicTimings = existingTimings.Select(t => new ClinicTimingDTO
+            {
+                Id = t.Id,
+                Day = t.Day,
+                Session = t.Session,
+                StartTime = t.StartTime,
+                EndTime = t.EndTime
+            }).ToList()
+        });
     }
+    catch (Exception ex)
+    {
+        return StatusCode(500, ex.Message);
+    }
+        }
+
+
+    }
+
 }

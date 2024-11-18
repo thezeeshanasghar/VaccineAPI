@@ -1,0 +1,57 @@
+name: Build and Deploy .NET Application
+
+on:
+  push:
+    branches: [staging, master]
+
+jobs:
+  build-and-deploy:
+    runs-on: windows-latest # Use a Windows runner to build .NET project
+
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: "6.0" # Specify your .NET version here
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish --configuration Release --no-restore --output publish
+
+      - name: Deploy for staging
+        if: github.ref == 'refs/heads/staging'
+        uses: SamKirkland/FTP-Deploy-Action@4.2.0
+        with:
+          server: ${{ secrets.STAGING_FTP_SERVER }}
+          username: ${{ secrets.STAGING_FTP_USERNAME }}
+          password: ${{ secrets.STAGING_FTP_PASSWORD }}
+          local-dir: publish/
+          server-dir: /
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            web.config
+
+      - name: Deploy for master
+        if: github.ref == 'refs/heads/master'
+        uses: SamKirkland/FTP-Deploy-Action@4.2.0
+        with:
+          server: ${{ secrets.PROD_FTP_SERVER }}
+          username: ${{ secrets.PROD_FTP_USERNAME }}
+          password: ${{ secrets.PROD_FTP_PASSWORD }}
+          local-dir: publish/
+          server-dir: /
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            web.config

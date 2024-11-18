@@ -19,7 +19,7 @@ namespace VaccineAPI
             CreateMap<ClinicTiming, ClinicTimingDTO>().ReverseMap();
             CreateMap<Clinic, ClinicDTO>().ReverseMap();
             CreateMap<Child, ChildDTO>().ReverseMap();
-            CreateMap<BrandInventory, BrandInventoryDTO>().ReverseMap();
+            // CreateMap<BrandInventory, BrandInventoryDTO>().ReverseMap();
             CreateMap<Brand, BrandDTO>().ReverseMap();
             CreateMap<BrandAmount, BrandAmountDTO>().ReverseMap();
         }

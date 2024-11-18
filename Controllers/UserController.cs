@@ -108,12 +108,10 @@ namespace VaccineAPI.Controllers
                 var doctorDb = _db.Doctors.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
                 if (doctorDb == null)
                     return new Response<UserDTO>(false, "Doctor not found.", null);
-                if (doctorDb.IsApproved != true)
-                    return new Response<UserDTO>(
-                        false,
-                        "You are not approved. Contact admin for approval at 923335196658",
-                        null
-                    );
+                if (doctorDb.ValidUpto == null)
+                {
+                    return new Response<UserDTO>(false, "You are not approved. Contact admin for approval at 923335196658.", null);
+                }
 
                 userDTO.DoctorId = doctorDb.Id;
                 userDTO.AllowInventory = doctorDb.AllowInventory;
@@ -191,6 +189,83 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // [HttpPost("verify")]
+        // public ActionResult<Response<bool>> VerifyChild(string childname, string fathername, DateTime DOB, string Email)
+        // {
+        //     var child = _db.Childs
+        //         .Where(x => x.Name == childname &&
+        //                     x.FatherName == fathername &&
+        //                     x.DOB.Date == DOB)
+        //         .FirstOrDefault();
+        //     if (child == null)
+        //     {
+
+
+        //         return new Response<bool>(false, "No matching record found", false);
+        //     }
+
+        //     if (string.IsNullOrEmpty(child.Email))
+        //     {
+        //         child.Email = Email;
+        //         _db.Childs.Update(child); // Mark the entity as updated
+        //         _db.SaveChanges();
+
+
+        //     }
+        //     return new Response<bool>(true, "Record matches", true);
+        // }
+        [HttpPost("verify")]
+        public ActionResult<Response<bool>> VerifyChild(ChildDTO childDTO)
+        {
+            var child = _db.Childs
+                .Where(x => x.Name == childDTO.Name &&
+                            x.FatherName == childDTO.FatherName &&
+                            x.DOB.Date == childDTO.DOB.Date)
+                .FirstOrDefault();
+
+            if (child == null)
+            {
+                return new Response<bool>(false, "No matching record found", false);
+            }
+
+            // Retrieve user data based on child's UserId
+            var user = _db.Users
+                .Where(u => u.Id == child.UserId)
+                .Select(u => new { u.MobileNumber, u.Password })
+                .FirstOrDefault();
+
+            if (user == null)
+            {
+                return new Response<bool>(false, "No matching user record found", false);
+            }
+
+            // Update child's email if it's empty
+            if (string.IsNullOrEmpty(child.Email))
+            {
+                child.Email = childDTO.Email;
+                _db.Childs.Update(child);
+                _db.SaveChanges();
+            }
+
+            // Prepare email body
+            string body = $"We have reset your password, please use the following details to login Your Account \n" +
+                          $"Username: {user.MobileNumber}\n" +
+                          $"Password: {user.Password}\n";
+
+            // Send email
+            try
+            {
+                UserEmail.SendEmail2(child.Email, body);
+                return new Response<bool>(true, "Your login credentials have been sent to your email address", true);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error sending email: " + ex.Message);
+                return new Response<bool>(false, $"Record matches but error sending email: {ex.Message}", false);
+            }
+        }
+
+
         [HttpPost("change-password")]
         public Response<UserDTO> ChangePassword(ChangePasswordRequestDTO user)
         {
@@ -206,6 +281,58 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
                     return new Response<UserDTO>(true, "Password change successfully.", null);
                 }
+            }
+        }
+
+
+        [HttpPost("change-parent-password")]
+        public ActionResult<Response<UserDTO>> ChangeParentPassword([FromBody] ChangePasswordRequestDTO request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.OldPassword) || string.IsNullOrEmpty(request.NewPassword) || string.IsNullOrEmpty(request.ConfirmPassword))
+                {
+                    return BadRequest(new Response<UserDTO>(false, "All password fields are required.", null));
+                }
+
+                if (request.NewPassword != request.ConfirmPassword)
+                {
+                    return BadRequest(new Response<UserDTO>(false, "New password and confirm password do not match.", null));
+                }
+
+                var user = _db.Users
+                    .Include(u => u.Childs)
+                    .FirstOrDefault(x => x.UserType == "PARENT" && x.Password == request.OldPassword);
+
+                if (user == null)
+                {
+                    return NotFound(new Response<UserDTO>(false, "Parent user not found or old password is incorrect.", null));
+                }
+
+                // Update the password
+                user.Password = request.NewPassword;
+
+                // If you want to update the Child's password as well (assuming it's stored there)
+                if (user.Childs != null && user.Childs.Any())
+                {
+                    foreach (var child in user.Childs)
+                    {
+                        user.Password = request.NewPassword;
+                    }
+                }
+
+                _db.SaveChanges();
+
+                // Map the updated user to UserDTO if needed
+                var userDTO = _mapper.Map<UserDTO>(user);
+
+                return Ok(new Response<UserDTO>(true, "Password changed successfully.", userDTO));
+            }
+            catch (Exception ex)
+            {
+                // Log the exception
+                Console.WriteLine($"Error in ChangeParentPassword: {ex}");
+                return StatusCode(500, new Response<UserDTO>(false, "An error occurred while changing the password.", null));
             }
         }
 

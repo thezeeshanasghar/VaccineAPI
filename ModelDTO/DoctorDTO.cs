@@ -17,14 +17,12 @@ namespace VaccineAPI.ModelDTO
         public string PhoneNo { get; set; }
         public string Password { get; set; }
         public string PMDC { get; set; }
-        public bool IsApproved { get; set; }
         public bool ShowPhone { get; set; }
         public bool ShowMobile { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime ValidUpto { get; set; }
         public int? InvoiceNumber { get; set; }
         public string ProfileImage { get; set; }
-        public string SignatureImage { get; set; }
         public string DisplayName { get; set; }
         public bool AllowInvoice { get; set; }
         public bool AllowChart { get; set; }

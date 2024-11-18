@@ -7,8 +7,9 @@ namespace VaccineAPI.ModelDTO
 {
     public class ChangePasswordRequestDTO
     {
-        public int UserId { get; set; }
+        internal string ConfirmPassword;
         public string OldPassword { get; set; }
+        public int UserId { get; set; }
         public string NewPassword { get; set;  } 
     }
 }

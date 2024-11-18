@@ -102,28 +102,29 @@ namespace VaccineAPI.Controllers
         [HttpGet("/forget/{email}")]
         public ActionResult<DoctorDTO> GetDoctorDetailsByEmail(string email)
         {
-            
+
             var doctor = _db.Doctors.FirstOrDefault(d => d.Email == email);
             var userDetails = _db.Users.FirstOrDefault(u => u.Id == doctor.UserId);
             if (userDetails != null)
             {
-            
+
                 var body = "Hi " + "<b>" + doctor.FirstName + " " + doctor.LastName + "</b>, <br />"
                 + "Welcome to vaccinationcentre.com <br /><br />"
                 + "Your account credentials are: <br />"
                 + "ID/Mobile Number: " + userDetails.MobileNumber + "<br />"
                 + "Password: " + userDetails.Password + "<br />"
                 + "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
-                try{
-                    UserEmail.SendEmail2( doctor.Email, body);
+                try
+                {
+                    UserEmail.SendEmail2(doctor.Email, body);
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     Console.WriteLine("Error sending email: " + ex.Message);
 
                     // Return a 500 status code
-                    return StatusCode(500,ex.Message);
-                }   
+                    return StatusCode(500, ex.Message);
+                }
             }
             return Ok();
         }
@@ -131,25 +132,22 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<DoctorDTO> Post(DoctorDTO doctorDTO)
         {
-            var existingUser = _db.Users.FirstOrDefault(x => x.MobileNumber == doctorDTO.MobileNumber);
-            var existingDoctorWithEmail = _db.Doctors.FirstOrDefault(d => d.Email == doctorDTO.Email);
+            // Check if the phone number exists in either Users or Doctors table
+            var existingUserWithPhone = _db.Users.FirstOrDefault(x => x.MobileNumber == doctorDTO.MobileNumber);
             var existingDoctorWithPhone = _db.Doctors.FirstOrDefault(d => d.PhoneNo == doctorDTO.PhoneNo);
+            var existingDoctorWithEmail = _db.Doctors.FirstOrDefault(d => d.Email == doctorDTO.Email);
 
-            if (existingUser != null && (existingDoctorWithEmail != null || existingDoctorWithPhone != null))
+            if ((existingUserWithPhone != null || existingDoctorWithPhone != null) && existingDoctorWithEmail != null)
             {
-                return new Response<DoctorDTO>(false, "Both email and phone number are already in use. Please use different email and phone number.", null);
+                return new Response<DoctorDTO>(false, "Both phone number and email are already in use. Please try different ones.", null);
             }
-            else if (existingUser != null)
+            else if (existingDoctorWithPhone != null)
             {
                 return new Response<DoctorDTO>(false, "Phone number is already in use. Please try a different phone number.", null);
             }
             else if (existingDoctorWithEmail != null)
             {
                 return new Response<DoctorDTO>(false, "Email already exists. Please try another email.", null);
-            }
-            else if (existingDoctorWithPhone != null)
-            {
-                return new Response<DoctorDTO>(false, "Phone number is already in use. Please try a different phone number.", null);
             }
 
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
@@ -287,8 +285,8 @@ namespace VaccineAPI.Controllers
             dbDoctor.ValidUpto = doctorDTO.ValidUpto;
             _db.SaveChanges();
             var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
-            bool brandamount=_db.BrandAmounts.Any(x=>x.DoctorId==Id);
-            if(brandamount==false)
+            bool brandamount = _db.BrandAmounts.Any(x => x.DoctorId == Id);
+            if (brandamount == false)
             {
                 foreach (var vaccine in vaccines)
                 {
@@ -312,8 +310,8 @@ namespace VaccineAPI.Controllers
                     }
                 }
             }
-            
-           
+
+
             DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
             return new Response<DoctorDTO>(true, null, doctorDTOs);
         }
@@ -377,7 +375,7 @@ namespace VaccineAPI.Controllers
                         if (dbChild.User.Childs.Count == 1)
                             _db.Users.Remove(dbChild.User);
                         _db.Childs.Remove(dbChild);
-                    } 
+                    }
                     _db.ClinicTimings.RemoveRange(clinic.ClinicTimings);
                 }
                 _db.DoctorSchedules.RemoveRange(dbDoctor.DoctorSchedules);
@@ -469,7 +467,7 @@ namespace VaccineAPI.Controllers
             {
                 return StatusCode(500, $"An error occurred while updating schedules for child ID {childId}: {ex.Message}");
             }
-        }  
+        }
 
 
         [HttpGet("allDoc")]

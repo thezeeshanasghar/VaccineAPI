@@ -10,7 +10,7 @@ namespace VaccineAPI.Controllers
     [ApiController]
     public class DashboardController : ControllerBase
     {
-        private readonly Context _db; 
+        private readonly Context _db;  
 
         public DashboardController(Context context)
         {

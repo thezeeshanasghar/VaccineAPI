@@ -10,7 +10,7 @@ namespace VaccineAPI.Controllers
     [ApiController]
     public class DashboardController : ControllerBase
     {
-        private readonly Context _db; // Replace with your actual DbContext
+        private readonly Context _db; 
 
         public DashboardController(Context context)
         {
@@ -35,7 +35,7 @@ public async Task<IActionResult> GetDashboardData()
             // Initialize other properties as needed
         };
 
-        return Ok(dashboardData); // Return a 200 response with the DashboardDTO
+        return Ok(dashboardData); 
     }
     catch (Exception ex)
     {

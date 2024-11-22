@@ -32,7 +32,6 @@ public async Task<IActionResult> GetDashboardData()
         var dashboardData = new DashboardDTO
         {
             CurrentMonthChildCount = currentMonthChildCount
-            // Initialize other properties as needed
         };
 
         return Ok(dashboardData); 

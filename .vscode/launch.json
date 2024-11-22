@@ -13,7 +13,11 @@
             "console": "internalConsole",
             "requireExactSource": true,
             "env": {
-                "ASPNETCORE_ENVIRONMENT" : "Development"
+                "ASPNETCORE_ENVIRONMENT" : "Development",
+
+            
+    "DefaultDBConnection": "server=localhost;userid=root;password='';database=fernfers_vaccinebe;port=3306;"
+  
             }
         }
     ]

@@ -915,6 +915,7 @@ namespace VaccineAPI.Controllers
                 return output;
             }
         }
+        [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)
         {
             DateTime todayDate = DateTime.Now;

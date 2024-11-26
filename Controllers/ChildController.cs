@@ -12,6 +12,7 @@ using iTextSharp.text.pdf;
 using QRCoder;
 using iTextSharpImage = iTextSharp.text.Image;
 using iTextSharpFont = iTextSharp.text.Font;
+using System.Collections.Generic;
 
 // using WebApi.Out3Cache.V2;
 namespace VaccineAPI.Controllers
@@ -1604,29 +1605,32 @@ namespace VaccineAPI.Controllers
 
             //}
             var FileName = childName.Replace(" ", "") + "_Invoice" + "_" +
-                           DateTime.UtcNow.AddHours(5).Date.ToString("MMMM-dd-yyyy") + ".pdf";
+                           DateTime.UtcNow.AddHours(5).Date.ToString("yy") + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
 
-        private string GenerateRandomInvoiceId(int length)
+        private static int currentInvoiceNumber = 1;
+        private readonly object lockObject = new object();
+        private string GenerateSequentialInvoiceNumber()
         {
-            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-            var random = new Random();
-            return new string(Enumerable.Repeat(chars, length)
-                .Select(s => s[random.Next(s.Length)]).ToArray());
+            lock (lockObject)
+            {
+                string year = DateTime.Now.Year.ToString().Substring(2, 2);
+                string sequentialNumber = currentInvoiceNumber.ToString("D6"); 
+                string invoiceNumber = $"{year}{sequentialNumber}";
+                currentInvoiceNumber++;
+                return invoiceNumber;
+            }
         }
         // updated invoice pdf
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
         public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate,
                                                        int ConsultationFee)
         {
-            // var IsConsultationFee = true;
-            // var IsBrand = true;
-            Stream stream;
+        Stream stream;
             int amount = 0;
             int count = 0;
 
-            // int col = 3;
             int consultaionFee = ConsultationFee;
             string childName = "";
             var document = new Document(PageSize.A4, 60, 60, 30, 30);
@@ -1636,14 +1640,12 @@ namespace VaccineAPI.Controllers
 
             document.Open();
 
-            // Page Heading
-            // GetPDFHeading (document, "INVOICE");
             // Access db data
             var dbChild = _db.Childs.Include(x => x.Clinic)
-                              .ThenInclude(x => x.Doctor)
-                              .ThenInclude(y => y.User)
-                              .Where(x => x.Id == Id)
-                              .FirstOrDefault();
+                                    .ThenInclude(x => x.Doctor)
+                                    .ThenInclude(y => y.User)
+                                    .Where(x => x.Id == Id)
+                                    .FirstOrDefault();
             var dbDoctor = dbChild.Clinic.Doctor;
             var DoctorId = dbDoctor.Id;
 
@@ -1695,7 +1697,7 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell("#StayHome #GetVaccinated", "", 1, "right", "description"));
 
             document.Add(upperTable);
-            string invoiceNumber = GenerateRandomInvoiceId(25);
+            string invoiceNumber = GenerateSequentialInvoiceNumber();
             Paragraph invoiceNoParagraph = new Paragraph();
             Chunk invoiceText = new Chunk("Invoice # ", FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD));
             invoiceNoParagraph.Add(invoiceText);

@@ -460,7 +460,7 @@ namespace VaccineAPI.Controllers
 
                 upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 2, "left", "description"));
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));
-                
+
                 upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));
 
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
@@ -1609,25 +1609,30 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf", FileName);
         }
 
-        private static int currentInvoiceNumber = 1;
-        private readonly object lockObject = new object();
-        private string GenerateSequentialInvoiceNumber()
+        private HashSet<string> existingInvoiceNumbers = new HashSet<string>();
+        private HashSet<long> existingDoseIds = new HashSet<long>();
+        private long lastInvoiceNumber = 24000000;
+        private string GenerateSequentialInvoiceNumber(long doseId, long childId)
         {
-            lock (lockObject)
+            var existingInvoice = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == childId);
+            if (existingInvoice != null)
             {
-                string year = DateTime.Now.Year.ToString().Substring(2, 2);
-                string sequentialNumber = currentInvoiceNumber.ToString("D6"); 
-                string invoiceNumber = $"{year}{sequentialNumber}";
-                currentInvoiceNumber++;
-                return invoiceNumber;
+                return existingInvoice.InvoiceId;
             }
+            lastInvoiceNumber = _db.Invoices.AsEnumerable().Any() ? _db.Invoices.AsEnumerable().Max(i => long.Parse(i.InvoiceId)) + 1 : 24000001;
+            string invoiceNumber = lastInvoiceNumber.ToString();
+            existingInvoiceNumbers.Add(invoiceNumber);
+            existingDoseIds.Add(doseId);
+
+            return invoiceNumber;
         }
+
         // updated invoice pdf
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
         public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate,
                                                        int ConsultationFee)
         {
-        Stream stream;
+            Stream stream;
             int amount = 0;
             int count = 0;
 
@@ -1649,7 +1654,6 @@ namespace VaccineAPI.Controllers
             var dbDoctor = dbChild.Clinic.Doctor;
             var DoctorId = dbDoctor.Id;
 
-
             dbDoctor.InvoiceNumber = (dbDoctor.InvoiceNumber > 0) ? dbDoctor.InvoiceNumber + 1 : 1;
 
             var dbSchedules = _db.Schedules.Include(x => x.Dose)
@@ -1662,6 +1666,17 @@ namespace VaccineAPI.Controllers
             DateTime givendate = latestSchedule?.GivenDate ?? DateTime.Now;
 
             childName = dbChild.Name;
+            var doseId = latestSchedule?.Dose?.Id ?? 0;
+            if (doseId == 0)
+            {
+                throw new Exception("Dose ID not found for generating invoice number.");
+            }
+            string invoiceNumber = GenerateSequentialInvoiceNumber(doseId, Id);
+
+            if (string.IsNullOrEmpty(invoiceNumber))
+            {
+                throw new Exception("Invoice number already exists for the given Dose ID.");
+            }
 
             // Table 1 for description above amounts table
             PdfPTable upperTable = new PdfPTable(2);
@@ -1695,16 +1710,9 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell(givendate.ToString("dd-MM-yyyy"), "", 1, "right", "description"));
             upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "unbold", 1, "left", "description"));
             upperTable.AddCell(CreateCell("#StayHome #GetVaccinated", "", 1, "right", "description"));
+            upperTable.AddCell(CreateCell("Invoice # " + invoiceNumber, "bold", 2, "right", "description"));
 
             document.Add(upperTable);
-            string invoiceNumber = GenerateSequentialInvoiceNumber();
-            Paragraph invoiceNoParagraph = new Paragraph();
-            Chunk invoiceText = new Chunk("Invoice # ", FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD));
-            invoiceNoParagraph.Add(invoiceText);
-            Chunk invoiceNumberChunk = new Chunk(" " + invoiceNumber, FontFactory.GetFont(FontFactory.HELVETICA, 10));
-            invoiceNoParagraph.Add(invoiceNumberChunk);
-            invoiceNoParagraph.Alignment = Element.ALIGN_RIGHT;
-            document.Add(invoiceNoParagraph);
 
             // 2nd Table
             float[] widths = new float[] { 170f, 300f };

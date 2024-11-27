@@ -1619,10 +1619,16 @@ namespace VaccineAPI.Controllers
             {
                 return existingInvoice.InvoiceId;
             }
-            lastInvoiceNumber = _db.Invoices.AsEnumerable().Any() ? _db.Invoices.AsEnumerable().Max(i => long.Parse(i.InvoiceId)) + 1 : 24000001;
+            var validInvoiceNumbers = _db.Invoices
+                .AsEnumerable()
+                .Select(i => i.InvoiceId)
+                .Where(id => !string.IsNullOrEmpty(id) && long.TryParse(id, out _))
+                .Select(long.Parse)
+                .ToList();
+            lastInvoiceNumber = validInvoiceNumbers.Any()
+                ? validInvoiceNumbers.Max() + 1
+                : 24000001;
             string invoiceNumber = lastInvoiceNumber.ToString();
-            existingInvoiceNumbers.Add(invoiceNumber);
-            existingDoseIds.Add(doseId);
 
             return invoiceNumber;
         }

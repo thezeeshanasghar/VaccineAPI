@@ -51,6 +51,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}")]
         public Response<List<DoctorScheduleDTO>> GetSingle(long id)
         {
+            // Check if the doctor has any schedules
             var doctorSchedules = _db.DoctorSchedules
                 .Include(ds => ds.Dose)
                 .ThenInclude(d => d.Vaccine)
@@ -59,16 +60,46 @@ namespace VaccineAPI.Controllers
                 .ToList();
 
             if (doctorSchedules == null || doctorSchedules.Count == 0)
-                return new Response<List<DoctorScheduleDTO>>(false, "DoctorSchedule not found", null);
+            {
+                // If no schedules exist, copy from DoctorId = 1
+                var defaultDoctorSchedules = _db.DoctorSchedules
+                    .Where(ds => ds.DoctorId == 1)
+                    .ToList();
 
-            // Order the schedules by Dose Name
-            var sortedDoctorSchedules = doctorSchedules
-                .OrderBy(ds => ds.Dose.Name) // Ensure that Dose.Name is not null and sortable
-                .ToList();
+                if (defaultDoctorSchedules == null || defaultDoctorSchedules.Count == 0)
+                {
+                    return new Response<List<DoctorScheduleDTO>>(false, "Default schedules not found", null);
+                }
 
-            var doctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(sortedDoctorSchedules);
+                // Create schedules for the new doctor
+                foreach (var schedule in defaultDoctorSchedules)
+                {
+                    var newSchedule = new DoctorSchedule
+                    {
+                        DoctorId = id,
+                        DoseId = schedule.DoseId,
+                        GapInDays = schedule.GapInDays,
+                        IsActive = schedule.IsActive
+                    };
+                    _db.DoctorSchedules.Add(newSchedule);
+                }
+                _db.SaveChanges();
+
+                // Fetch the newly created schedules for the new doctor
+                doctorSchedules = _db.DoctorSchedules
+                    .Include(ds => ds.Dose)
+                    .ThenInclude(d => d.Vaccine)
+                    .Include(ds => ds.Doctor)
+                    .Where(ds => ds.DoctorId == id)
+                    .OrderBy(ds => ds.Dose.Name)
+                    .ToList();
+            }
+
+            // Map and return the schedules
+            var doctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(doctorSchedules);
             return new Response<List<DoctorScheduleDTO>>(true, null, doctorScheduleDTOs);
         }
+
 
 
         [HttpPost]
@@ -95,7 +126,7 @@ namespace VaccineAPI.Controllers
                     Amount = amount,
                     DoctorId = DoctorSchedueDTO.DoctorId,
                 };
-                
+
                 _db.BrandAmounts.Add(brandAmount);
                 _db.SaveChanges();
             }

@@ -69,255 +69,179 @@ namespace VaccineAPI.Controllers
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
         {
             if (String.IsNullOrEmpty(scheduleDTO.DiseaseYear)) { scheduleDTO.DiseaseYear = ""; }
+            var dbSchedule = _db.Schedules
+                .Include(x => x.Dose)
+                .ThenInclude(x => x.Vaccine)
+                .Include(x => x.Child)
+                .Where(c => c.Id == scheduleDTO.Id)
+                .FirstOrDefault();
+
+            if (dbSchedule == null)
             {
-                var dbSchedule = _db.Schedules
-                    .Include(x => x.Dose)
-                    .ThenInclude(x => x.Vaccine)
-                    .Include(x => x.Child)
-                    .Where(c => c.Id == scheduleDTO.Id)
-                    .FirstOrDefault();
-                var dbBrandInventory = _db.BrandAmounts
-                    .Where(
-                        b => b.BrandId == scheduleDTO.BrandId && b.DoctorId == scheduleDTO.DoctorId
-                    )
-                    .FirstOrDefault();
+                return new Response<ScheduleDTO>(false, "Schedule not found", null);
+            }
+            var dbBrandInventory = _db.BrandAmounts
+                .Where(b => b.BrandId == scheduleDTO.BrandId && b.DoctorId == scheduleDTO.DoctorId)
+                .FirstOrDefault();
 
-                var dbSchedule2 = _db.Schedules
-                  .Include(x => x.Dose)
-                      .ThenInclude(x => x.Vaccine)
-                  .Include(x => x.Child)
-                      .ThenInclude(x => x.Clinic)
-                  .Where(c => c.Id == scheduleDTO.Id)
-                  .FirstOrDefault();
-                var dbBrandInventory2 = _db.BrandAmounts
-                    .Where(
-                        b => b.BrandId == dbSchedule2.BrandId && b.DoctorId == dbSchedule2.Child.Clinic.DoctorId
-                    )
-                    .FirstOrDefault();
-
-                if (scheduleDTO.IsDone == false)
+            // Handle incomplete dose scenario
+            if (!scheduleDTO.IsDone)
+            {
+                dbSchedule.IsDone = false;
+                dbSchedule.GivenDate = null;
+                dbSchedule.BrandId = null;
+                dbSchedule.IsSkip = scheduleDTO.IsSkip;
+                if (dbBrandInventory != null && dbSchedule.Brand == null)
                 {
-                    dbSchedule.IsDone = scheduleDTO.IsDone;
-                    dbSchedule.GivenDate = null;
-                    dbSchedule.BrandId = null;
-                    dbSchedule.IsSkip = scheduleDTO.IsSkip;
-
-                    ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
-                    if (dbBrandInventory2 != null)
-                    {
-                        if (dbSchedule.Brand == null)
-                        {
-                            dbBrandInventory2.Count += 1;
-                        }
-                    }
-                    _db.SaveChanges();
-                    return new Response<ScheduleDTO>(true, "Congratulations", newData2);
+                    dbBrandInventory.Count += 1;
                 }
-                if (dbBrandInventory != null)
-                {
-                    if (dbSchedule.Brand == null)
-                    {
-                        dbBrandInventory.Count -= 1;
-                    }
-                }
-
-                if (scheduleDTO.IsDisease == true)
-                {
-                    var nextDoses = _db.Doses
-                        .Where(x => x.VaccineId == dbSchedule.Dose.VaccineId)
-                        .ToList();
-                    foreach (var dose in nextDoses)
-                    {
-                        if (dose.Id != dbSchedule.DoseId)
-                        {
-                            var childschedule = _db.Schedules
-                                .Where(x => x.ChildId == dbSchedule.Child.Id && x.DoseId == dose.Id)
-                                .FirstOrDefault();
-                            if (childschedule != null)
-                                childschedule.IsSkip = true;
-                        }
-                    }
-                }
-
-                // hpv doses skip and add
-                if (dbSchedule.Dose.Name.StartsWith("HPV") && dbSchedule.Dose.DoseOrder == 1)
-                {
-                    var daysDifference = Convert.ToInt32(
-                        (scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays
-                    );
-
-                    // Console.WriteLine (daysDifference);
-                    if (daysDifference > 5475)
-                    {
-                        // CHANGE NEXT DOSES
-                        var nextDoses = _db.Doses
-                            .Where(x => x.VaccineId == dbSchedule.Dose.VaccineId)
-                            .ToList();
-                        foreach (var dose in nextDoses)
-                        {
-                            if (dose.DoseOrder == 2)
-                            {
-                                var childschedule = _db.Schedules
-                                    .Where(
-                                        x => x.ChildId == dbSchedule.Child.Id && x.DoseId == dose.Id
-                                    )
-                                    .FirstOrDefault();
-                                childschedule.IsSkip = false;
-                                childschedule.Date = calculateDate(scheduleDTO.GivenDate.Date, 30);
-                            }
-
-                            if (dose.DoseOrder == 3)
-                            {
-                                var childschedule = _db.Schedules
-                                    .Where(
-                                        x => x.ChildId == dbSchedule.Child.Id && x.DoseId == dose.Id
-                                    )
-                                    .FirstOrDefault();
-                                childschedule.IsSkip = false;
-                                childschedule.Date = calculateDate(scheduleDTO.GivenDate.Date, 180);
-                            }
-                        }
-
-                        // SAVE CURRENT DOSE
-                        dbSchedule.BrandId = scheduleDTO.BrandId;
-                        dbSchedule.Weight = scheduleDTO.Weight;
-                        dbSchedule.Height = scheduleDTO.Height;
-                        dbSchedule.Circle = scheduleDTO.Circle;
-                        dbSchedule.IsDone = scheduleDTO.IsDone;
-                        dbSchedule.GivenDate = scheduleDTO.GivenDate;
-                        dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
-                        dbSchedule.IsDisease = scheduleDTO.IsDisease;
-
-                        ScheduleDTO newData1 = _mapper.Map<ScheduleDTO>(dbSchedule);
-                        _db.SaveChanges();
-                        return new Response<ScheduleDTO>(true, "congratulations", newData1);
-                    }
-                }
-
-                // for MENACWY Rules on brand Selection start
-                if (dbSchedule.Dose.Name.StartsWith("MenACWY") && dbSchedule.Dose.DoseOrder == 1)
-                {
-                    var doseBrand = _db.Brands
-                        .Where(x => x.Id == scheduleDTO.BrandId)
-                        .FirstOrDefault();
-                    var daysDifference = Convert.ToInt32(
-                        (scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays
-                    );
-
-                    if (doseBrand != null)
-                        if (daysDifference > 729 && doseBrand.Name.Equals("MENACTRA"))
-                        {
-                            var nextDose = _db.Doses
-                                .Where(
-                                    x =>
-                                        x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2
-                                )
-                                .FirstOrDefault();
-                            var nextSchedule = _db.Schedules
-                                .Where(
-                                    x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id
-                                )
-                                .FirstOrDefault();
-                            if (nextSchedule != null)
-                                nextSchedule.IsSkip = true;
-                        }
-                        else if (daysDifference > 364 && doseBrand.Name.Equals("NIMENRIX"))
-                        {
-                            var nextDose = _db.Doses
-                                .Where(
-                                    x =>
-                                        x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2
-                                )
-                                .FirstOrDefault();
-                            var nextSchedule = _db.Schedules
-                                .Where(
-                                    x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id
-                                )
-                                .FirstOrDefault();
-                            nextSchedule.IsSkip = true;
-                        }
-                }
-
-                // for MENACWY Rules on brand Selection end
-
-                // // for flu and typhoid
-                //   if (dbSchedule.Dose.Name.StartsWith ("Flu") || dbSchedule.Dose.Name.StartsWith ("Typhoid")) {
-                //      var nextDose = _db.Doses.Where (x => x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == (dbSchedule.Dose.DoseOrder + 1)).ToList ();
-                //     if (nextDose != null){
-                //         var nextschedule = _db.Schedules.Where(x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id).FirstOrDefault();
-                //     }
-                //   }
-                if (dbSchedule.Dose.DoseOrder != 1 && scheduleDTO.IsSkip != true)
-                {
-                    var prevdose = _db.Doses
-                        .Where(
-                            x =>
-                                x.VaccineId == dbSchedule.Dose.VaccineId
-                                && x.DoseOrder == (dbSchedule.Dose.DoseOrder - 1)
-                        )
-                        .FirstOrDefault();
-                    var previousSchedule = _db.Schedules
-                        .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == prevdose.Id)
-                        .FirstOrDefault();
-                    if (previousSchedule != null)
-                    {
-                        if (previousSchedule.IsSkip != true && previousSchedule.IsDone == false)
-                            return new Response<ScheduleDTO>(
-                                false,
-                                "previous dose is not given",
-                                null
-                            );
-                    }
-                }
-
-                dbSchedule.BrandId = scheduleDTO.BrandId;
-                dbSchedule.Weight = scheduleDTO.Weight;
-                dbSchedule.Height = scheduleDTO.Height;
-                dbSchedule.Circle = scheduleDTO.Circle;
-                dbSchedule.IsDone = scheduleDTO.IsDone;
-                dbSchedule.GivenDate = scheduleDTO.GivenDate;
-                dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
-                dbSchedule.IsDisease = scheduleDTO.IsDisease;
-                ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
-                ScheduleDTO newData = _mapper.Map<ScheduleDTO>(dbSchedule);
                 _db.SaveChanges();
-                return new Response<ScheduleDTO>(true, "congratulations", newData);
+                return new Response<ScheduleDTO>(true, "Dose update reverted", _mapper.Map<ScheduleDTO>(dbSchedule));
+            }
+            if (dbBrandInventory != null && dbSchedule.Brand == null)
+            {
+                dbBrandInventory.Count -= 1;
+            }
+
+            if ((bool)scheduleDTO.IsDisease)
+            {
+                var nextDoses = _db.Doses
+                    .Where(x => x.VaccineId == dbSchedule.Dose.VaccineId)
+                    .ToList();
+                foreach (var dose in nextDoses)
+                {
+                    if (dose.Id != dbSchedule.DoseId)
+                    {
+                        var childschedule = _db.Schedules
+                            .Where(x => x.ChildId == dbSchedule.Child.Id && x.DoseId == dose.Id)
+                            .FirstOrDefault();
+                        if (childschedule != null)
+                            childschedule.IsSkip = false;
+                    }
+                }
+            }
+
+            if (dbSchedule.Dose.Name.StartsWith("HPV") && dbSchedule.Dose.DoseOrder == 1)
+            {
+                var daysDifference = (scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays;
+                if (daysDifference > 5475)
+                {
+                    // Update future doses (HPV)
+                    UpdateFutureDoses(dbSchedule, scheduleDTO.GivenDate);
+                }
+            }
+
+            // MENACWY dose adjustments
+            if (dbSchedule.Dose.Name.StartsWith("MenACWY") && dbSchedule.Dose.DoseOrder == 1)
+            {
+                UpdateMenACWYRules(scheduleDTO, dbSchedule);
+            }
+
+            // Ensure every vaccine is updated (e.g., Chicken Pox)
+            dbSchedule.BrandId = scheduleDTO.BrandId;
+            dbSchedule.Weight = scheduleDTO.Weight;
+            dbSchedule.Height = scheduleDTO.Height;
+            dbSchedule.Circle = scheduleDTO.Circle;
+            dbSchedule.IsDone = scheduleDTO.IsDone;
+            dbSchedule.GivenDate = scheduleDTO.GivenDate;
+            dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
+            dbSchedule.IsDisease = scheduleDTO.IsDisease;
+
+            // Change due dates of upcoming injections
+            ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
+
+            _db.SaveChanges();
+            return new Response<ScheduleDTO>(true, "Schedule updated successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
+        }
+
+        private void UpdateFutureDoses(Schedule dbSchedule, DateTime givenDate)
+        {
+            var nextDoses = _db.Doses
+                .Where(x => x.VaccineId == dbSchedule.Dose.VaccineId)
+                .ToList();
+
+            foreach (var dose in nextDoses)
+            {
+                var childschedule = _db.Schedules
+                    .Where(x => x.ChildId == dbSchedule.Child.Id && x.DoseId == dose.Id)
+                    .FirstOrDefault();
+
+                if (childschedule != null)
+                {
+                    if (dose.DoseOrder == 2)
+                    {
+                        childschedule.IsSkip = false;
+                        childschedule.Date = calculateDate(givenDate, 30);
+                    }
+                    if (dose.DoseOrder == 3)
+                    {
+                        childschedule.IsSkip = false;
+                        childschedule.Date = calculateDate(givenDate, 180);
+                    }
+                }
+            }
+        }
+
+        private void UpdateMenACWYRules(ScheduleDTO scheduleDTO, Schedule dbSchedule)
+        {
+            var doseBrand = _db.Brands
+                .Where(x => x.Id == scheduleDTO.BrandId)
+                .FirstOrDefault();
+            var daysDifference = (scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays;
+
+            if (doseBrand != null)
+            {
+                if (daysDifference > 729 && doseBrand.Name.Equals("MENACTRA"))
+                {
+                    SkipNextDose(dbSchedule, 2);
+                }
+                else if (daysDifference > 364 && doseBrand.Name.Equals("NIMENRIX"))
+                {
+                    SkipNextDose(dbSchedule, 2);
+                }
+            }
+        }
+
+        private void SkipNextDose(Schedule dbSchedule, int doseOrder)
+        {
+            var nextDose = _db.Doses
+                .Where(x => x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == doseOrder)
+                .FirstOrDefault();
+            var nextSchedule = _db.Schedules
+                .Where(x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id)
+                .FirstOrDefault();
+            if (nextSchedule != null)
+            {
+                nextSchedule.IsSkip = false;
             }
         }
 
         private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Schedule dbSchedule)
         {
-            var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
-            var dbDose = _db.Doses.Include(x => x.Vaccine).ToList();
-            var dbVacc = _db.Vaccines.Include(x => x.Doses).ToList();
-            var AllDoses = dbSchedule.Dose.Vaccine.Doses;
-            AllDoses = AllDoses.Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).OrderBy(x => x.DoseOrder).ToList();
+            var daysDifference = (scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays;
+            var AllDoses = dbSchedule.Dose.Vaccine.Doses
+                .Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder)
+                .OrderBy(x => x.DoseOrder)
+                .ToList();
+
             var previousdosedate = scheduleDTO.GivenDate.Date;
             foreach (var d in AllDoses)
             {
-                var minimumGap = d.MinGap;
-
                 var TargetSchedule = _db.Schedules
                     .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
                     .FirstOrDefault();
                 if (TargetSchedule != null)
                 {
-                    var Targetdosegap = Convert.ToInt32(
-                        (TargetSchedule.Date.Date - previousdosedate).TotalDays
-                    );
-                    if (Targetdosegap < minimumGap)
+                    var Targetdosegap = (TargetSchedule.Date.Date - previousdosedate).TotalDays;
+                    if (Targetdosegap < d.MinGap)
                     {
-                        // TargetSchedule.Date =
-                        //     calculateDate(TargetSchedule.Date, Convert.ToInt32(d.MinGap)); //TargetSchedule.Date.AddDays(daysDifference);
-                        TargetSchedule.Date = calculateDate(
-                                previousdosedate,
-                                Convert.ToInt32(minimumGap)
-                            ); //TargetSchedule.Date.AddDays(daysDifference);
+                        TargetSchedule.Date = calculateDate(previousdosedate, (int)d.MinGap);
                         previousdosedate = TargetSchedule.Date.Date;
                     }
                 }
             }
         }
+
 
         [HttpPost]
         public Response<IEnumerable<ScheduleDTO>> Post(IEnumerable<ScheduleDTO> dsDTOS)

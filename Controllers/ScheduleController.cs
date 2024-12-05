@@ -1019,7 +1019,7 @@ namespace VaccineAPI.Controllers
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                     .Where(c => c.Date.Date > inputDate.Date && c.Date.Date <= AddedDateTime.Date)
                     .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
-                    .OrderBy(x => x.Child.Id)
+                    .OrderBy(x => x.Child.Name)
                     .ThenBy(x => x.Date)
                     .ToList<Schedule>();
             }
@@ -1032,7 +1032,7 @@ namespace VaccineAPI.Controllers
                     .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                     .Where(c => c.Date < inputDate.Date && c.Date >= AddedDateTime)
                     .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
-                    .OrderBy(x => x.Child.Id)
+                    .OrderBy(x => x.Child.Name)
                     .ThenBy(x => x.Date)
                     .ToList<Schedule>();
             }

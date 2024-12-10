@@ -2310,7 +2310,7 @@ namespace VaccineAPI.Controllers
                 cell.PaddingLeft = -21f;
                 cell.PaddingTop = 28f;
                 tabFot.AddCell(cell);
-                tabFot.WriteSelectedRows(0, -1, 65, 90, writer.DirectContent);
+                tabFot.WriteSelectedRows(0, -1, 65, 100, writer.DirectContent);
 
             }
 

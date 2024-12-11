@@ -82,6 +82,54 @@ namespace VaccineAPI.Controllers
                     )
                     .FirstOrDefault();
 
+                if (dbSchedule == null)
+                {
+                    return new Response<ScheduleDTO>(false, "Schedule not found", null);
+                }
+
+                var targetVaccines = new List<string>
+                {
+                    "MMR",
+                    "Chicken Pox",
+                    "DTaP",
+                    "Hepatitis A",
+                    "Hepatitis B",
+                    "OPV/IPV+HBV+DPT+Hib",
+                    "Pneumococcal"
+                };
+
+                if (targetVaccines.Contains(dbSchedule.Dose.Vaccine.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (dbBrandInventory != null)
+                    {
+                        if (scheduleDTO.IsDone)
+                        {
+                            dbBrandInventory.Count -= 1;
+                        }
+                        else
+                        {
+                            dbBrandInventory.Count += 1;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Brand inventory not found for brand: " + scheduleDTO.BrandId);
+                    }
+
+                    dbSchedule.IsDone = scheduleDTO.IsDone;
+                    dbSchedule.GivenDate = scheduleDTO.GivenDate;
+                    dbSchedule.BrandId = scheduleDTO.BrandId;
+                    dbSchedule.Weight = scheduleDTO.Weight;
+                    dbSchedule.Height = scheduleDTO.Height;
+                    dbSchedule.Circle = scheduleDTO.Circle;
+                    dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
+                    dbSchedule.IsDisease = scheduleDTO.IsDisease;
+                    _db.SaveChanges();
+
+                    return new Response<ScheduleDTO>(true, "Injection updated successfully for specified vaccine",
+                        _mapper.Map<ScheduleDTO>(dbSchedule));
+                }
+
                 var dbSchedule2 = _db.Schedules
                   .Include(x => x.Dose)
                       .ThenInclude(x => x.Vaccine)

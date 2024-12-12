@@ -416,9 +416,9 @@ namespace VaccineAPI.Controllers
                         {
                             var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
                             pdfQrCode.ScaleAbsolute(60f, 60f);
-                            float marginLeft = 40f;
+                            float marginLeft = document.PageSize.Width / 2 - pdfQrCode.ScaledWidth / 2;
                             float qrCodeXPosition = marginLeft;
-                            float marginTop = 665f - 4f;
+                            float marginTop = 0f - 4f;
                             float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
                             pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                             writer.DirectContent.AddImage(pdfQrCode);
@@ -2309,6 +2309,7 @@ namespace VaccineAPI.Controllers
                 cell.Border = 0;
                 cell.PaddingLeft = -21f;
                 cell.PaddingTop = 28f;
+                cell.PaddingRight = 21f;
                 tabFot.AddCell(cell);
                 tabFot.WriteSelectedRows(0, -1, 65, 100, writer.DirectContent);
 

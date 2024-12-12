@@ -422,10 +422,7 @@ namespace VaccineAPI.Controllers
                             float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
                             pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                             writer.DirectContent.AddImage(pdfQrCode);
-                            iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                            ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
-                            new Phrase("Scan to verify", explanationFont),
-                            qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 7, 0);
+                           
                         }
                     }
                 }
@@ -1980,10 +1977,7 @@ namespace VaccineAPI.Controllers
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
 
-                        iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                        ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
-                        new Phrase("Scan to verify", explanationFont),
-                        qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
+                      
                     }
                 }
 

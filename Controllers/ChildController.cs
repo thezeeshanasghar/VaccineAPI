@@ -1,18 +1,18 @@
-﻿using System.Globalization;
+﻿using System.Collections.Generic;
+using System.Globalization;
 using System.Net.Mail;
 using System.Text;
 using AutoMapper;
 using CsvHelper;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using VaccineAPI.ModelDTO;
-using VaccineAPI.Models;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using QRCoder;
-using iTextSharpImage = iTextSharp.text.Image;
+using VaccineAPI.ModelDTO;
+using VaccineAPI.Models;
 using iTextSharpFont = iTextSharp.text.Font;
-using System.Collections.Generic;
+using iTextSharpImage = iTextSharp.text.Image;
 
 // using WebApi.Out3Cache.V2;
 namespace VaccineAPI.Controllers
@@ -24,6 +24,7 @@ namespace VaccineAPI.Controllers
         private readonly Context _db;
         private readonly IMapper _mapper;
         private readonly IWebHostEnvironment _host;
+
         public ChildController(Context context, IMapper mapper, IWebHostEnvironment host)
         {
             _db = context;
@@ -36,11 +37,12 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var child = _db.Childs
-                    .FirstOrDefault(c => c.Id == id);
+                var child = _db.Childs.FirstOrDefault(c => c.Id == id);
                 if (child == null)
                 {
-                    return NotFound(new Response<ChildDTO>(false, $"Child not found with ID: {id}", null));
+                    return NotFound(
+                        new Response<ChildDTO>(false, $"Child not found with ID: {id}", null)
+                    );
                 }
 
                 // Toggle the IsInactive status
@@ -55,18 +57,30 @@ namespace VaccineAPI.Controllers
                 if (affectedRows > 0)
                 {
                     var childDTO = _mapper.Map<ChildDTO>(child);
-                    return Ok(new Response<ChildDTO>(true, $"Active status updated successfully for child ID: {id}", childDTO));
+                    return Ok(
+                        new Response<ChildDTO>(
+                            true,
+                            $"Active status updated successfully for child ID: {id}",
+                            childDTO
+                        )
+                    );
                 }
                 else
                 {
-                    return StatusCode(500, new Response<ChildDTO>(false, $"Failed to update child with ID: {id}", null));
+                    return StatusCode(
+                        500,
+                        new Response<ChildDTO>(false, $"Failed to update child with ID: {id}", null)
+                    );
                 }
             }
             catch (Exception ex)
             {
                 // Log the full exception details
                 Console.WriteLine($"Error in ToggleActiveStatus: {ex}");
-                return StatusCode(500, new Response<ChildDTO>(false, $"An error occurred: {ex.Message}", null));
+                return StatusCode(
+                    500,
+                    new Response<ChildDTO>(false, $"An error occurred: {ex.Message}", null)
+                );
             }
         }
 
@@ -86,18 +100,25 @@ namespace VaccineAPI.Controllers
                     return NotFound("Child not found");
                 }
 
-
                 var userDetails = _db.Users.FirstOrDefault(u => u.Id == child.UserId);
                 if (userDetails != null)
                 {
-
-                    var body = "Hi " + "<b>" + child.Name + " " + child.FatherName + "</b>, <br />" +
-                        "Welcome to vaccinationcentre.com <br /><br />" +
-                        "Your account credentials are: <br />" +
-                        "ID/Mobile Number: " + userDetails.MobileNumber + "<br />" +
-                        "Password: " + userDetails.Password + "<br />" +
-                        "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
-
+                    var body =
+                        "Hi "
+                        + "<b>"
+                        + child.Name
+                        + " "
+                        + child.FatherName
+                        + "</b>, <br />"
+                        + "Welcome to vaccinationcentre.com <br /><br />"
+                        + "Your account credentials are: <br />"
+                        + "ID/Mobile Number: "
+                        + userDetails.MobileNumber
+                        + "<br />"
+                        + "Password: "
+                        + userDetails.Password
+                        + "<br />"
+                        + "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
 
                     try
                     {
@@ -122,7 +143,6 @@ namespace VaccineAPI.Controllers
             }
         }
 
-
         [HttpGet]
         public Response<IEnumerable<ChildDTO>> Get()
         {
@@ -142,12 +162,13 @@ namespace VaccineAPI.Controllers
         [HttpGet("clinic/{id}/{page}")]
         public Response<IEnumerable<ChildDTO>> GetChildByClinic(long id, int page)
         {
-            var dbChilds = _db.Childs.Include(x => x.User)
-                               .Where(x => x.ClinicId == id)
-                               .OrderByDescending(x => x.Id)
-                               .Skip(10 * page)
-                               .Take(10)
-                               .ToList();
+            var dbChilds = _db
+                .Childs.Include(x => x.User)
+                .Where(x => x.ClinicId == id)
+                .OrderByDescending(x => x.Id)
+                .Skip(10 * page)
+                .Take(10)
+                .ToList();
             List<ChildDTO> childDTOs = new List<ChildDTO>();
             foreach (var child in dbChilds)
             {
@@ -160,11 +181,14 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
 
-
         [HttpGet("user/{id}")]
         public Response<IEnumerable<ChildDTO>> GetChildByUser(long id)
         {
-            var dbChilds = _db.Childs.Include(x => x.User).Where(x => x.UserId == id).OrderByDescending(x => x.Id).ToList();
+            var dbChilds = _db
+                .Childs.Include(x => x.User)
+                .Where(x => x.UserId == id)
+                .OrderByDescending(x => x.Id)
+                .ToList();
             List<ChildDTO> childDTOs = new List<ChildDTO>();
             foreach (var child in dbChilds)
             {
@@ -191,7 +215,10 @@ namespace VaccineAPI.Controllers
         public Response<IEnumerable<ScheduleDTO>> GetChildSchedule(int id)
         {
             {
-                var child = _db.Childs.Include(x => x.Schedules).Include(x => x.User).FirstOrDefault(c => c.Id == id);
+                var child = _db
+                    .Childs.Include(x => x.Schedules)
+                    .Include(x => x.User)
+                    .FirstOrDefault(c => c.Id == id);
                 if (child == null)
                     return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
                 else
@@ -200,9 +227,14 @@ namespace VaccineAPI.Controllers
                     for (int i = 0; i < dbSchedules.Count; i++)
                     {
                         var dbSchedule = dbSchedules.ElementAt(i);
-                        dbSchedule.Dose =
-                            _db.Schedules.Include("Dose").Where<Schedule>(x => x.Id == dbSchedule.Id).FirstOrDefault().Dose;
-                        dbSchedule.Brand = _db.Brands.Where<Brand>(x => x.Id == dbSchedule.BrandId).FirstOrDefault();
+                        dbSchedule.Dose = _db
+                            .Schedules.Include("Dose")
+                            .Where<Schedule>(x => x.Id == dbSchedule.Id)
+                            .FirstOrDefault()
+                            .Dose;
+                        dbSchedule.Brand = _db
+                            .Brands.Where<Brand>(x => x.Id == dbSchedule.BrandId)
+                            .FirstOrDefault();
                     }
 
                     var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
@@ -219,24 +251,27 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/downloadcsv")]
         public IActionResult MyExportAction(int id)
         {
-            var schedule =
-                _db.Schedules.Where(x => x.ChildId == id).Include(x => x.Dose).ThenInclude(x => x.Vaccine).ToList();
+            var schedule = _db
+                .Schedules.Where(x => x.ChildId == id)
+                .Include(x => x.Dose)
+                .ThenInclude(x => x.Vaccine)
+                .ToList();
             DateTime nextvisitDate = getNextDate(schedule);
-            var progresses =
-                _db.Childs.Include(x => x.User)
-                    .Where(x => x.Id == id)
-                    .ToList()
-                    .Select(progress => new ChildCsvDTO()
-                    {
-                        Name = progress.Name,
-                        FatherName = progress.FatherName,
-                        DOB = progress.DOB.ToShortDateString(),
-                        City = progress.City,
-                        Next_Due_Date = nextvisitDate.ToString("yyyy/MM/dd"),
-                        Next_Due_Vaccines = getNextVaccine(schedule, nextvisitDate),
-                        Phone = progress.User.MobileNumber,
-                        Email = progress.Email
-                    });
+            var progresses = _db
+                .Childs.Include(x => x.User)
+                .Where(x => x.Id == id)
+                .ToList()
+                .Select(progress => new ChildCsvDTO()
+                {
+                    Name = progress.Name,
+                    FatherName = progress.FatherName,
+                    DOB = progress.DOB.ToShortDateString(),
+                    City = progress.City,
+                    Next_Due_Date = nextvisitDate.ToString("yyyy/MM/dd"),
+                    Next_Due_Vaccines = getNextVaccine(schedule, nextvisitDate),
+                    Phone = progress.User.MobileNumber,
+                    Email = progress.Email,
+                });
             var stream = new MemoryStream();
             using (var writeFile = new StreamWriter(stream, Encoding.UTF8, 512, true))
             {
@@ -244,10 +279,9 @@ namespace VaccineAPI.Controllers
                 csv.WriteRecords(progresses);
                 csv.WriteRecords(progresses);
             }
-            stream.Position = 0;  // reset stream
+            stream.Position = 0; // reset stream
             return File(stream, "application/octet-stream", "Reports.csv");
         }
-
 
         [HttpGet("downloadcsv")]
         public IActionResult MyExportAction2([FromQuery(Name = "arr[]")] long[] arr)
@@ -259,30 +293,34 @@ namespace VaccineAPI.Controllers
                 var csv = new CsvWriter(writeFile, CultureInfo.InvariantCulture);
                 foreach (long id in arr)
                 {
-                    var schedule =
-                        _db.Schedules.Where(x => x.ChildId == id).Include(x => x.Dose).ThenInclude(x => x.Vaccine).ToList();
+                    var schedule = _db
+                        .Schedules.Where(x => x.ChildId == id)
+                        .Include(x => x.Dose)
+                        .ThenInclude(x => x.Vaccine)
+                        .ToList();
                     DateTime nextvisitDate = getNextDate(schedule);
                     DateTime currentVisitDate = getDueDate(schedule);
-                    var progresses = _db.Childs.Include(x => x.User)
-                                         .Where(x => x.Id == id)
-                                         .ToList()
-                                         .Select(progress => new ChildCsvDTO()
-                                         {
-                                             Name = progress.Name,
-                                             FatherName = progress.FatherName,
-                                             DOB = progress.DOB.ToShortDateString(),
-                                             City = progress.City,
-                                             Due_Date = currentVisitDate.ToString("yyyy/MM/dd"),
-                                             Due_Vaccines = getDueVaccine(schedule, currentVisitDate),
-                                             Next_Due_Date = nextvisitDate.ToString("yyyy/MM/dd"),
-                                             Next_Due_Vaccines = getNextVaccine(schedule, nextvisitDate),
-                                             Phone = progress.User.MobileNumber,
-                                             Email = progress.Email
-                                         });
+                    var progresses = _db
+                        .Childs.Include(x => x.User)
+                        .Where(x => x.Id == id)
+                        .ToList()
+                        .Select(progress => new ChildCsvDTO()
+                        {
+                            Name = progress.Name,
+                            FatherName = progress.FatherName,
+                            DOB = progress.DOB.ToShortDateString(),
+                            City = progress.City,
+                            Due_Date = currentVisitDate.ToString("yyyy/MM/dd"),
+                            Due_Vaccines = getDueVaccine(schedule, currentVisitDate),
+                            Next_Due_Date = nextvisitDate.ToString("yyyy/MM/dd"),
+                            Next_Due_Vaccines = getNextVaccine(schedule, nextvisitDate),
+                            Phone = progress.User.MobileNumber,
+                            Email = progress.Email,
+                        });
                     csv.WriteRecords(progresses);
                 }
             }
-            stream.Position = 0;  // reset stream
+            stream.Position = 0; // reset stream
             return File(stream, "application/octet-stream", "Reports.csv");
         }
 
@@ -290,7 +328,8 @@ namespace VaccineAPI.Controllers
         {
             DateTime Now = DateTime.Now;
             foreach (var sch in schedul)
-                if (sch.Date.Equals(Now)) return sch.Date;
+                if (sch.Date.Equals(Now))
+                    return sch.Date;
             return Now;
         }
 
@@ -298,7 +337,8 @@ namespace VaccineAPI.Controllers
         {
             DateTime Now = DateTime.Now;
             foreach (var sch in schedul)
-                if (sch.Date > Now) return sch.Date;
+                if (sch.Date > Now)
+                    return sch.Date;
             return Now;
         }
 
@@ -306,7 +346,7 @@ namespace VaccineAPI.Controllers
         {
             string dueVaccines = "";
             foreach (var sch in schedu)
-                if (sch.Date.Date.Equals(dueDate.Date))  // && sch.ChildId == 7970)
+                if (sch.Date.Date.Equals(dueDate.Date)) // && sch.ChildId == 7970)
                     dueVaccines += (sch.Dose.Name + ",");
             return dueVaccines;
         }
@@ -343,7 +383,9 @@ namespace VaccineAPI.Controllers
             var doctorSchedule = clinic.Doctor.DoctorSchedules.FirstOrDefault();
             if (doctorSchedule != null)
             {
-                DoctorScheduleDTO doctorScheduleDTO = _mapper.Map<DoctorScheduleDTO>(doctorSchedule);
+                DoctorScheduleDTO doctorScheduleDTO = _mapper.Map<DoctorScheduleDTO>(
+                    doctorSchedule
+                );
                 return new Response<DoctorScheduleDTO>(true, null, doctorScheduleDTO);
             }
             else
@@ -356,36 +398,45 @@ namespace VaccineAPI.Controllers
         public IActionResult DownloadSchedulePDF(int id)
         {
             Child dbScheduleChild;
-            { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
+            {
+                dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault();
+            }
             var stream = CreateSchedulePdf(id);
-            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
-                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+            var FileName =
+                dbScheduleChild.Name.Replace(" ", "")
+                + "_Schedule_"
+                + DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy")
+                + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
 
         private Stream CreateSchedulePdf(int childId)
         {
             // Access db data
-            var dbChild = _db.Childs.Include(x => x.User)
-                                  .Include(x => x.Clinic)
-                                  .ThenInclude(x => x.Doctor)
-                                  .ThenInclude(x => x.User)
-                                  .Where(x => x.Id == childId)
-                                  .FirstOrDefault();
+            var dbChild = _db
+                .Childs.Include(x => x.User)
+                .Include(x => x.Clinic)
+                .ThenInclude(x => x.Doctor)
+                .ThenInclude(x => x.User)
+                .Where(x => x.Id == childId)
+                .FirstOrDefault();
             var dbDoctor = dbChild.Clinic.Doctor;
-            var child = _db.Childs.Include(x => x.Schedules)
-                                .ThenInclude(x => x.Dose)
-                                .Include(x => x.Schedules)
-                                .ThenInclude(x => x.Brand)
-                                .FirstOrDefault(c => c.Id == childId);
+            var child = _db
+                .Childs.Include(x => x.Schedules)
+                .ThenInclude(x => x.Dose)
+                .Include(x => x.Schedules)
+                .ThenInclude(x => x.Brand)
+                .FirstOrDefault(c => c.Id == childId);
             var dbSchedules = child.Schedules.ToList();
 
             var Gender = 1;
-            if (dbChild.Gender == "Girl") Gender = 2;
+            if (dbChild.Gender == "Girl")
+                Gender = 2;
 
             foreach (var sch in dbSchedules)
             {
-                if (sch.IsDone == true) sch.Date = sch.GivenDate ?? DateTime.Now;
+                if (sch.IsDone == true)
+                    sch.Date = sch.GivenDate ?? DateTime.Now;
             }
             dbSchedules = dbSchedules.OrderBy(x => x.Date).ToList();
 
@@ -408,7 +459,12 @@ namespace VaccineAPI.Controllers
                 try
                 {
                     using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
-                    using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
+                    using (
+                        QRCodeData qrCodeData = qrGenerator.CreateQrCode(
+                            qrCodeUrl,
+                            QRCodeGenerator.ECCLevel.Q
+                        )
+                    )
                     {
                         var qrCode = new BitmapByteQRCode(qrCodeData);
                         byte[] qrCodeImage = qrCode.GetGraphic(18);
@@ -416,13 +472,13 @@ namespace VaccineAPI.Controllers
                         {
                             var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
                             pdfQrCode.ScaleAbsolute(60f, 60f);
-                            float marginLeft = document.PageSize.Width / 2 - pdfQrCode.ScaledWidth / 2;
+                            float marginLeft =
+                                document.PageSize.Width / 2 - pdfQrCode.ScaledWidth / 2;
                             float qrCodeXPosition = marginLeft;
                             float marginTop = 0f - 4f;
                             float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
                             pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                             writer.DirectContent.AddImage(pdfQrCode);
-                           
                         }
                     }
                 }
@@ -438,43 +494,98 @@ namespace VaccineAPI.Controllers
                 upperTable.TotalWidth = 510f;
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths(upperTableWidths);
-                upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 2, "left", "description"));
-                var imgPath = dbChild.Clinic.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
+                upperTable.AddCell(
+                    CreateCell(dbDoctor.DisplayName, "bold", 2, "left", "description")
+                );
+                // Safely handle database null values
+                // Safely handle database null values
+                var monogramImage = dbChild.Clinic?.MonogramImage ?? string.Empty; // Use null-conditional operator
+
+                // Determine image path, ensuring nulls are handled
+                var imgPath = !string.IsNullOrWhiteSpace(monogramImage)
+                    ? Path.Combine(_host.ContentRootPath, monogramImage)
+                    : null;
 
                 // Add Image Cell
-                if (imgPath != null)
+                if (!string.IsNullOrEmpty(imgPath) && System.IO.File.Exists(imgPath))
                 {
+                    // If path is valid and file exists, add the image
                     Image img = Image.GetInstance(imgPath);
                     img.ScaleAbsolute(160f, 50f);
-                    PdfPCell imageCell = new PdfPCell(img, false);
-                    imageCell.Colspan = 1;
-                    imageCell.Rowspan = 2;
-                    imageCell.Border = 0;
-                    imageCell.FixedHeight = 50f; // Set a fixed height for the image cell
-                    imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                    PdfPCell imageCell = new PdfPCell(img, false)
+                    {
+                        Colspan = 1,
+                        Rowspan = 2,
+                        Border = 0,
+                        FixedHeight = 50f, // Set a fixed height for the image cell
+                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                    };
                     upperTable.AddCell(imageCell);
                 }
+                else
+                {
+                    // Add an empty cell if the image path is null or invalid
+                    PdfPCell emptyCell = new PdfPCell
+                    {
+                        Colspan = 1,
+                        Rowspan = 2,
+                        Border = 0,
+                        FixedHeight =
+                            50f // Maintain table structure without image
+                        ,
+                    };
+                    upperTable.AddCell(emptyCell);
+                }
 
-                upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 2, "left", "description"));
-                upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));
+                upperTable.AddCell(
+                    CreateCell(dbDoctor.AdditionalInfo, "unbold", 2, "left", "description")
+                );
+                upperTable.AddCell(
+                    CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description")
+                );
 
                 upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));
 
-                upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
+                upperTable.AddCell(
+                    CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description")
+                );
 
-                upperTable.AddCell(CreateCell("S/D/W/o " + dbChild.FatherName, "", 1, "right", "description"));
-                upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
-                upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
-                                                "description"));
+                upperTable.AddCell(
+                    CreateCell("S/D/W/o " + dbChild.FatherName, "", 1, "right", "description")
+                );
+                upperTable.AddCell(
+                    CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description")
+                );
+                upperTable.AddCell(
+                    CreateCell(
+                        "+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber,
+                        "",
+                        1,
+                        "right",
+                        "description"
+                    )
+                );
                 upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
 
                 if (!String.IsNullOrEmpty(dbChild.CNIC))
-                    upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
+                    upperTable.AddCell(
+                        CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description")
+                    );
                 else
-                    upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
+                    upperTable.AddCell(
+                        CreateCell("" + dbChild.CNIC, "", 1, "right", "description")
+                    );
 
                 upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
-                upperTable.AddCell(CreateCell("DOB: " + dbChild.DOB.ToString("dd MMMM, yyyy"), "", 1, "right", "description"));
+                upperTable.AddCell(
+                    CreateCell(
+                        "DOB: " + dbChild.DOB.ToString("dd MMMM, yyyy"),
+                        "",
+                        1,
+                        "right",
+                        "description"
+                    )
+                );
 
                 // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
                 //  upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
@@ -493,14 +604,30 @@ namespace VaccineAPI.Controllers
                 table.LockedWidth = true;
                 table.SpacingBefore = 5;
                 table.SetWidths(widths);
-                table.AddCell(CreateCell("Sr", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Vaccine", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Status", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Date", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Brand", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Weight", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Height", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("OFC/BMI", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(
+                    CreateCell("Sr", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                table.AddCell(
+                    CreateCell("Vaccine", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                table.AddCell(
+                    CreateCell("Status", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                table.AddCell(
+                    CreateCell("Date", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                table.AddCell(
+                    CreateCell("Brand", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                table.AddCell(
+                    CreateCell("Weight", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                table.AddCell(
+                    CreateCell("Height", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                table.AddCell(
+                    CreateCell("OFC/BMI", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
 
                 // table.AddCell(CreateCell("Injected", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 // for typhoid and flu
@@ -531,8 +658,11 @@ namespace VaccineAPI.Controllers
 
                 foreach (var dbSchedule in dbSchedules)
                 {
-                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") &&
-                        !dbSchedule.Dose.Name.StartsWith("Typhoid"))
+                    if (
+                        dbSchedule.IsSkip != true
+                        && !dbSchedule.Dose.Name.StartsWith("Flu")
+                        && !dbSchedule.Dose.Name.StartsWith("Typhoid")
+                    )
                     {
                         int doseCount = 0;
                         Paragraph p = new Paragraph();
@@ -545,7 +675,11 @@ namespace VaccineAPI.Controllers
                         Font rangefont = FontFactory.GetFont(FontFactory.HELVETICA, 6);
 
                         Font boldfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
-                        Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
+                        Font italicfont = FontFactory.GetFont(
+                            FontFactory.HELVETICA,
+                            10,
+                            Font.ITALIC
+                        );
 
                         {
                             PdfPCell ageCell = new PdfPCell(new Phrase(count.ToString(), font));
@@ -554,37 +688,55 @@ namespace VaccineAPI.Controllers
                             ageCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(ageCell);
 
-                            PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, font));
+                            PdfPCell dosenameCell = new PdfPCell(
+                                new Phrase(dbSchedule.Dose.Name, font)
+                            );
                             dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(dosenameCell);
 
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            if (
+                                dbSchedule.IsDone == true
+                                && dbSchedule.IsDisease != true
+                                && dbSchedule.Due2EPI != true
+                            )
                             {
                                 PdfPCell statusCell = new PdfPCell(new Phrase("Given", boldfont));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(statusCell);
                             }
-                            else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)
+                            else if (
+                                dbSchedule.IsDone == true
+                                && dbSchedule.IsDisease != true
+                                && dbSchedule.Due2EPI == true
+                            )
                             {
                                 PdfPCell statusCell = new PdfPCell(new Phrase("By EPI", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(statusCell);
                             }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
-                                        !checkForMissed(dbSchedule.Date))
+                            else if (
+                                dbSchedule.IsDone == false
+                                && dbSchedule.IsDisease != true
+                                && !checkForMissed(dbSchedule.Date)
+                            )
                             {
                                 PdfPCell statusCell = new PdfPCell(new Phrase("Due", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(statusCell);
                             }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
-                                        checkForMissed(dbSchedule.Date))
+                            else if (
+                                dbSchedule.IsDone == false
+                                && dbSchedule.IsDisease != true
+                                && checkForMissed(dbSchedule.Date)
+                            )
                             {
-                                PdfPCell statusCell = new PdfPCell(new Phrase(" Missed", italicfont));
+                                PdfPCell statusCell = new PdfPCell(
+                                    new Phrase(" Missed", italicfont)
+                                );
                                 statusCell.HorizontalAlignment = Element.ALIGN_RIGHT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(statusCell);
@@ -597,25 +749,36 @@ namespace VaccineAPI.Controllers
                                 table.AddCell(statusCell);
                             }
 
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            if (
+                                dbSchedule.IsDone == true
+                                && dbSchedule.IsDisease != true
+                                && dbSchedule.Due2EPI != true
+                            )
                             {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy"), font));
+                                PdfPCell dateCell = new PdfPCell(
+                                    new Phrase(
+                                        dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy"),
+                                        font
+                                    )
+                                );
                                 dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
                             }
-
                             else if (dbSchedule.IsDisease == true)
                             {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("yyyy") + " Y", font));
+                                PdfPCell dateCell = new PdfPCell(
+                                    new Phrase(dbSchedule.Date.Date.ToString("yyyy") + " Y", font)
+                                );
                                 dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
                             }
-
                             else
                             {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font));
+                                PdfPCell dateCell = new PdfPCell(
+                                    new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font)
+                                );
                                 dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
@@ -625,8 +788,11 @@ namespace VaccineAPI.Controllers
                             {
                                 brandName = dbSchedule.Brand.Name.ToString();
                             }
-
-                            else if (dbSchedule.BrandId == null && dbSchedule.IsDone != false && dbSchedule.IsDisease != true)
+                            else if (
+                                dbSchedule.BrandId == null
+                                && dbSchedule.IsDone != false
+                                && dbSchedule.IsDisease != true
+                            )
                             {
                                 brandName = "OHF*";
                             }
@@ -644,22 +810,44 @@ namespace VaccineAPI.Controllers
                             table.AddCell(brandCell);
 
                             // normal ranges code start
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            if (
+                                dbSchedule.IsDone == true
+                                && dbSchedule.IsDisease != true
+                                && dbSchedule.Due2EPI != true
+                            )
                             {
                                 DateTime currentDate = DateTime.UtcNow.AddHours(5);
-                                var ageInMonths = Convert.ToInt32((dbSchedule.GivenDate?.Date.Year - dbChild.DOB.Date.Year) * 12 +
-                                                                    dbSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month +
-                                                                    (dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0
-                                                                    : -1));
-                                NormalRange normalrange =
-                                    _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
+                                var ageInMonths = Convert.ToInt32(
+                                    (dbSchedule.GivenDate?.Date.Year - dbChild.DOB.Date.Year) * 12
+                                        + dbSchedule.GivenDate?.Date.Month
+                                        - dbChild.DOB.Date.Month
+                                        + (
+                                            dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day
+                                                ? 0
+                                                : -1
+                                        )
+                                );
+                                NormalRange normalrange = _db
+                                    .NormalRanges.Where(x =>
+                                        x.Age == ageInMonths && x.Gender == Gender
+                                    )
+                                    .FirstOrDefault();
                                 // Console.WriteLine (normalrange);
 
                                 Paragraph pw = new Paragraph("", rangevaluefont);
                                 if (dbSchedule.Weight > 0 && normalrange != null)
                                 {
                                     pw.Add(new Chunk(dbSchedule.Weight.ToString(), rangevaluefont));
-                                    pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
+                                    pw.Add(
+                                        new Chunk(
+                                            " ("
+                                                + normalrange.WeightMin
+                                                + "-"
+                                                + normalrange.WeightMax
+                                                + ")",
+                                            rangefont
+                                        )
+                                    );
                                 }
 
                                 PdfPCell weightCell = new PdfPCell(pw);
@@ -671,7 +859,16 @@ namespace VaccineAPI.Controllers
                                 if (dbSchedule.Height > 0 && normalrange != null)
                                 {
                                     ph.Add(new Chunk(dbSchedule.Height.ToString(), rangevaluefont));
-                                    ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
+                                    ph.Add(
+                                        new Chunk(
+                                            " ("
+                                                + normalrange.HeightMin
+                                                + "-"
+                                                + normalrange.HeightMax
+                                                + ")",
+                                            rangefont
+                                        )
+                                    );
                                 }
 
                                 PdfPCell heightCell = new PdfPCell(ph);
@@ -680,30 +877,57 @@ namespace VaccineAPI.Controllers
                                 table.AddCell(heightCell);
 
                                 Paragraph pc = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
+                                if (
+                                    dbSchedule.Circle > 0
+                                    && normalrange != null
+                                    && ageInMonths < 25
+                                )
                                 {
                                     pc.Add(new Chunk(dbSchedule.Circle.ToString(), rangevaluefont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                    pc.Add(
+                                        new Chunk(
+                                            " ("
+                                                + normalrange.OfcMin
+                                                + "-"
+                                                + normalrange.OfcMax
+                                                + ")",
+                                            rangefont
+                                        )
+                                    );
                                 }
 
                                 // FOR BMI
-                                if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
+                                if (
+                                    dbSchedule.Height > 0
+                                    && dbSchedule.Weight > 0
+                                    && normalrange != null
+                                    && ageInMonths > 24
+                                )
                                 {
-                                    double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
+                                    double BMI = (double)(
+                                        dbSchedule.Weight
+                                        / (dbSchedule.Height * dbSchedule.Height / 10000)
+                                    );
                                     BMI = Math.Round(BMI, 1);
                                     pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                    pc.Add(
+                                        new Chunk(
+                                            " ("
+                                                + normalrange.OfcMin
+                                                + "-"
+                                                + normalrange.OfcMax
+                                                + ")",
+                                            rangefont
+                                        )
+                                    );
                                 }
 
                                 PdfPCell circleCell = new PdfPCell(pc);
                                 circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 circleCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(circleCell);
-
                             }
-
                             else
-
                             {
                                 PdfPCell weightCell = new PdfPCell(new Phrase("", font));
                                 weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
@@ -735,13 +959,11 @@ namespace VaccineAPI.Controllers
                                 flu1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                                 flu1Brand = dbSchedule.Brand?.Name.ToString();
                             }
-
                             else if (String.IsNullOrEmpty(flu2GivenDate))
                             {
                                 flu2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                                 flu2Brand = dbSchedule.Brand?.Name.ToString();
                             }
-
                             else if (String.IsNullOrEmpty(flu3GivenDate))
                             {
                                 flu3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
@@ -759,7 +981,6 @@ namespace VaccineAPI.Controllers
                                 flu3Brand = dbSchedule.Brand?.Name.ToString();
                                 // flu3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
                             }
-
                         }
                         else
                         {
@@ -794,7 +1015,6 @@ namespace VaccineAPI.Controllers
                                 type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                                 type1Brand = dbSchedule.Brand?.Name.ToString();
                             }
-
                             else if (String.IsNullOrEmpty(type2GivenDate))
                             {
                                 type2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
@@ -815,7 +1035,6 @@ namespace VaccineAPI.Controllers
                                 type3Brand = dbSchedule.Brand?.Name.ToString();
                                 // type3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
                             }
-
                         }
                         else
                         {
@@ -850,8 +1069,12 @@ namespace VaccineAPI.Controllers
                 lowertable.LockedWidth = true;
                 lowertable.SpacingBefore = 10;
                 lowertable.SetWidths(lowerwidths);
-                lowertable.AddCell(CreateCell("Typhoid (Every 2-3 years)", "bold", 1, "center", "scheduleRecords"));
-                lowertable.AddCell(CreateCell("Flu (Yearly)", "bold", 1, "center", "scheduleRecords"));
+                lowertable.AddCell(
+                    CreateCell("Typhoid (Every 2-3 years)", "bold", 1, "center", "scheduleRecords")
+                );
+                lowertable.AddCell(
+                    CreateCell("Flu (Yearly)", "bold", 1, "center", "scheduleRecords")
+                );
                 document.Add(lowertable);
 
                 float[] lowerwidths2 = new float[] { 85f, 85f, 85f, 85f, 85f, 85f };
@@ -862,14 +1085,26 @@ namespace VaccineAPI.Controllers
                 lowertable2.SetWidths(lowerwidths2);
 
                 // header
-                lowertable2.AddCell(CreateCell("Brand", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell("Given On ", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell("Next Due", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(
+                    CreateCell("Brand", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                lowertable2.AddCell(
+                    CreateCell("Given On ", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                lowertable2.AddCell(
+                    CreateCell("Next Due", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
 
                 // lowertable2.AddCell (CreateCell ("Signature", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell("Brand", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell("Given On ", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell("Next Due", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(
+                    CreateCell("Brand", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                lowertable2.AddCell(
+                    CreateCell("Given On ", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
+                lowertable2.AddCell(
+                    CreateCell("Next Due", "backgroudLightGray", 1, "center", "scheduleRecords")
+                );
 
                 // lowertable2.AddCell (CreateCell ("Signature", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 // boxes
@@ -913,6 +1148,7 @@ namespace VaccineAPI.Controllers
                 return output;
             }
         }
+
         [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)
         {
@@ -930,15 +1166,20 @@ namespace VaccineAPI.Controllers
                 List<Child> dbChildrenResults = new List<Child>();
                 List<ChildDTO> childDTOs = new List<ChildDTO>();
 
-                dbChildrenResults = _db.Childs
-                                        .Where(c => c.Name.ToLower().Contains(keyword.ToLower()) ||
-                                                    c.FatherName.ToLower().Contains(keyword.ToLower()))
-                                        .ToList();
+                dbChildrenResults = _db
+                    .Childs.Where(c =>
+                        c.Name.ToLower().Contains(keyword.ToLower())
+                        || c.FatherName.ToLower().Contains(keyword.ToLower())
+                    )
+                    .ToList();
                 childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(dbChildrenResults));
 
                 foreach (var item in childDTOs)
                 {
-                    item.MobileNumber = dbChildrenResults.Where(x => x.Id == item.Id).FirstOrDefault().User.MobileNumber;
+                    item.MobileNumber = dbChildrenResults
+                        .Where(x => x.Id == item.Id)
+                        .FirstOrDefault()
+                        .User.MobileNumber;
                 }
 
                 return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
@@ -948,9 +1189,14 @@ namespace VaccineAPI.Controllers
         // for admin app
         [HttpGet("search")]
         public Response<IEnumerable<ChildDTO>> SearchChildrenByCity(
-            [FromQuery] string name = "", [FromQuery] string city = "", [FromQuery] string fromdob = "",
-            [FromQuery] string todob = "", [FromQuery] string gender = "", [FromQuery] string vaccineid = "",
-            [FromQuery] string doctorid = "")
+            [FromQuery] string name = "",
+            [FromQuery] string city = "",
+            [FromQuery] string fromdob = "",
+            [FromQuery] string todob = "",
+            [FromQuery] string gender = "",
+            [FromQuery] string vaccineid = "",
+            [FromQuery] string doctorid = ""
+        )
         {
             List<Child> dbChildrenResults = new List<Child>();
 
@@ -970,21 +1216,27 @@ namespace VaccineAPI.Controllers
             Doctor doctor = new Doctor();
             if (!String.IsNullOrEmpty(name))
                 dbChildrenResults = dbChildrenResults
-                                        .Where(c => c.Name.ToLower().Contains(name.Trim().ToLower()) ||
-                                                    c.FatherName.ToLower().Contains(name.Trim().ToLower()))
-                                        .ToList();
+                    .Where(c =>
+                        c.Name.ToLower().Contains(name.Trim().ToLower())
+                        || c.FatherName.ToLower().Contains(name.Trim().ToLower())
+                    )
+                    .ToList();
 
             if (!String.IsNullOrEmpty(city))
-                dbChildrenResults =
-                    dbChildrenResults.Where(c => c.City != null && c.City.ToLower().Contains(city.Trim().ToLower())).ToList();
+                dbChildrenResults = dbChildrenResults
+                    .Where(c => c.City != null && c.City.ToLower().Contains(city.Trim().ToLower()))
+                    .ToList();
 
             if (!String.IsNullOrEmpty(fromdob) && !String.IsNullOrEmpty(todob))
-                dbChildrenResults =
-                    dbChildrenResults
-                        .Where(c => c.DOB >= Convert.ToDateTime(fromdob).Date && c.DOB <= Convert.ToDateTime(todob).Date)
-                        .ToList();
+                dbChildrenResults = dbChildrenResults
+                    .Where(c =>
+                        c.DOB >= Convert.ToDateTime(fromdob).Date
+                        && c.DOB <= Convert.ToDateTime(todob).Date
+                    )
+                    .ToList();
 
-            if (!String.IsNullOrEmpty(gender)) dbChildrenResults = dbChildrenResults.Where(c => c.Gender == gender).ToList();
+            if (!String.IsNullOrEmpty(gender))
+                dbChildrenResults = dbChildrenResults.Where(c => c.Gender == gender).ToList();
 
             if (!String.IsNullOrEmpty(vaccineid))
             {
@@ -997,11 +1249,16 @@ namespace VaccineAPI.Controllers
 
             if (!String.IsNullOrEmpty(doctorid))
             {
-                doctor = _db.Doctors.Where(x => x.Id == Convert.ToInt32(doctorid)).Include(x => x.Clinics).FirstOrDefault();
+                doctor = _db
+                    .Doctors.Where(x => x.Id == Convert.ToInt32(doctorid))
+                    .Include(x => x.Clinics)
+                    .FirstOrDefault();
                 clinics = doctor.Clinics.ToList();
                 foreach (var clinic in clinics)
                 {
-                    dbChildrenResults = dbChildrenResults.Where(c => c.ClinicId == clinic.Id).ToList();
+                    dbChildrenResults = dbChildrenResults
+                        .Where(c => c.ClinicId == clinic.Id)
+                        .ToList();
                 }
             }
 
@@ -1009,7 +1266,10 @@ namespace VaccineAPI.Controllers
 
             foreach (var item in childDTOs)
             {
-                item.MobileNumber = dbChildrenResults.Where(x => x.Id == item.Id).FirstOrDefault().User.MobileNumber;
+                item.MobileNumber = dbChildrenResults
+                    .Where(x => x.Id == item.Id)
+                    .FirstOrDefault()
+                    .User.MobileNumber;
             }
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
@@ -1018,7 +1278,6 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<ChildDTO> Post(ChildDTO childDTO)
         {
-
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             childDTO.Name = textInfo.ToTitleCase(childDTO.Name);
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
@@ -1028,8 +1287,11 @@ namespace VaccineAPI.Controllers
 
                 // check for existing parent
 
-                User user =
-                    _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
+                User user = _db
+                    .Users.Where(x =>
+                        x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT"
+                    )
+                    .FirstOrDefault();
 
                 if (user == null)
                 {
@@ -1048,12 +1310,15 @@ namespace VaccineAPI.Controllers
                 else
                 {
                     childDTO.Password = user.Password;
-                    Child existingChild = _db.Childs.FirstOrDefault(x => x.Name.Equals(childDTO.Name) && x.UserId == user.Id);
+                    Child existingChild = _db.Childs.FirstOrDefault(x =>
+                        x.Name.Equals(childDTO.Name) && x.UserId == user.Id
+                    );
                     if (existingChild != null)
                         return new Response<ChildDTO>(
                             false,
                             "Children with same name & number already exists. Parent should login and start change doctor process.",
-                            null);
+                            null
+                        );
                     childDB.UserId = user.Id;
                     _db.Childs.Add(childDB);
                     _db.SaveChanges();
@@ -1062,30 +1327,40 @@ namespace VaccineAPI.Controllers
                 if (childDTO.Type == "regular")
                 {
                     // get doctor schedule and apply it to child and save in Schedule table
-                    Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x => x.Doctor).FirstOrDefault();
+                    Clinic clinic = _db
+                        .Clinics.Where(x => x.Id == childDTO.ClinicId)
+                        .Include(x => x.Doctor)
+                        .FirstOrDefault();
                     Doctor doctor = clinic.Doctor;
 
-                    List<DoctorSchedule> dss = _db.DoctorSchedules.Where(x => x.DoctorId == doctor.Id).ToList();
+                    List<DoctorSchedule> dss = _db
+                        .DoctorSchedules.Where(x => x.DoctorId == doctor.Id)
+                        .ToList();
 
                     // IEnumerable<DoctorSchedule> dss = doctor.DoctorSchedules;
                     foreach (DoctorSchedule ds in dss)
                     {
-                        var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).Include(x => x.Vaccine).FirstOrDefault();
+                        var dbDose = _db
+                            .Doses.Where(x => x.Id == ds.DoseId)
+                            .Include(x => x.Vaccine)
+                            .FirstOrDefault();
 
                         //  if (childDTO.ChildVaccines.Any(x => x.Id == dbDose.Vaccine.Id))
                         {
                             Schedule cvd = new Schedule();
                             cvd.ChildId = childDTO.Id;
                             cvd.DoseId = ds.DoseId;
-                            if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith("HPV")) continue;
+                            if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith("HPV"))
+                                continue;
 
-                            if (childDTO.IsSkip == true && ds.IsActive != true  // skip unactive doses
+                            if (
+                                childDTO.IsSkip == true
+                                && ds.IsActive != true // skip unactive doses
                             )
                                 continue;
 
                             if (childDTO.IsEPIDone)
                             {
-
                                 var dob = childDTO.DOB.Date;
                                 DateTime comparisonDate2002 = DateTime.Parse("01/01/2002");
                                 DateTime comparisonDate2009 = DateTime.Parse("01/01/2009");
@@ -1100,7 +1375,6 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
                                 else if (dob > comparisonDate2021)
                                 {
                                     if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
@@ -1109,7 +1383,6 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
                                 else if (dob > comparisonDate2002 && dob < comparisonDate2009)
                                 {
                                     if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
@@ -1118,7 +1391,6 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
                                 else if (dob > comparisonDate2009 && dob < comparisonDate2015)
                                 {
                                     if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
@@ -1127,12 +1399,10 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
                                 else
                                 {
                                     cvd.DoseId = ds.DoseId;
                                 }
-
 
                                 // if (ds.Dose.Name.StartsWith("BCG") || ds.Dose.Name.StartsWith("HBV") ||
                                 //     ds.Dose.Name.Equals("OPV # 1"))
@@ -1179,7 +1449,8 @@ namespace VaccineAPI.Controllers
                                 // }
                             }
 
-                            if (ds.Dose.Name.StartsWith("HPV") && ds.Dose.DoseOrder == 3) cvd.IsSkip = true;
+                            if (ds.Dose.Name.StartsWith("HPV") && ds.Dose.DoseOrder == 3)
+                                cvd.IsSkip = true;
 
                             cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
                             cvd.DiseaseYear = "";
@@ -1232,16 +1503,17 @@ namespace VaccineAPI.Controllers
                     }
 
                     _db.SaveChanges();
-
                 }
-                Child c = _db.Childs.Where(x => x.Id == childDTO.Id)
-                              .Include(x => x.User)
-                              .Include(x => x.Clinic)
-                              .Include(x => x.Clinic.Doctor.User)
-                              .FirstOrDefault();
+                Child c = _db
+                    .Childs.Where(x => x.Id == childDTO.Id)
+                    .Include(x => x.User)
+                    .Include(x => x.Clinic)
+                    .Include(x => x.Clinic.Doctor.User)
+                    .FirstOrDefault();
                 try
                 {
-                    if (c.Email != "") UserEmail.ParentEmail(c);
+                    if (c.Email != "")
+                        UserEmail.ParentEmail(c);
                 }
                 catch (SmtpException e)
                 {
@@ -1269,10 +1541,13 @@ namespace VaccineAPI.Controllers
                 }
 
                 // when followup call from doctor side
-                var dbFollowUps = _db.FollowUps.Include(x => x.Child)
-                                      .Where(f => f.DoctorId == followUpDto.DoctorId && f.ChildId == followUpDto.ChildId)
-                                      .OrderByDescending(x => x.CurrentVisitDate)
-                                      .ToList();
+                var dbFollowUps = _db
+                    .FollowUps.Include(x => x.Child)
+                    .Where(f =>
+                        f.DoctorId == followUpDto.DoctorId && f.ChildId == followUpDto.ChildId
+                    )
+                    .OrderByDescending(x => x.CurrentVisitDate)
+                    .ToList();
                 List<FollowUpDTO> followUpDTOs = _mapper.Map<List<FollowUpDTO>>(dbFollowUps);
                 return new Response<List<FollowUpDTO>>(true, null, followUpDTOs);
             }
@@ -1290,7 +1565,13 @@ namespace VaccineAPI.Controllers
             document.Add(new Chunk("\n"));
         }
 
-        protected PdfPCell CreateCell(string value, string color, int colpan, string alignment, string table)
+        protected PdfPCell CreateCell(
+            string value,
+            string color,
+            int colpan,
+            string alignment,
+            string table
+        )
         {
             Font font = FontFactory.GetFont(FontFactory.HELVETICA, 11);
             if (color == "bold" || color == "backgroudLightGray")
@@ -1357,7 +1638,13 @@ namespace VaccineAPI.Controllers
             return cell;
         }
 
-        protected PdfPCell CreateInvoiceCell(string value, string color, int colpan, int rowspan, string alignment)
+        protected PdfPCell CreateInvoiceCell(
+            string value,
+            string color,
+            int colpan,
+            int rowspan,
+            string alignment
+        )
         {
             Font font = FontFactory.GetFont(FontFactory.HELVETICA, 11);
             if (color == "bold" || color == "backgroudLightGray")
@@ -1400,9 +1687,16 @@ namespace VaccineAPI.Controllers
         }
 
         // old invoice pdf
-        [HttpGet("{Id}/{IsBrand}/{IsConsultationFee}/{InvoiceDate}/{DoctorId}/Download-Invoice-PDF")]
-        public IActionResult DownloadInvoicePDF(int Id, bool IsBrand, bool IsConsultationFee, DateTime InvoiceDate,
-                                                int DoctorId)
+        [HttpGet(
+            "{Id}/{IsBrand}/{IsConsultationFee}/{InvoiceDate}/{DoctorId}/Download-Invoice-PDF"
+        )]
+        public IActionResult DownloadInvoicePDF(
+            int Id,
+            bool IsBrand,
+            bool IsConsultationFee,
+            DateTime InvoiceDate,
+            int DoctorId
+        )
         {
             Stream stream;
             int amount = 0;
@@ -1423,14 +1717,18 @@ namespace VaccineAPI.Controllers
             GetPDFHeading(document, "INVOICE");
 
             // Access db data
-            var dbDoctor = _db.Doctors.Where(x => x.Id == DoctorId).Include(x => x.User).FirstOrDefault();
+            var dbDoctor = _db
+                .Doctors.Where(x => x.Id == DoctorId)
+                .Include(x => x.User)
+                .FirstOrDefault();
             dbDoctor.InvoiceNumber = (dbDoctor.InvoiceNumber > 0) ? dbDoctor.InvoiceNumber + 1 : 1;
             var dbChild = _db.Childs.Include("Clinic").Where(x => x.Id == Id).FirstOrDefault();
-            var dbSchedules = _db.Schedules.Include(x => x.Dose)
-                                  .ThenInclude(x => x.Vaccine)
-                                  .Include("Brand")
-                                  .Where(x => x.ChildId == Id)
-                                  .ToList();
+            var dbSchedules = _db
+                .Schedules.Include(x => x.Dose)
+                .ThenInclude(x => x.Vaccine)
+                .Include("Brand")
+                .Where(x => x.ChildId == Id)
+                .ToList();
             childName = dbChild.Name;
 
             //
@@ -1444,14 +1742,28 @@ namespace VaccineAPI.Controllers
             // upperTable.DefaultCell.PaddingLeft = 4;
             upperTable.SetWidths(upperTableWidths);
 
-            upperTable.AddCell(CreateCell("Dr " + dbDoctor.DisplayName, "bold", 1, "left", "description"));
-            upperTable.AddCell(CreateCell("Invoice # " + dbDoctor.InvoiceNumber, "", 1, "right", "description"));
+            upperTable.AddCell(
+                CreateCell("Dr " + dbDoctor.DisplayName, "bold", 1, "left", "description")
+            );
+            upperTable.AddCell(
+                CreateCell("Invoice # " + dbDoctor.InvoiceNumber, "", 1, "right", "description")
+            );
             upperTable.AddCell(CreateCell(dbDoctor.Qualification, "", 1, "left", "description"));
 
             // upperTable.AddCell(CreateCell("Date: " + DateTime.UtcNow.AddHours(5), "", 1, "right", "description"));
-            upperTable.AddCell(CreateCell("Date: " + InvoiceDate.ToString("dd-MM-yyyy"), "", 1, "right", "description"));
+            upperTable.AddCell(
+                CreateCell(
+                    "Date: " + InvoiceDate.ToString("dd-MM-yyyy"),
+                    "",
+                    1,
+                    "right",
+                    "description"
+                )
+            );
             upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "", 1, "left", "description"));
-            upperTable.AddCell(CreateCell("Bill To: " + dbChild.Name, "bold", 1, "right", "description"));
+            upperTable.AddCell(
+                CreateCell("Bill To: " + dbChild.Name, "bold", 1, "right", "description")
+            );
 
             upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "", 1, "left", "description"));
 
@@ -1468,7 +1780,9 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
             upperTable.AddCell(CreateCell("P: " + dbDoctor.PhoneNo, "", 1, "left", "description"));
             upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
-            upperTable.AddCell(CreateCell("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description"));
+            upperTable.AddCell(
+                CreateCell("M: " + dbDoctor.User.MobileNumber, "", 1, "left", "description")
+            );
             upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
 
             document.Add(upperTable);
@@ -1495,9 +1809,13 @@ namespace VaccineAPI.Controllers
             table.AddCell(CreateCell("Item", "backgroudLightGray", 1, "center", "invoiceRecords"));
             if (IsBrand)
             {
-                table.AddCell(CreateCell("Brand", "backgroudLightGray", 1, "center", "invoiceRecords"));
+                table.AddCell(
+                    CreateCell("Brand", "backgroudLightGray", 1, "center", "invoiceRecords")
+                );
             }
-            table.AddCell(CreateCell("Amount", "backgroudLightGray", 1, "center", "invoiceRecords"));
+            table.AddCell(
+                CreateCell("Amount", "backgroudLightGray", 1, "center", "invoiceRecords")
+            );
 
             // Rows
             table.AddCell(CreateCell(count.ToString(), "", 1, "center", "invoiceRecords"));
@@ -1505,7 +1823,9 @@ namespace VaccineAPI.Controllers
             // col = (col > 3) ? col - 3 : col-2;
             if (col - 2 < 2)
             {
-                table.AddCell(CreateCell("Consultation Fee", "", col - 2, "center", "invoiceRecords"));
+                table.AddCell(
+                    CreateCell("Consultation Fee", "", col - 2, "center", "invoiceRecords")
+                );
             }
             else
             {
@@ -1523,18 +1843,41 @@ namespace VaccineAPI.Controllers
                     if (schedule.IsDone && schedule.BrandId > 0)
                     {
                         count++;
-                        table.AddCell(CreateCell(count.ToString(), "", 1, "center", "invoiceRecords"));
-                        table.AddCell(CreateCell(schedule.Dose.Vaccine.Name, "", 1, "center", "invoiceRecords"));
+                        table.AddCell(
+                            CreateCell(count.ToString(), "", 1, "center", "invoiceRecords")
+                        );
+                        table.AddCell(
+                            CreateCell(
+                                schedule.Dose.Vaccine.Name,
+                                "",
+                                1,
+                                "center",
+                                "invoiceRecords"
+                            )
+                        );
                         if (IsBrand)
                         {
-                            table.AddCell(CreateCell(schedule.Brand.Name, "", 1, "center", "invoiceRecords"));
+                            table.AddCell(
+                                CreateCell(schedule.Brand.Name, "", 1, "center", "invoiceRecords")
+                            );
                         }
-                        var brandAmount =
-                            _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault();
+                        var brandAmount = _db
+                            .BrandAmounts.Where(x =>
+                                x.BrandId == schedule.BrandId && x.DoctorId == DoctorId
+                            )
+                            .FirstOrDefault();
                         if (brandAmount != null)
                         {
                             amount = amount + Convert.ToInt32(brandAmount.Amount);
-                            table.AddCell(CreateCell(brandAmount.Amount.ToString(), "", 1, "right", "invoiceRecords"));
+                            table.AddCell(
+                                CreateCell(
+                                    brandAmount.Amount.ToString(),
+                                    "",
+                                    1,
+                                    "right",
+                                    "invoiceRecords"
+                                )
+                            );
                         }
                         else
                         {
@@ -1565,8 +1908,18 @@ namespace VaccineAPI.Controllers
             bottomTable.LockedWidth = true;
             bottomTable.SetWidths(bottomTableWidths);
 
-            bottomTable.AddCell(CreateCell("Thank you for your visit", "bold", 1, "left", "description"));
-            bottomTable.AddCell(CreateCell("Total Amount: " + amount.ToString() + "/-", "bold", 1, "right", "description"));
+            bottomTable.AddCell(
+                CreateCell("Thank you for your visit", "bold", 1, "left", "description")
+            );
+            bottomTable.AddCell(
+                CreateCell(
+                    "Total Amount: " + amount.ToString() + "/-",
+                    "bold",
+                    1,
+                    "right",
+                    "description"
+                )
+            );
 
             var imgcellLeft = CreateCell("", "", 1, "left", "description");
             imgcellLeft.PaddingTop = 5;
@@ -1602,23 +1955,30 @@ namespace VaccineAPI.Controllers
             stream = output;
 
             //}
-            var FileName = childName.Replace(" ", "") + "_Invoice" + "_" +
-                           DateTime.UtcNow.AddHours(5).Date.ToString("yy") + ".pdf";
+            var FileName =
+                childName.Replace(" ", "")
+                + "_Invoice"
+                + "_"
+                + DateTime.UtcNow.AddHours(5).Date.ToString("yy")
+                + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
 
         private HashSet<string> existingInvoiceNumbers = new HashSet<string>();
         private HashSet<long> existingDoseIds = new HashSet<long>();
         private long lastInvoiceNumber = 24000000;
+
         private string GenerateSequentialInvoiceNumber(long doseId, long childId)
         {
-            var existingInvoice = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == childId);
+            var existingInvoice = _db.Invoices.FirstOrDefault(i =>
+                i.DoseId == doseId && i.ChildId == childId
+            );
             if (existingInvoice != null)
             {
                 return existingInvoice.InvoiceId;
             }
-            var validInvoiceNumbers = _db.Invoices
-                .AsEnumerable()
+            var validInvoiceNumbers = _db
+                .Invoices.AsEnumerable()
                 .Select(i => i.InvoiceId)
                 .Where(id => !string.IsNullOrEmpty(id) && long.TryParse(id, out _))
                 .Select(long.Parse)
@@ -1633,8 +1993,12 @@ namespace VaccineAPI.Controllers
 
         // updated invoice pdf
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
-        public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate,
-                                                       int ConsultationFee)
+        public IActionResult DownloadInvoicePDFUpdated(
+            int Id,
+            DateTime ScheduleDate,
+            DateTime InvoiceDate,
+            int ConsultationFee
+        )
         {
             Stream stream;
             int amount = 0;
@@ -1650,22 +2014,29 @@ namespace VaccineAPI.Controllers
             document.Open();
 
             // Access db data
-            var dbChild = _db.Childs.Include(x => x.Clinic)
-                                    .ThenInclude(x => x.Doctor)
-                                    .ThenInclude(y => y.User)
-                                    .Where(x => x.Id == Id)
-                                    .FirstOrDefault();
+            var dbChild = _db
+                .Childs.Include(x => x.Clinic)
+                .ThenInclude(x => x.Doctor)
+                .ThenInclude(y => y.User)
+                .Where(x => x.Id == Id)
+                .FirstOrDefault();
             var dbDoctor = dbChild.Clinic.Doctor;
             var DoctorId = dbDoctor.Id;
 
             dbDoctor.InvoiceNumber = (dbDoctor.InvoiceNumber > 0) ? dbDoctor.InvoiceNumber + 1 : 1;
 
-            var dbSchedules = _db.Schedules.Include(x => x.Dose)
-                                  .ThenInclude(x => x.Vaccine)
-                                  .Include(x => x.Brand)
-                                  .Where(x => x.ChildId == Id && x.Date.Date == ScheduleDate.Date && x.IsSkip != true &&
-                                              x.IsDone == true && x.IsDisease != true)
-                                  .ToList();
+            var dbSchedules = _db
+                .Schedules.Include(x => x.Dose)
+                .ThenInclude(x => x.Vaccine)
+                .Include(x => x.Brand)
+                .Where(x =>
+                    x.ChildId == Id
+                    && x.Date.Date == ScheduleDate.Date
+                    && x.IsSkip != true
+                    && x.IsDone == true
+                    && x.IsDisease != true
+                )
+                .ToList();
             var latestSchedule = dbSchedules.OrderByDescending(s => s.GivenDate).FirstOrDefault();
             DateTime givendate = latestSchedule?.GivenDate ?? DateTime.Now;
 
@@ -1699,22 +2070,42 @@ namespace VaccineAPI.Controllers
             Image img = Image.GetInstance(imgPath);
             img.ScaleAbsolute(160f, 50f);
             PdfPCell imageCell = new PdfPCell(img, false);
-            imageCell.Colspan = 1;  // either 1 if you need to insert one cell
+            imageCell.Colspan = 1; // either 1 if you need to insert one cell
             imageCell.Rowspan = 2;
             imageCell.Border = 0;
             imageCell.FixedHeight = 50f;
             imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
             upperTable.AddCell(imageCell);
 
-            upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 1, "left", "description"));
+            upperTable.AddCell(
+                CreateCell(dbDoctor.AdditionalInfo, "unbold", 1, "left", "description")
+            );
 
             upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 1, "left", "description"));
-            upperTable.AddCell(CreateCell("info@vaccinationcentre.com", "", 1, "right", "description"));
-            upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 1, "left", "description"));
-            upperTable.AddCell(CreateCell(givendate.ToString("dd-MM-yyyy"), "", 1, "right", "description"));
-            upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "unbold", 1, "left", "description"));
-            upperTable.AddCell(CreateCell("#StayHome #GetVaccinated", "", 1, "right", "description"));
-            upperTable.AddCell(CreateCell("Invoice # " + invoiceNumber, "bold", 2, "right", "description"));
+            upperTable.AddCell(
+                CreateCell("info@vaccinationcentre.com", "", 1, "right", "description")
+            );
+            upperTable.AddCell(
+                CreateCell(dbChild.Clinic.Address, "unbold", 1, "left", "description")
+            );
+            upperTable.AddCell(
+                CreateCell(givendate.ToString("dd-MM-yyyy"), "", 1, "right", "description")
+            );
+            upperTable.AddCell(
+                CreateCell(
+                    "Phone: " + dbChild.Clinic.PhoneNumber,
+                    "unbold",
+                    1,
+                    "left",
+                    "description"
+                )
+            );
+            upperTable.AddCell(
+                CreateCell("#StayHome #GetVaccinated", "", 1, "right", "description")
+            );
+            upperTable.AddCell(
+                CreateCell("Invoice # " + invoiceNumber, "bold", 2, "right", "description")
+            );
 
             document.Add(upperTable);
 
@@ -1728,16 +2119,32 @@ namespace VaccineAPI.Controllers
             childtable.SpacingBefore = 10;
             childtable.SpacingAfter = 10;
 
-            childtable.AddCell(CreateCell("Name of Kid/Patient:", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            childtable.AddCell(
+                CreateCell(
+                    "Name of Kid/Patient:",
+                    "backgroudLightGray",
+                    1,
+                    "left",
+                    "invoiceRecords"
+                )
+            );
             childtable.AddCell(CreateCell(dbChild.Name, " ", 1, "left", "invoiceRecords"));
 
-            childtable.AddCell(CreateCell("Father/Mother Name:", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            childtable.AddCell(
+                CreateCell("Father/Mother Name:", "backgroudLightGray", 1, "left", "invoiceRecords")
+            );
             childtable.AddCell(CreateCell(dbChild.FatherName, "", 1, "left", "invoiceRecords"));
 
-            childtable.AddCell(CreateCell("Date of Birth:", "backgroudLightGray", 1, "left", "invoiceRecords"));
-            childtable.AddCell(CreateCell(dbChild.DOB.ToString("dd/MM/yyyy"), "", 1, "left", "invoiceRecords"));
+            childtable.AddCell(
+                CreateCell("Date of Birth:", "backgroudLightGray", 1, "left", "invoiceRecords")
+            );
+            childtable.AddCell(
+                CreateCell(dbChild.DOB.ToString("dd/MM/yyyy"), "", 1, "left", "invoiceRecords")
+            );
 
-            childtable.AddCell(CreateCell("City:", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            childtable.AddCell(
+                CreateCell("City:", "backgroudLightGray", 1, "left", "invoiceRecords")
+            );
             childtable.AddCell(CreateCell(dbChild.City, " ", 1, "left", "invoiceRecords"));
 
             _db.SaveChanges();
@@ -1759,11 +2166,21 @@ namespace VaccineAPI.Controllers
             vaccinetable.SpacingAfter = 50;
 
             vaccinetable.AddCell(CreateCell("#", " ", 1, "center", "invoiceRecords"));
-            vaccinetable.AddCell(CreateCell("Vaccine", "backgroudLightGray", 1, "left", "invoiceRecords"));
-            vaccinetable.AddCell(CreateCell("Brand", "backgroudLightGray", 1, "left", "invoiceRecords"));
-            vaccinetable.AddCell(CreateCell("Quantity", "backgroudLightGray", 1, "center", "invoiceRecords"));
-            vaccinetable.AddCell(CreateCell("Price", "backgroudLightGray", 1, "left", "invoiceRecords"));
-            vaccinetable.AddCell(CreateCell("Amount", "backgroudLightGray", 1, "center", "invoiceRecords"));
+            vaccinetable.AddCell(
+                CreateCell("Vaccine", "backgroudLightGray", 1, "left", "invoiceRecords")
+            );
+            vaccinetable.AddCell(
+                CreateCell("Brand", "backgroudLightGray", 1, "left", "invoiceRecords")
+            );
+            vaccinetable.AddCell(
+                CreateCell("Quantity", "backgroudLightGray", 1, "center", "invoiceRecords")
+            );
+            vaccinetable.AddCell(
+                CreateCell("Price", "backgroudLightGray", 1, "left", "invoiceRecords")
+            );
+            vaccinetable.AddCell(
+                CreateCell("Amount", "backgroudLightGray", 1, "center", "invoiceRecords")
+            );
 
             // loop start
             if (dbSchedules.Count != 0)
@@ -1773,23 +2190,29 @@ namespace VaccineAPI.Controllers
                     if (schedule.IsDone == true)
                     {
                         count++;
-                        vaccinetable.AddCell(CreateCell(count.ToString(), "", 1, "center", "invoiceRecords"));
-                        vaccinetable.AddCell(CreateCell(schedule.Dose.Vaccine.Name, "", 1, "left", "invoiceRecords"));
+                        vaccinetable.AddCell(
+                            CreateCell(count.ToString(), "", 1, "center", "invoiceRecords")
+                        );
+                        vaccinetable.AddCell(
+                            CreateCell(schedule.Dose.Vaccine.Name, "", 1, "left", "invoiceRecords")
+                        );
                         // Assuming 'schedule' is defined and contains the necessary properties
                         var childId = schedule.ChildId;
                         var doctorId = schedule.Child.Clinic.DoctorId;
                         var clinicId = schedule.Child.ClinicId;
 
                         // Retrieve the brand amount
-                        var brandAmount = _db.BrandAmounts
-                            .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId);
+                        var brandAmount = _db.BrandAmounts.FirstOrDefault(x =>
+                            x.BrandId == schedule.BrandId && x.DoctorId == doctorId
+                        );
 
                         // Check if the invoice already exists
-                        var existingInvoice = _db.Invoices
-                            .FirstOrDefault(i => i.DoseId == schedule.Dose.Id
-                                                && i.ChildId == schedule.ChildId
-                                                && i.DoctorId == doctorId
-                                                && i.ClinicId == schedule.Child.ClinicId);
+                        var existingInvoice = _db.Invoices.FirstOrDefault(i =>
+                            i.DoseId == schedule.Dose.Id
+                            && i.ChildId == schedule.ChildId
+                            && i.DoctorId == doctorId
+                            && i.ClinicId == schedule.Child.ClinicId
+                        );
 
                         // If the invoice doesn't exist, create a new one
                         if (existingInvoice == null)
@@ -1800,18 +2223,22 @@ namespace VaccineAPI.Controllers
                                 DoseId = schedule.Dose.Id,
                                 ChildId = schedule.ChildId,
                                 DoctorId = doctorId,
-                                ClinicId = schedule.Child.ClinicId
+                                ClinicId = schedule.Child.ClinicId,
                             };
                             _db.Invoices.Add(existingInvoice);
                         }
 
                         // Determine if the schedule's amount is empty or zero
-                        bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
+                        bool isAmountEmptyOrZero =
+                            schedule.Amount == null
+                            || schedule.Amount == 0
+                            || schedule.Amount.ToString().Trim() == string.Empty;
 
                         // Update invoice amount logic
                         if (brandAmount != null && isAmountEmptyOrZero)
                         {
-                            existingInvoice.Amount = brandAmount.Amount != 0 ? brandAmount.Amount : 0;
+                            existingInvoice.Amount =
+                                brandAmount.Amount != 0 ? brandAmount.Amount : 0;
                         }
                         else if (schedule.Amount != null && schedule.Amount != 0)
                         {
@@ -1822,34 +2249,89 @@ namespace VaccineAPI.Controllers
 
                         if (schedule.BrandId > 0)
                         {
-                            vaccinetable.AddCell(CreateCell(schedule.Brand.Name, "", 1, "left", "invoiceRecords"));
+                            vaccinetable.AddCell(
+                                CreateCell(schedule.Brand.Name, "", 1, "left", "invoiceRecords")
+                            );
                         }
                         else
                         {
-                            vaccinetable.AddCell(CreateCell(" ", "", 1, "center", "invoiceRecords"));
+                            vaccinetable.AddCell(
+                                CreateCell(" ", "", 1, "center", "invoiceRecords")
+                            );
                         }
 
                         vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
 
-                        var brandAmount1 =
-                            _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault();
+                        var brandAmount1 = _db
+                            .BrandAmounts.Where(x =>
+                                x.BrandId == schedule.BrandId && x.DoctorId == DoctorId
+                            )
+                            .FirstOrDefault();
                         if (brandAmount != null && schedule.Amount == null)
                         {
                             amount = amount + Convert.ToInt32(brandAmount.Amount);
-                            vaccinetable.AddCell(CreateCell(brandAmount.Amount.ToString(), "", 1, "right", "invoiceRecords"));
-                            vaccinetable.AddCell(CreateCell(brandAmount.Amount.ToString(), "", 1, "right", "invoiceRecords"));
+                            vaccinetable.AddCell(
+                                CreateCell(
+                                    brandAmount.Amount.ToString(),
+                                    "",
+                                    1,
+                                    "right",
+                                    "invoiceRecords"
+                                )
+                            );
+                            vaccinetable.AddCell(
+                                CreateCell(
+                                    brandAmount.Amount.ToString(),
+                                    "",
+                                    1,
+                                    "right",
+                                    "invoiceRecords"
+                                )
+                            );
                         }
                         else if (brandAmount != null && schedule.Amount != null)
                         {
                             amount = amount + Convert.ToInt32(schedule.Amount);
-                            vaccinetable.AddCell(CreateCell(schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
-                            vaccinetable.AddCell(CreateCell(schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
+                            vaccinetable.AddCell(
+                                CreateCell(
+                                    schedule.Amount.ToString(),
+                                    "",
+                                    1,
+                                    "right",
+                                    "invoiceRecords"
+                                )
+                            );
+                            vaccinetable.AddCell(
+                                CreateCell(
+                                    schedule.Amount.ToString(),
+                                    "",
+                                    1,
+                                    "right",
+                                    "invoiceRecords"
+                                )
+                            );
                         }
                         else if (brandAmount == null && schedule.Amount != null)
                         {
                             amount = amount + Convert.ToInt32(schedule.Amount);
-                            vaccinetable.AddCell(CreateCell(schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
-                            vaccinetable.AddCell(CreateCell(schedule.Amount.ToString(), "", 1, "right", "invoiceRecords"));
+                            vaccinetable.AddCell(
+                                CreateCell(
+                                    schedule.Amount.ToString(),
+                                    "",
+                                    1,
+                                    "right",
+                                    "invoiceRecords"
+                                )
+                            );
+                            vaccinetable.AddCell(
+                                CreateCell(
+                                    schedule.Amount.ToString(),
+                                    "",
+                                    1,
+                                    "right",
+                                    "invoiceRecords"
+                                )
+                            );
                         }
                         else
                         {
@@ -1864,24 +2346,62 @@ namespace VaccineAPI.Controllers
                     count++;
                     vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
                     vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
-                    vaccinetable.AddCell(CreateCell("Consultation / Visit Charges", "left", 1, "left", "invoiceRecords"));
+                    vaccinetable.AddCell(
+                        CreateCell(
+                            "Consultation / Visit Charges",
+                            "left",
+                            1,
+                            "left",
+                            "invoiceRecords"
+                        )
+                    );
                     vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
                     vaccinetable.AddCell(CreateCell("", " ", 1, "right", "invoiceRecords"));
-                    vaccinetable.AddCell(CreateCell(consultaionFee.ToString(), " ", 1, "right", "invoiceRecords"));
+                    vaccinetable.AddCell(
+                        CreateCell(consultaionFee.ToString(), " ", 1, "right", "invoiceRecords")
+                    );
                 }
 
                 vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
-                vaccinetable.AddCell(CreateCell("Total", "backgroudLightGray", 1, "left", "invoiceRecords"));
-                vaccinetable.AddCell(CreateCell((count).ToString(), "backgroudLightGray", 1, "right", "invoiceRecords"));
-                vaccinetable.AddCell(CreateCell(" ", "backgroudLightGray", 1, "right", "invoiceRecords"));
-                vaccinetable.AddCell(CreateCell(("PKR " + (amount + consultaionFee) + "/-").ToString(), "backgroudLightGray", 1,
-                                                "right", "invoiceRecords"));
+                vaccinetable.AddCell(
+                    CreateCell("Total", "backgroudLightGray", 1, "left", "invoiceRecords")
+                );
+                vaccinetable.AddCell(
+                    CreateCell(
+                        (count).ToString(),
+                        "backgroudLightGray",
+                        1,
+                        "right",
+                        "invoiceRecords"
+                    )
+                );
+                vaccinetable.AddCell(
+                    CreateCell(" ", "backgroudLightGray", 1, "right", "invoiceRecords")
+                );
+                vaccinetable.AddCell(
+                    CreateCell(
+                        ("PKR " + (amount + consultaionFee) + "/-").ToString(),
+                        "backgroudLightGray",
+                        1,
+                        "right",
+                        "invoiceRecords"
+                    )
+                );
 
                 vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
-                vaccinetable.AddCell(CreateCell("Amount in words", " ", 1, "left", "invoiceRecords"));
-                vaccinetable.AddCell(CreateCell(ConvertWholeNumber((amount + consultaionFee).ToString()) + " Only", " ", 4,
-                                                "left", "inwordamount"));
+                vaccinetable.AddCell(
+                    CreateCell("Amount in words", " ", 1, "left", "invoiceRecords")
+                );
+                vaccinetable.AddCell(
+                    CreateCell(
+                        ConvertWholeNumber((amount + consultaionFee).ToString()) + " Only",
+                        " ",
+                        4,
+                        "left",
+                        "inwordamount"
+                    )
+                );
             }
 
             // loop end
@@ -1900,7 +2420,14 @@ namespace VaccineAPI.Controllers
             var currentDate = DateTime.Now.ToString("yyyy-MM-dd");
 
             // Adding cells to the bottom table
-            PdfPCell CreateCellWithMargin(string text, string style, int colspan, string alignment, string description, float topMargin = 0)
+            PdfPCell CreateCellWithMargin(
+                string text,
+                string style,
+                int colspan,
+                string alignment,
+                string description,
+                float topMargin = 0
+            )
             {
                 var cell = CreateCell(text, style, colspan, alignment, description);
                 cell.PaddingTop = topMargin;
@@ -1911,11 +2438,42 @@ namespace VaccineAPI.Controllers
             bottomTable.AddCell(CreateCell("Quick links: ", "", 2, "left", "description"));
 
             bottomTable.AddCell(CreateCell("vaccinationcentre.com", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCellWithMargin("Web: vaccinationcentre.com", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
-            bottomTable.AddCell(CreateCell("vaccinationcentre.com/vaccines", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCellWithMargin("Phone/WhatsApp: +923335196658", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
-            bottomTable.AddCell(CreateCell("vaccinationcentre.com/schedule", "", 1, "left", "description"));
-            bottomTable.AddCell(CreateCellWithMargin("Email: info@vaccinationcentre.com", "", 1, "right", "description", topMargin: -0)); // Adjust topMargin as needed
+            bottomTable.AddCell(
+                CreateCellWithMargin(
+                    "Web: vaccinationcentre.com",
+                    "",
+                    1,
+                    "right",
+                    "description",
+                    topMargin: -0
+                )
+            ); // Adjust topMargin as needed
+            bottomTable.AddCell(
+                CreateCell("vaccinationcentre.com/vaccines", "", 1, "left", "description")
+            );
+            bottomTable.AddCell(
+                CreateCellWithMargin(
+                    "Phone/WhatsApp: +923335196658",
+                    "",
+                    1,
+                    "right",
+                    "description",
+                    topMargin: -0
+                )
+            ); // Adjust topMargin as needed
+            bottomTable.AddCell(
+                CreateCell("vaccinationcentre.com/schedule", "", 1, "left", "description")
+            );
+            bottomTable.AddCell(
+                CreateCellWithMargin(
+                    "Email: info@vaccinationcentre.com",
+                    "",
+                    1,
+                    "right",
+                    "description",
+                    topMargin: -0
+                )
+            ); // Adjust topMargin as needed
             bottomTable.WriteSelectedRows(0, -1, 65, 85, writer.DirectContent);
 
             PdfPTable footerTable = new PdfPTable(1);
@@ -1924,7 +2482,9 @@ namespace VaccineAPI.Controllers
 
             Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10);
             Phrase footerPhrase = new Phrase();
-            var statementText = "This is an electronically generated invoice and doesn’t require signature/stamp. Printed On : " + currentDate;
+            var statementText =
+                "This is an electronically generated invoice and doesn’t require signature/stamp. Printed On : "
+                + currentDate;
             Chunk statementChunk = new Chunk(statementText, footerFont1);
             footerPhrase.Add(statementChunk);
             PdfPCell footerCell = new PdfPCell(footerPhrase)
@@ -1938,16 +2498,15 @@ namespace VaccineAPI.Controllers
             // Add the footer cell to the table
             bottomTable.AddCell(footerCell);
 
-
-
             footerTable.AddCell(footerCell);
             footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);
 
             var baseUrl = "https://myapi.skintechno.com/api";
-            var childData = _db.Childs.Include(x => x.Clinic)
-                            .ThenInclude(x => x.Doctor)
-                            .ThenInclude(y => y.User)
-                            .FirstOrDefault(x => x.Id == Id);
+            var childData = _db
+                .Childs.Include(x => x.Clinic)
+                .ThenInclude(x => x.Doctor)
+                .ThenInclude(y => y.User)
+                .FirstOrDefault(x => x.Id == Id);
 
             var childDTO = new ChildDTO
             {
@@ -1955,12 +2514,17 @@ namespace VaccineAPI.Controllers
                 Name = childData.Name ?? "Unknown",
                 FatherName = childData.FatherName ?? "Unknown",
             };
-            var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
+            var qrCodeUrl =
+                $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
             try
             {
-
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
-                using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
+                using (
+                    QRCodeData qrCodeData = qrGenerator.CreateQrCode(
+                        qrCodeUrl,
+                        QRCodeGenerator.ECCLevel.Q
+                    )
+                )
                 {
                     var qrCode = new BitmapByteQRCode(qrCodeData);
                     byte[] qrCodeImage = qrCode.GetGraphic(20);
@@ -1976,13 +2540,8 @@ namespace VaccineAPI.Controllers
 
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
-
-                      
                     }
                 }
-
-
-
             }
             catch (Exception ex)
             {
@@ -1992,10 +2551,13 @@ namespace VaccineAPI.Controllers
             output.Seek(0, SeekOrigin.Begin);
             stream = output;
 
-            var FileName = childName.Replace(" ", "") + "_Invoice" + "_" +
-                           DateTime.UtcNow.AddHours(5).Date.ToString("MMMM-dd-yyyy") + ".pdf";
+            var FileName =
+                childName.Replace(" ", "")
+                + "_Invoice"
+                + "_"
+                + DateTime.UtcNow.AddHours(5).Date.ToString("MMMM-dd-yyyy")
+                + ".pdf";
             return File(stream, "application/pdf", FileName);
-
         }
 
         // functions to convert amount to words
@@ -2111,8 +2673,8 @@ namespace VaccineAPI.Controllers
             string word = "";
             try
             {
-                bool beginsZero = false;  // tests for 0XX
-                bool isDone = false;      // test if already translated
+                bool beginsZero = false; // tests for 0XX
+                bool isDone = false; // test if already translated
                 double dblAmt = (Convert.ToDouble(Number));
 
                 // if ((dblAmt > 0) && number.StartsWith("0"))
@@ -2124,35 +2686,35 @@ namespace VaccineAPI.Controllers
                     beginsZero = Number.StartsWith("0");
 
                     int numDigits = Number.Length;
-                    int pos = 0;        // store digit grouping
-                    String place = "";  // digit grouping name:hundres,thousand,etc...
+                    int pos = 0; // store digit grouping
+                    String place = ""; // digit grouping name:hundres,thousand,etc...
                     switch (numDigits)
                     {
-                        case 1:  // ones' range
+                        case 1: // ones' range
                             word = ones(Number);
                             isDone = true;
                             break;
-                        case 2:  // tens' range
+                        case 2: // tens' range
                             word = tens(Number);
                             isDone = true;
                             break;
-                        case 3:  // hundreds' range
+                        case 3: // hundreds' range
                             pos = (numDigits % 3) + 1;
                             place = " Hundred ";
                             break;
-                        case 4:  // thousands' range
+                        case 4: // thousands' range
                         case 5:
                         case 6:
                             pos = (numDigits % 4) + 1;
                             place = " Thousand ";
                             break;
-                        case 7:  // millions' range
+                        case 7: // millions' range
                         case 8:
                         case 9:
                             pos = (numDigits % 7) + 1;
                             place = " Million ";
                             break;
-                        case 10:  // Billions's range
+                        case 10: // Billions's range
                         case 11:
                         case 12:
                             pos = (numDigits % 10) + 1;
@@ -2172,15 +2734,18 @@ namespace VaccineAPI.Controllers
                         {
                             try
                             {
-                                word = ConvertWholeNumber(Number.Substring(0, pos)) + place + ConvertWholeNumber(Number.Substring(pos));
+                                word =
+                                    ConvertWholeNumber(Number.Substring(0, pos))
+                                    + place
+                                    + ConvertWholeNumber(Number.Substring(pos));
                             }
-                            catch
-                            {
-                            }
+                            catch { }
                         }
                         else
                         {
-                            word = ConvertWholeNumber(Number.Substring(0, pos)) + ConvertWholeNumber(Number.Substring(pos));
+                            word =
+                                ConvertWholeNumber(Number.Substring(0, pos))
+                                + ConvertWholeNumber(Number.Substring(pos));
                         }
 
                         // check for trailing zeros
@@ -2189,12 +2754,11 @@ namespace VaccineAPI.Controllers
 
                     // ignore digit grouping names
 
-                    if (word.Trim().Equals(place.Trim())) word = "";
+                    if (word.Trim().Equals(place.Trim()))
+                        word = "";
                 }
             }
-            catch
-            {
-            }
+            catch { }
             return word.Trim();
         }
 
@@ -2206,8 +2770,11 @@ namespace VaccineAPI.Controllers
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
 
             {
-                var dbChild = _db.Childs.Include(x => x.User).FirstOrDefault(c => c.Id == childDTO.Id);
-                if (dbChild == null) return new Response<ChildDTO>(false, "Child not found", null);
+                var dbChild = _db
+                    .Childs.Include(x => x.User)
+                    .FirstOrDefault(c => c.Id == childDTO.Id);
+                if (dbChild == null)
+                    return new Response<ChildDTO>(false, "Child not found", null);
                 dbChild.Name = childDTO.Name;
                 dbChild.Email = childDTO.Email;
                 dbChild.Guardian = childDTO.Guardian;
@@ -2229,15 +2796,17 @@ namespace VaccineAPI.Controllers
         [HttpDelete("{id}")]
         public Response<string> Delete(int Id)
         {
-            var dbChild = _db.Childs.Include(x => x.User)
-                              .ThenInclude(x => x.Childs)
-                              .Include(x => x.Schedules)
-                              .Include(x => x.FollowUps)
-                              .Where(c => c.Id == Id)
-                              .FirstOrDefault();
+            var dbChild = _db
+                .Childs.Include(x => x.User)
+                .ThenInclude(x => x.Childs)
+                .Include(x => x.Schedules)
+                .Include(x => x.FollowUps)
+                .Where(c => c.Id == Id)
+                .FirstOrDefault();
             _db.Schedules.RemoveRange(dbChild.Schedules);
             _db.FollowUps.RemoveRange(dbChild.FollowUps);
-            if (dbChild.User.Childs.Count == 1) _db.Users.Remove(dbChild.User);
+            if (dbChild.User.Childs.Count == 1)
+                _db.Users.Remove(dbChild.User);
             _db.Childs.Remove(dbChild);
             _db.SaveChanges();
             return new Response<string>(true, "Child is deleted successfully", null);
@@ -2246,53 +2815,74 @@ namespace VaccineAPI.Controllers
         // Date Function
         protected DateTime calculateDate(DateTime date, int GapInDays)
         {
-
             // For 3 months
             if (GapInDays == 84)
                 return date.AddMonths(3);
-            else  // For 9 Year 1 month`
-                if (GapInDays == 3315)
+            else // For 9 Year 1 month`
+            if (GapInDays == 3315)
                 return date.AddYears(9).AddMonths(1);
-            else  // For 10 Year 6 month
-                if (GapInDays == 3833)
+            else // For 10 Year 6 month
+            if (GapInDays == 3833)
                 return date.AddYears(10).AddMonths(6);
-            else  // For 1 to 15 years
-                if (GapInDays == 365 || GapInDays == 730 || GapInDays == 1095 || GapInDays == 1460 || GapInDays == 1825 ||
-                    GapInDays == 2190 || GapInDays == 2555 || GapInDays == 2920 || GapInDays == 3285 || GapInDays == 3650 ||
-                    GapInDays == 4015 || GapInDays == 4380 || GapInDays == 4745 || GapInDays == 5110 || GapInDays == 5475)
+            else // For 1 to 15 years
+            if (
+                GapInDays == 365
+                || GapInDays == 730
+                || GapInDays == 1095
+                || GapInDays == 1460
+                || GapInDays == 1825
+                || GapInDays == 2190
+                || GapInDays == 2555
+                || GapInDays == 2920
+                || GapInDays == 3285
+                || GapInDays == 3650
+                || GapInDays == 4015
+                || GapInDays == 4380
+                || GapInDays == 4745
+                || GapInDays == 5110
+                || GapInDays == 5475
+            )
                 return date.AddYears((int)(GapInDays / 365));
-            else  // From 6 months to 11 months
-                if (GapInDays >= 168 && GapInDays <= 334)
+            else // From 6 months to 11 months
+            if (GapInDays >= 168 && GapInDays <= 334)
                 return date.AddMonths((int)(GapInDays / 28));
-            else  // From 13 months to 20 months
-                if (GapInDays >= 395 && GapInDays <= 608)
+            else // From 13 months to 20 months
+            if (GapInDays >= 395 && GapInDays <= 608)
                 return date.AddMonths((int)(GapInDays / 29));
-            else  // From 21 months to 11 months
-                if (GapInDays >= 639 && GapInDays <= 1795)
+            else // From 21 months to 11 months
+            if (GapInDays >= 639 && GapInDays <= 1795)
                 return date.AddMonths((int)(GapInDays / 30));
             else
                 return date.AddDays(GapInDays);
         }
 
-
         public class PDFFooter : PdfPageEventHelper
         {
             Child child = new Child();
 
-            public PDFFooter(Child postedChild) { child = postedChild; }
+            public PDFFooter(Child postedChild)
+            {
+                child = postedChild;
+            }
 
-            public override void OnStartPage(PdfWriter writer, Document document) { base.OnStartPage(writer, document); }
+            public override void OnStartPage(PdfWriter writer, Document document)
+            {
+                base.OnStartPage(writer, document);
+            }
 
             // write on end of each page
             public override void OnEndPage(PdfWriter writer, Document document)
             {
                 base.OnEndPage(writer, document);
                 string footer =
-                    "Vaccines may cause fever, localized redness, and pain. This schedule is valid for production on demand at all airports, embassies, and schools worldwide. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses. " +
-                    "Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given. " +
-                    "*OHF = vaccine given at other health facility (not by vaccinationcentre.com)\n\n" +
-                    "Printed on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd");
-                footer = footer.Replace(Environment.NewLine, String.Empty).Replace("  ", String.Empty);
+                    "Vaccines may cause fever, localized redness, and pain. This schedule is valid for production on demand at all airports, embassies, and schools worldwide. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses. "
+                    + "Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given. "
+                    + "*OHF = vaccine given at other health facility (not by vaccinationcentre.com)\n\n"
+                    + "Printed on: "
+                    + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd");
+                footer = footer
+                    .Replace(Environment.NewLine, String.Empty)
+                    .Replace("  ", String.Empty);
                 Font georgia = FontFactory.GetFont("georgia", 8f);
                 Chunk beginning = new Chunk(footer, georgia);
                 PdfPTable tabFot = new PdfPTable(1);
@@ -2306,7 +2896,6 @@ namespace VaccineAPI.Controllers
                 cell.PaddingRight = 21f;
                 tabFot.AddCell(cell);
                 tabFot.WriteSelectedRows(0, -1, 65, 100, writer.DirectContent);
-
             }
 
             // write on close of document
@@ -2316,5 +2905,4 @@ namespace VaccineAPI.Controllers
             }
         }
     }
-
 }

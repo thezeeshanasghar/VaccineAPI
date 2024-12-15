@@ -444,19 +444,29 @@ namespace VaccineAPI.Controllers
                 upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 2, "left", "description"));
                 var imgPath = dbChild.Clinic.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
 
-                // Add Image Cell
-                if (imgPath != null)
+                // Handle clinic logo
+                var logoPath = dbChild.Clinic.MonogramImage != null ? 
+                    Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
+                PdfPCell imageCell = new PdfPCell(new Phrase("")) {
+                    Colspan = 1,
+                    Rowspan = 2,
+                    Border = 0,
+                    FixedHeight = 50f,
+                    HorizontalAlignment = Element.ALIGN_RIGHT
+                };
+                if (logoPath != null && System.IO.File.Exists(logoPath))
                 {
-                    Image img = Image.GetInstance(imgPath);
+                    var img = Image.GetInstance(logoPath);
                     img.ScaleAbsolute(160f, 50f);
-                    PdfPCell imageCell = new PdfPCell(img, false);
-                    imageCell.Colspan = 1;
-                    imageCell.Rowspan = 2;
-                    imageCell.Border = 0;
-                    imageCell.FixedHeight = 50f; // Set a fixed height for the image cell
-                    imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                    upperTable.AddCell(imageCell);
+                    imageCell = new PdfPCell(img, false) { 
+                        Colspan = 1,
+                        Rowspan = 2,
+                        Border = 0,
+                        FixedHeight = 50f,
+                        HorizontalAlignment = Element.ALIGN_RIGHT
+                    };
                 }
+                upperTable.AddCell(imageCell);
 
                 upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 2, "left", "description"));
                 upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));

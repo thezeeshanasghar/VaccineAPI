@@ -1985,11 +1985,6 @@ namespace VaccineAPI.Controllers
 
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
-
-                        iTextSharpFont explanationFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                        ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
-                        new Phrase("Scan to verify", explanationFont),
-                        qrCodeXPosition + pdfQrCode.ScaledWidth / 2, qrCodeYPosition - 10, 0);
                     }
                 }
 
@@ -2302,7 +2297,7 @@ namespace VaccineAPI.Controllers
                 string footer =
                     "Vaccines may cause fever, localized redness, and pain. This schedule is valid for production on demand at all airports, embassies, and schools worldwide. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses. " +
                     "Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given. " +
-                    "*OHF = vaccine given at other health facility (not by vaccinationcentre.com)\n" +
+                    "*OHF = vaccine given at other health facility (not by vaccinationcentre.com). " +
                     "Printed on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd");
                 footer = footer.Replace(Environment.NewLine, String.Empty).Replace("  ", String.Empty);
                 Font georgia = FontFactory.GetFont("georgia", 8f);

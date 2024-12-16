@@ -44,7 +44,7 @@ namespace VaccineAPI.Controllers
             
         }
          [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
-        public Response<IEnumerable<FollowUpDTO>> GetAlert(int GapDays, long OnlineClinicId)
+        public Response<IEnumerable<FollowUpDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId)
         {
                 {
                     var doctor = _db.Clinics.Where(x => x.Id == OnlineClinicId).Include(x=>x.Doctor).First<Clinic>().Doctor;
@@ -59,7 +59,7 @@ namespace VaccineAPI.Controllers
                         followups = _db.FollowUps.Include(x=> x.Child).ThenInclude(x=>x.User)
                             .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                        //     .Where(c => System.Data.Entity.DbFunctions.TruncateTime(c.NextVisitDate) == System.Data.Entity.DbFunctions.TruncateTime(pakistanTime))
-                           .Where(c => c.NextVisitDate == pakistanTime.Date)
+                           .Where(c => c.NextVisitDate == inputDate.Date)
                             .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate).ToList<FollowUp>();
                     else if (GapDays > 0)
                     {

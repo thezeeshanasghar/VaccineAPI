@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using VaccineAPI.Models;
-using AutoMapper;
 using VaccineAPI.ModelDTO;
+using VaccineAPI.Models;
 
 namespace VaccineAPI.Controllers
 {
@@ -23,20 +23,39 @@ namespace VaccineAPI.Controllers
             _mapper = mapper;
         }
 
-        [HttpGet("{GapDays}/{OnlineClinicId}")]
-        public Response<IEnumerable<ChildDTO>> GetBirthdayAlert(int GapDays, long OnlineClinicId)
+        [HttpGet("{OnlineClinicId}")]
+        public Response<IEnumerable<ChildDTO>> GetBirthdayAlert(
+            DateTime inputDate,
+            long OnlineClinicId
+        )
         {
-            List<Child> childs = GetBirthdayAlertData(GapDays, OnlineClinicId, _db);
+            // Filter records where DOB matches the input date (month and day) and ClinicId matches
+            List<Child> childs = _db
+                .Childs.Where(c =>
+                    c.DOB.Month == inputDate.Month
+                    && c.DOB.Day == inputDate.Day
+                    && c.ClinicId == OnlineClinicId
+                )
+                .ToList();
+
+            // Map entities to DTOs
             IEnumerable<ChildDTO> childDTOs = _mapper.Map<IEnumerable<ChildDTO>>(childs);
+
+            // Return the response
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
 
-        private static List<Child> GetBirthdayAlertData(int GapDays, long OnlineClinicId, Context db)
+        private static List<Child> GetBirthdayAlertData(
+            int GapDays,
+            long OnlineClinicId,
+            Context db
+        )
         {
-            return db.Childs.Where(x=>
-                        x.DOB.Date== DateTime.Today &&
-                        x.IsInactive.HasValue.Equals(false)).ToList<Child>();
+            return db
+                .Childs.Where(x =>
+                    x.DOB.Date == DateTime.Today && x.IsInactive.HasValue.Equals(false)
+                )
+                .ToList<Child>();
         }
-
     }
 }

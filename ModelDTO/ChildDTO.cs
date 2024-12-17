@@ -44,6 +44,8 @@ namespace VaccineAPI.ModelDTO
 
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime InvoiceDate { get; set; }
+        
+
 
    }
 

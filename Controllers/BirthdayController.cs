@@ -31,7 +31,7 @@ namespace VaccineAPI.Controllers
         {
             // Filter records where DOB matches the input date (month and day) and ClinicId matches
             List<Child> childs = _db
-                .Childs.Where(c =>
+                .Childs.Include(x=> x.User).Where(c =>
                     c.DOB.Month == inputDate.Month
                     && c.DOB.Day == inputDate.Day
                     && c.ClinicId == OnlineClinicId

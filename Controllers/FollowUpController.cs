@@ -135,7 +135,7 @@ namespace VaccineAPI.Controllers
             _db.FollowUps.Remove(obj);
             await _db.SaveChangesAsync();
 
-            return NoContent();
+            return Ok(new { Message = "Follow-up deleted successfully." });
         }
     }
 }

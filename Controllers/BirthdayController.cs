@@ -23,18 +23,21 @@ namespace VaccineAPI.Controllers
             _mapper = mapper;
         }
 
-        [HttpGet("{OnlineClinicId}")]
-        public Response<IEnumerable<ChildDTO>> GetBirthdayAlert(
+        [HttpGet("{doctorId}")]
+        public Response<IEnumerable<ChildDTO>> GetBirthdayAlertByDoctor(
             DateTime inputDate,
-            long OnlineClinicId
+            long doctorId
         )
         {
-            // Filter records where DOB matches the input date (month and day) and ClinicId matches
+            // Filter records where DOB matches the input date (month and day) and DoctorId matches
             List<Child> childs = _db
-                .Childs.Include(x=> x.User).Where(c =>
+                .Childs.Include(c => c.User) // Include User
+                .Include(c => c.Clinic) // Include Clinic
+                .ThenInclude(cl => cl.Doctor) // Include Doctor via Clinic
+                .Where(c =>
                     c.DOB.Month == inputDate.Month
                     && c.DOB.Day == inputDate.Day
-                    && c.ClinicId == OnlineClinicId
+                    && c.Clinic.DoctorId == doctorId // Filter by DoctorId
                 )
                 .ToList();
 

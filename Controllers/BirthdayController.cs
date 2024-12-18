@@ -30,7 +30,7 @@ namespace VaccineAPI.Controllers
         )
         {
             // Filter records where DOB matches the input date (month and day) and DoctorId matches
-              List<Child> childs = _db
+            List<Child> childs = _db
                 .Childs.Include(c => c.User) // Include User
                 .Include(c => c.Clinic) // Include Clinic
                 .ThenInclude(cl => cl.Doctor) // Include Doctor via Clinic

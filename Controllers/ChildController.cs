@@ -441,9 +441,10 @@ namespace VaccineAPI.Controllers
                 var imgPath = dbChild.Clinic.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
 
                 // Handle clinic logo
-                var logoPath = dbChild.Clinic.MonogramImage != null ? 
+                var logoPath = dbChild.Clinic.MonogramImage != null ?
                     Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
-                PdfPCell imageCell = new PdfPCell(new Phrase("")) {
+                PdfPCell imageCell = new PdfPCell(new Phrase(""))
+                {
                     Colspan = 1,
                     Rowspan = 2,
                     Border = 0,
@@ -454,7 +455,8 @@ namespace VaccineAPI.Controllers
                 {
                     var img = Image.GetInstance(logoPath);
                     img.ScaleAbsolute(160f, 50f);
-                    imageCell = new PdfPCell(img, false) { 
+                    imageCell = new PdfPCell(img, false)
+                    {
                         Colspan = 1,
                         Rowspan = 2,
                         Border = 0,
@@ -1906,7 +1908,7 @@ namespace VaccineAPI.Controllers
 
             // Ensure `currentDate` and `footerFont` are properly initialized
             var footerFont = new Font(Font.HELVETICA, 8, Font.NORMAL);
-            var currentDate = DateTime.Now.ToString("yyyy-MM-dd");
+            var currentDate = DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd"); ;
 
             // Adding cells to the bottom table
             PdfPCell CreateCellWithMargin(string text, string style, int colspan, string alignment, string description, float topMargin = 0)

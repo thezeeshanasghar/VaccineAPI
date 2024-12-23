@@ -999,22 +999,19 @@ namespace VaccineAPI.Controllers
             var objList = await _db.Schedules
                 .Where(x => x.ChildId == ChildId)
                 .Where(x => x.DoseId == DoseId)
-                .Where(x => x.Date > dateOfInjection)
+                .Where(x => x.IsDone == false)
                 .ToListAsync();
-
-            List<Schedule> listDTO = _mapper.Map<List<Schedule>>(objList);
-
+            var futureDoses = objList.Where(x => x.Date > dateOfInjection).ToList();
+            List<Schedule> listDTO = _mapper.Map<List<Schedule>>(futureDoses);
             if (listDTO == null)
             {
                 return new Response<List<Schedule>>(false, "Error: failed to delete ", listDTO);
             }
-
             foreach (Schedule obj in listDTO)
             {
                 _db.Schedules.Remove(obj);
             }
             await _db.SaveChangesAsync();
-
             return new Response<List<Schedule>>(true, null, listDTO);
         }
 

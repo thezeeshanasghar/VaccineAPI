@@ -38,10 +38,25 @@ namespace VaccineAPI.Controllers
             var single = await _db.FollowUps.FindAsync(id);
             if (single == null)
              return new Response<FollowUp>(false, "Not Found", null);
-           
              return new Response<FollowUp>(true, null, single);   
-
-            
+        }
+        [HttpGet("doctor/{doctorId}")]
+        public Response<IEnumerable<FollowUpDTO>> GetFollowUpsByDoctor(
+            long doctorId,
+            DateTime inputDate
+        )
+        {
+            List<FollowUp> followUps = _db
+                .FollowUps.Include(f => f.Child) // Include related Child data
+                .ThenInclude(c => c.User) // Include User data through Child
+                .Where(f => f.DoctorId == doctorId) // Filter by DoctorId
+                .Where(c => c.NextVisitDate == inputDate.Date)
+                .OrderBy(x => x.Child.Id)
+                .ToList();
+            IEnumerable<FollowUpDTO> followUpDTOs = _mapper.Map<IEnumerable<FollowUpDTO>>(
+                followUps
+            );
+            return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTOs);
         }
          [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<FollowUpDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId)

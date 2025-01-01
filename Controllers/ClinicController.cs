@@ -140,6 +140,5 @@ namespace VaccineAPI.Controllers
             _db.SaveChanges();
             return new Response<string>(true, null, "record deleted");
         }
-       
     }
 }

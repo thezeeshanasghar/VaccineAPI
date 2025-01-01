@@ -479,6 +479,45 @@ namespace VaccineAPI.Controllers
 
             return new Response<List<DoctorDTO>>(true, null, doctorDTO);
         }
+         [HttpPatch("update-clinic-id")]
+        public async Task<IActionResult> UpdateClinicIdForChild(
+            [FromQuery] int doctorId,
+            [FromQuery] long childId
+        )
+        {
+            try
+            {
+                // Example async operation
+                var child = await _db.Childs.FindAsync(childId);
+                if (child == null)
+                {
+                    return NotFound($"Child with ID {childId} not found");
+                }
+
+                child.ClinicId = doctorId;
+                await _db.SaveChangesAsync();
+
+                return Ok("Clinic ID updated successfully");
+            }
+            catch (DbUpdateException dbEx)
+            {
+                // Log the detailed error
+                Console.WriteLine(
+                    $"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}"
+                );
+                return StatusCode(
+                    500,
+                    $"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}"
+                );
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    500,
+                    $"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}"
+                );
+            }
+        }
     }
 
 }

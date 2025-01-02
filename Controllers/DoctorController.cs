@@ -68,7 +68,23 @@ namespace VaccineAPI.Controllers
 
         }
 
+        [HttpGet("GetDoctorByDisplayName")]
+        public async Task<IActionResult> GetDoctorByDisplayName(string displayName)
+        {
+            if (string.IsNullOrEmpty(displayName))
+            {
+                return BadRequest("Display name is required");
+            }
 
+            var doctor = await _db.Doctors.Where(d => d.DisplayName == displayName).FirstOrDefaultAsync();
+
+            if (doctor == null)
+            {
+                return NotFound("Doctor not found");
+            }
+
+            return Ok(new Response<Doctor>(true, null, doctor));
+        }
         // [HttpPost]
         // public async Task<ActionResult<Doctor>> Post(Doctor Doctor)
         // {
@@ -480,27 +496,36 @@ namespace VaccineAPI.Controllers
 
             return new Response<List<DoctorDTO>>(true, null, doctorDTO);
         }
-        [HttpPatch("update-clinic-id")]
-        public async Task<IActionResult> UpdateClinicIdForChild([FromQuery] int doctorId, [FromQuery] long childId)
+      [HttpPatch("update-clinic-id")]
+        public async Task<IActionResult> UpdateClinicIdForChild([FromQuery] int doctorId,[FromQuery] long childId)
         {
             try
             {
+                // Find the child by the given childId
                 var child = await _db.Childs.FindAsync(childId);
                 if (child == null)
                     return NotFound($"Child with ID {childId} not found");
 
-                child.ClinicId = _db.Clinics.Where(x => x.DoctorId == doctorId).FirstOrDefaultAsync<Clinic>().Id;
+                // Find the clinic by the given doctorId
+                var clinic = await _db.Clinics.FirstOrDefaultAsync(x => x.DoctorId == doctorId);
+                if (clinic == null)
+                    return NotFound($"Clinic with Doctor ID {doctorId} not found");
+
+                // Update the child's ClinicId with the found clinic's ID
+                child.ClinicId = clinic.Id;
+
+                // Save the changes to the database
                 await _db.SaveChangesAsync();
 
                 return Ok("Clinic ID updated successfully");
             }
             catch (DbUpdateException dbEx)
             {
-                return StatusCode(500, $"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}");
+                return StatusCode(500,$"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}");
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}");
+                return StatusCode(500,$"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}");
             }
         }
     }

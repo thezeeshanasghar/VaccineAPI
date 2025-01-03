@@ -68,32 +68,6 @@ namespace VaccineAPI.Controllers
 
         }
 
-        [HttpGet("GetDoctorByDisplayName")]
-        public async Task<IActionResult> GetDoctorByDisplayName(string displayName)
-        {
-            if (string.IsNullOrEmpty(displayName))
-            {
-                return BadRequest("Display name is required");
-            }
-
-            var doctor = await _db.Doctors.Where(d => d.DisplayName == displayName).FirstOrDefaultAsync();
-
-            if (doctor == null)
-            {
-                return NotFound("Doctor not found");
-            }
-
-            return Ok(new Response<Doctor>(true, null, doctor));
-        }
-        // [HttpPost]
-        // public async Task<ActionResult<Doctor>> Post(Doctor Doctor)
-        // {
-        //     _db.Doctors.Update(Doctor);
-        //     await _db.SaveChangesAsync();
-
-        //   //  return CreatedAtAction(nameof(GetSingle), new { id = Doctor.Id }, Doctor);
-        // }
-
         [HttpGet("{id}/clinics")]
         public Response<IEnumerable<ClinicDTO>> GetAllClinicsOfaDoctor(int id)
         {
@@ -115,6 +89,7 @@ namespace VaccineAPI.Controllers
                 return new Response<IEnumerable<ClinicDTO>>(true, null, clinicDTOs);
             }
         }
+
         [HttpGet("/forget/{email}")]
         public ActionResult<DoctorDTO> GetDoctorDetailsByEmail(string email)
         {
@@ -254,7 +229,6 @@ namespace VaccineAPI.Controllers
             return new Response<DoctorDTO>(false, "invalid files in request", null);
         }
 
-        // }
         [HttpPut("{id}")]
         public Response<DoctorDTO> Put(int Id, DoctorDTO doctorDTO)
         {
@@ -420,10 +394,6 @@ namespace VaccineAPI.Controllers
             return result;
         }
 
-
-
-
-
         [HttpGet("{id}/children/{childId}/schedules")]
         public async Task<ActionResult<IEnumerable<Schedule>>> GetSchedulesForChild(long id, long childId, DateTime fromDate, DateTime toDate)
         {
@@ -446,7 +416,6 @@ namespace VaccineAPI.Controllers
                 return StatusCode(500, $"An error occurred while retrieving schedules for child ID {childId}: {ex.Message}");
             }
         }
-
 
         [HttpPatch]
         [Route("/update_date_for_Vacations")]
@@ -496,7 +465,8 @@ namespace VaccineAPI.Controllers
 
             return new Response<List<DoctorDTO>>(true, null, doctorDTO);
         }
-      [HttpPatch("update-clinic-id")]
+
+       [HttpPatch("update-clinic-id")]
         public async Task<IActionResult> UpdateClinicIdForChild([FromQuery] int doctorId,[FromQuery] long childId)
         {
             try

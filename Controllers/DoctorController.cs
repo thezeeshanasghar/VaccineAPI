@@ -471,20 +471,17 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                // Find the child by the given childId
+
                 var child = await _db.Childs.FindAsync(childId);
                 if (child == null)
                     return NotFound($"Child with ID {childId} not found");
 
-                // Find the clinic by the given doctorId
                 var clinic = await _db.Clinics.FirstOrDefaultAsync(x => x.DoctorId == doctorId);
                 if (clinic == null)
                     return NotFound($"Clinic with Doctor ID {doctorId} not found");
 
-                // Update the child's ClinicId with the found clinic's ID
                 child.ClinicId = clinic.Id;
 
-                // Save the changes to the database
                 await _db.SaveChangesAsync();
 
                 return Ok("Clinic ID updated successfully");
@@ -497,6 +494,31 @@ namespace VaccineAPI.Controllers
             {
                 return StatusCode(500,$"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}");
             }
+        }
+
+        [HttpGet("with-clinics")]
+        public async Task<Response<List<DoctorDTO>>> GetDoctorsWithClinics()
+        {
+            var doctors = await _db.Doctors
+                .Include(x => x.Clinics)
+                .Where(x => x.Clinics.Any())  // Only get doctors that have clinics
+                .OrderBy(x => x.Id)
+                .ToListAsync();
+
+            if (doctors == null || !doctors.Any())
+                return new Response<List<DoctorDTO>>(false, "No doctors found with clinics", null);
+            List<DoctorDTO> doctorDTOs = _mapper.Map<List<DoctorDTO>>(doctors);
+                return Ok("Clinic ID updated successfully");
+            }
+            catch (DbUpdateException dbEx)
+            {
+                return StatusCode(500,$"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500,$"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}");
+            }
+
         }
     }
 }

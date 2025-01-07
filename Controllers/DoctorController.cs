@@ -498,5 +498,21 @@ namespace VaccineAPI.Controllers
                 return StatusCode(500,$"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}");
             }
         }
+
+        [HttpGet("with-clinics")]
+        public async Task<Response<List<DoctorDTO>>> GetDoctorsWithClinics()
+        {
+            var doctors = await _db.Doctors
+                .Include(x => x.Clinics)
+                .Where(x => x.Clinics.Any())  // Only get doctors that have clinics
+                .OrderBy(x => x.Id)
+                .ToListAsync();
+
+            if (doctors == null || !doctors.Any())
+                return new Response<List<DoctorDTO>>(false, "No doctors found with clinics", null);
+
+            List<DoctorDTO> doctorDTOs = _mapper.Map<List<DoctorDTO>>(doctors);
+            return new Response<List<DoctorDTO>>(true, null, doctorDTOs);
+        }
     }
 }

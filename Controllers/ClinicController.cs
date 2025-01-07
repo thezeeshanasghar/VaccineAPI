@@ -140,5 +140,23 @@ namespace VaccineAPI.Controllers
             _db.SaveChanges();
             return new Response<string>(true, null, "record deleted");
         }
+
+        [HttpGet("doctor/{clinicId}")]
+        public async Task<Response<DoctorDTO>> GetDoctorByClinicId(long clinicId)
+        {
+            var clinic = await _db.Clinics
+                .Include(x => x.Doctor)
+                .Where(x => x.Id == clinicId)
+                .FirstOrDefaultAsync();
+
+            if (clinic == null)
+                return new Response<DoctorDTO>(false, "Clinic not found", null);
+
+            if (clinic.Doctor == null)
+                return new Response<DoctorDTO>(false, "No doctor assigned to this clinic", null);
+
+            var doctorDTO = _mapper.Map<DoctorDTO>(clinic.Doctor);
+            return new Response<DoctorDTO>(true, null, doctorDTO);
+        }
     }
 }

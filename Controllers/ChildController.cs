@@ -1730,6 +1730,7 @@ namespace VaccineAPI.Controllers
                     upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
                 else
                     upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
+            upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
             upperTable.AddCell(CreateCell("Invoice # " + invoiceNumber, "bold", 2, "right", "description"));
 
             document.Add(upperTable);

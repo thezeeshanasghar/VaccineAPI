@@ -1726,10 +1726,11 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "unbold", 1, "left", "description"));
             upperTable.AddCell(CreateCell("#StayHome #GetVaccinated", "", 1, "right", "description"));
             upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
-                if (!String.IsNullOrEmpty(dbChild.CNIC))
-                    upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
-                else
-                    upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
+            if (!String.IsNullOrEmpty(dbChild.CNIC))
+                upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
+            else
+                upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
+
             upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
             upperTable.AddCell(CreateCell("Invoice # " + invoiceNumber, "bold", 2, "right", "description"));
 

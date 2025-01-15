@@ -40,9 +40,9 @@ jobs:
         if: github.ref == 'refs/heads/staging' || github.event.inputs.deploy_env == 'staging'
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
-          server: ${{ secrets.STAING_FTP_SERVER }}
+          server: ${{ secrets.STAGING_FTP_SERVER }}
           username: ${{ secrets.STAGING_FTP_USERNAME }}
-          password: ${{ secrets.STAING_FTP_PASSWORD }}
+          password: ${{ secrets.STAGING_FTP_PASSWORD }}
           local-dir: publish/
           server-dir: /
           exclude: |
@@ -56,8 +56,8 @@ jobs:
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
           server: ${{ secrets.PROD_FTP_SERVER }}
-          username: ${{ secrets.PRD_FTP_USERNAME }}
-          password: ${{ secrets.PRD_FTP_PASSWORD }}
+          username: ${{ secrets.PROD_FTP_USERNAME }}
+          password: ${{ secrets.PROD_FTP_PASSWORD }}
           local-dir: publish/
           server-dir: /
           exclude: |

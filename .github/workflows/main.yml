@@ -3,6 +3,16 @@ name: Build and Deploy .NET Application
 on:
   push:
     branches: [staging, master]
+  workflow_dispatch: # Allows manual triggering via a button
+    inputs:
+      deploy_env:
+        description: 'Select the environment to deploy (staging or master)'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - 'staging'
+          - 'master'
 
 jobs:
   build-and-deploy:
@@ -27,12 +37,12 @@ jobs:
         run: dotnet publish --configuration Release --no-restore --output publish
 
       - name: Deploy for staging
-        if: github.ref == 'refs/heads/staging'
+        if: github.ref == 'refs/heads/staging' || github.event.inputs.deploy_env == 'staging'
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
-          server: ${{ secrets.STAGING_FTP_SERVER }}
+          server: ${{ secrets.STAING_FTP_SERVER }}
           username: ${{ secrets.STAGING_FTP_USERNAME }}
-          password: ${{ secrets.STAGING_FTP_PASSWORD }}
+          password: ${{ secrets.STAING_FTP_PASSWORD }}
           local-dir: publish/
           server-dir: /
           exclude: |
@@ -42,12 +52,12 @@ jobs:
             web.config
 
       - name: Deploy for master
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master' || github.event.inputs.deploy_env == 'master'
         uses: SamKirkland/FTP-Deploy-Action@4.2.0
         with:
           server: ${{ secrets.PROD_FTP_SERVER }}
-          username: ${{ secrets.PROD_FTP_USERNAME }}
-          password: ${{ secrets.PROD_FTP_PASSWORD }}
+          username: ${{ secrets.PRD_FTP_USERNAME }}
+          password: ${{ secrets.PRD_FTP_PASSWORD }}
           local-dir: publish/
           server-dir: /
           exclude: |
@@ -55,3 +65,4 @@ jobs:
             **/.git*/**
             **/node_modules/**
             web.config
+

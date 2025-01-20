@@ -1748,7 +1748,7 @@ namespace VaccineAPI.Controllers
             childtable.AddCell(CreateCell("Name of Kid/Patient:", "backgroudLightGray", 1, "left", "invoiceRecords"));
             childtable.AddCell(CreateCell(dbChild.Name, " ", 1, "left", "invoiceRecords"));
 
-            childtable.AddCell(CreateCell("Father/Mother Name:", "backgroudLightGray", 1, "left", "invoiceRecords"));
+            childtable.AddCell(CreateCell("Father/Mother/Husband Name:", "backgroudLightGray", 1, "left", "invoiceRecords"));
             childtable.AddCell(CreateCell(dbChild.FatherName, "", 1, "left", "invoiceRecords"));
 
             childtable.AddCell(CreateCell("Date of Birth:", "backgroudLightGray", 1, "left", "invoiceRecords"));

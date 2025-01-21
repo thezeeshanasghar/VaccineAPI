@@ -2364,14 +2364,6 @@ namespace VaccineAPI.Controllers
             };
             headerTable.AddCell(titleCell);
 
-            PdfPCell subtitleCell = new PdfPCell(new Paragraph("FOR INTERNATIONAL TRAVELLERS", FontFactory.GetFont(FontFactory.HELVETICA, 12)))
-            {
-                Border = PdfPCell.NO_BORDER,
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                VerticalAlignment = Element.ALIGN_MIDDLE
-            };
-            headerTable.AddCell(subtitleCell);
-
             headerTable.AddCell(new PdfPCell(new Phrase("")) { Border = PdfPCell.NO_BORDER });
 
             var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
@@ -2412,17 +2404,7 @@ namespace VaccineAPI.Controllers
 
             details += $" | DOB: {dbChild.DOB:dd-MMM-yyyy}";
             document.Add(new Paragraph(details, detailsFont));
-            //  var detailsFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, BaseColor.Black);
-            // string details1 = $"\nVaccine.pk is home & clinic based\nvaccination service based\nvaccination service offered by babymedics (IHRA00568) under supervision of doctor salman(50423-p)"
-            // document.Add(new Paragraph(details1, detailsFont1));
-            //   var clinic = _db.Clinics.FirstOrDefault();
-            // string clinicName = clinic != null ? clinic.Name : "Default Clinic Name";
-
-          
-            // document.Add(new Paragraph(clinicName, smallFont));
             string currentDateTime = "";
-            // document.SetMargins(0, 0, 0,0);
-
             var baseUrl = "https://myapi.skintechno.com/api";
             var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
             try
@@ -2442,7 +2424,7 @@ namespace VaccineAPI.Controllers
 
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
-                        Paragraph vaccineApiText = new Paragraph("Vaccine.Pk", FontFactory.GetFont(FontFactory.HELVETICA, 8))
+                        Paragraph vaccineApiText = new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 8))
                         {
                             Alignment = Element.ALIGN_RIGHT,
                             Leading = 2f,
@@ -2458,7 +2440,7 @@ namespace VaccineAPI.Controllers
                 Console.WriteLine($"Error generating QR code: {ex.Message}");
             }
             Font smallFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-            document.Add(new Paragraph("Vaccine.pk is home & clinic based vaccination service based vaccination service offered by babymedics\n(IHRA00568) under supervision of doctor salman(50423-p)", smallFont));
+            document.Add(new Paragraph("Vaccine.pk is home and clinic bases vaccination service offered by BabyMedics ( IHRA00568) under supervision of Dr Salman Ahmad Bajwa.", smallFont));
             document.Add(new Paragraph(currentDateTime, smallFont));
 
           

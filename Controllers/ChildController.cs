@@ -1729,8 +1729,9 @@ namespace VaccineAPI.Controllers
             if (!String.IsNullOrEmpty(dbChild.CNIC))
                 upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
             else
-                upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
-            upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
+                upperTable.AddCell(CreateCell("", "", 1, "right", "description")); // Provide a default message if CNIC is empty
+
+            upperTable.AddCell(CreateCell("", "", 2, "left", "description")); // Empty cell for spacing
             upperTable.AddCell(CreateCell("Invoice # " + invoiceNumber, "bold", 2, "right", "description"));
 
             document.Add(upperTable);
@@ -2351,6 +2352,7 @@ namespace VaccineAPI.Controllers
 
             document.Open();
 
+            // Add header
             PdfPTable headerTable = new PdfPTable(1);
             headerTable.WidthPercentage = 100;
 
@@ -2371,6 +2373,7 @@ namespace VaccineAPI.Controllers
             headerTable.AddCell(subtitleCell);
 
             headerTable.AddCell(new PdfPCell(new Phrase("")) { Border = PdfPCell.NO_BORDER });
+
             var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
             Console.WriteLine("Logo Path: " + logoPath);
 
@@ -2383,7 +2386,7 @@ namespace VaccineAPI.Controllers
                     Border = PdfPCell.NO_BORDER,
                     HorizontalAlignment = Element.ALIGN_RIGHT,
                     VerticalAlignment = Element.ALIGN_MIDDLE,
-                    PaddingTop = -55f 
+                    PaddingTop = -55f
                 };
                 headerTable.AddCell(logoCell);
             }
@@ -2393,77 +2396,33 @@ namespace VaccineAPI.Controllers
             }
 
             document.Add(headerTable);
-            document.Add(new Paragraph("\n")); 
-            PdfPTable table = new PdfPTable(2);
-            table.WidthPercentage = 100;
-            table.DefaultCell.Padding = 5;
-            var headerCellFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10, BaseColor.Black);
+            document.Add(new Paragraph("\n")); // Add a blank line
 
-            var valueCellFont = FontFactory.GetFont(FontFactory.HELVETICA, 10, BaseColor.Black);
-            float[] columnWidths = new float[] { 1f, 2f };
-            table.SetWidths(columnWidths);
+            // Add details in a single line
+            var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA, 10, BaseColor.Black);
+            string details = $"{dbChild.Name} \n{dbChild.FatherName}";
+            if (!string.IsNullOrEmpty(dbChild.CNIC))
+            {
+                details += $"\nPP# {dbChild.CNIC}";
+            }
+            else
+            {
+                details += "\n"; // Add a new line if CNIC is not present
+            }
 
-            PdfPCell nameHeader = new PdfPCell(new Phrase("Name:", headerCellFont))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                Border = Rectangle.BOX, 
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                VerticalAlignment = Element.ALIGN_MIDDLE
-            };
-            PdfPCell nameValue = new PdfPCell(new Phrase(dbChild.Name, valueCellFont))
-            {
-                Border = Rectangle.BOX,
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                VerticalAlignment = Element.ALIGN_MIDDLE
-            };
-            PdfPCell dobHeader = new PdfPCell(new Phrase("Date of Birth:", headerCellFont))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                Border = Rectangle.BOX, 
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                VerticalAlignment = Element.ALIGN_MIDDLE
-            };
-            PdfPCell dobValue = new PdfPCell(new Phrase(dbChild.DOB.ToString("dd-MMM-yyyy"), valueCellFont))
-            {
-                Border = Rectangle.BOX,
-                HorizontalAlignment = Element.ALIGN_LEFT, 
-                VerticalAlignment = Element.ALIGN_MIDDLE
-            };
-            PdfPCell passportHeader = new PdfPCell(new Phrase("Passport/ID:", headerCellFont))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                Border = Rectangle.BOX, 
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                VerticalAlignment = Element.ALIGN_MIDDLE
-            };
-            PdfPCell passportValue = new PdfPCell(new Phrase(dbChild.CNIC, valueCellFont))
-            {
-                Border = Rectangle.BOX, 
-                HorizontalAlignment = Element.ALIGN_LEFT, 
-                VerticalAlignment = Element.ALIGN_MIDDLE
-            };
+            details += $" | DOB: {dbChild.DOB:dd-MMM-yyyy}";
+            document.Add(new Paragraph(details, detailsFont));
+            //  var detailsFont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, BaseColor.Black);
+            // string details1 = $"\nVaccine.pk is home & clinic based\nvaccination service based\nvaccination service offered by babymedics (IHRA00568) under supervision of doctor salman(50423-p)"
+            // document.Add(new Paragraph(details1, detailsFont1));
+            //   var clinic = _db.Clinics.FirstOrDefault();
+            // string clinicName = clinic != null ? clinic.Name : "Default Clinic Name";
 
-            // Add cells to the table with enhanced design
-            table.AddCell(nameHeader);
-            table.AddCell(nameValue);
-            table.AddCell(dobHeader);
-            table.AddCell(dobValue);
-            table.AddCell(passportHeader);
-            table.AddCell(passportValue);
+          
+            // document.Add(new Paragraph(clinicName, smallFont));
+            string currentDateTime = "";
+            // document.SetMargins(0, 0, 0,0);
 
-            // Add the table to the document
-            document.Add(table);
-            var clinic = _db.Clinics.FirstOrDefault();
-            string clinicName = clinic != null ? clinic.Name : "Default Clinic Name";
-
-            Font smallFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-            document.Add(new Paragraph("\nThis certificate is valid to produce on demand at all airports, embassies, and schools of the world.", smallFont));
-            document.Add(new Paragraph(clinicName, smallFont));
-            string currentDateTime = DateTime.Now.ToString("dd-MM-yyyy hh:mm tt");
-            document.Add(new Paragraph(currentDateTime, smallFont));
-            document.SetMargins(0, 0, 0, -90);
-
-            // QR Code URL
             var baseUrl = "https://myapi.skintechno.com/api";
             var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
             try
@@ -2477,19 +2436,19 @@ namespace VaccineAPI.Controllers
                     {
                         var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
                         pdfQrCode.ScaleAbsolute(60f, 60f);
-                        
-                        float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 10f; 
-                        float qrCodeYPosition = 55f; 
+
+                        float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 180f;
+                        float qrCodeYPosition = 110f;
 
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
-                        Paragraph vaccineApiText = new Paragraph("VaccineAPI", FontFactory.GetFont(FontFactory.HELVETICA, 8))
+                        Paragraph vaccineApiText = new Paragraph("Vaccine.Pk", FontFactory.GetFont(FontFactory.HELVETICA, 8))
                         {
                             Alignment = Element.ALIGN_RIGHT,
-                            Leading = 10f,
-                            IndentationRight = 10
+                            Leading = 2f,
+                            IndentationRight = 180
                         };
-                        vaccineApiText.SpacingBefore = 25f; 
+                        vaccineApiText.SpacingBefore = 25f;
                         document.Add(vaccineApiText);
                     }
                 }
@@ -2498,11 +2457,18 @@ namespace VaccineAPI.Controllers
             {
                 Console.WriteLine($"Error generating QR code: {ex.Message}");
             }
+            Font smallFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+            document.Add(new Paragraph("Vaccine.pk is home & clinic based vaccination service based vaccination service offered by babymedics\n(IHRA00568) under supervision of doctor salman(50423-p)", smallFont));
+            document.Add(new Paragraph(currentDateTime, smallFont));
+
+          
+            // QR Code URL
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             var fileName = "Patient-ID.pdf";
             return File(output, "application/pdf", fileName);
         }
+
     }
 
 }

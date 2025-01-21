@@ -1729,8 +1729,9 @@ namespace VaccineAPI.Controllers
             if (!String.IsNullOrEmpty(dbChild.CNIC))
                 upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
             else
-                upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
-            upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
+                upperTable.AddCell(CreateCell("", "", 1, "right", "description")); // Provide a default message if CNIC is empty
+
+            upperTable.AddCell(CreateCell("", "", 2, "left", "description")); // Empty cell for spacing
             upperTable.AddCell(CreateCell("Invoice # " + invoiceNumber, "bold", 2, "right", "description"));
 
             document.Add(upperTable);

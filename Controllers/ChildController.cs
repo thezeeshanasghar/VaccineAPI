@@ -2364,6 +2364,14 @@ namespace VaccineAPI.Controllers
             };
             headerTable.AddCell(titleCell);
 
+            PdfPCell subtitleCell = new PdfPCell(new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 12)))
+            {
+                Border = PdfPCell.NO_BORDER,
+                HorizontalAlignment = Element.ALIGN_LEFT,
+                VerticalAlignment = Element.ALIGN_MIDDLE
+            };
+            headerTable.AddCell(subtitleCell);
+
             headerTable.AddCell(new PdfPCell(new Phrase("")) { Border = PdfPCell.NO_BORDER });
 
             var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");

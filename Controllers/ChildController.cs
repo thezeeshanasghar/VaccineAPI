@@ -2379,7 +2379,7 @@ namespace VaccineAPI.Controllers
                     Border = PdfPCell.NO_BORDER,
                     HorizontalAlignment = Element.ALIGN_RIGHT,
                     VerticalAlignment = Element.ALIGN_MIDDLE,
-                    PaddingTop = -55f
+                    PaddingTop = -45f
                 };
                 headerTable.AddCell(logoCell);
             }

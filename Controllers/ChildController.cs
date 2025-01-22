@@ -2441,7 +2441,7 @@ namespace VaccineAPI.Controllers
                         float textXPosition = qrCodeXPosition; // Align text with QR code
                         float textYPosition = qrCodeYPosition + pdfQrCode.ScaledHeight + 5f; // Position above the QR code
 
-                        var font = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+                        var font = FontFactory.GetFont(FontFactory.HELVETICA, 6);
                         ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
                             new Phrase($"MR#{currentYear}-{dbChild.Id}", font), textXPosition + pdfQrCode.ScaledWidth / 2, textYPosition, 0);
                     }

@@ -2341,18 +2341,13 @@ namespace VaccineAPI.Controllers
             {
                 return NotFound(new { message = "Child not found." });
             }
-
             float width = 150f * 2.83465f; // Increased width
             float height = 90f * 2.83465f;
-
             var document = new Document(new Rectangle(width, height), 10, 10, 10, 10);
             var output = new MemoryStream();
             var writer = PdfWriter.GetInstance(document, output);
             writer.CloseStream = false;
-
             document.Open();
-
-            // Add header
             PdfPTable headerTable = new PdfPTable(1);
             headerTable.WidthPercentage = 100;
 
@@ -2363,7 +2358,6 @@ namespace VaccineAPI.Controllers
                 VerticalAlignment = Element.ALIGN_MIDDLE
             };
             headerTable.AddCell(titleCell);
-
             PdfPCell subtitleCell = new PdfPCell(new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 12)))
             {
                 Border = PdfPCell.NO_BORDER,
@@ -2371,9 +2365,7 @@ namespace VaccineAPI.Controllers
                 VerticalAlignment = Element.ALIGN_MIDDLE
             };
             headerTable.AddCell(subtitleCell);
-
             headerTable.AddCell(new PdfPCell(new Phrase("")) { Border = PdfPCell.NO_BORDER });
-
             var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
             Console.WriteLine("Logo Path: " + logoPath);
 
@@ -2394,11 +2386,8 @@ namespace VaccineAPI.Controllers
             {
                 throw new FileNotFoundException("Logo file not found at: " + logoPath);
             }
-
             document.Add(headerTable);
             document.Add(new Paragraph("\n")); // Add a blank line
-
-            // Add details in a single line
             var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA, 10, BaseColor.Black);
             string details = $"{dbChild.Name} \n{dbChild.FatherName}";
             if (!string.IsNullOrEmpty(dbChild.CNIC))
@@ -2409,7 +2398,6 @@ namespace VaccineAPI.Controllers
             {
                 details += "\n"; // Add a new line if CNIC is not present
             }
-
             details += $" | DOB: {dbChild.DOB:dd-MMM-yyyy}";
             document.Add(new Paragraph(details, detailsFont));
             string currentDateTime = "";
@@ -2422,25 +2410,17 @@ namespace VaccineAPI.Controllers
                 {
                     var qrCode = new BitmapByteQRCode(qrCodeData);
                     byte[] qrCodeImage = qrCode.GetGraphic(18);
-
                     using (MemoryStream ms = new MemoryStream(qrCodeImage))
                     {
-                        // Create the QR code image
                         var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
-                        pdfQrCode.ScaleAbsolute(60f, 60f); // Set QR code size
+                        pdfQrCode.ScaleAbsolute(60f, 60f); 
                         int currentYear = DateTime.Now.Year;
-                        // Calculate QR code position
                         float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 15f;
                         float qrCodeYPosition = 110f;
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
-
-                        // Add the QR code to the document
                         writer.DirectContent.AddImage(pdfQrCode);
-
-                        // Add text above the QR code
                         float textXPosition = qrCodeXPosition; // Align text with QR code
                         float textYPosition = qrCodeYPosition + pdfQrCode.ScaledHeight + 5f; // Position above the QR code
-
                         var font = FontFactory.GetFont(FontFactory.HELVETICA, 6);
                         ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
                             new Phrase($"MR#{currentYear}-{dbChild.Id}", font), textXPosition + pdfQrCode.ScaledWidth / 2, textYPosition, 0);
@@ -2451,21 +2431,13 @@ namespace VaccineAPI.Controllers
             {
                 Console.WriteLine($"Error generating QR code: {ex.Message}");
             }
-
-
-            // ... existing code ...
             Font smallFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
             document.Add(new Paragraph("Vaccine.pk is home and clinic bases vaccination service offered by BabyMedics ( IHRA00568)\nunder supervision of Dr Salman Ahmad Bajwa.", smallFont));
             document.Add(new Paragraph(currentDateTime, smallFont));
-
-          
-            // QR Code URL
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             var fileName = "Patient-ID.pdf";
             return File(output, "application/pdf", fileName);
         }
-
     }
-
 }

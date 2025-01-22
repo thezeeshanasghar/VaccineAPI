@@ -25,6 +25,16 @@ builder.Services.AddDbContext<VaccineAPI.Models.Context>(
         .EnableDetailedErrors()
 );
 
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.ListenAnyIP(80); // HTTP
+    serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
+    {
+        listenOptions.UseHttps("/etc/letsencrypt/live/myapi.ewarenet.com/fullchain.pem", 
+                               "/etc/letsencrypt/live/myapi.ewarenet.com/privkey.pem");
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

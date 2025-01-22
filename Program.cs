@@ -30,8 +30,7 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
     serverOptions.ListenAnyIP(80); // HTTP
     serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
     {
-        listenOptions.UseHttps("/etc/letsencrypt/live/myapi.ewarenet.com/fullchain.pem", 
-                               "/etc/letsencrypt/live/myapi.ewarenet.com/privkey.pem");
+        listenOptions.UseHttps("/home/ec2-user/VaccineAPI/myapi.pfx", "Ae!8bfb666");
     });
 });
 

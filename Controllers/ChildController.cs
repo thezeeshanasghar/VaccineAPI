@@ -2422,24 +2422,28 @@ namespace VaccineAPI.Controllers
                 {
                     var qrCode = new BitmapByteQRCode(qrCodeData);
                     byte[] qrCodeImage = qrCode.GetGraphic(18);
+
                     using (MemoryStream ms = new MemoryStream(qrCodeImage))
                     {
-                        var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
-                        pdfQrCode.ScaleAbsolute(60f, 60f);
-
-                        float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 180f;
+                        // Create the QR code image
+                        var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
+                        pdfQrCode.ScaleAbsolute(60f, 60f); // Set QR code size
+                        int currentYear = DateTime.Now.Year;
+                        // Calculate QR code position
+                        float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 15f;
                         float qrCodeYPosition = 110f;
-
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
+
+                        // Add the QR code to the document
                         writer.DirectContent.AddImage(pdfQrCode);
-                        Paragraph vaccineApiText = new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 8))
-                        {
-                            Alignment = Element.ALIGN_RIGHT,
-                            Leading = 2f,
-                            IndentationRight = 180
-                        };
-                        vaccineApiText.SpacingBefore = 25f;
-                        document.Add(vaccineApiText);
+
+                        // Add text above the QR code
+                        float textXPosition = qrCodeXPosition; // Align text with QR code
+                        float textYPosition = qrCodeYPosition + pdfQrCode.ScaledHeight + 5f; // Position above the QR code
+
+                        var font = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+                        ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
+                            new Phrase($"MR#{currentYear}-{dbChild.Id}", font), textXPosition + pdfQrCode.ScaledWidth / 2, textYPosition, 0);
                     }
                 }
             }
@@ -2447,8 +2451,11 @@ namespace VaccineAPI.Controllers
             {
                 Console.WriteLine($"Error generating QR code: {ex.Message}");
             }
+
+
+            // ... existing code ...
             Font smallFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-            document.Add(new Paragraph("Vaccine.pk is home and clinic bases vaccination service offered by BabyMedics ( IHRA00568) under supervision of Dr Salman Ahmad Bajwa.", smallFont));
+            document.Add(new Paragraph("Vaccine.pk is home and clinic bases vaccination service offered by BabyMedics ( IHRA00568)\nunder supervision of Dr Salman Ahmad Bajwa.", smallFont));
             document.Add(new Paragraph(currentDateTime, smallFont));
 
           

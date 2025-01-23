@@ -2345,7 +2345,7 @@ namespace VaccineAPI.Controllers
 
 
             float width = 120f * 2.83465f; 
-            float height = 75f * 2.83465f;
+            float height = 80f * 2.83465f;
             float padding = 10f; 
             var document = new Document(new Rectangle(width, height), padding, padding, padding, padding);
             var output = new MemoryStream();
@@ -2371,8 +2371,8 @@ namespace VaccineAPI.Controllers
             textCell.Border = PdfPCell.NO_BORDER;
             textCell.PaddingTop=20f;
             textCell.PaddingLeft=20f;
-            textCell.AddElement(new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
-            textCell.AddElement(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA, 12))
+            textCell.AddElement(new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 10)));
+            textCell.AddElement(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12))
             {
                 SpacingAfter = 0f 
             }
@@ -2401,14 +2401,11 @@ namespace VaccineAPI.Controllers
             }
             document.Add(headerTable);
 
-
-            var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+            var detailsFonts = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+            var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
             PdfPTable detailsTable = new PdfPTable(1);
             detailsTable.WidthPercentage = 100;
-            textCell.PaddingTop=10f;
-            textCell.PaddingLeft=0f;
-            detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.Name}", detailsFont))
-
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.Name}", detailsFonts))
             {
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f, 
@@ -2431,9 +2428,9 @@ namespace VaccineAPI.Controllers
                 PaddingLeft = 23f
             });
             int currentYear = DateTime.Now.Year;
-            string mrNumber = currentYear.ToString().Substring(2);
+            string mrNumber = currentYear.ToString()[2..];
 
-            detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # {mrNumber}{dbChild.Id}", detailsFont))
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # {mrNumber}{dbChild.Id}", detailsFonts))
             {
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 45f,
@@ -2444,7 +2441,7 @@ namespace VaccineAPI.Controllers
 
             document.Add(detailsTable);
 
-            var baseUrl = "https://myapi.skintechno.com/api";
+            var baseUrl = "https://myapi.ewarenet.com/api";
             var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
@@ -2468,7 +2465,7 @@ namespace VaccineAPI.Controllers
         
             Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
 
-            Paragraph footerText1 = new Paragraph("Baby Medics", footerFont)
+            Paragraph footerText1 = new Paragraph("Baby Medics (IHRA-00568)", footerFont)
             {
 
                 IndentationLeft = 20f 
@@ -2476,13 +2473,13 @@ namespace VaccineAPI.Controllers
             document.Add(footerText1);
 
             // Get the current date and time
-            string currentDateTime = DateTime.Now.ToString("dd-MMM-yyyy hh:mmtt"); // Format as needed
+            // string currentDateTime = DateTime.Now.ToString("dd-MMM-yyyy hh:mmtt"); // Format as needed
 
-            Paragraph footerText2 = new Paragraph($"IHRA-00568    {currentDateTime}", footerFont)
-            {
-                IndentationLeft = 20f
-            };
-            document.Add(footerText2);
+            // Paragraph footerText2 = new Paragraph($"IHRA-00568    {currentDateTime}", footerFont)
+            // {
+            //     IndentationLeft = 20f
+            // };
+            // document.Add(footerText2);
 
 
 

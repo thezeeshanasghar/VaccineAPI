@@ -25,6 +25,15 @@ builder.Services.AddDbContext<VaccineAPI.Models.Context>(
         .EnableDetailedErrors()
 );
 
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.ListenAnyIP(80); // HTTP
+    serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
+    {
+        listenOptions.UseHttps("/home/ec2-user/VaccineAPI/myapi.pfx", "Ae!8bfb666");
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

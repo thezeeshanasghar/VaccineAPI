@@ -1729,9 +1729,10 @@ namespace VaccineAPI.Controllers
             if (!String.IsNullOrEmpty(dbChild.CNIC))
                 upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
             else
-                upperTable.AddCell(CreateCell("", "", 1, "right", "description")); // Provide a default message if CNIC is empty
+                upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
+                
+            upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
 
-            upperTable.AddCell(CreateCell("", "", 2, "left", "description")); // Empty cell for spacing
             upperTable.AddCell(CreateCell("Invoice # " + invoiceNumber, "bold", 2, "right", "description"));
 
             document.Add(upperTable);
@@ -2449,6 +2450,7 @@ namespace VaccineAPI.Controllers
                 return NotFound(new { message = "Child not found." });
             }
 
+
             float width = 120f * 2.83465f; 
             float height = 75f * 2.83465f;
             float padding = 10f; 
@@ -2457,6 +2459,7 @@ namespace VaccineAPI.Controllers
             var writer = PdfWriter.GetInstance(document, output);
             writer.CloseStream = false;
             document.Open();
+
 
             
             PdfContentByte canvas = writer.DirectContent;
@@ -2482,6 +2485,7 @@ namespace VaccineAPI.Controllers
             }
             );
             headerTable.AddCell(textCell);
+
             var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
             if (System.IO.File.Exists(logoPath))
             {
@@ -2490,7 +2494,9 @@ namespace VaccineAPI.Controllers
                 PdfPCell logoCell = new PdfPCell(logo)
                 {
                     Border = PdfPCell.NO_BORDER,
+
                     HorizontalAlignment = Element.ALIGN_LEFT 
+
                 };
                 logoCell.PaddingTop = 30f; 
                 logoCell.PaddingLeft= 0f;
@@ -2500,8 +2506,8 @@ namespace VaccineAPI.Controllers
             {
                 throw new FileNotFoundException("Logo file not found at: " + logoPath);
             }
-
             document.Add(headerTable);
+
 
             var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
             PdfPTable detailsTable = new PdfPTable(1);
@@ -2509,6 +2515,7 @@ namespace VaccineAPI.Controllers
             textCell.PaddingTop=10f;
             textCell.PaddingLeft=0f;
             detailsTable.AddCell(new PdfPCell(new Paragraph($"Name: {dbChild.Name}", detailsFont))
+
             {
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f, 
@@ -2516,6 +2523,7 @@ namespace VaccineAPI.Controllers
             });
             detailsTable.AddCell(new PdfPCell(new Paragraph($"S/W/D/o: {dbChild.FatherName}", detailsFont))
             {
+
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
             });
@@ -2557,6 +2565,7 @@ namespace VaccineAPI.Controllers
                     float qrCodeYPosition = 25f;
                     pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                     writer.DirectContent.AddImage(pdfQrCode);
+
                 }
             }
 
@@ -2565,6 +2574,7 @@ namespace VaccineAPI.Controllers
 
             Paragraph footerText1 = new Paragraph("Baby Medics", footerFont)
             {
+
                 IndentationLeft = 20f 
             };
             document.Add(footerText1);
@@ -2579,12 +2589,12 @@ namespace VaccineAPI.Controllers
             document.Add(footerText2);
 
 
+
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
 
             var fileName = "Patient-ID.pdf";
             return File(output, "application/pdf", fileName);
         }
-
     }
 }

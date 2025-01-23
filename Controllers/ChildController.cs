@@ -2430,12 +2430,15 @@ namespace VaccineAPI.Controllers
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
             });
-            detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # ", detailsFont))
+            int currentYear = DateTime.Now.Year;
+            string mrNumber = currentYear.ToString().Substring(2);
+
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # {mrNumber}{dbChild.Id}", detailsFont))
             {
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 45f,
-                PaddingBottom=6f,
-                PaddingTop=6f
+                PaddingBottom = 6f,
+                PaddingTop = 6f
             });
 
 
@@ -2463,7 +2466,7 @@ namespace VaccineAPI.Controllers
             }
 
         
-            Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+            Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
 
             Paragraph footerText1 = new Paragraph("Baby Medics", footerFont)
             {

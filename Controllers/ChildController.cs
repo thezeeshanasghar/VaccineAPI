@@ -1705,18 +1705,34 @@ namespace VaccineAPI.Controllers
 
             upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 1, "left", "description"));
 
-            // image code start
             var imgPath = Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage);
-            Image img = Image.GetInstance(imgPath);
-            img.ScaleAbsolute(160f, 50f);
-            PdfPCell imageCell = new PdfPCell(img, false);
-            imageCell.Colspan = 1;  // either 1 if you need to insert one cell
-            imageCell.Rowspan = 2;
-            imageCell.Border = 0;
-            imageCell.FixedHeight = 50f;
-            imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-            upperTable.AddCell(imageCell);
 
+            if (System.IO.File.Exists(imgPath))
+            {
+                Image img = Image.GetInstance(imgPath);
+                img.ScaleAbsolute(160f, 50f);
+                PdfPCell imageCell = new PdfPCell(img, false)
+                {
+                    Colspan = 1,
+                    Rowspan = 2,
+                    Border = 0,
+                    FixedHeight = 50f,
+                    HorizontalAlignment = Element.ALIGN_RIGHT
+                };
+                upperTable.AddCell(imageCell);
+            }
+            else
+            {
+                PdfPCell emptyCell = new PdfPCell
+                {
+                    Colspan = 1,
+                    Rowspan = 2,
+                    Border = 0,
+                    FixedHeight = 50f,
+                    HorizontalAlignment = Element.ALIGN_RIGHT
+                };
+                upperTable.AddCell(emptyCell);
+            }
             upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 1, "left", "description"));
 
             upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 1, "left", "description"));

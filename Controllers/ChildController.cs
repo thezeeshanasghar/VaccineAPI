@@ -2333,113 +2333,6 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        // [HttpGet("PID/{id}")]
-        // public IActionResult GenerateHelloPdf(int id)
-        // {
-        //     long childId = Convert.ToInt64(id);
-        //     var dbChild = _db.Childs.Find(childId);
-        //     if (dbChild == null)
-        //     {
-        //         return NotFound(new { message = "Child not found." });
-        //     }
-        //     float width = 150f * 2.83465f; // Increased width
-        //     float height = 90f * 2.83465f;
-        //     var document = new Document(new Rectangle(width, height), 10, 10, 10, 10);
-        //     var output = new MemoryStream();
-        //     var writer = PdfWriter.GetInstance(document, output);
-        //     writer.CloseStream = false;
-        //     document.Open();
-        //     PdfPTable headerTable = new PdfPTable(1);
-        //     headerTable.WidthPercentage = 100;
-
-        //     PdfPCell titleCell = new PdfPCell(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 16)))
-        //     {
-        //         Border = PdfPCell.NO_BORDER,
-        //         HorizontalAlignment = Element.ALIGN_LEFT,
-        //         VerticalAlignment = Element.ALIGN_MIDDLE
-        //     };
-        //     headerTable.AddCell(titleCell);
-        //     PdfPCell subtitleCell = new PdfPCell(new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 12)))
-        //     {
-        //         Border = PdfPCell.NO_BORDER,
-        //         HorizontalAlignment = Element.ALIGN_LEFT,
-        //         VerticalAlignment = Element.ALIGN_MIDDLE
-        //     };
-        //     headerTable.AddCell(subtitleCell);
-        //     headerTable.AddCell(new PdfPCell(new Phrase("")) { Border = PdfPCell.NO_BORDER });
-        //     var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
-        //     Console.WriteLine("Logo Path: " + logoPath);
-
-        //     if (System.IO.File.Exists(logoPath))
-        //     {
-        //         var logo = Image.GetInstance(logoPath);
-        //         logo.ScaleToFit(100f, 70f);
-        //         PdfPCell logoCell = new PdfPCell(logo)
-        //         {
-        //             Border = PdfPCell.NO_BORDER,
-        //             HorizontalAlignment = Element.ALIGN_RIGHT,
-        //             VerticalAlignment = Element.ALIGN_MIDDLE,
-        //             PaddingTop = -45f
-        //         };
-        //         headerTable.AddCell(logoCell);
-        //     }
-        //     else
-        //     {
-        //         throw new FileNotFoundException("Logo file not found at: " + logoPath);
-        //     }
-        //     document.Add(headerTable);
-        //     document.Add(new Paragraph("\n")); // Add a blank line
-        //     var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA, 10, BaseColor.Black);
-        //     string details = $"{dbChild.Name} \n{dbChild.FatherName}";
-        //     if (!string.IsNullOrEmpty(dbChild.CNIC))
-        //     {
-        //         details += $"\nPP# {dbChild.CNIC}";
-        //     }
-        //     else
-        //     {
-        //         details += "\n"; // Add a new line if CNIC is not present
-        //     }
-        //     details += $" | DOB: {dbChild.DOB:dd-MMM-yyyy}";
-        //     document.Add(new Paragraph(details, detailsFont));
-        //     string currentDateTime = "";
-        //     var baseUrl = "https://myapi.skintechno.com/api";
-        //     var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
-        //     try
-        //     {
-        //         using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
-        //         using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
-        //         {
-        //             var qrCode = new BitmapByteQRCode(qrCodeData);
-        //             byte[] qrCodeImage = qrCode.GetGraphic(18);
-        //             using (MemoryStream ms = new MemoryStream(qrCodeImage))
-        //             {
-        //                 var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
-        //                 pdfQrCode.ScaleAbsolute(60f, 60f); 
-        //                 int currentYear = DateTime.Now.Year;
-        //                 float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 15f;
-        //                 float qrCodeYPosition = 110f;
-        //                 pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
-        //                 writer.DirectContent.AddImage(pdfQrCode);
-        //                 float textXPosition = qrCodeXPosition; // Align text with QR code
-        //                 float textYPosition = qrCodeYPosition + pdfQrCode.ScaledHeight + 5f; // Position above the QR code
-        //                 var font = FontFactory.GetFont(FontFactory.HELVETICA, 6);
-        //                 ColumnText.ShowTextAligned(writer.DirectContent, Element.ALIGN_CENTER,
-        //                     new Phrase($"MR#{currentYear}-{dbChild.Id}", font), textXPosition + pdfQrCode.ScaledWidth / 2, textYPosition, 0);
-        //             }
-        //         }
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         Console.WriteLine($"Error generating QR code: {ex.Message}");
-        //     }
-        //     Font smallFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-        //     document.Add(new Paragraph("Vaccine.pk is home and clinic bases vaccination service offered by BabyMedics ( IHRA00568)\nunder supervision of Dr Salman Ahmad Bajwa.", smallFont));
-        //     document.Add(new Paragraph(currentDateTime, smallFont));
-        //     document.Close();
-        //     output.Seek(0, SeekOrigin.Begin);
-        //     var fileName = "Patient-ID.pdf";
-        //     return File(output, "application/pdf", fileName);
-        // }
         [HttpGet("PID/{id}")]
         public IActionResult GenerateHelloPdf(int id)
         {
@@ -2478,8 +2371,8 @@ namespace VaccineAPI.Controllers
             textCell.Border = PdfPCell.NO_BORDER;
             textCell.PaddingTop=20f;
             textCell.PaddingLeft=20f;
-            textCell.AddElement(new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 10)));
-            textCell.AddElement(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12))
+            textCell.AddElement(new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
+            textCell.AddElement(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA, 12))
             {
                 SpacingAfter = 0f 
             }
@@ -2509,25 +2402,25 @@ namespace VaccineAPI.Controllers
             document.Add(headerTable);
 
 
-            var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+            var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
             PdfPTable detailsTable = new PdfPTable(1);
             detailsTable.WidthPercentage = 100;
             textCell.PaddingTop=10f;
             textCell.PaddingLeft=0f;
-            detailsTable.AddCell(new PdfPCell(new Paragraph($"Name: {dbChild.Name}", detailsFont))
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.Name}", detailsFont))
 
             {
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f, 
                 PaddingTop = 0f 
             });
-            detailsTable.AddCell(new PdfPCell(new Paragraph($"S/W/D/o: {dbChild.FatherName}", detailsFont))
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.FatherName}", detailsFont))
             {
 
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
             });
-            detailsTable.AddCell(new PdfPCell(new Paragraph($"Date of Birth: {dbChild.DOB:dd-MMM-yyyy}", detailsFont))
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"DOB: {dbChild.DOB:dd-MMM-yyyy}", detailsFont))
             {
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
@@ -2537,7 +2430,7 @@ namespace VaccineAPI.Controllers
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
             });
-            detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # 345 987", detailsFont))
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # ", detailsFont))
             {
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 45f,

@@ -26,7 +26,7 @@ jobs:
         run: dotnet publish --configuration Release --no-restore --output publish  
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: published-app
           path: publish/
@@ -36,7 +36,7 @@ jobs:
     needs: build
     steps:  
       - name: Download artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: published-app
           path: publish

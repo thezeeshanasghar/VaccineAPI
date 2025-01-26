@@ -45,8 +45,8 @@ else
     // Development environment - use development certificate
     builder.WebHost.ConfigureKestrel(serverOptions =>
     {
-        serverOptions.ListenAnyIP(5001); // HTTP
-        serverOptions.ListenAnyIP(5002, listenOptions => // HTTPS
+        serverOptions.ListenAnyIP(5000); // HTTP
+        serverOptions.ListenAnyIP(5001, listenOptions => // HTTPS
         {
             // Use ASP.NET Core's development certificate
             listenOptions.UseHttps();

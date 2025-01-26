@@ -2,7 +2,7 @@ dotnet clean
 dotnet restore
 dotnet build
 export ASPNETCORE_ENVIRONMENT=Development
-dotnet run
+dotnet run --environment Development
 
 dotnet tool install --global dotnet-ef --version 3.\*
 dotnet ef migrations add InitialCreate

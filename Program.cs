@@ -30,7 +30,7 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
     serverOptions.ListenAnyIP(80); // HTTP
     serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
     {
-        listenOptions.UseHttps("/home/ec2-user/VaccineAPI/myapi.pfx", "Ae!8bfb666");
+        listenOptions.UseHttps("/app/certs/myapi.pfx", "Ae!8bfb666");
     });
 });
 

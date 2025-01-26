@@ -5,8 +5,16 @@ services:
     build: .
     ports:
       - "8080:80"
+      - "443:443"
     depends_on:
       - db
+    volumes:
+      - ./certs:/app/certs
+    environment:
+      - ASPNETCORE_URLS=https://+:443;http://+:80
+      - ASPNETCORE_HTTPS_PORT=443
+      - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/certs/myapi.pfx
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=Ae!8bfb666
 
   db:
     image: mysql:8.0

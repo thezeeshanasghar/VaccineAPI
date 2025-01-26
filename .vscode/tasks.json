@@ -36,6 +36,17 @@
                 "${workspaceFolder}/VaccineAPI.csproj"
             ],
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "run",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/VaccineAPI.csproj"
+            ],
+            "problemMatcher": "$msCompile"
         }
     ]
 }

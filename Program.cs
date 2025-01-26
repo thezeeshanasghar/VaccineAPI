@@ -25,14 +25,34 @@ builder.Services.AddDbContext<VaccineAPI.Models.Context>(
         .EnableDetailedErrors()
 );
 
-builder.WebHost.ConfigureKestrel(serverOptions =>
+var environment = builder.Environment.EnvironmentName;
+Console.WriteLine($"Current environment: {environment}");
+
+
+if (!builder.Environment.IsDevelopment())
 {
-    serverOptions.ListenAnyIP(80); // HTTP
-    serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
+    builder.WebHost.ConfigureKestrel(serverOptions =>
     {
-        listenOptions.UseHttps("/app/certs/myapi.pfx", "Ae!8bfb666");
+        serverOptions.ListenAnyIP(80); // HTTP
+        serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
+        {
+            listenOptions.UseHttps("/app/certs/myapi.pfx", "Ae!8bfb666");
+        });
     });
-});
+}
+else
+{
+    // Development environment - use development certificate
+    builder.WebHost.ConfigureKestrel(serverOptions =>
+    {
+        serverOptions.ListenAnyIP(5001); // HTTP
+        serverOptions.ListenAnyIP(5002, listenOptions => // HTTPS
+        {
+            // Use ASP.NET Core's development certificate
+            listenOptions.UseHttps();
+        });
+    });
+}
 
 var app = builder.Build();
 
@@ -48,8 +68,8 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.UseStaticFiles(new StaticFileOptions
 {
-   FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.ContentRootPath, "Resources")),
-   RequestPath = "/Resources"
+    FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.ContentRootPath, "Resources")),
+    RequestPath = "/Resources"
 });
 
 app.MapControllers();

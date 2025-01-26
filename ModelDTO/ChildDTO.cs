@@ -24,6 +24,7 @@ namespace VaccineAPI.ModelDTO
         public string Gender { get; set; }
         public bool IsSkip { get; set; }
         public string City { get; set; } = "Rawalpindi";
+        public string Agent { get; set; } = "";
         public string CNIC { get; set; } = "";
         public bool IsEPIDone { get; set; }
         public bool IsVerified { get; set; }

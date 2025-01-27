@@ -45,10 +45,7 @@ DROP COLUMN IsSpecial;
 ALTER TABLE doctors
 DROP COLUMN IsApproved;
 
-
-
-
-
+ALTER TABLE `childs` ADD `Agent` LONGTEXT NOT NULL DEFAULT '' AFTER `Guardian`;
 
 CREATE TABLE `cities` (
   `Id` INT NOT NULL AUTO_INCREMENT,
@@ -69,5 +66,3 @@ CREATE TABLE Invoices (
     DoseId INT NOT NULL,
     PRIMARY KEY (Id)
 );
-
-Revert changes 

@@ -11,7 +11,7 @@ using VaccineAPI.Models;
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    [Migration("20250127020924_InitialCreate")]
+    [Migration("20250127045531_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -34,7 +34,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Agents");
+                    b.ToTable("agents");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Brand", b =>
@@ -54,7 +54,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("VaccineId");
 
-                    b.ToTable("Brands");
+                    b.ToTable("brands");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.BrandAmount", b =>
@@ -81,7 +81,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("DoctorId");
 
-                    b.ToTable("BrandAmounts");
+                    b.ToTable("brandamounts");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Child", b =>
@@ -155,7 +155,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Childs");
+                    b.ToTable("childs");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.City", b =>
@@ -170,7 +170,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Cities");
+                    b.ToTable("cities");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Clinic", b =>
@@ -214,7 +214,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("DoctorId");
 
-                    b.ToTable("Clinics");
+                    b.ToTable("clinics");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.ClinicTiming", b =>
@@ -247,7 +247,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("ClinicId");
 
-                    b.ToTable("ClinicTimings");
+                    b.ToTable("clinictimings");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Doctor", b =>
@@ -330,7 +330,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Doctors");
+                    b.ToTable("doctors");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.DoctorSchedule", b =>
@@ -357,7 +357,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("DoseId");
 
-                    b.ToTable("DoctorSchedules");
+                    b.ToTable("doctorschedules");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Dose", b =>
@@ -389,7 +389,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("VaccineId");
 
-                    b.ToTable("Doses");
+                    b.ToTable("doses");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.FollowUp", b =>
@@ -435,7 +435,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("DoctorId");
 
-                    b.ToTable("FollowUps");
+                    b.ToTable("followups");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Invoice", b =>
@@ -465,7 +465,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Invoices");
+                    b.ToTable("invoices");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Message", b =>
@@ -496,7 +496,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Messages");
+                    b.ToTable("messages");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.NormalRange", b =>
@@ -531,7 +531,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("NormalRanges");
+                    b.ToTable("normalranges");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Schedule", b =>
@@ -591,7 +591,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasIndex("DoseId");
 
-                    b.ToTable("Schedules");
+                    b.ToTable("schedules");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.User", b =>
@@ -618,7 +618,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users");
+                    b.ToTable("users");
 
                     b.HasData(
                         new
@@ -652,7 +652,7 @@ namespace VaccineAPI.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Vaccines");
+                    b.ToTable("vaccines");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Brand", b =>

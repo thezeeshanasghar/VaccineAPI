@@ -21,7 +21,7 @@ services:
     image: mysql:8.0
     platform: linux/arm64/v8
     environment:
-      MYSQL_ROOT_PASSWORD: mcs@12345@12345
+      MYSQL_ROOT_PASSWORD: mcs@12345
       MYSQL_DATABASE: skint__stagedb
       MYSQL_USER: skint__stagedb
       MYSQL_PASSWORD: mcs@12345
@@ -31,7 +31,7 @@ services:
       - db_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
       retries: 5
 
@@ -42,7 +42,7 @@ services:
       - db
     environment:
       DATABASE_HOST: db
-      MYSQL_ROOT_PASSWORD: mcs@12345@12345
+      MYSQL_ROOT_PASSWORD: mcs@12345
     ports:
       - "8081:8080"
 

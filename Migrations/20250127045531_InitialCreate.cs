@@ -16,7 +16,7 @@ namespace VaccineAPI.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Agents",
+                name: "agents",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
@@ -26,12 +26,12 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Agents", x => x.Id);
+                    table.PrimaryKey("PK_agents", x => x.Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Cities",
+                name: "cities",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
@@ -41,12 +41,12 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Cities", x => x.Id);
+                    table.PrimaryKey("PK_cities", x => x.Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Invoices",
+                name: "invoices",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -61,12 +61,12 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Invoices", x => x.Id);
+                    table.PrimaryKey("PK_invoices", x => x.Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "NormalRanges",
+                name: "normalranges",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
@@ -82,12 +82,12 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_NormalRanges", x => x.Id);
+                    table.PrimaryKey("PK_normalranges", x => x.Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Users",
+                name: "users",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -103,12 +103,12 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Users", x => x.Id);
+                    table.PrimaryKey("PK_users", x => x.Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Vaccines",
+                name: "vaccines",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -121,12 +121,12 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Vaccines", x => x.Id);
+                    table.PrimaryKey("PK_vaccines", x => x.Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Doctors",
+                name: "doctors",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -164,18 +164,18 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Doctors", x => x.Id);
+                    table.PrimaryKey("PK_doctors", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Doctors_Users_UserId",
+                        name: "FK_doctors_users_UserId",
                         column: x => x.UserId,
-                        principalTable: "Users",
+                        principalTable: "users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Messages",
+                name: "messages",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -191,17 +191,17 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Messages", x => x.Id);
+                    table.PrimaryKey("PK_messages", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Messages_Users_UserId",
+                        name: "FK_messages_users_UserId",
                         column: x => x.UserId,
-                        principalTable: "Users",
+                        principalTable: "users",
                         principalColumn: "Id");
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Brands",
+                name: "brands",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -212,18 +212,18 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Brands", x => x.Id);
+                    table.PrimaryKey("PK_brands", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Brands_Vaccines_VaccineId",
+                        name: "FK_brands_vaccines_VaccineId",
                         column: x => x.VaccineId,
-                        principalTable: "Vaccines",
+                        principalTable: "vaccines",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Doses",
+                name: "doses",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -238,18 +238,18 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Doses", x => x.Id);
+                    table.PrimaryKey("PK_doses", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Doses_Vaccines_VaccineId",
+                        name: "FK_doses_vaccines_VaccineId",
                         column: x => x.VaccineId,
-                        principalTable: "Vaccines",
+                        principalTable: "vaccines",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Clinics",
+                name: "clinics",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -270,18 +270,18 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Clinics", x => x.Id);
+                    table.PrimaryKey("PK_clinics", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Clinics_Doctors_DoctorId",
+                        name: "FK_clinics_doctors_DoctorId",
                         column: x => x.DoctorId,
-                        principalTable: "Doctors",
+                        principalTable: "doctors",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "BrandAmounts",
+                name: "brandamounts",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -293,24 +293,24 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_BrandAmounts", x => x.Id);
+                    table.PrimaryKey("PK_brandamounts", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_BrandAmounts_Brands_BrandId",
+                        name: "FK_brandamounts_brands_BrandId",
                         column: x => x.BrandId,
-                        principalTable: "Brands",
+                        principalTable: "brands",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_BrandAmounts_Doctors_DoctorId",
+                        name: "FK_brandamounts_doctors_DoctorId",
                         column: x => x.DoctorId,
-                        principalTable: "Doctors",
+                        principalTable: "doctors",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "DoctorSchedules",
+                name: "doctorschedules",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -322,24 +322,24 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_DoctorSchedules", x => x.Id);
+                    table.PrimaryKey("PK_doctorschedules", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_DoctorSchedules_Doctors_DoctorId",
+                        name: "FK_doctorschedules_doctors_DoctorId",
                         column: x => x.DoctorId,
-                        principalTable: "Doctors",
+                        principalTable: "doctors",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_DoctorSchedules_Doses_DoseId",
+                        name: "FK_doctorschedules_doses_DoseId",
                         column: x => x.DoseId,
-                        principalTable: "Doses",
+                        principalTable: "doses",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Childs",
+                name: "childs",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -372,29 +372,29 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Childs", x => x.Id);
+                    table.PrimaryKey("PK_childs", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Childs_Clinics_ClinicId",
+                        name: "FK_childs_clinics_ClinicId",
                         column: x => x.ClinicId,
-                        principalTable: "Clinics",
+                        principalTable: "clinics",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_Childs_Doctors_DoctorId",
+                        name: "FK_childs_doctors_DoctorId",
                         column: x => x.DoctorId,
-                        principalTable: "Doctors",
+                        principalTable: "doctors",
                         principalColumn: "Id");
                     table.ForeignKey(
-                        name: "FK_Childs_Users_UserId",
+                        name: "FK_childs_users_UserId",
                         column: x => x.UserId,
-                        principalTable: "Users",
+                        principalTable: "users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "ClinicTimings",
+                name: "clinictimings",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -410,18 +410,18 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ClinicTimings", x => x.Id);
+                    table.PrimaryKey("PK_clinictimings", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ClinicTimings_Clinics_ClinicId",
+                        name: "FK_clinictimings_clinics_ClinicId",
                         column: x => x.ClinicId,
-                        principalTable: "Clinics",
+                        principalTable: "clinics",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "FollowUps",
+                name: "followups",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -440,24 +440,24 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_FollowUps", x => x.Id);
+                    table.PrimaryKey("PK_followups", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_FollowUps_Childs_ChildId",
+                        name: "FK_followups_childs_ChildId",
                         column: x => x.ChildId,
-                        principalTable: "Childs",
+                        principalTable: "childs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_FollowUps_Doctors_DoctorId",
+                        name: "FK_followups_doctors_DoctorId",
                         column: x => x.DoctorId,
-                        principalTable: "Doctors",
+                        principalTable: "doctors",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Schedules",
+                name: "schedules",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -480,120 +480,120 @@ namespace VaccineAPI.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Schedules", x => x.Id);
+                    table.PrimaryKey("PK_schedules", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Schedules_Brands_BrandId",
+                        name: "FK_schedules_brands_BrandId",
                         column: x => x.BrandId,
-                        principalTable: "Brands",
+                        principalTable: "brands",
                         principalColumn: "Id");
                     table.ForeignKey(
-                        name: "FK_Schedules_Childs_ChildId",
+                        name: "FK_schedules_childs_ChildId",
                         column: x => x.ChildId,
-                        principalTable: "Childs",
+                        principalTable: "childs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_Schedules_Doses_DoseId",
+                        name: "FK_schedules_doses_DoseId",
                         column: x => x.DoseId,
-                        principalTable: "Doses",
+                        principalTable: "doses",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.InsertData(
-                table: "Users",
+                table: "users",
                 columns: new[] { "Id", "CountryCode", "MobileNumber", "Password", "UserType" },
                 values: new object[] { 1L, "92", "3331231231", "1234", "SUPERADMIN" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_BrandAmounts_BrandId",
-                table: "BrandAmounts",
+                name: "IX_brandamounts_BrandId",
+                table: "brandamounts",
                 column: "BrandId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_BrandAmounts_DoctorId",
-                table: "BrandAmounts",
+                name: "IX_brandamounts_DoctorId",
+                table: "brandamounts",
                 column: "DoctorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Brands_VaccineId",
-                table: "Brands",
+                name: "IX_brands_VaccineId",
+                table: "brands",
                 column: "VaccineId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Childs_ClinicId",
-                table: "Childs",
+                name: "IX_childs_ClinicId",
+                table: "childs",
                 column: "ClinicId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Childs_DoctorId",
-                table: "Childs",
+                name: "IX_childs_DoctorId",
+                table: "childs",
                 column: "DoctorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Childs_UserId",
-                table: "Childs",
+                name: "IX_childs_UserId",
+                table: "childs",
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Clinics_DoctorId",
-                table: "Clinics",
+                name: "IX_clinics_DoctorId",
+                table: "clinics",
                 column: "DoctorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ClinicTimings_ClinicId",
-                table: "ClinicTimings",
+                name: "IX_clinictimings_ClinicId",
+                table: "clinictimings",
                 column: "ClinicId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Doctors_UserId",
-                table: "Doctors",
+                name: "IX_doctors_UserId",
+                table: "doctors",
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DoctorSchedules_DoctorId",
-                table: "DoctorSchedules",
+                name: "IX_doctorschedules_DoctorId",
+                table: "doctorschedules",
                 column: "DoctorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DoctorSchedules_DoseId",
-                table: "DoctorSchedules",
+                name: "IX_doctorschedules_DoseId",
+                table: "doctorschedules",
                 column: "DoseId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Doses_VaccineId",
-                table: "Doses",
+                name: "IX_doses_VaccineId",
+                table: "doses",
                 column: "VaccineId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_FollowUps_ChildId",
-                table: "FollowUps",
+                name: "IX_followups_ChildId",
+                table: "followups",
                 column: "ChildId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_FollowUps_DoctorId",
-                table: "FollowUps",
+                name: "IX_followups_DoctorId",
+                table: "followups",
                 column: "DoctorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Messages_UserId",
-                table: "Messages",
+                name: "IX_messages_UserId",
+                table: "messages",
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Schedules_BrandId",
-                table: "Schedules",
+                name: "IX_schedules_BrandId",
+                table: "schedules",
                 column: "BrandId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Schedules_ChildId",
-                table: "Schedules",
+                name: "IX_schedules_ChildId",
+                table: "schedules",
                 column: "ChildId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Schedules_DoseId",
-                table: "Schedules",
+                name: "IX_schedules_DoseId",
+                table: "schedules",
                 column: "DoseId");
         }
 
@@ -601,55 +601,55 @@ namespace VaccineAPI.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Agents");
+                name: "agents");
 
             migrationBuilder.DropTable(
-                name: "BrandAmounts");
+                name: "brandamounts");
 
             migrationBuilder.DropTable(
-                name: "Cities");
+                name: "cities");
 
             migrationBuilder.DropTable(
-                name: "ClinicTimings");
+                name: "clinictimings");
 
             migrationBuilder.DropTable(
-                name: "DoctorSchedules");
+                name: "doctorschedules");
 
             migrationBuilder.DropTable(
-                name: "FollowUps");
+                name: "followups");
 
             migrationBuilder.DropTable(
-                name: "Invoices");
+                name: "invoices");
 
             migrationBuilder.DropTable(
-                name: "Messages");
+                name: "messages");
 
             migrationBuilder.DropTable(
-                name: "NormalRanges");
+                name: "normalranges");
 
             migrationBuilder.DropTable(
-                name: "Schedules");
+                name: "schedules");
 
             migrationBuilder.DropTable(
-                name: "Brands");
+                name: "brands");
 
             migrationBuilder.DropTable(
-                name: "Childs");
+                name: "childs");
 
             migrationBuilder.DropTable(
-                name: "Doses");
+                name: "doses");
 
             migrationBuilder.DropTable(
-                name: "Clinics");
+                name: "clinics");
 
             migrationBuilder.DropTable(
-                name: "Vaccines");
+                name: "vaccines");
 
             migrationBuilder.DropTable(
-                name: "Doctors");
+                name: "doctors");
 
             migrationBuilder.DropTable(
-                name: "Users");
+                name: "users");
         }
     }
 }

@@ -29,30 +29,30 @@ var environment = builder.Environment.EnvironmentName;
 Console.WriteLine($"Current environment: {environment}");
 
 
-if (!builder.Environment.IsDevelopment())
-{
-    builder.WebHost.ConfigureKestrel(serverOptions =>
-    {
-        serverOptions.ListenAnyIP(80); // HTTP
-        serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
-        {
-            listenOptions.UseHttps("/app/certs/myapi.pfx", "Ae!8bfb666");
-        });
-    });
-}
-else
-{
-    // Development environment - use development certificate
-    builder.WebHost.ConfigureKestrel(serverOptions =>
-    {
-        serverOptions.ListenAnyIP(5000); // HTTP
-        serverOptions.ListenAnyIP(5001, listenOptions => // HTTPS
-        {
-            // Use ASP.NET Core's development certificate
-            listenOptions.UseHttps();
-        });
-    });
-}
+// if (!builder.Environment.IsDevelopment())
+// {
+//     builder.WebHost.ConfigureKestrel(serverOptions =>
+//     {
+//         serverOptions.ListenAnyIP(80); // HTTP
+//         serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
+//         {
+//             listenOptions.UseHttps("/app/certs/myapi.pfx", "Ae!8bfb666");
+//         });
+//     });
+// }
+// else
+// {
+//     // Development environment - use development certificate
+//     builder.WebHost.ConfigureKestrel(serverOptions =>
+//     {
+//         // serverOptions.ListenAnyIP(5000); // HTTP
+//         serverOptions.ListenAnyIP(5001, listenOptions => // HTTPS
+//         {
+//             // Use ASP.NET Core's development certificate
+//             listenOptions.UseHttps();
+//         });
+//     });
+// }
 
 var app = builder.Build();
 

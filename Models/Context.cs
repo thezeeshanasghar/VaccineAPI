@@ -32,6 +32,9 @@ namespace VaccineAPI.Models
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            // Convert all table names to lowercase
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+                entity.SetTableName(entity.GetTableName().ToLower());
             modelBuilder.Entity<User>().HasData(new User() { Id = 1, MobileNumber = "3331231231", Password = "1234", UserType = "SUPERADMIN", CountryCode = "92" });
         }
     }

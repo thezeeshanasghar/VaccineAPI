@@ -1583,31 +1583,6 @@ namespace VaccineAPI.Controllers
             imgcellLeft.PaddingTop = 5;
             bottomTable.AddCell(imgcellLeft);
 
-            // var imgPath = System.Web.Hosting.HostingEnvironment.MapPath("~/Content/UserImages");
-            //  var httpPostedSignatureImage = HttpContext.Request.Form.Files["SignatureImage"];
-            var imgPath = Path.Combine(_host.ContentRootPath, "Content/UserImages");
-
-            // using (var fileStream = new FileStream(imgPath, FileMode.Create))
-
-            // httpPostedSignatureImage.CopyToAsync(fileStream);
-            // dbDoctor.SignatureImage = httpPostedSignatureImage.FileName;
-            // var signatureImage = dbDoctor.SignatureImage;
-            // if (signatureImage == null)
-            // {
-            //     signatureImage = "avatar.png";
-            // }
-            // Image img = Image.GetInstance(imgPath + "//" + signatureImage);
-
-            // img.ScaleAbsolute(2f, 2f);
-            // PdfPCell imageCell = new PdfPCell(img, true);
-            // imageCell.PaddingTop = 5;
-            // imageCell.Colspan = 1;  // either 1 if you need to insert one cell
-            // imageCell.Border = 0;
-            // imageCell.FixedHeight = 40f;
-            // imageCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-            // bottomTable.AddCell(imageCell);
-
-            // document.Add(bottomTable);
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             stream = output;
@@ -2504,7 +2479,8 @@ namespace VaccineAPI.Controllers
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
 
-            var fileName = "Patient-ID.pdf";
+            var currentDate = DateTime.Now.ToString("dd-MMM-yyyy");
+            var fileName = $"{dbChild.Name}_PID_{currentDate}.pdf";
             return File(output, "application/pdf", fileName);
         }
     }

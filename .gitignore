@@ -38,3 +38,5 @@ msbuild.wrn
 
 .history/
 Resources/Images/
+!Resources/Images/Vaccine.pdflogo.png
+!Resources/Images/avatar.png

@@ -2490,7 +2490,7 @@ namespace VaccineAPI.Controllers
             // Fetch child, clinic, and doctor details from the database
             var childDetails = _db.Childs
                 .Include(c => c.Clinic)
-                    .ThenInclude(clinic => clinic.Doctor)
+                .ThenInclude(clinic => clinic.Doctor)
                 .FirstOrDefault(c => c.Id == childId);
 
             if (childDetails == null)
@@ -2510,7 +2510,10 @@ namespace VaccineAPI.Controllers
 
             // Continue with PDF generation using fetched details
             var output = new MemoryStream();
-            using (var document = new Document())
+            var customHeight = 450f; // Custom height in points
+            var customWidth = 600f; // Custom width in points
+            var customSize = new Rectangle(customWidth, customHeight);
+            using (var document = new Document(customSize))
             {
                 PdfWriter.GetInstance(document, output);
                 document.Open();
@@ -2615,68 +2618,72 @@ namespace VaccineAPI.Controllers
                         BorderColor = BaseColor.Gray,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
                         PaddingTop = 5,
-                        Border = Rectangle.TOP_BORDER | (header == "Vaccine" ? Rectangle.LEFT_BORDER : 0) | (header == "Validity" ? Rectangle.RIGHT_BORDER : 0)
+                        Border = Rectangle.TOP_BORDER | (header == "Vaccine" ? Rectangle.LEFT_BORDER : 0) | (header == "Validity" ? Rectangle.RIGHT_BORDER : 0) 
                     });
                 }
 
-                // Loop through the schedules and populate the table
-                foreach (var schedule in dbSchedules)
+                string staticVaccine = "COVID-19 Vaccine";
+                string staticBrand = "Generic";
+                string staticBatchLot = "12XYZ";
+                string staticValidity = "4 Years";
+                string staticDateGiven = "15/01/2025";
+
+                // Add static data to the table
+                vaccineTable.AddCell(new PdfPCell(new Phrase(staticVaccine, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(schedule.Dose.Name, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.LEFT_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
+                    Border = Rectangle.LEFT_BORDER | Rectangle.BOTTOM_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+                    BorderColor = BaseColor.Gray,
+                    PaddingBottom = 5
+                });
 
-                    // Static values for demonstration
-                    string staticBrand = "Generic";
-                    string staticBatchLot = "12XYZ";
-                    string staticValidity = "4 Years";
+                vaccineTable.AddCell(new PdfPCell(new Phrase(staticBrand, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    Border = Rectangle.NO_BORDER  | Rectangle.BOTTOM_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+                    BorderColor = BaseColor.Gray,
+                    PaddingBottom = 5
+                });
 
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(staticBrand, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.NO_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(staticBatchLot, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.NO_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(schedule.GivenDate.HasValue ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.NO_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(staticValidity, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.RIGHT_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
-                }
+                vaccineTable.AddCell(new PdfPCell(new Phrase(staticBatchLot, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+                    BorderColor = BaseColor.Gray,
+                    PaddingBottom = 5
+                });
 
-                // Add the vaccine table to the document
+                vaccineTable.AddCell(new PdfPCell(new Phrase(staticDateGiven, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+                    BorderColor = BaseColor.Gray,
+                    PaddingBottom = 5
+                });
+
+                vaccineTable.AddCell(new PdfPCell(new Phrase(staticValidity, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    Border = Rectangle.RIGHT_BORDER  | Rectangle.BOTTOM_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+                    BorderColor = BaseColor.Gray,
+                    PaddingBottom = 5
+                });
                 document.Add(vaccineTable);
 
+                document.Add(new Paragraph(" ")); // Add a single empty paragraph for a small space
+                document.Add(new Paragraph(" ")); // Add another empty paragraph for more space
 
-
-                // Add QR Code Image
+                // Add QR Code Image with a specific height using a Paragraph for spacing
+                document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10))
+                {
+                    SpacingAfter = 20 // Adjust the spacing value for more space
+                });
                 var qrCodePath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "QR-Code.png");
                 if (System.IO.File.Exists(qrCodePath))
                 {
                     var qrCodeImage = Image.GetInstance(qrCodePath);
-                    qrCodeImage.ScaleToFit(80f, 80f); // Adjust size as needed
-                    qrCodeImage.Alignment = Element.ALIGN_RIGHT; // Center the image
+                    qrCodeImage.ScaleToFit(80f, 80f); 
+                    qrCodeImage.Alignment = Element.ALIGN_RIGHT; 
                     document.Add(qrCodeImage);
                 }
                 else
@@ -2684,17 +2691,51 @@ namespace VaccineAPI.Controllers
                     throw new FileNotFoundException("QR Code image not found at: " + qrCodePath);
                 }
 
-                // Add Footer
-                var footerTable = new PdfPTable(1) { WidthPercentage = 100 };
-                var footer = new PdfPCell(new Phrase($"Baby Medics    IHRA-00568\nThis is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code or visit https://vaccine.pk/verify and enter MR number. MR No: {mrNumber}   Date: {DateTime.Now:yyyy-MM-dd HH:mm:ss}", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
+                var footerLeft = new PdfPCell(new Phrase($"Baby Medics  IHRA-00568", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
                 {
-                    Border = PdfPCell.NO_BORDER,
-                    HorizontalAlignment = Element.ALIGN_LEFT
+                    Border = Rectangle.NO_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_LEFT,
+                    
+                    Padding = 5
                 };
-                footerTable.AddCell(footer);
+
+                var footerRight = new PdfPCell(new Phrase($"MR No: {mrNumber}", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
+                {
+                    Border = Rectangle.NO_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_RIGHT,
+                    Padding = 5
+                };
+                footerRight.Phrase.Font.Color = BaseColor.Blue;
+
+                var footerTable = new PdfPTable(2) { WidthPercentage = 100 }; 
+                footerTable.AddCell(footerLeft); 
+                footerTable.AddCell(footerRight);
+
                 document.Add(footerTable);
 
-                // Close the document
+                var footerDetails = new PdfPCell(new Phrase($"This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
+                {
+                    Border = PdfPCell.NO_BORDER,
+                    HorizontalAlignment = Element.ALIGN_LEFT,
+                    Colspan = 2 
+                };
+
+                var footerTableDetails = new PdfPTable(1) { WidthPercentage = 100 };
+                footerTableDetails.AddCell(footerDetails);
+                document.Add(footerTableDetails);
+
+                var footerContact = new PdfPCell(new Phrase($"Block F, National Police Foundation, Main PWD Road, Islamabad          Phone: 051 5735006     info@vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    Border = PdfPCell.NO_BORDER,
+                    HorizontalAlignment = Element.ALIGN_LEFT,
+                    BackgroundColor = BaseColor.LightGray,
+                    Colspan = 2 
+                };
+                var footerContactTable = new PdfPTable(1) { WidthPercentage = 100 };
+                footerContactTable.AddCell(footerContact);
+                document.Add(footerContactTable);
+                document.NewPage(); 
+
                 document.Close();
             }
 

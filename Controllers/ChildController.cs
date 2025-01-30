@@ -2597,20 +2597,14 @@ namespace VaccineAPI.Controllers
                 document.Add(new Paragraph(" ")); // Adds a blank line
 
                 // Add Immunization Record Table
-                var vaccineTable = new PdfPTable(5) { WidthPercentage = 100 };
-                vaccineTable.SetWidths(new float[] { 3, 1, 1, 2, 1 });
+                var vaccineTable = new PdfPTable(7) { WidthPercentage = 100 };
+                vaccineTable.SetWidths(new float[] { 1.5f, 1, 1.5f, 1, 1, 1, 1 });
 
                 // Set the default cell border to no border
                 vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
-                var child = _db.Childs
-                               .Include(x => x.Schedules)
-                                   .ThenInclude(x => x.Dose)
-                               .Include(x => x.Schedules)
-                                   .ThenInclude(x => x.Brand)
-                               .FirstOrDefault(c => c.Id == childId);
-                var dbSchedules = child.Schedules.ToList();
+
                 // Adding header cells
-                string[] headers = { "Vaccine", "Brand", "Batch/Lot", "Date Given", "Validity" };
+                string[] headers = { "Vaccine", "Brand", "Manufacturer", "Batch/Lot", "Date Given", "Expiry", "Validity" };
                 foreach (string header in headers)
                 {
                     vaccineTable.AddCell(new PdfPCell(new Phrase(header, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
@@ -2618,17 +2612,19 @@ namespace VaccineAPI.Controllers
                         BorderColor = BaseColor.Gray,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
                         PaddingTop = 5,
-                        Border = Rectangle.TOP_BORDER | (header == "Vaccine" ? Rectangle.LEFT_BORDER : 0) | (header == "Validity" ? Rectangle.RIGHT_BORDER : 0) 
+                        Border = Rectangle.TOP_BORDER | (header == "Vaccine" ? Rectangle.LEFT_BORDER : 0) | (header == "Validity" ? Rectangle.RIGHT_BORDER : 0)
                     });
                 }
 
+                // Add static data to the table
                 string staticVaccine = "COVID-19 Vaccine";
                 string staticBrand = "Generic";
                 string staticBatchLot = "12XYZ";
-                string staticValidity = "4 Years";
+                string staticManufacturer = "sadi";
                 string staticDateGiven = "15/01/2025";
+                string staticExpiry = "15/01/2026"; // Example expiry date
+                string staticValidity = "4 Years";
 
-                // Add static data to the table
                 vaccineTable.AddCell(new PdfPCell(new Phrase(staticVaccine, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
                     Border = Rectangle.LEFT_BORDER | Rectangle.BOTTOM_BORDER,
@@ -2639,7 +2635,15 @@ namespace VaccineAPI.Controllers
 
                 vaccineTable.AddCell(new PdfPCell(new Phrase(staticBrand, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
-                    Border = Rectangle.NO_BORDER  | Rectangle.BOTTOM_BORDER,
+                    Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+                    BorderColor = BaseColor.Gray,
+                    PaddingBottom = 5
+                });
+
+                vaccineTable.AddCell(new PdfPCell(new Phrase(staticManufacturer, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
                     HorizontalAlignment = PdfPCell.ALIGN_CENTER,
                     BorderColor = BaseColor.Gray,
                     PaddingBottom = 5
@@ -2661,13 +2665,22 @@ namespace VaccineAPI.Controllers
                     PaddingBottom = 5
                 });
 
-                vaccineTable.AddCell(new PdfPCell(new Phrase(staticValidity, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                vaccineTable.AddCell(new PdfPCell(new Phrase(staticExpiry, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
-                    Border = Rectangle.RIGHT_BORDER  | Rectangle.BOTTOM_BORDER,
+                    Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
                     HorizontalAlignment = PdfPCell.ALIGN_CENTER,
                     BorderColor = BaseColor.Gray,
                     PaddingBottom = 5
                 });
+
+                vaccineTable.AddCell(new PdfPCell(new Phrase(staticValidity, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    Border = Rectangle.RIGHT_BORDER | Rectangle.BOTTOM_BORDER,
+                    HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+                    BorderColor = BaseColor.Gray,
+                    PaddingBottom = 5
+                });
+
                 document.Add(vaccineTable);
 
                 document.Add(new Paragraph(" ")); // Add a single empty paragraph for a small space
@@ -2698,8 +2711,8 @@ namespace VaccineAPI.Controllers
                     
                     Padding = 5
                 };
-
-                var footerRight = new PdfPCell(new Phrase($"MR No: {mrNumber}", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
+                int currentYear = DateTime.Now.Year;
+                var footerRight = new PdfPCell(new Phrase($"MR No: {currentYear}-{childId}", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
                 {
                     Border = Rectangle.NO_BORDER,
                     HorizontalAlignment = PdfPCell.ALIGN_RIGHT,

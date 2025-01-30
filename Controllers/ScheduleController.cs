@@ -287,6 +287,10 @@ namespace VaccineAPI.Controllers
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                 dbSchedule.IsDisease = scheduleDTO.IsDisease;
+                dbSchedule.Manufacturer = scheduleDTO.Manufacturer;
+                dbSchedule.Lot = scheduleDTO.Lot;
+                dbSchedule.Expiry = scheduleDTO.Expiry;
+                dbSchedule.Validity = scheduleDTO.Validity;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
                 ScheduleDTO newData = _mapper.Map<ScheduleDTO>(dbSchedule);
                 _db.SaveChanges();

@@ -23,7 +23,10 @@ namespace VaccineAPI.Models
         public long? BrandId { get; set; }
         public virtual Brand Brand { get; set; }
         public int? Amount { get; set; }
-
+        public string Manufacturer { get; set; } = "";
+        public string Lot { get; set; } = "";
+        public string Expiry { get; set; } = "";
+        public string Validity { get; set; } = "";
         public long ChildId { get; set; }
         public virtual Child Child { get; set; }
 

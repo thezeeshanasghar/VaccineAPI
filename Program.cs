@@ -82,3 +82,4 @@ using (var scope = app.Services.CreateScope())
     dbContext.Database.Migrate(); // Optional: Apply pending migrations before applying the changes
 }
 app.Run();
+

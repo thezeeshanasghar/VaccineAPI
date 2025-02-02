@@ -31,8 +31,8 @@ namespace VaccineAPI.ModelDTO
         public int? Amount { get; set; }
         public string Manufacturer { get; set; } = "";
         public string Lot { get; set; } = "";
-        public string Expiry { get; set; } = "";
-        public string Validity { get; set; } = "";
+        public DateTime? Expiry { get; set; } 
+        public DateTime? Validity { get; set; }
         public List<ScheduleBrandDTO> ScheduleBrands { get; set; }
         public long DoctorId { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]

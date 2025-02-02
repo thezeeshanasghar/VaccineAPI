@@ -332,23 +332,45 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // [HttpPost]
+        // public Response<IEnumerable<ScheduleDTO>> Post(IEnumerable<ScheduleDTO> dsDTOS)
+        // {
+        //     foreach (var SchedueDTO in dsDTOS)
+        //     {
+        //         if (String.IsNullOrEmpty(SchedueDTO.DiseaseYear))
+        //             SchedueDTO.DiseaseYear = "";
+
+        //         var dbChild = _db.Childs.Where(x => x.Id == SchedueDTO.ChildId).FirstOrDefault();
+        //         var dbDose = _db.Doses.Where(x => x.Id == SchedueDTO.DoseId).FirstOrDefault();
+        //         SchedueDTO.Date = calculateDate(dbChild.DOB, dbDose.MinAge);
+        //         Schedule SchduleDB = _mapper.Map<Schedule>(SchedueDTO);
+
+        //         //  SchduleDB.Date = calculateDate(dbChild.DOB , dbDose.MinAge);
+        //         _db.Schedules.Add(SchduleDB);
+        //         _db.SaveChanges();
+        //         SchedueDTO.Id = SchduleDB.Id;
+        //     }
+        //     return new Response<IEnumerable<ScheduleDTO>>(true, null, dsDTOS);
+        // }
         [HttpPost]
         public Response<IEnumerable<ScheduleDTO>> Post(IEnumerable<ScheduleDTO> dsDTOS)
         {
-            foreach (var SchedueDTO in dsDTOS)
+            foreach (var scheduleDTO in dsDTOS)
             {
-                if (String.IsNullOrEmpty(SchedueDTO.DiseaseYear))
-                    SchedueDTO.DiseaseYear = "";
+                if (String.IsNullOrEmpty(scheduleDTO.DiseaseYear))
+                    scheduleDTO.DiseaseYear = "";
 
-                var dbChild = _db.Childs.Where(x => x.Id == SchedueDTO.ChildId).FirstOrDefault();
-                var dbDose = _db.Doses.Where(x => x.Id == SchedueDTO.DoseId).FirstOrDefault();
-                SchedueDTO.Date = calculateDate(dbChild.DOB, dbDose.MinAge);
-                Schedule SchduleDB = _mapper.Map<Schedule>(SchedueDTO);
-
-                //  SchduleDB.Date = calculateDate(dbChild.DOB , dbDose.MinAge);
-                _db.Schedules.Add(SchduleDB);
+                var dbChild = _db.Childs.FirstOrDefault(x => x.Id == scheduleDTO.ChildId);
+                var dbDose = _db.Doses.FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
+                scheduleDTO.Date = calculateDate(dbChild.DOB, dbDose.MinAge);
+                if (string.IsNullOrEmpty(scheduleDTO.Expiry?.ToString()))
+                {
+                    scheduleDTO.Expiry = null;
+                }
+                Schedule scheduleDB = _mapper.Map<Schedule>(scheduleDTO);
+                _db.Schedules.Add(scheduleDB);
                 _db.SaveChanges();
-                SchedueDTO.Id = SchduleDB.Id;
+                scheduleDTO.Id = scheduleDB.Id;
             }
             return new Response<IEnumerable<ScheduleDTO>>(true, null, dsDTOS);
         }

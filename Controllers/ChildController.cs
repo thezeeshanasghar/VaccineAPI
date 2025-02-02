@@ -2645,7 +2645,7 @@ namespace VaccineAPI.Controllers
                     string manufacturer = schedule.Manufacturer ?? "N/A";
                     string batchLot = schedule.Lot ?? "N/A";
                     string dateGiven = schedule.GivenDate?.ToString("dd/MM/yyyy") ?? "Due"; // Formatted date
-                    string expiry = schedule.Expiry?.ToString(); // Formatted expiry date
+                    string expiry = schedule.Expiry?.ToString("dd/MM/yyyy"); // Formatted expiry date
                     string validity = $"{schedule.Validity}";
 
                     vaccineTable.AddCell(new PdfPCell(new Phrase(vaccineName, FontFactory.GetFont(FontFactory.HELVETICA, 10)))

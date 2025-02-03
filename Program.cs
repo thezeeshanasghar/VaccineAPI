@@ -70,6 +70,7 @@ app.UseSwaggerUI();
 // Map health checks to the root path
 app.MapHealthChecks("/");
 
+app.UseCors("corsapp");
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.UseStaticFiles(new StaticFileOptions
@@ -79,7 +80,6 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.MapControllers();
-app.UseCors("corsapp");
 using (var scope = app.Services.CreateScope())
 {
     var serviceProvider = scope.ServiceProvider;

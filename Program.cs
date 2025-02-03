@@ -11,9 +11,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
-// Add health checks services
-builder.Services.AddHealthChecks();
-
 var connectionString = builder.Environment.IsDevelopment() ?
                         builder.Configuration.GetConnectionString("DefaultConnection") : Environment.GetEnvironmentVariable("DefaultDBConnection");
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 31));
@@ -66,9 +63,6 @@ app.UseDeveloperExceptionPage();
 app.UseSwagger();
 app.UseSwaggerUI();
 // }
-
-// Map health checks to the root path
-app.MapHealthChecks("/");
 
 app.UseCors("corsapp");
 app.UseHttpsRedirection();

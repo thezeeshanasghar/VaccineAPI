@@ -5,7 +5,7 @@ using Microsoft.Extensions.FileProviders;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddCors(p => p.AddPolicy("corsapp", builder => { builder.WithOrigins("https://doctor.vaccinationcentre.com").AllowAnyMethod().AllowAnyHeader().AllowCredentials(); }));
+builder.Services.AddCors(p => p.AddPolicy("corsapp", builder => { builder.WithOrigins("*").AllowAnyMethod().AllowAnyHeader().AllowCredentials(); }));
 builder.Services.AddControllers(options => options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true).AddNewtonsoftJson(options => { options.UseMemberCasing(); });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

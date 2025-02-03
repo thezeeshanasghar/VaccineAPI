@@ -1,85 +1,114 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.FileProviders;
+using Microsoft.EntityFrameworkCore;  
+using Microsoft.Extensions.FileProviders;  
 
+var builder = WebApplication.CreateBuilder(args);  
 
-var builder = WebApplication.CreateBuilder(args);
+// Add services to the container.  
+// Configure CORS  
+builder.Services.AddCors(p => p.AddPolicy("corsapp", builder =>  
+{  
+    builder.WithOrigins("*").AllowAnyMethod().AllowAnyHeader();  
+}));  
 
-// Add services to the container.
-builder.Services.AddCors(p => p.AddPolicy("corsapp", builder => { builder.WithOrigins("*").AllowAnyMethod().AllowAnyHeader(); }));
-builder.Services.AddControllers(options => options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true).AddNewtonsoftJson(options => { options.UseMemberCasing(); });
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+// Configure controllers and JSON options  
+builder.Services.AddControllers(options =>  
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)  
+    .AddNewtonsoftJson(options =>  
+    {  
+        options.UseMemberCasing();  
+    });  
 
-var connectionString = builder.Environment.IsDevelopment() ?
-                        builder.Configuration.GetConnectionString("DefaultConnection") : Environment.GetEnvironmentVariable("DefaultDBConnection");
-var serverVersion = new MySqlServerVersion(new Version(8, 0, 31));
+// Add Swagger for API documentation  
+builder.Services.AddEndpointsApiExplorer();  
+builder.Services.AddSwaggerGen();  
 
-builder.Services.AddDbContext<VaccineAPI.Models.Context>(
-    dbContextOptions => dbContextOptions
-        .UseMySql(connectionString, serverVersion, options => options.EnableRetryOnFailure())
-        // The following three options help with debugging, but should
-        // be changed or removed for production.
-        .LogTo(Console.WriteLine, LogLevel.Information)
-        .EnableSensitiveDataLogging()
-        .EnableDetailedErrors()
-);
+// Add AutoMapper  
+builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());  
 
-var environment = builder.Environment.EnvironmentName;
-Console.WriteLine($"Current environment: {environment}");
+// Configure database connection  
+var connectionString = builder.Environment.IsDevelopment()  
+    ? builder.Configuration.GetConnectionString("DefaultConnection")  
+    : Environment.GetEnvironmentVariable("DefaultDBConnection");  
 
+var serverVersion = new MySqlServerVersion(new Version(8, 0, 31));  
 
-// if (!builder.Environment.IsDevelopment())
-// {
-//     builder.WebHost.ConfigureKestrel(serverOptions =>
-//     {
-//         serverOptions.ListenAnyIP(80); // HTTP
-//         serverOptions.ListenAnyIP(443, listenOptions => // HTTPS
-//         {
-//             listenOptions.UseHttps("/app/certs/myapi.pfx", "Ae!8bfb666");
-//         });
-//     });
-// }
-// else
-// {
-//     // Development environment - use development certificate
-//     builder.WebHost.ConfigureKestrel(serverOptions =>
-//     {
-//         // serverOptions.ListenAnyIP(5000); // HTTP
-//         serverOptions.ListenAnyIP(5001, listenOptions => // HTTPS
-//         {
-//             // Use ASP.NET Core's development certificate
-//             listenOptions.UseHttps();
-//         });
-//     });
-// }
+builder.Services.AddDbContext<VaccineAPI.Models.Context>(dbContextOptions =>  
+    dbContextOptions  
+        .UseMySql(connectionString, serverVersion, options => options.EnableRetryOnFailure())  
+        // The following three options help with debugging, but should  
+        // be changed or removed for production.  
+        .LogTo(Console.WriteLine, LogLevel.Information)  
+        .EnableSensitiveDataLogging()  
+        .EnableDetailedErrors()  
+);  
 
-var app = builder.Build();
+// Log the current environment  
+var environment = builder.Environment.EnvironmentName;  
+Console.WriteLine($"Current environment: {environment}");  
 
-// Configure the HTTP request pipeline.
-// if (app.Environment.IsDevelopment())
-// {
-app.UseDeveloperExceptionPage();
-app.UseSwagger();
-app.UseSwaggerUI();
-// }
+// Configure Kestrel server (uncomment if needed for custom HTTPS settings)  
+// if (!builder.Environment.IsDevelopment())  
+// {  
+//     builder.WebHost.ConfigureKestrel(serverOptions =>  
+//     {  
+//         serverOptions.ListenAnyIP(80); // HTTP  
+//         serverOptions.ListenAnyIP(443, listenOptions => // HTTPS  
+//         {  
+//             listenOptions.UseHttps("/app/certs/myapi.pfx", "Ae!8bfb666");  
+//         });  
+//     });  
+// }  
+// else  
+// {  
+//     // Development environment - use development certificate  
+//     builder.WebHost.ConfigureKestrel(serverOptions =>  
+//     {  
+//         // serverOptions.ListenAnyIP(5000); // HTTP  
+//         serverOptions.ListenAnyIP(5001, listenOptions => // HTTPS  
+//         {  
+//             // Use ASP.NET Core's development certificate  
+//             listenOptions.UseHttps();  
+//         });  
+//     });  
+// }  
 
-app.UseCors("corsapp");
-app.UseHttpsRedirection();
-app.UseAuthorization();
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.ContentRootPath, "Resources")),
-    RequestPath = "/Resources"
-});
+var app = builder.Build();  
 
-app.MapControllers();
-using (var scope = app.Services.CreateScope())
-{
-    var serviceProvider = scope.ServiceProvider;
-    var dbContext = serviceProvider.GetRequiredService<VaccineAPI.Models.Context>();
-    dbContext.Database.EnsureCreated(); // Optional: Ensure the database is created before applying the changes
-    dbContext.Database.Migrate(); // Optional: Apply pending migrations before applying the changes
-}
+// Configure the HTTP request pipeline  
+if (app.Environment.IsDevelopment())  
+{  
+    app.UseDeveloperExceptionPage();  
+    app.UseSwagger();  
+    app.UseSwaggerUI();  
+}  
+
+// Enable CORS  
+app.UseCors("corsapp");  
+
+// Enable HTTPS redirection  
+app.UseHttpsRedirection();  
+
+// Enable authorization middleware  
+app.UseAuthorization();  
+
+// Serve static files from the "Resources" folder  
+app.UseStaticFiles(new StaticFileOptions  
+{  
+    FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.ContentRootPath, "Resources")),  
+    RequestPath = "/Resources"  
+});  
+
+// Map controllers  
+app.MapControllers();  
+
+// Apply database migrations and ensure the database is created  
+using (var scope = app.Services.CreateScope())  
+{  
+    var serviceProvider = scope.ServiceProvider;  
+    var dbContext = serviceProvider.GetRequiredService<VaccineAPI.Models.Context>();  
+    dbContext.Database.EnsureCreated(); // Optional: Ensure the database is created before applying the changes  
+    dbContext.Database.Migrate(); // Optional: Apply pending migrations before applying the changes  
+}  
+
+// Run the application  
 app.Run();
-

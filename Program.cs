@@ -75,7 +75,6 @@ app.UseSwaggerUI();
 // }
 
 app.UseHttpsRedirection();
-app.UseAuthorization();
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.ContentRootPath, "Resources")),
@@ -83,6 +82,7 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseCors("corsapp");
+app.UseAuthorization();
 using (var scope = app.Services.CreateScope())
 {
     var serviceProvider = scope.ServiceProvider;

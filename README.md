@@ -66,3 +66,16 @@ CREATE TABLE Invoices (
     DoseId INT NOT NULL,
     PRIMARY KEY (Id)
 );
+
+
+
+CREATE TABLE `__efmigrationshistory` (
+  `MigrationId` varchar(150) NOT NULL,
+  `ProductVersion` varchar(32) NOT NULL
+);
+
+INSERT INTO `__efmigrationshistory` (`MigrationId`, `ProductVersion`) VALUES
+('20250127045531_InitialCreate', '7.0.2');
+
+ALTER TABLE `__efmigrationshistory`
+  ADD PRIMARY KEY (`MigrationId`);

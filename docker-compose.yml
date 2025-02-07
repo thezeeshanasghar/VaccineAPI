@@ -11,20 +11,22 @@ services:
       - ./certs:/app/certs
       - ./Resources:/app/Resources
     environment:
+      - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=https://+:443;http://+:80
       - ASPNETCORE_HTTPS_PORT=443
       - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/certs/myapi.pfx
       - ASPNETCORE_Kestrel__Certificates__Default__Password=Ae!8bfb666
-      - DefaultDBConnection=server=db;userid=skint__stagedb;password=mcs@12345;database=skint__stagedb;port=3306
+      - DefaultConnection=server=db;userid=root;password=test;database=vaccineapi;port=3306
 
   db:
     image: mysql:8.0
-    platform: linux/arm64/v8
+    platform: linux/amd64
+    command: --default-authentication-plugin=mysql_native_password --loose-validate_password.policy=LOW
     environment:
-      MYSQL_ROOT_PASSWORD: mcs@12345
-      MYSQL_DATABASE: skint__stagedb
-      MYSQL_USER: skint__stagedb
-      MYSQL_PASSWORD: mcs@12345
+      MYSQL_ROOT_PASSWORD: test
+      MYSQL_DATABASE: vaccineapi
+      MYSQL_USER: test
+      MYSQL_PASSWORD: test
     ports:
       - "3306:3306"
     volumes:
@@ -37,12 +39,12 @@ services:
 
   phpmyadmin:
     image: bitnami/phpmyadmin:latest
-    platform: linux/arm64/v8
+    platform: linux/amd64
     depends_on:
       - db
     environment:
       DATABASE_HOST: db
-      MYSQL_ROOT_PASSWORD: mcs@12345
+      MYSQL_ROOT_PASSWORD: test
     ports:
       - "8081:8080"
 

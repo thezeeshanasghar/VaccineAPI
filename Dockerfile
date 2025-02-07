@@ -10,11 +10,11 @@ COPY ["VaccineAPI.csproj", "./"]
 RUN dotnet restore "VaccineAPI.csproj"
 COPY . .
 WORKDIR "/src/."
-RUN dotnet build "VaccineAPI.csproj" -c Release -o /app/build
+RUN dotnet build "VaccineAPI.csproj" -c Development -o /app/build
  
 
 FROM build AS publish
-RUN dotnet publish "VaccineAPI.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "VaccineAPI.csproj" -c Development -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app

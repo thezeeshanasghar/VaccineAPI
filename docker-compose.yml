@@ -16,7 +16,7 @@ services:
       - ASPNETCORE_HTTPS_PORT=443
       - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/certs/myapi.pfx
       - ASPNETCORE_Kestrel__Certificates__Default__Password=Ae!8bfb666
-      - DefaultConnection=server=db;userid=root;password=test;database=vaccineapi;port=3306
+      - DefaultConnection=server=db;userid=test;password=test;database=vaccineapi;port=3306
 
   db:
     image: mysql:8.0

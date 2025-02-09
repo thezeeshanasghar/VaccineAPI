@@ -2327,7 +2327,7 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("PID/{id}")]
-        public IActionResult GenerateHelloPdf(int id)
+        public IActionResult GeneratePIDPdf(int id)
         {
             long childId = Convert.ToInt64(id);
             var dbChild = _db.Childs.Find(childId);
@@ -2335,7 +2335,6 @@ namespace VaccineAPI.Controllers
             {
                 return NotFound(new { message = "Child not found." });
             }
-
 
             float width = 120f * 2.83465f;
             float height = 80f * 2.83465f;
@@ -2435,7 +2434,7 @@ namespace VaccineAPI.Controllers
             document.Add(detailsTable);
 
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
-            var qrCodeUrl = $"{baseUrl}/child/{childId}/Download-Schedule-PDF";
+            var qrCodeUrl = $"{baseUrl}/child/PID/{childId}";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))

@@ -84,9 +84,12 @@ ALTER TABLE `__efmigrationshistory`
 bash db_backup.sh
 
 # Run manually
-docker exec vaccineapi-db-1 sh -c "mysqldump -u root -ptest vaccineapi > /tmp/vaccineapi_backup_$(date +%F).sql"
-docker cp vaccineapi-db-1:/tmp/vaccineapi_backup_$(date +%F).sql .
+docker exec vaccineapi-db-1 sh -c "mysqldump -u root -ptest vaccineapi | gzip > /tmp/vaccineapi_backup_$(date +%F).sql.gz"
+docker cp vaccineapi-db-1:/tmp/vaccineapi_backup_$(date +%F).sql.gz .
 
-# Add to crontab to run daily at 00:00
+# Add to crontab to run daily at 02:00
+   sudo yum install cronie
+   sudo systemctl start crond
+   sudo systemctl enable crond
 crontab -e
-0 0 * * * /home/ec2-user/db_backup.sh
+0 2 * * * /path/to/db_backup.sh >> /path/to/backup.log 2>&1

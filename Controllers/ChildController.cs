@@ -403,7 +403,7 @@ namespace VaccineAPI.Controllers
                 writer.PageEvent = new PDFFooter(child);
                 document.Open();
                 // QR Code URL
-                var baseUrl = "https://myapi.skintechno.com/api";
+                var baseUrl = "https://myapi.vaccinationcentre.com/api";
                 var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
                 try
                 {
@@ -1955,7 +1955,7 @@ namespace VaccineAPI.Controllers
             footerTable.AddCell(footerCell);
             footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);
 
-            var baseUrl = "https://myapi.skintechno.com/api";
+            var baseUrl = "https://myapi.vaccinationcentre.com/api";
             var childData = _db.Childs.Include(x => x.Clinic)
                             .ThenInclude(x => x.Doctor)
                             .ThenInclude(y => y.User)

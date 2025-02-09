@@ -27,7 +27,7 @@ namespace VaccineAPI
 
             body += "Doctor Phone Number: <b>+92" + child.Clinic.Doctor.User.MobileNumber + "<b><br>";
             body += "Web Link: <a href=\"https://vaccinationcentre.com\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccinationcentre.com</a><br>";
-            body += "<a href=\"http://myapi.skintechno.com/api/child/" + child.Id + "/Download-Schedule-PDF\" target=\"_blank\" rel=\"noopener noreferrer\">Click here</a>" + " to view vaccination schedule";
+            body += "<a href=\"http://myapi.vaccinationcentre.com/api/child/" + child.Id + "/Download-Schedule-PDF\" target=\"_blank\" rel=\"noopener noreferrer\">Click here</a>" + " to view vaccination schedule";
             //TODO: website and android link
             SendEmail(child.Name, child.Email, body);
         }

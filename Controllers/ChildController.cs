@@ -404,7 +404,7 @@ namespace VaccineAPI.Controllers
                 document.Open();
                 // QR Code URL
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
+                var qrCodeUrl = $"{baseUrl}/child/{childId}/Download-Schedule-PDF";
                 try
                 {
                     using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
@@ -2434,8 +2434,8 @@ namespace VaccineAPI.Controllers
 
             document.Add(detailsTable);
 
-            var baseUrl = "https://myapi.ewarenet.com/api";
-            var qrCodeUrl = $"{baseUrl}/child/{childId}//Download-Schedule-PDF";
+            var baseUrl = "https://myapi.vaccinationcentre.com/api";
+            var qrCodeUrl = $"{baseUrl}/child/{childId}/Download-Schedule-PDF";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))

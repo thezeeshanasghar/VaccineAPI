@@ -1,8 +1,7 @@
 services:
-  vaccineapi:
+  api:
     build: .
     ports:
-      - "80:80"
       - "443:443"
     depends_on:
       db:
@@ -12,7 +11,7 @@ services:
       - ./Resources:/app/Resources
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=https://+:443;http://+:80
+      - ASPNETCORE_URLS=https://0.0.0.0:443
       - ASPNETCORE_HTTPS_PORT=443
       - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/certs/myapi.pfx
       - ASPNETCORE_Kestrel__Certificates__Default__Password=Ae!8bfb666

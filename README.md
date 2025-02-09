@@ -79,3 +79,14 @@ INSERT INTO `__efmigrationshistory` (`MigrationId`, `ProductVersion`) VALUES
 
 ALTER TABLE `__efmigrationshistory`
   ADD PRIMARY KEY (`MigrationId`);
+
+# Run daily at 00:00
+bash db_backup.sh
+
+# Run manually
+docker exec vaccineapi-db-1 sh -c "mysqldump -u root -ptest vaccineapi > /tmp/vaccineapi_backup_$(date +%F).sql"
+docker cp vaccineapi-db-1:/tmp/vaccineapi_backup_$(date +%F).sql .
+
+# Add to crontab to run daily at 00:00
+crontab -e
+0 0 * * * /home/ec2-user/db_backup.sh

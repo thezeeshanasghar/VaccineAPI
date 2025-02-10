@@ -2433,7 +2433,7 @@ namespace VaccineAPI.Controllers
             document.Add(detailsTable);
 
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
-            var qrCodeUrl = $"{baseUrl}/child/PIDQR/{childId}";
+            var qrCodeUrl = $"{baseUrl}/PIDQR/{childId}";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))

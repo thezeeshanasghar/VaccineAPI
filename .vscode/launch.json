@@ -12,11 +12,7 @@
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development"
             },
-            "stopAtEntry": false,
-            "ConnectionStrings": {
-                "DefaultConnection": "server=localhost;database=fernfers_vaccinebe;userid=root;password='';port=3306;"
-                
-              }
+            "stopAtEntry": false
         }
     ]
 }

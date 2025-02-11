@@ -2326,10 +2326,9 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        [HttpGet("PID/{id}")]
+        [HttpGet("PIDQR/{id}")]
         public IActionResult GeneratePIDPdf(int id)
         {
-            
             long childId = Convert.ToInt64(id);
             var dbChild = _db.Childs.Find(childId);
             if (dbChild == null)
@@ -2352,11 +2351,9 @@ namespace VaccineAPI.Controllers
             canvas.Rectangle(10f, 10f, document.PageSize.Width - 25f, document.PageSize.Height - 25f);
             canvas.Stroke();
 
-
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
             headerTable.SetWidths(new float[] { 3, 1 });
-
 
             PdfPCell textCell = new PdfPCell();
             textCell.Border = PdfPCell.NO_BORDER;
@@ -2366,8 +2363,7 @@ namespace VaccineAPI.Controllers
             textCell.AddElement(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12))
             {
                 SpacingAfter = 0f
-            }
-            );
+            });
             headerTable.AddCell(textCell);
 
             var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
@@ -2378,9 +2374,7 @@ namespace VaccineAPI.Controllers
                 PdfPCell logoCell = new PdfPCell(logo)
                 {
                     Border = PdfPCell.NO_BORDER,
-
                     HorizontalAlignment = Element.ALIGN_LEFT
-
                 };
                 logoCell.PaddingTop = 30f;
                 logoCell.PaddingLeft = 0f;
@@ -2404,7 +2398,6 @@ namespace VaccineAPI.Controllers
             });
             detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.FatherName}", detailsFont))
             {
-
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
             });
@@ -2428,7 +2421,6 @@ namespace VaccineAPI.Controllers
                 PaddingBottom = 6f,
                 PaddingTop = 6f
             });
-
 
             document.Add(detailsTable);
 
@@ -2452,26 +2444,13 @@ namespace VaccineAPI.Controllers
                 }
             }
 
-
             Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
 
             Paragraph footerText1 = new Paragraph("Baby Medics (IHRA-00568)", footerFont)
             {
-
                 IndentationLeft = 20f
             };
             document.Add(footerText1);
-
-            // Get the current date and time
-            // string currentDateTime = DateTime.Now.ToString("dd-MMM-yyyy hh:mmtt"); // Format as needed
-
-            // Paragraph footerText2 = new Paragraph($"IHRA-00568    {currentDateTime}", footerFont)
-            // {
-            //     IndentationLeft = 20f
-            // };
-            // document.Add(footerText2);
-
-
 
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
@@ -2481,12 +2460,14 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
-        [HttpGet("PIDQR/{childId}")]
+        [HttpGet("PID/{childId}")]
         public IActionResult ViewPdf(int childId)
         {
             
+            
             long child = Convert.ToInt64(childId);
             var dbChild = _db.Childs.Find(child);
+
             if (dbChild == null)
             {
                 return NotFound(new { message = "Child not found." });
@@ -2507,11 +2488,9 @@ namespace VaccineAPI.Controllers
             canvas.Rectangle(10f, 10f, document.PageSize.Width - 25f, document.PageSize.Height - 25f);
             canvas.Stroke();
 
-
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
             headerTable.SetWidths(new float[] { 3, 1 });
-
 
             PdfPCell textCell = new PdfPCell();
             textCell.Border = PdfPCell.NO_BORDER;
@@ -2521,8 +2500,7 @@ namespace VaccineAPI.Controllers
             textCell.AddElement(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12))
             {
                 SpacingAfter = 0f
-            }
-            );
+            });
             headerTable.AddCell(textCell);
 
             var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
@@ -2533,9 +2511,7 @@ namespace VaccineAPI.Controllers
                 PdfPCell logoCell = new PdfPCell(logo)
                 {
                     Border = PdfPCell.NO_BORDER,
-
                     HorizontalAlignment = Element.ALIGN_LEFT
-
                 };
                 logoCell.PaddingTop = 30f;
                 logoCell.PaddingLeft = 0f;
@@ -2559,7 +2535,6 @@ namespace VaccineAPI.Controllers
             });
             detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.FatherName}", detailsFont))
             {
-
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
             });
@@ -2584,7 +2559,6 @@ namespace VaccineAPI.Controllers
                 PaddingTop = 6f
             });
 
-
             document.Add(detailsTable);
 
             // Replace QR code with "VERIFIED" text
@@ -2597,39 +2571,25 @@ namespace VaccineAPI.Controllers
             canvas2.ShowTextAligned(Element.ALIGN_LEFT, "VERIFIED", textXPosition, textYPosition, 0);
             canvas2.EndText();
 
-
-
             Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
 
             Paragraph footerText1 = new Paragraph("Baby Medics (IHRA-00568)", footerFont)
             {
-
                 IndentationLeft = 20f
             };
             document.Add(footerText1);
-
-            // Get the current date and time
-            // string currentDateTime = DateTime.Now.ToString("dd-MMM-yyyy hh:mmtt"); // Format as needed
-
-            // Paragraph footerText2 = new Paragraph($"IHRA-00568    {currentDateTime}", footerFont)
-            // {
-            //     IndentationLeft = 20f
-            // };
-            // document.Add(footerText2);
-
-
 
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
 
             var currentDate = DateTime.Now.ToString("dd-MMM-yyyy");
             var fileName = $"{dbChild.Name}_PID_{currentDate}.pdf";
-            return File(output.ToArray(), "application/pdf", fileName);
-        }
 
-        private IActionResult File(IActionResult pdfBytes, string v, bool inline)
-        {
-            throw new NotImplementedException();
+            // Set headers to allow embedding in an iframe
+            Response.Headers.Add("X-Frame-Options", "ALLOWALL");
+            Response.Headers.Add("Content-Disposition", $"inline; filename={fileName}");
+
+            return File(output.ToArray(), "application/pdf");
         }
 
         [HttpGet("Travel-PDF-Download/atta")]

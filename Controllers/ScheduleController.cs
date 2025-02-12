@@ -1070,33 +1070,24 @@ namespace VaccineAPI.Controllers
                     .ThenBy(x => x.Date)
                     .ToList<Schedule>();
             }
-
             Dictionary<string, string> map = AddDoseNames(schedules);
             List<Schedule> listOfSchedules = new List<Schedule>();
             listOfSchedules = removeDuplicateRecords(schedules, map);
-
             return listOfSchedules;
         }
-
 
         ///////////////
         [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
         {
             List<Schedule> schedules = GetAlertData2(GapDays, OnlineClinicId, _db);
-
-
             IEnumerable<ChildDTO> childInfoDTOs = schedules.Select(s => new ChildDTO
             {
                 Id = s.Child.Id,
                 Name = s.Child.Name,
                 Email = s.Child.Email,
                 ClinicId = s.Child.ClinicId,
-
-
             });
-
-
             foreach (var child in childInfoDTOs)
             {
                 if (child.Email == "")
@@ -1105,39 +1096,30 @@ namespace VaccineAPI.Controllers
                 }
                 else
                 {
-
                     var ChildId = child.Id;
                     var ClinicId = child.ClinicId;
-
                     var doctor = _db.Clinics
                         .Where(x => x.Id == ClinicId)
                         .Include(x => x.Doctor)
                         .FirstOrDefault()
                         ?.Doctor;
-
                     var clinics = _db.Clinics.Where(x => x.Id == ClinicId).FirstOrDefault();
                     var dbSchedules = _db.Schedules.Where(x => x.ChildId == ChildId).ToList();
-
                     var specificDate = DateTime.Today;
-
                     var specificSchedule = dbSchedules
                         .FirstOrDefault(schedule => schedule.Date == specificDate);
-
                     string body;
                     if (specificSchedule != null)
                     {
                         var doseId = specificSchedule.DoseId;
                         var dose = _db.Doses.Where(x => x.Id == doseId).FirstOrDefault();
-
                         body = $"Reminder: Vaccination  {dose.Name}, For Child: {child.Name},  is due today. Kindly Book an appointment at Clinic: {clinics.Name}, with Doctor: {doctor.FirstName} {doctor.LastName}, at Phone: {clinics.PhoneNumber} ";
                     }
                     else
                     {
                         body = "No schedule found for the specified date.";
                     }
-
                     // Use the 'body' variable as needed (e.g., send an email)
-
                     try
                     {
                         UserEmail.SendEmail2(child.Email, body);
@@ -1145,16 +1127,57 @@ namespace VaccineAPI.Controllers
                     catch (Exception ex)
                     {
                         Console.WriteLine("Error sending email: " + ex.Message);
-
-
                     }
-
                 }
-
             }
-
             return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);
         }
+
+        [HttpGet("alertone/{ChildId}")]
+        public Response<object> GetAlertone(long ChildId)
+        {
+            var child = _db.Childs.Include(c => c.Clinic).FirstOrDefault(c => c.Id == ChildId);
+            if (child == null || string.IsNullOrEmpty(child.Email))
+            {
+                return new Response<object>(false, "Child not found or email is missing.", null);
+            }
+
+            var specificDate = DateTime.Today;
+            var todaySchedules = _db.Schedules
+                .Where(s => s.ChildId == ChildId && s.Date == specificDate)
+                .Include(s => s.Dose)  // Include dose details
+                .ToList();
+
+            string body;
+            if (todaySchedules.Any())
+            {
+                var clinic = _db.Clinics.Include(x => x.Doctor).FirstOrDefault(x => x.Id == child.ClinicId);
+
+                var doseDetails = todaySchedules.Select(s => $" {s.Dose.Name},").ToList();
+
+                body = $"Reminder: The following vaccinations for Child: {child.Name} are due today:\n\n" +
+                       $"{string.Join("\n", doseDetails)}\n\n" +
+                       $"at Clinic: {clinic.Name}\nDoctor: {clinic.Doctor.FirstName} {clinic.Doctor.LastName}\nPhone: {clinic.PhoneNumber}.";
+            }
+            else
+            {
+                body = "No schedule found for today.";
+            }
+
+            // Send the email
+            try
+            {
+                UserEmail.SendEmail2(child.Email, body);
+                return new Response<object>(true, "Email sent successfully.", new { child.Id, child.Email });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error sending email: " + ex.Message);
+                return new Response<object>(false, "Failed to send email.", null);
+            }
+        }
+
+
 
 
         private static List<Schedule> GetAlertData2(int GapDays, long OnlineClinicId, Context db)
@@ -1164,17 +1187,12 @@ namespace VaccineAPI.Controllers
                 .Include(x => x.Doctor)
                 .First()
                 .Doctor;
-
             var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
             long[] ClinicIDs = clinics.Select(x => x.Id).ToArray();
-
             DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
             DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
             DateTime NextDayTime = CurrentPakDateTime.AddDays(1).Date;
-
-
             List<Schedule> schedules = new List<Schedule>();
-
             if (GapDays == 0)
             {
                 schedules = db.Schedules
@@ -1188,18 +1206,14 @@ namespace VaccineAPI.Controllers
                     .ThenBy(x => x.Date)
                     .ToList();
             }
-
             Dictionary<string, string> map = AddDoseNames(schedules);
             List<Schedule> listOfSchedules = removeDuplicateRecords(schedules, map);
-
             return listOfSchedules;
         }
-
 
         private static Dictionary<String, String> AddDoseNames(List<Schedule> schedules)
         {
             Dictionary<String, String> map = new Dictionary<string, string>();
-
             long childId = 0;
             foreach (Schedule s in schedules)
             {
@@ -1227,7 +1241,6 @@ namespace VaccineAPI.Controllers
 
             // Dictionary<String, String> phoneAndMsg = new Dictionary<string, string>();
             Queue<Schedule> myQueue = new Queue<Schedule>();
-
             long childId = 0;
             foreach (Schedule s in schedules)
             {
@@ -1245,7 +1258,6 @@ namespace VaccineAPI.Controllers
                     sms += s.Child.Name + " is due on " + s.Date;
                     sms += " (" + name + " )";
                     // phoneAndMsg.Add(s.Child.User.MobileNumber.ToString(), sms);
-
                     // Console.WriteLine(s.Child.Name);
                     // Console.WriteLine(name);
                 }
@@ -1276,11 +1288,9 @@ namespace VaccineAPI.Controllers
                             doseName += schedule.Dose.Name + ", ";
                             scheduleDate = schedule.Date;
                         }
-
                         UserEmail.ParentAlertEmail(doseName, scheduleDate, child);
                     }
                 }
-
                 List<ScheduleDTO> scheduleDtos = _mapper.Map<List<ScheduleDTO>>(Schedules);
                 return new Response<IEnumerable<ScheduleDTO>>(true, null, scheduleDtos);
             }

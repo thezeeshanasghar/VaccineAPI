@@ -90,18 +90,15 @@ namespace VaccineAPI.Controllers
                 var userDetails = _db.Users.FirstOrDefault(u => u.Id == child.UserId);
                 if (userDetails != null)
                 {
-
-                    var body = "Hi " + "<b>" + child.Name + " " + child.FatherName + "</b>, <br />" +
-                        "Welcome to vaccinationcentre.com <br /><br />" +
-                        "Your account credentials are: <br />" +
-                        "ID/Mobile Number: " + userDetails.MobileNumber + "<br />" +
-                        "Password: " + userDetails.Password + "<br />" +
-                        "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
-
-
+                    var body = "Hi " + child.Name + " " + child.FatherName + ",\n" +
+                        "Welcome to vaccinationcentre.com\n\n" +
+                        "Your account credentials are:\n" +
+                        "ID/Mobile Number: " + userDetails.MobileNumber + "\n" +
+                        "Password: " + userDetails.Password + "\n" +
+                        "Web Link: https://doctor.vaccinationcentre.com/";
                     try
                     {
-                        UserEmail.SendEmail3(child.Email, body);
+                        UserEmail.SendEmail(child.Email, body);
                         return Ok("Email sent successfully");
                     }
                     catch (Exception ex)

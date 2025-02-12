@@ -1122,7 +1122,7 @@ namespace VaccineAPI.Controllers
                     // Use the 'body' variable as needed (e.g., send an email)
                     try
                     {
-                        UserEmail.SendEmail2(child.Email, body);
+                        UserEmail.SendEmail(child.Email, body);
                     }
                     catch (Exception ex)
                     {
@@ -1134,7 +1134,7 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("alertone/{ChildId}")]
-        public Response<object> GetAlertone(long ChildId)
+        public Response<object> SendAlertEmail(long ChildId)
         {
             var child = _db.Childs.Include(c => c.Clinic).FirstOrDefault(c => c.Id == ChildId);
             if (child == null || string.IsNullOrEmpty(child.Email))
@@ -1167,7 +1167,7 @@ namespace VaccineAPI.Controllers
             // Send the email
             try
             {
-                UserEmail.SendEmail2(child.Email, body);
+                UserEmail.SendEmail(child.Email, body);
                 return new Response<object>(true, "Email sent successfully.", new { child.Id, child.Email });
             }
             catch (Exception ex)
@@ -1176,9 +1176,6 @@ namespace VaccineAPI.Controllers
                 return new Response<object>(false, "Failed to send email.", null);
             }
         }
-
-
-
 
         private static List<Schedule> GetAlertData2(int GapDays, long OnlineClinicId, Context db)
         {

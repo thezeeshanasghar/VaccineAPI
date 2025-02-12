@@ -2424,7 +2424,7 @@ namespace VaccineAPI.Controllers
 
             document.Add(detailsTable);
 
-            var baseUrl = "https://localhost:5001/api";
+            var baseUrl = "https://myapi.vaccinationcentre.com/api";
             var qrCodeUrl = $"{baseUrl}/Child/PIDQRC/{childId}";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
@@ -2606,7 +2606,7 @@ namespace VaccineAPI.Controllers
                 output.CopyTo(fileStream);
             }
 
-            var fileUrl = $"https://localhost:5001/api/Child/PID/2";
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/PID/2";
 
             string htmlContent = $@"
     <!DOCTYPE html>

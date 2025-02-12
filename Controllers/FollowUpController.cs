@@ -24,7 +24,7 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet]
-      public async Task<Response<List<FollowUpDTO>>> GetAll()
+        public async Task<Response<List<FollowUpDTO>>> GetAll()
         {
             var list = await _db.FollowUps.OrderBy(x=>x.Id).ToListAsync();
             List<FollowUpDTO> listDTO = _mapper.Map<List<FollowUpDTO>>(list);
@@ -40,6 +40,7 @@ namespace VaccineAPI.Controllers
              return new Response<FollowUp>(false, "Not Found", null);
              return new Response<FollowUp>(true, null, single);   
         }
+
         [HttpGet("doctor/{doctorId}")]
         public Response<IEnumerable<FollowUpDTO>> GetFollowUpsByDoctor(
             long doctorId,
@@ -58,6 +59,7 @@ namespace VaccineAPI.Controllers
             );
             return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTOs);
         }
+
          [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<FollowUpDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId)
         {
@@ -99,12 +101,11 @@ namespace VaccineAPI.Controllers
                     IEnumerable<FollowUpDTO> followUpDTO = _mapper.Map<IEnumerable<FollowUpDTO>>(followups);
                     return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTO);
                 }
-            }
+        }
 
-             [HttpGet("sms-alert/{childId}")]
+        [HttpGet("sms-alert/{childId}")]
         public Response<FollowUpDTO> SendSMSAlertToOneChild(int childId)
         {
-            
                 {
                     var dbChildFollowup = _db.FollowUps.Where(x => x.ChildId == childId).OrderByDescending(x => x.Id).FirstOrDefault();
                     UserSMS u = new UserSMS(_db);
@@ -112,30 +113,26 @@ namespace VaccineAPI.Controllers
                     FollowUpDTO followupDTO = _mapper.Map<FollowUpDTO>(dbChildFollowup);
                     return new Response<FollowUpDTO>(true, null, followupDTO);
                 }
-
-            }
+        }
 
         [HttpPost]
         public Response<FollowUpDTO> Post(FollowUpDTO FollowUpDto)
-        
-            {
+        {
                 {
                     FollowUp dbFollowUp = _mapper.Map<FollowUp>(FollowUpDto);
                     _db.FollowUps.Add(dbFollowUp);
                     _db.SaveChanges();
                     return new Response<FollowUpDTO>(true, null, FollowUpDto);
                 }
-            }
+        }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Put(long id, FollowUp FollowUp)
         {
             if (id != FollowUp.Id)
                 return BadRequest();
-
             _db.Entry(FollowUp).State = EntityState.Modified;
             await _db.SaveChangesAsync();
-
             return NoContent();
         }
 
@@ -143,13 +140,10 @@ namespace VaccineAPI.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var obj = await _db.FollowUps.FindAsync(id);
-
             if (obj == null)
                 return NotFound();
-
             _db.FollowUps.Remove(obj);
             await _db.SaveChangesAsync();
-
             return Ok(new { Message = "Follow-up deleted successfully." });
         }
     }

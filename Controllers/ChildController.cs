@@ -2424,8 +2424,8 @@ namespace VaccineAPI.Controllers
 
             document.Add(detailsTable);
 
-            var baseUrl = "https://myapi.vaccinationcentre.com/api";
-            var qrCodeUrl = $"{baseUrl}/PIDQR/{childId}";
+            var baseUrl = "https://localhost:5001/api";
+            var qrCodeUrl = $"{baseUrl}/Child/PIDQRC/{childId}";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
@@ -2460,11 +2460,180 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
+        [HttpGet("PIDQRC/{id}")]
+        public IActionResult GeneratePID1Pdf(int id)
+        {
+            long childId = Convert.ToInt64(id);
+            var dbChild = _db.Childs.Find(childId);
+            if (dbChild == null)
+            {
+                return NotFound(new { message = "Child not found." });
+            }
+
+            float width = 120f * 2.83465f;
+            float height = 80f * 2.83465f;
+            float padding = 10f;
+            var document = new Document(new Rectangle(width, height), padding, padding, padding, padding);
+            var output = new MemoryStream();
+            var writer = PdfWriter.GetInstance(document, output);
+            writer.CloseStream = false;
+            document.Open();
+
+            PdfContentByte canvas = writer.DirectContent;
+            canvas.SetLineWidth(1f);
+            canvas.SetColorStroke(BaseColor.Gray);
+            canvas.Rectangle(10f, 10f, document.PageSize.Width - 25f, document.PageSize.Height - 25f);
+            canvas.Stroke();
+
+            PdfPTable headerTable = new PdfPTable(2);
+            headerTable.WidthPercentage = 100;
+            headerTable.SetWidths(new float[] { 3, 1 });
+
+            PdfPCell textCell = new PdfPCell();
+            textCell.Border = PdfPCell.NO_BORDER;
+            textCell.PaddingTop = 20f;
+            textCell.PaddingLeft = 20f;
+            textCell.AddElement(new Paragraph("Vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 10)));
+            textCell.AddElement(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12))
+            {
+                SpacingAfter = 0f
+            });
+            headerTable.AddCell(textCell);
+
+            var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
+            if (System.IO.File.Exists(logoPath))
+            {
+                var logo = Image.GetInstance(logoPath);
+                logo.ScaleToFit(50f, 50f);
+                PdfPCell logoCell = new PdfPCell(logo)
+                {
+                    Border = PdfPCell.NO_BORDER,
+                    HorizontalAlignment = Element.ALIGN_LEFT
+                };
+                logoCell.PaddingTop = 30f;
+                logoCell.PaddingLeft = 0f;
+                headerTable.AddCell(logoCell);
+            }
+            else
+            {
+                throw new FileNotFoundException("Logo file not found at: " + logoPath);
+            }
+            document.Add(headerTable);
+
+            var detailsFonts = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+            var detailsFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+            PdfPTable detailsTable = new PdfPTable(1);
+            detailsTable.WidthPercentage = 100;
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.Name}", detailsFonts))
+            {
+                Border = PdfPCell.NO_BORDER,
+                PaddingLeft = 23f,
+                PaddingTop = 0f
+            });
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.FatherName}", detailsFont))
+            {
+                Border = PdfPCell.NO_BORDER,
+                PaddingLeft = 23f
+            });
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"DOB: {dbChild.DOB:dd-MMM-yyyy}", detailsFont))
+            {
+                Border = PdfPCell.NO_BORDER,
+                PaddingLeft = 23f
+            });
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"Passport/ID: {dbChild.CNIC}", detailsFont))
+            {
+                Border = PdfPCell.NO_BORDER,
+                PaddingLeft = 23f
+            });
+            int currentYear = DateTime.Now.Year;
+            string mrNumber = currentYear.ToString()[2..];
+
+            detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # {mrNumber}{dbChild.Id}", detailsFonts))
+            {
+                Border = PdfPCell.NO_BORDER,
+                PaddingLeft = 45f,
+                PaddingBottom = 6f,
+                PaddingTop = 6f
+            });
+
+            document.Add(detailsTable);
+
+            var baseUrl = "https://myapi.vaccinationcentre.com/api";
+            var qrCodeUrl = $"{baseUrl}/child/PID/{childId}";
+
+            using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+            using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
+            {
+                var qrCode = new BitmapByteQRCode(qrCodeData);
+                byte[] qrCodeImage = qrCode.GetGraphic(18);
+
+                using (MemoryStream ms = new MemoryStream(qrCodeImage))
+                {
+                    var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
+                    pdfQrCode.ScaleAbsolute(60f, 60f);
+                    float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 35f;
+                    float qrCodeYPosition = 25f;
+                    pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
+                    writer.DirectContent.AddImage(pdfQrCode);
+                }
+            }
+
+            Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+
+            Paragraph footerText1 = new Paragraph("Baby Medics (IHRA-00568)", footerFont)
+            {
+                IndentationLeft = 20f
+            };
+            document.Add(footerText1);
+
+            document.Close();
+            output.Seek(0, SeekOrigin.Begin);
+
+            var currentDate = DateTime.Now.ToString("dd-MMM-yyyy");
+            var fileName = $"{dbChild.Name}_PID_{currentDate}.pdf";
+            var directoryPath = Path.Combine("wwwroot", "pdfs");
+            var filePath = Path.Combine(directoryPath, fileName);
+
+            // Ensure the directory exists
+            if (!Directory.Exists(directoryPath))
+            {
+                Directory.CreateDirectory(directoryPath);
+            }
+
+            // Save the PDF to the file system
+            using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+            {
+                output.CopyTo(fileStream);
+            }
+
+            var fileUrl = $"https://localhost:5001/api/Child/PID/2";
+
+            string htmlContent = $@"
+    <!DOCTYPE html>
+    <html lang='en'>
+    <head>
+        <meta charset='UTF-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <title>QR Code Viewer</title>
+    </head>
+    <body style='font-family: Arial, sans-serif; text-align: center; padding: 20px;'>
+        <h1>Immunization Record</h1>
+        <p>Scan the QR Code or <a href='{fileUrl}' target='_blank'>click here</a> to view the details.</p>
+        <iframe src='{fileUrl}' width='600' height='400' style='border: 1px solid #ccc;'></iframe>
+    </body>
+    </html>";
+
+            return new ContentResult
+            {
+                Content = htmlContent,
+                ContentType = "text/html",
+                StatusCode = 200
+            };
+        }
+
         [HttpGet("PID/{childId}")]
         public IActionResult ViewPdf(int childId)
         {
-            
-            
             long child = Convert.ToInt64(childId);
             var dbChild = _db.Childs.Find(child);
 

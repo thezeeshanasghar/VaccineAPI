@@ -2288,9 +2288,7 @@ namespace VaccineAPI.Controllers
         public class PDFFooter : PdfPageEventHelper
         {
             Child child = new Child();
-
             public PDFFooter(Child postedChild) { child = postedChild; }
-
             public override void OnStartPage(PdfWriter writer, Document document) { base.OnStartPage(writer, document); }
 
             // write on end of each page
@@ -2316,7 +2314,6 @@ namespace VaccineAPI.Controllers
                 cell.PaddingRight = 21f;
                 tabFot.AddCell(cell);
                 tabFot.WriteSelectedRows(0, -1, 65, 100, writer.DirectContent);
-
             }
 
             // write on close of document
@@ -2345,19 +2342,15 @@ namespace VaccineAPI.Controllers
             writer.CloseStream = false;
             document.Open();
 
-
-
             PdfContentByte canvas = writer.DirectContent;
             canvas.SetLineWidth(1f);
             canvas.SetColorStroke(BaseColor.Gray);
             canvas.Rectangle(10f, 10f, document.PageSize.Width - 25f, document.PageSize.Height - 25f);
             canvas.Stroke();
 
-
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
             headerTable.SetWidths(new float[] { 3, 1 });
-
 
             PdfPCell textCell = new PdfPCell();
             textCell.Border = PdfPCell.NO_BORDER;
@@ -2379,9 +2372,7 @@ namespace VaccineAPI.Controllers
                 PdfPCell logoCell = new PdfPCell(logo)
                 {
                     Border = PdfPCell.NO_BORDER,
-
                     HorizontalAlignment = Element.ALIGN_LEFT
-
                 };
                 logoCell.PaddingTop = 30f;
                 logoCell.PaddingLeft = 0f;
@@ -2429,19 +2420,15 @@ namespace VaccineAPI.Controllers
                 PaddingBottom = 6f,
                 PaddingTop = 6f
             });
-
-
             document.Add(detailsTable);
 
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
             var qrCodeUrl = $"{baseUrl}/child/PID/{childId}";
-
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
             {
                 var qrCode = new BitmapByteQRCode(qrCodeData);
                 byte[] qrCodeImage = qrCode.GetGraphic(18);
-
                 using (MemoryStream ms = new MemoryStream(qrCodeImage))
                 {
                     var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
@@ -2450,30 +2437,23 @@ namespace VaccineAPI.Controllers
                     float qrCodeYPosition = 25f;
                     pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                     writer.DirectContent.AddImage(pdfQrCode);
-
                 }
             }
 
-
             Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
-
             Paragraph footerText1 = new Paragraph("Baby Medics (IHRA-00568)", footerFont)
             {
-
                 IndentationLeft = 20f
             };
             document.Add(footerText1);
 
             // Get the current date and time
             // string currentDateTime = DateTime.Now.ToString("dd-MMM-yyyy hh:mmtt"); // Format as needed
-
             // Paragraph footerText2 = new Paragraph($"IHRA-00568    {currentDateTime}", footerFont)
             // {
             //     IndentationLeft = 20f
             // };
             // document.Add(footerText2);
-
-
 
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
@@ -2491,7 +2471,6 @@ namespace VaccineAPI.Controllers
                 .Include(c => c.Clinic)
                 .ThenInclude(clinic => clinic.Doctor)
                 .FirstOrDefault(c => c.Id == childId);
-
             if (childDetails == null)
             {
                 return NotFound("Child not found");

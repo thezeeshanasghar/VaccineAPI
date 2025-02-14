@@ -2463,7 +2463,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("PIDQRC/{id}")]
         public IActionResult GeneratePID1Pdf(int id)
         {
-            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/PID/2";
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/PID/{id}";
 
             string htmlContent = $@"
                                     <!DOCTYPE html>
@@ -2587,15 +2587,25 @@ namespace VaccineAPI.Controllers
 
             document.Add(detailsTable);
 
-            // Replace QR code with "VERIFIED" text
-            PdfContentByte canvas2 = writer.DirectContent;
-            canvas2.BeginText();
-            canvas2.SetFontAndSize(BaseFont.CreateFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED), 18);
-            canvas2.SetColorFill(BaseColor.Red);  // Red color for "VERIFIED"
-            float textXPosition = document.PageSize.Width - 100f;  // X-coordinate
-            float textYPosition = 25f;  // Y-coordinate
-            canvas2.ShowTextAligned(Element.ALIGN_LEFT, "VERIFIED", textXPosition, textYPosition, 0);
-            canvas2.EndText();
+            var baseUrl = "https://myapi.vaccinationcentre.com/api";
+            var qrCodeUrl = $"{baseUrl}/Child/PIDQRC/{childId}";
+
+            using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+            using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
+            {
+                var qrCode = new BitmapByteQRCode(qrCodeData);
+                byte[] qrCodeImage = qrCode.GetGraphic(18);
+
+                using (MemoryStream ms = new MemoryStream(qrCodeImage))
+                {
+                    var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
+                    pdfQrCode.ScaleAbsolute(60f, 60f);
+                    float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 35f;
+                    float qrCodeYPosition = 25f;
+                    pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
+                    writer.DirectContent.AddImage(pdfQrCode);
+                }
+            }
 
             Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
 

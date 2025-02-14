@@ -362,6 +362,19 @@ namespace VaccineAPI.Controllers
                            DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
+        [HttpGet("{id}/View-Schedule-PDF")]
+        public IActionResult ViewSchedulePDF(int id)
+        {
+            Child dbScheduleChild;
+            { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
+            var stream = CreateSchedulePdf(id);
+            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
+                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+            Response.Headers.Add("X-Frame-Options", "ALLOWALL");
+            Response.Headers.Add("Content-Disposition", $"inline; filename={FileName}");
+            return File(stream, "application/pdf");
+        }
+
 
         private Stream CreateSchedulePdf(int childId)
         {
@@ -404,7 +417,7 @@ namespace VaccineAPI.Controllers
                 document.Open();
                 // QR Code URL
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/child/{childId}/Download-Schedule-PDF";
+                var qrCodeUrl = $"{baseUrl}/child/ScheduleVerify/{childId}";
                 try
                 {
                     using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
@@ -918,12 +931,40 @@ namespace VaccineAPI.Controllers
 
                 // special vaccines table end
                 document.Close();
-
                 output.Seek(0, SeekOrigin.Begin);
 
                 return output;
             }
         }
+
+        [HttpGet("ScheduleVerify/{id}")]
+        public IActionResult GenerateVerifySchedule(int id)
+        {
+            var fileUrl = $"https://localhost:5001/api/Child/{id}/View-Schedule-PDF";
+
+            string htmlContent = $@"
+                            <!DOCTYPE html>
+                            <html lang='en'>
+                            <head>
+                                <meta charset='UTF-8'>
+                                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                                <title>QR Code Viewer</title>
+                            </head>
+                            <body style='font-family: Arial, sans-serif; text-align: center; padding: 20px;'>
+                                <h1>Immunization Record</h1>
+                                <p><a href='{fileUrl}' target='_blank'>click here</a> to view the details.</p>
+                                <iframe src='{fileUrl}' width='600' height='900' style='border: 1px solid #ccc;'></iframe>
+                            </body>
+                            </html>";
+
+            return new ContentResult
+            {
+                Content = htmlContent,
+                ContentType = "text/html",
+                StatusCode = 200
+            };
+        }
+
         [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)
         {

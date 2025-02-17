@@ -2365,7 +2365,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        [HttpGet("PID/{id}")]
+        [HttpGet("PIDVerify/{id}")]
         public IActionResult GeneratePIDPdf(int id)
         {
             long childId = Convert.ToInt64(id);
@@ -2388,10 +2388,10 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
-        [HttpGet("PIDVerify/{id}")]
+        [HttpGet("PID/{id}")]
         public IActionResult GenerateVerifyPID(int id)
         {
-            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/PID/{id}";
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/PIDVerification/{id}";
 
             string htmlContent = $@"
                                     <!DOCTYPE html>
@@ -2416,7 +2416,7 @@ namespace VaccineAPI.Controllers
             };
         }
 
-        [HttpGet("PIDPDF/{childId}")]
+        [HttpGet("PIDVerification/{childId}")]
         public IActionResult ViewPdf(int childId)
         {
             long child = Convert.ToInt64(childId);
@@ -2536,7 +2536,7 @@ namespace VaccineAPI.Controllers
             document.Add(detailsTable);
 
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
-            var qrCodeUrl = $"{baseUrl}/Child/PIDVerify/{childId}";
+            var qrCodeUrl = $"{baseUrl}/Child/PID/{childId}";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
@@ -2568,7 +2568,7 @@ namespace VaccineAPI.Controllers
             return output;
         }
 
-        [HttpGet("Travel-PDF-Download/{childId}")]
+        [HttpGet("Travel-PDF-Download-verify/{childId}")]
         public IActionResult GenerateTravelPdf(int childId)
         {
             var output = CreateTravelPdf(childId);
@@ -2794,7 +2794,7 @@ namespace VaccineAPI.Controllers
                 document.Add(new Paragraph(" "));
 
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/Child/Travel-PDF-Download-verify/{childId}";
+                var qrCodeUrl = $"{baseUrl}/Child/Travel-PDF-Download/{childId}";
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
                 using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
                 {
@@ -2867,10 +2867,10 @@ namespace VaccineAPI.Controllers
             return output;
         }
 
-        [HttpGet("Travel-PDF-Download-verify/{id}")]
-        public IActionResult GenerateVerifyTravelPdf(int id)
+        [HttpGet("Travel-PDF-Download/{childId}")]
+        public IActionResult GenerateVerifyTravelPdf(int childId)
         {
-            var fileUrl = $"https://localhost:5001/api/Child/Travel-PDF-Download-Verification/{id}";
+            var fileUrl = $"https://localhost:5001/api/Child/Travel-PDF-Download-Verification/{childId}";
 
             string htmlContent = $@"
                                     <!DOCTYPE html>

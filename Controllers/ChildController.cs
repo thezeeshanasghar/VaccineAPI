@@ -414,7 +414,7 @@ namespace VaccineAPI.Controllers
                 document.Open();
                 // QR Code URL
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Schedule-PDF";
+                var qrCodeUrl = $"{baseUrl}/child/{childId}/Download-Schedule-PDF";
                 try
                 {
                     using (QRCodeGenerator qrGenerator = new QRCodeGenerator())

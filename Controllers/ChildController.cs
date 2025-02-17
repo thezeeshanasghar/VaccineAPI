@@ -349,7 +349,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        [HttpGet("{id}/Download-Schedule-PDF")]
+        [HttpGet("{id}/ScheduleVerify")]
         public IActionResult DownloadSchedulePDF(int id)
         {
             Child dbScheduleChild;
@@ -360,7 +360,7 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf", FileName);
         }
 
-        [HttpGet("{id}/View-Schedule-PDF")]
+        [HttpGet("{id}/verification-Schedule-PDF")]
         public IActionResult ViewSchedulePDF(int id)
         {
             Child dbScheduleChild;
@@ -414,7 +414,7 @@ namespace VaccineAPI.Controllers
                 document.Open();
                 // QR Code URL
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/child/ScheduleVerify/{childId}";
+                var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Schedule-PDF";
                 try
                 {
                     using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
@@ -935,10 +935,11 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        [HttpGet("ScheduleVerify/{id}")]
+        [HttpGet("{id}/Download-Schedule-PDF")] 
+
         public IActionResult GenerateVerifySchedule(int id)
         {
-            var fileUrl = $"https://localhost:5001/api/Child/{id}/View-Schedule-PDF";
+            var fileUrl = $"https://localhost:5001/api/Child/{id}/Verification-Schedule-PDF";
 
             string htmlContent = $@"
                             <!DOCTYPE html>
@@ -1656,15 +1657,72 @@ namespace VaccineAPI.Controllers
             return invoiceNumber;
         }
 
-        // updated invoice pdf
-        [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
-        public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate,
-                                                       int ConsultationFee)
+        [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Verify-Invoice-PDF")]
+        public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
         {
-            Stream stream;
+            var output = CreateInvoiceCell(Id, ScheduleDate, InvoiceDate, ConsultationFee);
+            if (output == null)
+            {
+                return NotFound(new { message = "Child not found." });
+            }
+
+            // Convert Id to long before using Find()
+            long childId = (long)Id;
+            var dbChild = _db.Childs.Find(childId);
+
+            if (dbChild == null)
+            {
+                return NotFound(new { message = "Child not found." });
+            }
+
+            var fileName = $"{dbChild.Name.Replace(" ", "")}_Invoice_{DateTime.UtcNow.AddHours(5).Date:MMMM-dd-yyyy}.pdf";
+            return File(output.ToArray(), "application/pdf", fileName);
+        }
+        
+        [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Verification-Invoice-PDF")]
+        public IActionResult VerificationInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
+        {
+            try
+            {
+                // First, check if child exists using long id
+                long childId = (long)Id;
+                var dbChild = _db.Childs.Find(childId);
+                if (dbChild == null)
+                {
+                    return NotFound(new { message = "Child not found." });
+                }
+
+                // Generate invoice PDF
+                var output = CreateInvoiceCell(Id, ScheduleDate, InvoiceDate, ConsultationFee);
+                if (output == null)
+                {
+                    return StatusCode(500, new { message = "Error generating invoice PDF." });
+                }
+
+                // Create sanitized filename
+                var fileName = $"{dbChild.Name?.Replace(" ", "")}_Invoice_{DateTime.UtcNow.AddHours(5).Date:MMMM-dd-yyyy}.pdf";
+
+                // Add required headers for inline PDF viewing
+                Response.Headers.Add("X-Frame-Options", "ALLOWALL");
+                Response.Headers.Add("Content-Disposition", $"inline; filename={fileName}");
+
+                // Return PDF file
+                return File(output.ToArray(), "application/pdf");
+            }
+            catch (InvalidCastException)
+            {
+                return BadRequest(new { message = "Invalid ID format." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = $"Internal server error: {ex.Message}" });
+            }
+        }
+
+        private MemoryStream CreateInvoiceCell(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
+        {
             int amount = 0;
             int count = 0;
-
             int consultaionFee = ConsultationFee;
             string childName = "";
             var document = new Document(PageSize.A4, 60, 60, 30, 30);
@@ -1680,6 +1738,11 @@ namespace VaccineAPI.Controllers
                                     .ThenInclude(y => y.User)
                                     .Where(x => x.Id == Id)
                                     .FirstOrDefault();
+            if (dbChild == null)
+            {
+                return null;
+            }
+
             var dbDoctor = dbChild.Clinic.Doctor;
             var DoctorId = dbDoctor.Id;
 
@@ -1713,8 +1776,6 @@ namespace VaccineAPI.Controllers
             upperTable.HorizontalAlignment = 0;
             upperTable.TotalWidth = 470f;
             upperTable.LockedWidth = true;
-
-            // upperTable.DefaultCell.PaddingLeft = 4;
             upperTable.SetWidths(upperTableWidths);
 
             upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 1, "left", "description"));
@@ -1948,7 +2009,7 @@ namespace VaccineAPI.Controllers
 
             // Ensure `currentDate` and `footerFont` are properly initialized
             var footerFont = new Font(Font.HELVETICA, 8, Font.NORMAL);
-            var currentDate = DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd"); ;
+            var currentDate = DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd");
 
             // Adding cells to the bottom table
             PdfPCell CreateCellWithMargin(string text, string style, int colspan, string alignment, string description, float topMargin = 0)
@@ -1989,8 +2050,6 @@ namespace VaccineAPI.Controllers
             // Add the footer cell to the table
             bottomTable.AddCell(footerCell);
 
-
-
             footerTable.AddCell(footerCell);
             footerTable.WriteSelectedRows(0, -1, 65, 60, writer.DirectContent);
 
@@ -2006,7 +2065,8 @@ namespace VaccineAPI.Controllers
                 Name = childData.Name ?? "Unknown",
                 FatherName = childData.FatherName ?? "Unknown",
             };
-            var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
+            
+             var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
             try
             {
 
@@ -2033,18 +2093,41 @@ namespace VaccineAPI.Controllers
 
 
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error generating QR code: {ex.Message}");
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error generating QR code: {ex.Message}");
+                }
+                document.Close();
+                output.Seek(0, SeekOrigin.Begin);
+                return output;
             }
-            document.Close();
-            output.Seek(0, SeekOrigin.Begin);
-            stream = output;
 
-            var FileName = childName.Replace(" ", "") + "_Invoice" + "_" +
-                           DateTime.UtcNow.AddHours(5).Date.ToString("MMMM-dd-yyyy") + ".pdf";
-            return File(stream, "application/pdf", FileName);
+        [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
+        public IActionResult GenerateVerifyInvoicePdf(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
+        {
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Verification-Invoice-PDF";
 
+            string htmlContent = $@"
+                                    <!DOCTYPE html>
+                                    <html lang='en'>
+                                    <head>
+                                        <meta charset='UTF-8'>
+                                        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                                        <title>QR Code Viewer</title>
+                                    </head>
+                                    <body style='font-family: Arial, sans-serif; text-align: center; padding: 20px;'>
+                                        <h1>Immunization Record</h1>
+                                        <p><a href='{fileUrl}' target='_blank'>click here</a> to view the details.</p>
+                                        <iframe src='{fileUrl}' width='600' height='700' style='border: 1px solid #ccc;'></iframe>
+                                    </body>
+                                    </html>";
+
+            return new ContentResult
+            {
+                Content = htmlContent,
+                ContentType = "text/html",
+                StatusCode = 200
+            };
         }
 
         // functions to convert amount to words

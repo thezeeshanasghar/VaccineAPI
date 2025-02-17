@@ -2332,7 +2332,6 @@ namespace VaccineAPI.Controllers
             {
                 return NotFound(new { message = "Child not found." });
             }
-
             float width = 120f * 2.83465f;
             float height = 80f * 2.83465f;
             float padding = 10f;
@@ -2342,19 +2341,15 @@ namespace VaccineAPI.Controllers
             writer.CloseStream = false;
             document.Open();
 
-
-
             PdfContentByte canvas = writer.DirectContent;
             canvas.SetLineWidth(1f);
             canvas.SetColorStroke(BaseColor.Gray);
             canvas.Rectangle(10f, 10f, document.PageSize.Width - 25f, document.PageSize.Height - 25f);
             canvas.Stroke();
 
-
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
             headerTable.SetWidths(new float[] { 3, 1 });
-
 
             PdfPCell textCell = new PdfPCell();
             textCell.Border = PdfPCell.NO_BORDER;
@@ -2418,7 +2413,6 @@ namespace VaccineAPI.Controllers
             });
             int currentYear = DateTime.Now.Year;
             string mrNumber = currentYear.ToString()[2..];
-
             detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # {mrNumber}{dbChild.Id}", detailsFonts))
             {
                 Border = PdfPCell.NO_BORDER,
@@ -2426,8 +2420,6 @@ namespace VaccineAPI.Controllers
                 PaddingBottom = 6f,
                 PaddingTop = 6f
             });
-
-
             document.Add(detailsTable);
 
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
@@ -2480,10 +2472,36 @@ namespace VaccineAPI.Controllers
             return File(output, "application/pdf", fileName);
         }
 
-        [HttpGet("Travel-PDF-Download/atta")]
+        [HttpGet("Travel-PDF-Download/{childId}")]
         public IActionResult GenerateTravelPdf(int childId)
         {
-            // Fetch child, clinic, and doctor details from the database
+            var output = CreateTravelPdf(childId);
+            if (output == null)
+            {
+                return null;
+            }
+
+            return File(output.ToArray(), "application/pdf", "Immunization-Record.pdf");
+        }
+
+        [HttpGet("Travel-PDF-Download-Verification/{childId}")]
+        public IActionResult GenerateTravelVerificationPdf(int childId)
+        {
+            var output = CreateTravelPdf(childId);
+            if (output == null)
+            {
+                return null;
+            }
+
+            var fileName = $"Immunization-Record.pdf";
+            Response.Headers.Add("X-Frame-Options", "ALLOWALL");
+            Response.Headers.Add("Content-Disposition", $"inline; filename={fileName}");
+
+            return File(output.ToArray(), "application/pdf");
+        }
+
+        private MemoryStream CreateTravelPdf(int childId)
+        {
             var childDetails = _db.Childs
                 .Include(c => c.Clinic)
                 .ThenInclude(clinic => clinic.Doctor)
@@ -2491,30 +2509,24 @@ namespace VaccineAPI.Controllers
 
             if (childDetails == null)
             {
-                return NotFound("Child not found");
+                return null;
             }
-
-            // Extract details for the PDF
             string patientName = childDetails.Name;
-            string relation = childDetails.FatherName; // Assuming there is a ParentName field
+            string relation = childDetails.FatherName; 
             DateTime dob = childDetails.DOB;
-            string passport = childDetails.CNIC; // Assuming PassportNumber is a field
-            string mrNumber = childDetails.City; // Assuming MedicalRecordNumber is a field
+            string passport = childDetails.CNIC;
+            string mrNumber = childDetails.City;
             string clinicName = childDetails.Clinic.Name;
             string doctorDetails = $"Dr {childDetails.Clinic.Doctor.DisplayName}\n{childDetails.Clinic.Doctor.Qualification}"; // Adjust based on available fields
             string clinicAddress = childDetails.Clinic.Address;
-
-            // Continue with PDF generation using fetched details
             var output = new MemoryStream();
-            var customHeight = 450f; // Custom height in points
-            var customWidth = 600f; // Custom width in points
+            var customHeight = 650f; 
+            var customWidth = 600f; 
             var customSize = new Rectangle(customWidth, customHeight);
             using (var document = new Document(customSize))
             {
-                PdfWriter.GetInstance(document, output);
+                PdfWriter writer = PdfWriter.GetInstance(document, output);
                 document.Open();
-
-                // Add header with clinic information
                 var headerTable = new PdfPTable(2);
                 headerTable.WidthPercentage = 100;
                 headerTable.SetWidths(new float[] { 3, 1 });
@@ -2526,7 +2538,6 @@ namespace VaccineAPI.Controllers
                 headerCell.AddElement(new Paragraph(clinicAddress, FontFactory.GetFont(FontFactory.HELVETICA, 8)));
                 headerTable.AddCell(headerCell);
 
-                // Check for clinic logo and add to header
                 string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "clinicLogo.png");
                 if (System.IO.File.Exists(logoPath))
                 {
@@ -2544,24 +2555,19 @@ namespace VaccineAPI.Controllers
                     headerTable.AddCell(new PdfPCell(new Phrase("No Logo Available", FontFactory.GetFont(FontFactory.HELVETICA, 10))) { Border = PdfPCell.NO_BORDER });
                 }
                 document.Add(headerTable);
-                // Add Title
+
                 var title = new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10));
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
 
-                // Add Patient Details Table
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
                 patientTable.SetWidths(new float[] { 2, 2, 2, 2 });
+                patientTable.DefaultCell.BorderColor = BaseColor.LightGray; 
+                patientTable.DefaultCell.BorderWidth = 0.5f; 
 
-                // Set the border color and width for the table
-                patientTable.DefaultCell.BorderColor = BaseColor.LightGray; // Set border color to gray
-                patientTable.DefaultCell.BorderWidth = 0.5f; // Set border width
-
-                // Add cells with gray background color
                 var cellFontBold = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
                 var cellFontNormal = FontFactory.GetFont(FontFactory.HELVETICA, 10);
 
-                // Add cells with gray background for labels
                 patientTable.AddCell(CreateCell("Name:", cellFontBold, BaseColor.LightGray));
                 patientTable.AddCell(CreateCell(patientName, cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell("S/D/W/o:", cellFontBold, BaseColor.LightGray));
@@ -2571,34 +2577,25 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell("Passport No:", cellFontBold, BaseColor.LightGray));
                 patientTable.AddCell(CreateCell(passport, cellFontNormal, BaseColor.White));
 
-                // Add margin at the top of the table
-                document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f }); // Adjust spacing as needed
 
-                // Add the patient table to the document
+                document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
                 document.Add(patientTable);
 
-                // Helper method to create a cell with specified background color
                 PdfPCell CreateCell(string text, Font font, BaseColor backgroundColor)
                 {
                     var cell = new PdfPCell(new Phrase(text, font))
                     {
                         BackgroundColor = backgroundColor,
-                        BorderColor = BaseColor.Gray, // Set border color to gray
-                        BorderWidth = 1f // Set border width
+                        BorderColor = BaseColor.Gray,
+                        BorderWidth = 1f
                     };
                     return cell;
                 }
 
-                // Add space between tables
-                document.Add(new Paragraph(" ")); // Adds a blank line
-
-                // Add Immunization Record Table
+                document.Add(new Paragraph(" "));
                 var vaccineTable = new PdfPTable(7) { WidthPercentage = 100 };
                 vaccineTable.SetWidths(new float[] { 1.5f, 1, 1.5f, 1, 1, 1, 1 });
-
-                // Set the default cell border to no border
                 vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
-                // Fetch the child's schedules with vaccine details
                 var child = _db.Childs
                     .Include(x => x.Schedules)
                         .ThenInclude(x => x.Dose)
@@ -2608,19 +2605,14 @@ namespace VaccineAPI.Controllers
 
                 if (child == null)
                 {
-                    return NotFound("Child not found");
+                    return null;
                 }
-
                 var dbSchedules = child.Schedules.ToList();
 
-                // Add Immunization Record Table
-                var vaccineTable1 = new PdfPTable(7) { WidthPercentage = 100 }; // Declare vaccineTable only once
+                var vaccineTable1 = new PdfPTable(7) { WidthPercentage = 100 };
                 vaccineTable.SetWidths(new float[] { 1.5f, 1, 1.5f, 1, 1, 1, 1 });
-
-                // Set the default cell border to no border
                 vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
 
-                // Adding header cells
                 string[] headers = { "Vaccine", "Brand", "Manufacturer", "Batch/Lot", "Date Given", "Expiry", "Validity" };
                 foreach (string header in headers)
                 {
@@ -2633,15 +2625,14 @@ namespace VaccineAPI.Controllers
                     });
                 }
 
-                // Add dynamic data to the table
                 foreach (var schedule in dbSchedules)
                 {
                     string vaccineName = schedule.Dose?.Name ?? "N/A";
                     string brand = schedule.Brand?.Name ?? "N/A";
                     string manufacturer = schedule.Manufacturer ?? "N/A";
                     string batchLot = schedule.Lot ?? "N/A";
-                    string dateGiven = schedule.GivenDate?.ToString("dd/MM/yyyy") ?? "Due"; // Formatted date
-                    string expiry = schedule.Expiry?.ToString("dd/MM/yyyy"); // Formatted expiry date
+                    string dateGiven = schedule.GivenDate?.ToString("dd/MM/yyyy") ?? "Due"; 
+                    string expiry = schedule.Expiry?.ToString("dd/MM/yyyy"); 
                     string validity = $"{schedule.Validity}";
 
                     vaccineTable.AddCell(new PdfPCell(new Phrase(vaccineName, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
@@ -2703,32 +2694,37 @@ namespace VaccineAPI.Controllers
                 }
 
                 document.Add(vaccineTable);
-                document.Add(new Paragraph(" ")); // Add a single empty paragraph for a small space
-                document.Add(new Paragraph(" ")); // Add another empty paragraph for more space
+                document.Add(new Paragraph(" "));
+                document.Add(new Paragraph(" "));
 
-                // Add QR Code Image with a specific height using a Paragraph for spacing
+                var baseUrl = "https://myapi.vaccinationcentre.com/api";
+                var qrCodeUrl = $"{baseUrl}/Child/Travel-PDF-Download-verify/{childId}";
+                using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+                using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
+                {
+                    var qrCode = new BitmapByteQRCode(qrCodeData);
+                    byte[] qrCodeImage = qrCode.GetGraphic(18);
+
+                    using (MemoryStream ms = new MemoryStream(qrCodeImage))
+                    {
+                        var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
+                        pdfQrCode.ScaleAbsolute(75f, 75f);
+                        float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 35f;
+                        float qrCodeYPosition = document.PageSize.Height - pdfQrCode.ScaledHeight - 365f;
+                        pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
+                        writer.DirectContent.AddImage(pdfQrCode);
+                    }
+                }
+
                 document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10))
                 {
-                    SpacingAfter = 20 // Adjust the spacing value for more space
+                    SpacingAfter = 20
                 });
-                var qrCodePath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "QR-Code.png");
-                if (System.IO.File.Exists(qrCodePath))
-                {
-                    var qrCodeImage = Image.GetInstance(qrCodePath);
-                    qrCodeImage.ScaleToFit(80f, 80f);
-                    qrCodeImage.Alignment = Element.ALIGN_RIGHT;
-                    document.Add(qrCodeImage);
-                }
-                else
-                {
-                    throw new FileNotFoundException("QR Code image not found at: " + qrCodePath);
-                }
 
                 var footerLeft = new PdfPCell(new Phrase($"Baby Medics  IHRA-00568", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
                 {
                     Border = Rectangle.NO_BORDER,
                     HorizontalAlignment = PdfPCell.ALIGN_LEFT,
-
                     Padding = 5
                 };
                 int currentYear = DateTime.Now.Year;
@@ -2743,7 +2739,6 @@ namespace VaccineAPI.Controllers
                 var footerTable = new PdfPTable(2) { WidthPercentage = 100 };
                 footerTable.AddCell(footerLeft);
                 footerTable.AddCell(footerRight);
-
                 document.Add(footerTable);
 
                 var footerDetails = new PdfPCell(new Phrase($"This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
@@ -2772,11 +2767,36 @@ namespace VaccineAPI.Controllers
                 document.Close();
             }
 
-            // Reset the position of the MemoryStream to the beginning
             output.Seek(0, SeekOrigin.Begin);
+            return output;
+        }
 
-            // Return the PDF file
-            return File(output, "application/pdf", "Immunization-Record.pdf");
+        [HttpGet("Travel-PDF-Download-verify/{id}")]
+        public IActionResult GenerateVerifyTravelPdf(int id)
+        {
+            var fileUrl = $"https://localhost:5001/api/Child/Travel-PDF-Download-Verification/{id}";
+
+            string htmlContent = $@"
+                                    <!DOCTYPE html>
+                                    <html lang='en'>
+                                    <head>
+                                        <meta charset='UTF-8'>
+                                        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                                        <title>QR Code Viewer</title>
+                                    </head>
+                                    <body style='font-family: Arial, sans-serif; text-align: center; padding: 20px;'>
+                                        <h1>Immunization Record</h1>
+                                        <p><a href='{fileUrl}' target='_blank'>click here</a> to view the details.</p>
+                                        <iframe src='{fileUrl}' width='600' height='700' style='border: 1px solid #ccc;'></iframe>
+                                    </body>
+                                    </html>";
+
+            return new ContentResult
+            {
+                Content = htmlContent,
+                ContentType = "text/html",
+                StatusCode = 200
+            };
         }
     }
 }

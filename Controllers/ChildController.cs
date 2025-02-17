@@ -2326,7 +2326,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        [HttpGet("PIDPDF/{id}")]
+        [HttpGet("PID/{id}")]
         public IActionResult GeneratePIDPdf(int id)
         {
             long childId = Convert.ToInt64(id);
@@ -2377,7 +2377,7 @@ namespace VaccineAPI.Controllers
             };
         }
 
-        [HttpGet("PID/{childId}")]
+        [HttpGet("PIDPDF/{childId}")]
         public IActionResult ViewPdf(int childId)
         {
             long child = Convert.ToInt64(childId);

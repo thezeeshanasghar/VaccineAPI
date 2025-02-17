@@ -2352,7 +2352,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("PIDVerify/{id}")]
         public IActionResult GenerateVerifyPID(int id)
         {
-            var fileUrl = $"https://localhost:5001/api/Child/PID/{id}";
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/PID/{id}";
 
             string htmlContent = $@"
                                     <!DOCTYPE html>

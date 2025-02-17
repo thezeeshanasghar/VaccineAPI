@@ -10,9 +10,12 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development"
+                "ASPNETCORE_ENVIRONMENT": "Development",
             },
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            "ConnectionStrings": {
+                "DefaultConnection": "server=localhost;userid=root;password=;database=fernfers_vaccinebe;port=3306;"
+                }
         }
     ]
 }

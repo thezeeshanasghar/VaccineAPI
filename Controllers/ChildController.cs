@@ -2374,6 +2374,80 @@ namespace VaccineAPI.Controllers
             {
                 return NotFound(new { message = "Child not found." });
             }
+
+              MemoryStream output = CreatePID(childId);
+
+            if (output == null)
+            {
+                return NotFound(new { message = "Child not found." });
+            }
+
+
+            var currentDate = DateTime.Now.ToString("dd-MMM-yyyy");
+            var fileName = $"{dbChild.Name}_PID_{currentDate}.pdf";
+            return File(output.ToArray(), "application/pdf", fileName);
+        }
+
+        [HttpGet("PIDVerify/{id}")]
+        public IActionResult GenerateVerifyPID(int id)
+        {
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/PID/{id}";
+
+            string htmlContent = $@"
+                                    <!DOCTYPE html>
+                                    <html lang='en'>
+                                    <head>
+                                        <meta charset='UTF-8'>
+                                        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                                        <title>QR Code Viewer</title>
+                                    </head>
+                                    <body style='font-family: Arial, sans-serif; text-align: center; padding: 20px;'>
+                                        <h1>Immunization Record</h1>
+                                        <p><a href='{fileUrl}' target='_blank'>click here</a> to view the details.</p>
+                                        <iframe src='{fileUrl}' width='600' height='400' style='border: 1px solid #ccc;'></iframe>
+                                    </body>
+                                    </html>";
+
+            return new ContentResult
+            {
+                Content = htmlContent,
+                ContentType = "text/html",
+                StatusCode = 200
+            };
+        }
+
+        [HttpGet("PIDPDF/{childId}")]
+        public IActionResult ViewPdf(int childId)
+        {
+            long child = Convert.ToInt64(childId);
+            var dbChild = _db.Childs.Find(child);
+
+            if (dbChild == null)
+            {
+                return NotFound(new { message = "Child not found." });
+            }
+
+            MemoryStream output = CreatePID(child);
+
+            if (output == null)
+            {
+                return NotFound(new { message = "Child not found." });
+            }
+
+            Response.Headers.Add("X-Frame-Options", "ALLOWALL");
+            Response.Headers.Add("Content-Disposition", $"inline; filename=PID_{childId}.pdf");
+
+            return File(output.ToArray(), "application/pdf");
+        }
+
+        private MemoryStream CreatePID(long childId)
+        {
+            var dbChild = _db.Childs.Find(childId);
+            if (dbChild == null)
+            {
+                return null;
+            }
+
             float width = 120f * 2.83465f;
             float height = 80f * 2.83465f;
             float padding = 10f;
@@ -2401,21 +2475,18 @@ namespace VaccineAPI.Controllers
             textCell.AddElement(new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12))
             {
                 SpacingAfter = 0f
-            }
-            );
+            });
             headerTable.AddCell(textCell);
 
             var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
             if (System.IO.File.Exists(logoPath))
             {
-                var logo = Image.GetInstance(logoPath);
+                var logo = iTextSharp.text.Image.GetInstance(logoPath);
                 logo.ScaleToFit(50f, 50f);
                 PdfPCell logoCell = new PdfPCell(logo)
                 {
                     Border = PdfPCell.NO_BORDER,
-
                     HorizontalAlignment = Element.ALIGN_LEFT
-
                 };
                 logoCell.PaddingTop = 30f;
                 logoCell.PaddingLeft = 0f;
@@ -2439,7 +2510,6 @@ namespace VaccineAPI.Controllers
             });
             detailsTable.AddCell(new PdfPCell(new Paragraph($"{dbChild.FatherName}", detailsFont))
             {
-
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
             });
@@ -2462,10 +2532,11 @@ namespace VaccineAPI.Controllers
                 PaddingBottom = 6f,
                 PaddingTop = 6f
             });
+            
             document.Add(detailsTable);
 
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
-            var qrCodeUrl = $"{baseUrl}/child/PID/{childId}";
+            var qrCodeUrl = $"{baseUrl}/Child/PIDVerify/{childId}";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
@@ -2481,37 +2552,20 @@ namespace VaccineAPI.Controllers
                     float qrCodeYPosition = 25f;
                     pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                     writer.DirectContent.AddImage(pdfQrCode);
-
                 }
             }
-
 
             Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
 
             Paragraph footerText1 = new Paragraph("Baby Medics (IHRA-00568)", footerFont)
             {
-
                 IndentationLeft = 20f
             };
             document.Add(footerText1);
 
-            // Get the current date and time
-            // string currentDateTime = DateTime.Now.ToString("dd-MMM-yyyy hh:mmtt"); // Format as needed
-
-            // Paragraph footerText2 = new Paragraph($"IHRA-00568    {currentDateTime}", footerFont)
-            // {
-            //     IndentationLeft = 20f
-            // };
-            // document.Add(footerText2);
-
-
-
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
-
-            var currentDate = DateTime.Now.ToString("dd-MMM-yyyy");
-            var fileName = $"{dbChild.Name}_PID_{currentDate}.pdf";
-            return File(output, "application/pdf", fileName);
+            return output;
         }
 
         [HttpGet("Travel-PDF-Download/{childId}")]

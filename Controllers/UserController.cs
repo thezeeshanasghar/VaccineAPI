@@ -255,7 +255,7 @@ namespace VaccineAPI.Controllers
             // Send email
             try
             {
-                UserEmail.SendEmail2(child.Email, body);
+                UserEmail.SendEmail(child.Email, body);
                 return new Response<bool>(true, "Your login credentials have been sent to your email address", true);
             }
             catch (Exception ex)

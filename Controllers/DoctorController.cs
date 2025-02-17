@@ -99,15 +99,15 @@ namespace VaccineAPI.Controllers
             if (userDetails != null)
             {
 
-                var body = "Hi " + "<b>" + doctor.FirstName + " " + doctor.LastName + "</b>, <br />"
-                + "Welcome to vaccinationcentre.com <br /><br />"
-                + "Your account credentials are: <br />"
-                + "ID/Mobile Number: " + userDetails.MobileNumber + "<br />"
-                + "Password: " + userDetails.Password + "<br />"
-                + "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
+                var body = "Hi " + doctor.FirstName + " " + doctor.LastName + ",\n"
+                + "Welcome to vaccinationcentre.com\n\n"
+                + "Your account credentials are:\n"
+                + "ID/Mobile Number: " + userDetails.MobileNumber + "\n"
+                + "Password: " + userDetails.Password + "\n"
+                + "Web Link: https://doctor.vaccinationcentre.com";
                 try
                 {
-                    UserEmail.SendEmail2(doctor.Email, body);
+                    UserEmail.SendEmail(doctor.Email, body);
                 }
                 catch (Exception ex)
                 {
@@ -168,32 +168,14 @@ namespace VaccineAPI.Controllers
                 _db.SaveChanges();
                 doctorDTO.Id = doctorDB.Id;
 
-                //generate SMS and save it to the db
-                // UserSMS u = new UserSMS (_db);
-                // u.DoctorSMS (doctorDTO);
-                // UserEmail.DoctorEmail (doctorDTO);
 
-                var body = "Hi " + "<b>" + doctorDTO.FirstName + " " + doctorDTO.LastName + "</b>, <br />"
-        + "You are successfully registered in vaccinationcentre.com <br /><br />"
-        + "Your account credentials are: <br />"
-        + "ID/Mobile Number: " + doctorDTO.MobileNumber + "<br />"
-        + "Password: " + doctorDTO.Password + "<br />"
-        + "Web Link: <a href=\"https://doctor.vaccinationcentre.com/\" target=\"_blank\" rel=\"noopener noreferrer\">https://doctor.vaccinationcentre.com/</a>";
+                var body = "Hi " + doctorDTO.FirstName + " " + doctorDTO.LastName + ",\n"
+                    + "You are successfully registered in vaccinationcentre.com\n\n"
+                    + "Your account credentials are:\n"
+                    + "ID/Mobile Number: " + doctorDTO.MobileNumber + "\n"
+                    + "Password: " + doctorDTO.Password + "\n"
+                    + "Web Link: https://doctor.vaccinationcentre.com";
                 UserEmail.SendEmail(doctorDTO.FirstName, doctorDTO.Email, body);
-                // 4- check if clinicDto exsist; then save clinic as well
-                // if (doctorDTO.ClinicDTO != null && !String.IsNullOrEmpty(doctorDTO.ClinicDTO.Name))
-                // {
-                //     doctorDTO.ClinicDTO.Name = textInfo.ToTitleCase(doctorDTO.ClinicDTO.Name);
-
-                //     doctorDTO.ClinicDTO.DoctorId = doctorDB.Id;
-
-                //     Clinic clinicDB = _mapper.Map<Clinic>(doctorDTO.ClinicDTO);
-                //     clinicDB.IsOnline = true;
-                //     _db.Clinics.Add(clinicDB);
-                //     _db.SaveChanges();
-
-                //     doctorDTO.ClinicDTO.Id = clinicDB.Id;
-                // }
             }
             return new Response<DoctorDTO>(true, null, doctorDTO);
         }
@@ -466,8 +448,8 @@ namespace VaccineAPI.Controllers
             return new Response<List<DoctorDTO>>(true, null, doctorDTO);
         }
 
-       [HttpPatch("update-clinic-id")]
-        public async Task<IActionResult> UpdateClinicIdForChild([FromQuery] int doctorId,[FromQuery] long childId)
+        [HttpPatch("update-clinic-id")]
+        public async Task<IActionResult> UpdateClinicIdForChild([FromQuery] int doctorId, [FromQuery] long childId)
         {
             try
             {
@@ -488,11 +470,11 @@ namespace VaccineAPI.Controllers
             }
             catch (DbUpdateException dbEx)
             {
-                return StatusCode(500,$"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}");
+                return StatusCode(500, $"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}");
             }
             catch (Exception ex)
             {
-                return StatusCode(500,$"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}");
+                return StatusCode(500, $"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}");
             }
         }
 

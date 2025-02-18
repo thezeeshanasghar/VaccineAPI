@@ -5,6 +5,7 @@ using AutoMapper;
 using VaccineAPI.ModelDTO;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
+using static VaccineAPI.Controllers.ChildController;
 
 
 namespace VaccineAPI.Controllers
@@ -149,20 +150,15 @@ namespace VaccineAPI.Controllers
         [HttpGet("Follow-Up-PDF")]
         public IActionResult GenerateFollowUpPdf(int childId)
         {
-            var followUpDetails = _db.FollowUps
+            var followUpDetailsList = _db.FollowUps
                 .Where(f => f.ChildId == childId)
-                .OrderBy(f => f.NextVisitDate)
-                .FirstOrDefault();
+                .OrderBy(f => f.CurrentVisitDate)
+                .ToList();
 
-            if (followUpDetails == null)
+            if (followUpDetailsList.Count == 0)
             {
                 return NotFound("Follow-up details not found for the child");
             }
-            DateTime nextVisitDate = followUpDetails.NextVisitDate ?? DateTime.MinValue;
-            string disease = followUpDetails.Disease;
-            float weight = followUpDetails.Weight ?? 0;
-            float height = followUpDetails.Height ?? 0;
-            float ofc = followUpDetails.OFC ?? 0;
 
             var childDetails = _db.Childs
                 .Include(c => c.Clinic)
@@ -174,14 +170,21 @@ namespace VaccineAPI.Controllers
                 return NotFound("Child not found");
             }
             string clinicName = childDetails.Clinic.Name;
-            string doctorDetails = $"Dr {childDetails.Clinic.Doctor.DisplayName}\n{childDetails.Clinic.Doctor.Qualification}";
+            string doctorDisplayName = $"{childDetails.Clinic.Doctor.DisplayName}";
+            string doctorQualification = childDetails.Clinic.Doctor.AdditionalInfo;
+            string clinicPhone = $"Phone : {childDetails.Clinic.PhoneNumber}";
             string clinicAddress = childDetails.Clinic.Address;
             string childName = childDetails.Name;
-            string fatherName = childDetails.FatherName;
+            string fatherName = $"S/D/W/o : {childDetails.FatherName}";
+            string DOB = $"DOB : {childDetails.DOB.ToString("dd-MMM-yyyy")}";
 
             var output = new MemoryStream();
             var document = new Document();
-            PdfWriter.GetInstance(document, output);
+            PdfWriter writer = PdfWriter.GetInstance(document, output);
+            // Add the footer event
+            PDFFooter footer = new PDFFooter(childDetails);
+            writer.PageEvent = footer;
+
             document.Open();
             var headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
@@ -189,137 +192,196 @@ namespace VaccineAPI.Controllers
 
             PdfPCell headerCell = new PdfPCell();
             headerCell.Border = PdfPCell.NO_BORDER;
+            headerCell.AddElement(new Paragraph(doctorDisplayName, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12)));
+            headerCell.AddElement(new Paragraph(doctorQualification, FontFactory.GetFont(FontFactory.HELVETICA, 10)) { MultipliedLeading = 1.0f, SpacingBefore = 2 });
             headerCell.AddElement(new Paragraph(clinicName, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12)));
-            headerCell.AddElement(new Paragraph(doctorDetails, FontFactory.GetFont(FontFactory.HELVETICA, 8)));
-            headerCell.AddElement(new Paragraph(clinicAddress, FontFactory.GetFont(FontFactory.HELVETICA, 8)));
+            headerCell.AddElement(new Paragraph(clinicAddress, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
+            headerCell.AddElement(new Paragraph(clinicPhone, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
             headerTable.AddCell(headerCell);
-
-            string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "clinicLogo.png");
+            
+            PdfPCell childDetailsCell = new PdfPCell();
+            string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "ClinicTeeka.png");
             if (System.IO.File.Exists(logoPath))
             {
-                var logo = Image.GetInstance(logoPath);
-                logo.ScaleToFit(150f, 150f);
-                PdfPCell logoCell = new PdfPCell(logo)
-                {
-                    Border = PdfPCell.NO_BORDER,
-                    HorizontalAlignment = Element.ALIGN_RIGHT
-                };
-                headerTable.AddCell(logoCell);
+                Image logo = Image.GetInstance(logoPath);
+                logo.ScaleAbsolute(150f, 150f);
+                childDetailsCell.AddElement(logo);
             }
             else
             {
-                headerTable.AddCell(new PdfPCell(new Phrase("No Logo Available", FontFactory.GetFont(FontFactory.HELVETICA, 10))) { Border = PdfPCell.NO_BORDER });
+                childDetailsCell.AddElement(new Paragraph("Logo not found", FontFactory.GetFont(FontFactory.HELVETICA, 10)));
             }
+            childDetailsCell.Border = PdfPCell.NO_BORDER;
+            childDetailsCell.AddElement(new Paragraph($"   {childName}", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
+            childDetailsCell.AddElement(new Paragraph($"   {fatherName}", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { MultipliedLeading = 1.0f, SpacingBefore = 2 });
+            childDetailsCell.AddElement(new Paragraph($"   {DOB}", FontFactory.GetFont(FontFactory.HELVETICA, 10)));
 
+            headerTable.AddCell(childDetailsCell);
             document.Add(headerTable);
-            var childInfoHeading = new Paragraph("Child Info", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12))
+
+            var heading = new Paragraph("VISIT HISTORY", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14))
             {
-                SpacingBefore = 2, 
                 Alignment = Element.ALIGN_CENTER 
             };
-            document.Add(childInfoHeading);
-            var childDetailsTable = new PdfPTable(2);
-            childDetailsTable.WidthPercentage = 100;
-            childDetailsTable.SpacingBefore = 10;
+            document.Add(heading); 
 
-            childDetailsTable.AddCell(new PdfPCell(new Phrase("Child Name", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                Padding = 5 
-            });
-            childDetailsTable.AddCell(new PdfPCell(new Phrase(childName, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-            {
-                BackgroundColor = BaseColor.White,
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                Padding = 5 
-            });
+            var followUpHeaderTable = new PdfPTable(7);
+            followUpHeaderTable.HorizontalAlignment = 0;
+            followUpHeaderTable.TotalWidth = 510f;
+            followUpHeaderTable.LockedWidth = true;
+            followUpHeaderTable.SpacingBefore = 15; 
+            float[] widths = new float[] { 0.5f, 1.5f, 1.5f, 1f, 1f, 1f, 1f };
+            followUpHeaderTable.SetWidths(widths);
 
-            childDetailsTable.AddCell(new PdfPCell(new Phrase("Father Name", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                Padding = 5 
-            });
-            childDetailsTable.AddCell(new PdfPCell(new Phrase(fatherName, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-            {
-                BackgroundColor = BaseColor.White,
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                Padding = 5 
-            });
+            followUpHeaderTable.AddCell(CreateCell("Sr No", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("VISIT DATE", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("Disease", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("Weight", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("Height", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("OFC", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("Growth Velocity", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
-            document.Add(childDetailsTable);
+            // Loop through follow-up details and add them to the table
+            int srNo = 1; // Initialize serial number
+            float? previousHeight = null; // To store the height of the previous record
+            DateTime? previousVisitDate = null; // To store the visit date of the previous record
 
-            var followUpHeaderTable = new PdfPTable(2);
-            followUpHeaderTable.WidthPercentage = 100;
-            followUpHeaderTable.SpacingBefore = 10;
-            var followUpDetailsHeading = new Paragraph("Next Follow Up Details", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10))
+            foreach (var followUpDetails in followUpDetailsList)
             {
-                SpacingBefore = 20, 
-                Alignment = Element.ALIGN_CENTER
-            };
-            document.Add(followUpDetailsHeading);
+                DateTime currentVisitDate = followUpDetails.CurrentVisitDate ?? DateTime.MinValue;
+                string disease = followUpDetails.Disease;
+                float weight = followUpDetails.Weight ?? 0;
+                float height = followUpDetails.Height ?? 0;
+                float ofc = followUpDetails.OFC ?? 0;
 
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase("Next Visit", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9)))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase(nextVisitDate.ToString("dd-MM-yyyy"), FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-            {
-                BackgroundColor = BaseColor.White,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
+                // Add current record to the table
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(srNo.ToString(), FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    BackgroundColor = BaseColor.White,
+                    BorderColor = BaseColor.LightGray,
+                    HorizontalAlignment = Element.ALIGN_CENTER
+                });
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(currentVisitDate.ToString("dd-MM-yyyy"), FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    BackgroundColor = BaseColor.White,
+                    BorderColor = BaseColor.LightGray,
+                    HorizontalAlignment = Element.ALIGN_CENTER
+                });
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(disease, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    BackgroundColor = BaseColor.White,
+                    BorderColor = BaseColor.LightGray,
+                    HorizontalAlignment = Element.ALIGN_CENTER
+                });
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{weight} kg", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    BackgroundColor = BaseColor.White,
+                    BorderColor = BaseColor.LightGray,
+                    HorizontalAlignment = Element.ALIGN_CENTER
+                });
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{height} cm", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    BackgroundColor = BaseColor.White,
+                    BorderColor = BaseColor.LightGray,
+                    HorizontalAlignment = Element.ALIGN_CENTER
+                });
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{ofc} cm", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    BackgroundColor = BaseColor.White,
+                    BorderColor = BaseColor.LightGray,
+                    HorizontalAlignment = Element.ALIGN_CENTER
+                });
+                
+                // Growth Velocity = Height Difference / Time Difference in Years
+                if (previousHeight.HasValue && previousVisitDate.HasValue)
+                {
+                    float heightDifference = height - previousHeight.Value; // Calculate height difference
 
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase("Disease", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase(disease, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-            {
-                BackgroundColor = BaseColor.White,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
+                    // Add Growth Velocity to the table
+                    followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{heightDifference:F2} cm/year", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                    {
+                        BackgroundColor = BaseColor.White,
+                        BorderColor = BaseColor.LightGray,
+                        HorizontalAlignment = Element.ALIGN_CENTER
+                    });
+                }
+                else
+                {
+                    // If it's the first record, just add N/A for growth velocity
+                    followUpHeaderTable.AddCell(new PdfPCell(new Phrase("N/A", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                    {
+                        BackgroundColor = BaseColor.White,
+                        BorderColor = BaseColor.LightGray,
+                        HorizontalAlignment = Element.ALIGN_CENTER
+                    });
+                }
 
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase("Weight", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{weight} kg", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-            {
-                BackgroundColor = BaseColor.White,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
+                // Update previous record values for the next iteration
+                previousHeight = height;
+                previousVisitDate = currentVisitDate;
 
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase("Height", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{height} cm", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-            {
-                BackgroundColor = BaseColor.White,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
-
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase("OFC", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
-            {
-                BackgroundColor = BaseColor.LightGray,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
-            followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{ofc} cm", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-            {
-                BackgroundColor = BaseColor.White,
-                HorizontalAlignment = Element.ALIGN_LEFT
-            });
+                srNo++; // Increment serial number
+            }
 
             document.Add(followUpHeaderTable);
 
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
             return File(output, "application/pdf", "Follow-Up.pdf");
+        }
+
+        protected PdfPCell CreateCell(string value, string color, int colpan, string alignment, string table)
+        {
+            Font font = FontFactory.GetFont(FontFactory.HELVETICA, 11);
+            if (color == "bold" || color == "backgroudLightGray")
+            {
+                font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
+            }
+
+            if (table == "inwordamount")
+            {
+                font = FontFactory.GetFont(FontFactory.HELVETICA, 11, Font.ITALIC);
+            }
+
+            PdfPCell cell = new PdfPCell(new Phrase(value, font));
+            cell.BorderColor = GrayColor.LightGray;
+
+            if (color == "backgroudLightGray")
+            {
+                cell.BackgroundColor = new BaseColor(224, 218, 218);
+                cell.FixedHeight = 20f;
+            }
+
+            switch (alignment)
+            {
+                case "right":
+                    cell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                    break;
+                case "left":
+                    cell.HorizontalAlignment = Element.ALIGN_LEFT;
+                    break;
+                case "center":
+                    cell.HorizontalAlignment = Element.ALIGN_CENTER;
+                    break;
+            }
+
+            cell.Colspan = colpan;
+
+            if (table == "description")
+            {
+                cell.Border = 0;
+                cell.Padding = 2f;
+            }
+            else if (table == "scheduleRecords")
+            {
+                cell.FixedHeight = 15f;
+            }
+            else if (table == "invoiceRecords" || table == "inwordamount")
+            {
+                cell.FixedHeight = 18f;
+            }
+
+            return cell;
         }
     }
 }

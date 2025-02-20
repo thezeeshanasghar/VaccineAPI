@@ -940,7 +940,7 @@ namespace VaccineAPI.Controllers
 
         public IActionResult GenerateVerifySchedule(int id)
         {
-            var fileUrl = $"https://localhost:5001/api/Child/{id}/Verification-Schedule-PDF";
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/{id}/Verification-Schedule-PDF";
 
             string htmlContent = $@"
                             <!DOCTYPE html>
@@ -2954,7 +2954,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("Travel-PDF-Download/{id}")]
         public IActionResult GenerateVerifyTravelPdf(int id)
         {
-            var fileUrl = $"https://localhost:5001/api/Child/Travel-PDF-Download-Verification/{id}";
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/Travel-PDF-Download-Verification/{id}";
 
             string htmlContent = $@"
                                     <!DOCTYPE html>

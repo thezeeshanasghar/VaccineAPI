@@ -1820,10 +1820,6 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "unbold", 1, "left", "description"));
             upperTable.AddCell(CreateCell("#StayHome #GetVaccinated", "", 1, "right", "description"));
             upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
-            if (!String.IsNullOrEmpty(dbChild.CNIC))
-                upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
-            else
-                upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
 
             upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
 
@@ -1852,6 +1848,16 @@ namespace VaccineAPI.Controllers
 
             childtable.AddCell(CreateCell("City:", "backgroudLightGray", 1, "left", "invoiceRecords"));
             childtable.AddCell(CreateCell(dbChild.City, " ", 1, "left", "invoiceRecords"));
+            if (!String.IsNullOrEmpty(dbChild.CNIC))
+            {
+                childtable.AddCell(CreateCell("CNIC/Passport: ", "backgroudLightGray", 1, "left", "invoiceRecords"));
+                childtable.AddCell(CreateCell(dbChild.CNIC, " ", 1, "left", "invoiceRecords"));
+            }
+            else
+            {
+                childtable.AddCell(CreateCell("", "", 1, "right", "invoiceRecords"));
+                childtable.AddCell(CreateCell("", "", 1, "right", "invoiceRecords"));
+            }
 
             _db.SaveChanges();
             document.Add(childtable);

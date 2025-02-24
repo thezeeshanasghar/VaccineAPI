@@ -103,6 +103,72 @@ namespace VaccineAPI.Controllers
                 }
         }
 
+        [HttpGet("followupmail/{ChildId}")]
+        public Response<object> SendAlertEmail(long ChildId)
+        {
+            try
+            {
+                // Get child with clinic information
+                var child = _db.Childs
+                    .Include(c => c.Clinic)
+                        .ThenInclude(c => c.Doctor)
+                    .FirstOrDefault(c => c.Id == ChildId);
+
+                if (child == null || string.IsNullOrEmpty(child.Email))
+                {
+                    return new Response<object>(false, "Child not found or email is missing.", null);
+                }
+
+                // Get today's schedules - removed Include(s => s.Disease) since Disease is not a navigation property
+                var specificDate = DateTime.Today;
+                var nextSchedule = _db.FollowUps
+                    .Where(s => s.ChildId == ChildId && s.NextVisitDate >= specificDate)
+                    .OrderBy(s => s.NextVisitDate)
+                    .FirstOrDefault();
+
+                if (nextSchedule == null)
+                {
+                    return new Response<object>(false, "No FOLLOW UP found.", null);
+                }
+
+                // Create a more professional HTML email template
+                string emailBody = $@"Dear Parent/Guardian of {child.Name},
+
+                 Your follow-up vaccination visit is scheduled as follows:
+
+                 Appointment Date: {nextSchedule.NextVisitDate:dd-MM-yyyy}
+                 Reason: {nextSchedule.Disease}
+                 Clinic: {child.Clinic.Name}
+                 Doctor: {child.Clinic.Doctor.DisplayName}
+
+                 Please confirm your appointment by contacting us at {child.Clinic.PhoneNumber}.
+
+                 You can view your complete vaccination record at: https://vaccinationcentre.com
+
+                 Thanks,
+                 {child.Clinic.Name}
+
+                 Note: This is an automated reminder. Please do not reply to this email.";
+
+
+                UserEmail.SendEmail(child.Email, emailBody, "Follow-up Reminder");
+
+                return new Response<object>(true, "Email sent successfully.", new
+                {
+                    ChildId = child.Id,
+                    Email = child.Email,
+                    ScheduleDate = nextSchedule.NextVisitDate,
+                    Disease = nextSchedule.Disease,
+                    ClinicName = child.Clinic.Name
+                });
+            }
+            catch (Exception ex)
+            {
+                // Log the error details here
+                return new Response<object>(false, $"Error sending email: {ex.Message}", null);
+            }
+        }
+
         [HttpGet("sms-alert/{childId}")]
         public Response<FollowUpDTO> SendSMSAlertToOneChild(int childId)
         {

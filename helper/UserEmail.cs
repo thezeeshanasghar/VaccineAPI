@@ -13,22 +13,24 @@ namespace VaccineAPI
         public static void ParentEmail(Child child)
         {
             string body = "";
+
             if (child.Gender == "Boy")
-                body += ("Mr. " + child.Name + "</b>");
+                body += "Mr. " + child.Name;
 
             if (child.Gender == "Girl")
-                body += ("Miss. " + child.Name + "</b>");
+                body += "Miss. " + child.Name;
 
-            body += " has been registered at vaccinationcentre.com ";
+            body += " has been registered at vaccinationcentre.com.\n\n";
 
+            body += "ID: " + child.User.MobileNumber + "\n";
+            body += "Password: " + child.User.Password + "\n";
+            body += "Clinic Phone Number: " + child.Clinic.PhoneNumber + "\n";
+            body += "Doctor Phone Number: +92" + child.Clinic.Doctor.User.MobileNumber + "\n\n";
 
-            body += "ID: <b>" + child.User.MobileNumber + "</b><br>Password: <b>" + child.User.Password + "</b><br/>"
-                + "Clinic Phone Number <b>" + child.Clinic.PhoneNumber + "</b><br>";
+            body += "Website: https://vaccinationcentre.com\n";
+            body += "View vaccination schedule: http://myapi.vaccinationcentre.com/api/child/" + child.Id + "/Download-Schedule-PDF\n";
 
-            body += "Doctor Phone Number: <b>+92" + child.Clinic.Doctor.User.MobileNumber + "<b><br>";
-            body += "Web Link: <a href=\"https://vaccinationcentre.com\" target=\"_blank\" rel=\"noopener noreferrer\">https://vaccinationcentre.com</a><br>";
-            body += "<a href=\"http://myapi.vaccinationcentre.com/api/child/" + child.Id + "/Download-Schedule-PDF\" target=\"_blank\" rel=\"noopener noreferrer\">Click here</a>" + " to view vaccination schedule";
-            //TODO: website and android link
+            // TODO: Add website and Android app link
             SendEmail(child.Email, body);
         }
 

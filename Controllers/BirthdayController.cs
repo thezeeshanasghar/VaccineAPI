@@ -57,7 +57,7 @@ namespace VaccineAPI.Controllers
 We hope your special day is filled with joy, laughter, and wonderful memories!
 
 From,
-Dr. {child.Clinic.Doctor.DisplayName}
+{child.Clinic.Doctor.DisplayName}
 {child.Clinic.Name}
 
 Stay healthy and keep smiling! 😊

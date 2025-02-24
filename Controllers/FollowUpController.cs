@@ -134,7 +134,7 @@ namespace VaccineAPI.Controllers
                 // Create a more professional HTML email template
                 string emailBody = $@"Dear Parent/Guardian of {child.Name},
 
-                 Your follow-up vaccination visit is scheduled as follows:
+                 Your follow-up visit is scheduled as follows:
 
                  Appointment Date: {nextSchedule.NextVisitDate:dd-MM-yyyy}
                  Reason: {nextSchedule.Disease}

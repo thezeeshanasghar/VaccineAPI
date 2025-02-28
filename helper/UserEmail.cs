@@ -3,6 +3,11 @@ using System.Net;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using System.Text;
+using System.Net.Http;
+using System.Threading.Tasks;
+
 
 namespace VaccineAPI
 {
@@ -66,20 +71,23 @@ namespace VaccineAPI
 
         public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com")
         {
-            using (var client = new WebClient())
+            using (var client = new HttpClient())
             {
                 try
                 {
-                    var data = new System.Collections.Specialized.NameValueCollection
+                    var data = new
                     {
-                        ["recipient_email"] = userEmail,
-                        ["subject"] = subject,
-                        ["body"] = body
+                        recipient_email = userEmail,
+                        subject = subject,
+                        body = body
                     };
 
+                    var json = JsonSerializer.Serialize(data);
+                    var content = new StringContent(json, Encoding.UTF8, "application/json");
+
                     // Send POST request to PHP endpoint
-                    byte[] response = client.UploadValues("https://vaccinationcentre.com/testmail.php", data);
-                    string result = System.Text.Encoding.UTF8.GetString(response);
+                    var response = client.PostAsync("https://vaccinationcentre.com/testmail.php", content).Result;
+                    var result = response.Content.ReadAsStringAsync().Result;
 
                     // Optionally handle the JSON response
                     if (!result.Contains("\"status\":\"success\""))

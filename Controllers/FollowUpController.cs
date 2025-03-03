@@ -52,6 +52,7 @@ namespace VaccineAPI.Controllers
                 .ThenInclude(c => c.User) // Include User data through Child
                 .Where(f => f.DoctorId == doctorId) // Filter by DoctorId
                 .Where(c => c.NextVisitDate == inputDate.Date)
+                .Where(f => f.Child.IsInactive==false)
                 .OrderBy(x => x.Child.Id)
                 .ToList();
             IEnumerable<FollowUpDTO> followUpDTOs = _mapper.Map<IEnumerable<FollowUpDTO>>(

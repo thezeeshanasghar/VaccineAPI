@@ -38,6 +38,7 @@ namespace VaccineAPI.Controllers
                     c.DOB.Month == inputDate.Month
                     && c.DOB.Day == inputDate.Day
                     && c.Clinic.DoctorId == doctorId // Filter by DoctorId
+                    && c.IsInactive==false // Filter out inactive records
                 )
                 .ToList();
 

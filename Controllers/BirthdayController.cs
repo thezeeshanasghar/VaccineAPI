@@ -23,6 +23,85 @@ namespace VaccineAPI.Controllers
             _mapper = mapper;
         }
 
+        [HttpGet("birthdaymail/{childId}")]
+        public Response<object> SendBirthdayEmailByChildId(long childId)
+        {
+            try
+            {
+                // Get child with all required information
+                var child = _db.Childs
+                    .Include(c => c.User)
+                    .Include(c => c.Clinic)
+                        .ThenInclude(c => c.Doctor)
+                    .FirstOrDefault(c => c.Id == childId);
+
+                if (child == null)
+                {
+                    return new Response<object>(false, "Child not found.", null);
+                }
+
+                if (string.IsNullOrEmpty(child.Email))
+                {
+                    return new Response<object>(false, "No email address found for the child.", null);
+                }
+
+                var emailTo = child.Email;
+                var today = DateTime.Today;
+                var age = today.Year - child.DOB.Year;
+
+                // Create birthday email content
+                string emailBody = $@"Dear {child.Name},
+
+🎉 Happy {age}{GetOrdinalSuffix(age)} Birthday! 🎂
+
+We hope your special day is filled with joy, laughter, and wonderful memories!
+
+From,
+{child.Clinic.Doctor.DisplayName}
+{child.Clinic.Name}
+
+Stay healthy and keep smiling! 😊
+
+Best wishes from all of us at {child.Clinic.Name}
+
+Note: This is an automated birthday wish. For any medical queries, please contact the clinic directly.
+Contact: {child.Clinic.PhoneNumber}
+Website: https://vaccinationcentre.com";
+
+                try
+                {
+                    UserEmail.SendEmail(emailTo,emailBody,$"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!");
+
+                    return new Response<object>(true,
+                        "Birthday email sent successfully.",
+                        new
+                        {
+                            ChildId = child.Id,
+                            Name = child.Name,
+                            Email = emailTo,
+                            Age = age,
+                            ClinicName = child.Clinic.Name
+                        });
+                }
+                catch (Exception ex)
+                {
+                    return new Response<object>(
+                        false,
+                        $"Failed to send birthday email: {ex.Message}",
+                        new { ChildId = child.Id, Name = child.Name }
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                return new Response<object>(
+                    false,
+                    $"Error processing birthday email: {ex.Message}",
+                    null
+                );
+            }
+        }
+
         [HttpGet("{doctorId}")]
         public Response<IEnumerable<ChildDTO>> GetBirthdayAlertByDoctor(
             DateTime inputDate,
@@ -60,6 +139,21 @@ namespace VaccineAPI.Controllers
                     x.DOB.Date == DateTime.Today && x.IsInactive.HasValue.Equals(false)
                 )
                 .ToList<Child>();
+        }
+
+        private static string GetOrdinalSuffix(int number)
+        {
+            var lastDigit = number % 10;
+            if (number >= 11 && number <= 13)
+                return "th";
+
+            return lastDigit switch
+            {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th"
+            };
         }
     }
 }

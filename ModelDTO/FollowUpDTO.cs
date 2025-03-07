@@ -9,7 +9,7 @@ namespace VaccineAPI.ModelDTO
     public class FollowUpDTO
     {
         public long Id { get; set; }
-        public string Disease { get; set; }
+        public string? Disease { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime CurrentVisitDate { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]

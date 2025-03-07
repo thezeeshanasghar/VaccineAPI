@@ -7,6 +7,8 @@ namespace VaccineAPI.ModelDTO
 
     public class ClinicDTO
     {
+        internal string DoctorName;
+
         public long Id { get; set; }
         public string Name { get; set; }
         public string PhoneNumber { get; set; }

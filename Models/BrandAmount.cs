@@ -10,9 +10,9 @@ namespace VaccineAPI.Models
         public int Amount { get; set; }
         public int Count { get; set; }
 
-        public string SupName { get; set; } // Supplier Name
+        // public string SupName { get; set; } // Supplier Name
         public int PurchasedAmt { get; set; } // Purchased Vaccine Amount
-        public bool IsPaid { get; set; } // Payment Status
+        // public bool IsPaid { get; set; } // Payment Status
 
         public long BrandId { get; set; }
         [JsonIgnore]

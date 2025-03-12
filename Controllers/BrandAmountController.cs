@@ -68,7 +68,7 @@ namespace VaccineAPI.Controllers
                 brandAmoundDB.Count = brandAmountDTO.Count;
                 // brandAmoundDB.SupName = brandAmountDTO.SupName;
                 brandAmoundDB.PurchasedAmt = brandAmountDTO.PurchasedAmt;
-                brandAmoundDB.IsPaid = brandAmountDTO.IsPaid;
+                // brandAmoundDB.IsPaid = brandAmountDTO.IsPaid;
                 _db.SaveChanges();
             }
             return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);

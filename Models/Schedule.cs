@@ -5,11 +5,9 @@ using System;
 
 namespace VaccineAPI.Models
 {
-
     public class Schedule
     {
         public long Id { get; set; }
-
         public DateTime Date { get; set; }
         public float? Weight { get; set; }
         public float? Height { get; set; }
@@ -27,14 +25,11 @@ namespace VaccineAPI.Models
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }
         public DateTime? Validity { get; set; }
-
         public long ChildId { get; set; }
         public virtual Child Child { get; set; }
-
         public long DoseId { get; set; }
         public virtual Dose Dose { get; set; }
         // public virtual DateTime FromDate { get; set; }
         // public virtual DateTime ToDate { get; set; }
     }
-
 }

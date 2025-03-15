@@ -31,6 +31,25 @@ namespace VaccineAPI.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
+                name: "bills",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    BillNo = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Supplier = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Date = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    IsPaid = table.Column<bool>(type: "tinyint(1)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_bills", x => x.Id);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
                 name: "cities",
                 columns: table => new
                 {
@@ -281,6 +300,29 @@ namespace VaccineAPI.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
+                name: "adjuststocks",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    BrandId = table.Column<long>(type: "bigint", nullable: false),
+                    Adjustment = table.Column<int>(type: "int", nullable: false),
+                    Reason = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_adjuststocks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_adjuststocks_brands_BrandId",
+                        column: x => x.BrandId,
+                        principalTable: "brands",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
                 name: "brandamounts",
                 columns: table => new
                 {
@@ -288,6 +330,10 @@ namespace VaccineAPI.Migrations
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     Amount = table.Column<int>(type: "int", nullable: false),
                     Count = table.Column<int>(type: "int", nullable: false),
+                    SupName = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    PurchasedAmt = table.Column<int>(type: "int", nullable: false),
+                    IsPaid = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     BrandId = table.Column<long>(type: "bigint", nullable: false),
                     DoctorId = table.Column<long>(type: "bigint", nullable: false)
                 },
@@ -304,6 +350,35 @@ namespace VaccineAPI.Migrations
                         name: "FK_brandamounts_doctors_DoctorId",
                         column: x => x.DoctorId,
                         principalTable: "doctors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "stocks",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    BrandId = table.Column<long>(type: "bigint", nullable: false),
+                    Quantity = table.Column<int>(type: "int", nullable: false),
+                    StockAmount = table.Column<int>(type: "int", nullable: false),
+                    BillId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_stocks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_stocks_bills_BillId",
+                        column: x => x.BillId,
+                        principalTable: "bills",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_stocks_brands_BrandId",
+                        column: x => x.BrandId,
+                        principalTable: "brands",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
@@ -475,6 +550,12 @@ namespace VaccineAPI.Migrations
                     GivenDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     BrandId = table.Column<long>(type: "bigint", nullable: true),
                     Amount = table.Column<int>(type: "int", nullable: true),
+                    Manufacturer = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Lot = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Expiry = table.Column<DateTime>(type: "datetime(6)", nullable: true),
+                    Validity = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     ChildId = table.Column<long>(type: "bigint", nullable: false),
                     DoseId = table.Column<long>(type: "bigint", nullable: false)
                 },
@@ -505,6 +586,11 @@ namespace VaccineAPI.Migrations
                 table: "users",
                 columns: new[] { "Id", "CountryCode", "MobileNumber", "Password", "UserType" },
                 values: new object[] { 1L, "92", "3331231231", "1234", "SUPERADMIN" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_adjuststocks_BrandId",
+                table: "adjuststocks",
+                column: "BrandId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_brandamounts_BrandId",
@@ -595,11 +681,24 @@ namespace VaccineAPI.Migrations
                 name: "IX_schedules_DoseId",
                 table: "schedules",
                 column: "DoseId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_stocks_BillId",
+                table: "stocks",
+                column: "BillId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_stocks_BrandId",
+                table: "stocks",
+                column: "BrandId");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "adjuststocks");
+
             migrationBuilder.DropTable(
                 name: "agents");
 
@@ -631,13 +730,19 @@ namespace VaccineAPI.Migrations
                 name: "schedules");
 
             migrationBuilder.DropTable(
-                name: "brands");
+                name: "stocks");
 
             migrationBuilder.DropTable(
                 name: "childs");
 
             migrationBuilder.DropTable(
                 name: "doses");
+
+            migrationBuilder.DropTable(
+                name: "bills");
+
+            migrationBuilder.DropTable(
+                name: "brands");
 
             migrationBuilder.DropTable(
                 name: "clinics");

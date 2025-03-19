@@ -9,6 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.IO;
 
 namespace VaccineAPI.Controllers
 {
@@ -1540,6 +1543,163 @@ namespace VaccineAPI.Controllers
             var clinicPhoneNumber = child.Clinic?.PhoneNumber ?? "Unknown Phone Number";
             var message = $"Doses due for {child.Name} at {clinicName} (Phone: {clinicPhoneNumber}) by Dr. {doctorName}.";
             return new Response<List<DoseDTO>>(true, message, doseDtos);
+        }
+
+        [HttpGet("doctor-sales-pdf/{doctorId}")]
+        public IActionResult GetDoctorSalesPdf(long doctorId)
+        {
+            try
+            {
+                var today = DateTime.Today;
+                var schedules = _db.Schedules
+                    .Include(s => s.Child)
+                    .Include(s => s.Dose)
+                        .ThenInclude(d => d.Vaccine)
+                    .Include(s => s.Brand)
+                        .ThenInclude(b => b.BrandAmounts)
+                    .Where(s => s.Child.Clinic.DoctorId == doctorId
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date == today
+                            && s.IsDone == true)
+                    .OrderBy(s => s.Child.Name) // Order by patient name
+                    .ToList();
+
+                if (!schedules.Any())
+                    return NotFound("No vaccines administered today");
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    Document document = new Document(PageSize.A4, 25, 25, 30, 30);
+                    PdfWriter writer = PdfWriter.GetInstance(document, ms);
+                    document.Open();
+
+                    // Header setup
+                    Font titleFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 16);
+                    Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+                    Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
+
+                    Paragraph title = new Paragraph("Daily Vaccine Sales Report", titleFont);
+                    title.Alignment = Element.ALIGN_CENTER;
+                    title.SpacingAfter = 20f;
+                    document.Add(title);
+
+                    // Create table
+                    PdfPTable table = new PdfPTable(6);
+                    table.WidthPercentage = 100;
+                    table.SetWidths(new float[] {  1.5f, 2f, 1.5f, 1.2f, 1.2f, 1.2f });
+
+                    // Add headers
+                    string[] headers = { "Patient", "Vaccines", "Purchase Value", "Sale Value", "Profit", "Consultation" };
+                    foreach (string header in headers)
+                    {
+                        var cell = new PdfPCell(new Phrase(header, headerFont))
+                        {
+                            // BackgroundColor = BaseColor.LIGHT_GRAY,
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            Padding = 5
+                        };
+                        table.AddCell(cell);
+                    }
+
+                    string currentPatient = "";
+                    int index = 1;
+                    decimal totalPurchase = 0;
+                    decimal totalSale = 0;
+                    decimal totalProfit = 0;
+
+                    foreach (var schedule in schedules)
+                    {
+                        var brandAmount = schedule.Brand?.BrandAmounts?
+                            .FirstOrDefault(ba => ba.DoctorId == doctorId);
+                        decimal purchaseAmount = brandAmount?.PurchasedAmt ?? 0;
+                        decimal saleAmount = brandAmount?.Amount ?? 0;
+                        decimal profit = saleAmount - purchaseAmount;
+                        decimal consultation = 0;
+
+                        totalPurchase += purchaseAmount;
+                        totalSale += saleAmount;
+                        totalProfit += profit;
+
+                        // Add row
+                        // table.AddCell(new PdfPCell(new Phrase(index++.ToString(), normalFont))
+                        // { HorizontalAlignment = Element.ALIGN_CENTER });
+
+                        // Only show patient name if it's different from the previous row
+                        if (currentPatient != schedule.Child.Name)
+                        {
+                            currentPatient = schedule.Child.Name;
+                            table.AddCell(new PdfPCell(new Phrase(currentPatient, normalFont))
+                            { HorizontalAlignment = Element.ALIGN_LEFT });
+                        }
+                        else
+                        {
+                            table.AddCell(new PdfPCell(new Phrase("", normalFont))
+                            { HorizontalAlignment = Element.ALIGN_CENTER });
+                        }
+
+                        // table.AddCell(new PdfPCell(new Phrase(schedule.Dose.Vaccine.Name, normalFont))
+                        // { HorizontalAlignment = Element.ALIGN_LEFT });
+
+                        table.AddCell(new PdfPCell(new Phrase(schedule.Brand?.Name ?? "", normalFont))
+                        { HorizontalAlignment = Element.ALIGN_LEFT });
+
+                        table.AddCell(new PdfPCell(new Phrase($"₹{purchaseAmount:N0}", normalFont))
+                        { HorizontalAlignment = Element.ALIGN_RIGHT });
+
+                        table.AddCell(new PdfPCell(new Phrase($"₹{saleAmount:N0}", normalFont))
+                        { HorizontalAlignment = Element.ALIGN_RIGHT });
+
+                        table.AddCell(new PdfPCell(new Phrase($"₹{profit:N0}", normalFont))
+                        { HorizontalAlignment = Element.ALIGN_RIGHT });
+
+                        table.AddCell(new PdfPCell(new Phrase($"₹{consultation:N0}", normalFont))
+                        { HorizontalAlignment = Element.ALIGN_RIGHT });
+                    }
+
+                    // Add totals row
+                    var totalCell = new PdfPCell(new Phrase("Totals", headerFont))
+                    {
+                        Colspan = 4,
+                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                        // BackgroundColor = BaseColor.LIGHT_GRAY
+                    };
+                    table.AddCell(totalCell);
+
+                    table.AddCell(new PdfPCell(new Phrase($"₹{totalPurchase:N0}", headerFont))
+                    { HorizontalAlignment = Element.ALIGN_RIGHT, });
+
+                    table.AddCell(new PdfPCell(new Phrase($"₹{totalSale:N0}", headerFont))
+                    { HorizontalAlignment = Element.ALIGN_RIGHT,  });
+
+                    table.AddCell(new PdfPCell(new Phrase($"₹{totalProfit:N0}", headerFont))
+                    { HorizontalAlignment = Element.ALIGN_RIGHT,  });
+
+                    table.AddCell(new PdfPCell(new Phrase($"₹{totalProfit:N0}", headerFont))
+                    { HorizontalAlignment = Element.ALIGN_RIGHT,  });
+
+                    document.Add(table);
+
+                    // Add summary
+                    Paragraph summary = new Paragraph(
+                        $"\nTotal Patients: {schedules.Select(s => s.Child.Name).Distinct().Count()}" +
+                        $"\nTotal Vaccines: {schedules.Count}" +
+                        $"\nTotal Purchase Value: {schedules.Count}" +
+                        $"\nTotal Sale Value: ₹{totalSale:N0}" +
+                        $"\nTotal Profit: ₹{totalProfit:N0}" +
+                        $"\nTotal Consultation: ₹{totalPurchase:N0}"+
+                        $"\nGrand total cash: ₹{totalSale:N0}",             
+                        headerFont);
+                    summary.SpacingBefore = 20f;
+                    document.Add(summary);
+
+                    document.Close();
+                    return File(ms.ToArray(), "application/pdf", $"DailySales_{today:yyyyMMdd}.pdf");
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error generating PDF: {ex.Message}");
+            }
         }
     }
 }

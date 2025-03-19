@@ -29,6 +29,9 @@ namespace VaccineAPI.Models
         public DbSet<City> Cities { get; set; }
         public DbSet<Agent> Agents { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<Bill> Bills { get; set; }
+        public DbSet<Stock> Stocks { get; set; }
+        public DbSet<AdjustStock> AdjustStocks { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

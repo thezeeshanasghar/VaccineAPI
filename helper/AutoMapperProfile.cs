@@ -22,6 +22,9 @@ namespace VaccineAPI
             // CreateMap<BrandInventory, BrandInventoryDTO>().ReverseMap();
             CreateMap<Brand, BrandDTO>().ReverseMap();
             CreateMap<BrandAmount, BrandAmountDTO>().ReverseMap();
+            CreateMap<Bill, BillDTO>().ReverseMap();
+            CreateMap<Stock, StockDTO>().ReverseMap();
+            CreateMap<AdjustStock, AdjustStockDTO>().ReverseMap();
         }
     }
 }

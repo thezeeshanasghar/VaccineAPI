@@ -11,7 +11,7 @@ using VaccineAPI.Models;
 namespace VaccineAPI.Migrations
 {
     [DbContext(typeof(Context))]
-    [Migration("20250127045531_InitialCreate")]
+    [Migration("20250307103214_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -21,6 +21,29 @@ namespace VaccineAPI.Migrations
             modelBuilder
                 .HasAnnotation("ProductVersion", "7.0.2")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
+
+            modelBuilder.Entity("VaccineAPI.Models.AdjustStock", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Adjustment")
+                        .HasColumnType("int");
+
+                    b.Property<long>("BrandId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BrandId");
+
+                    b.ToTable("adjuststocks");
+                });
 
             modelBuilder.Entity("VaccineAPI.Models.Agent", b =>
                 {
@@ -35,6 +58,31 @@ namespace VaccineAPI.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("agents");
+                });
+
+            modelBuilder.Entity("VaccineAPI.Models.Bill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<string>("BillNo")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Supplier")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("bills");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Brand", b =>
@@ -74,6 +122,16 @@ namespace VaccineAPI.Migrations
 
                     b.Property<long>("DoctorId")
                         .HasColumnType("bigint");
+
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("PurchasedAmt")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SupName")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -565,6 +623,9 @@ namespace VaccineAPI.Migrations
                     b.Property<bool>("Due2EPI")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<DateTime?>("Expiry")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<DateTime?>("GivenDate")
                         .HasColumnType("datetime(6)");
 
@@ -580,6 +641,17 @@ namespace VaccineAPI.Migrations
                     b.Property<bool?>("IsSkip")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<string>("Lot")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Manufacturer")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("Validity")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<float?>("Weight")
                         .HasColumnType("float");
 
@@ -592,6 +664,33 @@ namespace VaccineAPI.Migrations
                     b.HasIndex("DoseId");
 
                     b.ToTable("schedules");
+                });
+
+            modelBuilder.Entity("VaccineAPI.Models.Stock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<int>("BillId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("BrandId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StockAmount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BillId");
+
+                    b.HasIndex("BrandId");
+
+                    b.ToTable("stocks");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.User", b =>
@@ -653,6 +752,17 @@ namespace VaccineAPI.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("vaccines");
+                });
+
+            modelBuilder.Entity("VaccineAPI.Models.AdjustStock", b =>
+                {
+                    b.HasOne("VaccineAPI.Models.Brand", "Brand")
+                        .WithMany()
+                        .HasForeignKey("BrandId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Brand");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Brand", b =>
@@ -822,6 +932,25 @@ namespace VaccineAPI.Migrations
                     b.Navigation("Child");
 
                     b.Navigation("Dose");
+                });
+
+            modelBuilder.Entity("VaccineAPI.Models.Stock", b =>
+                {
+                    b.HasOne("VaccineAPI.Models.Bill", "Bill")
+                        .WithMany()
+                        .HasForeignKey("BillId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("VaccineAPI.Models.Brand", "Brand")
+                        .WithMany()
+                        .HasForeignKey("BrandId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Bill");
+
+                    b.Navigation("Brand");
                 });
 
             modelBuilder.Entity("VaccineAPI.Models.Brand", b =>

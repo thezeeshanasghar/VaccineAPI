@@ -24,6 +24,7 @@ namespace VaccineAPI.Controllers
         private readonly IWebHostEnvironment _host;
 
         private readonly IMapper _mapper;
+        private decimal totalConsultation;
 
         public ScheduleController(Context context, IMapper mapper, IWebHostEnvironment host)
         {
@@ -1586,7 +1587,7 @@ namespace VaccineAPI.Controllers
                     // Create table
                     PdfPTable table = new PdfPTable(6);
                     table.WidthPercentage = 100;
-                    table.SetWidths(new float[] {  1.5f, 2f, 1.5f, 1.2f, 1.2f, 1.2f });
+                    table.SetWidths(new float[] {  1f, 1f, 0.5f, 0.5f, 0.5f, 0.5f });
 
                     // Add headers
                     string[] headers = { "Patient", "Vaccines", "Purchase Value", "Sale Value", "Profit", "Consultation" };
@@ -1619,6 +1620,8 @@ namespace VaccineAPI.Controllers
                         totalPurchase += purchaseAmount;
                         totalSale += saleAmount;
                         totalProfit += profit;
+                        totalConsultation += consultation; // Add consultation fee
+                        consultation += 0;
 
                         // Add row
                         // table.AddCell(new PdfPCell(new Phrase(index++.ToString(), normalFont))
@@ -1683,11 +1686,11 @@ namespace VaccineAPI.Controllers
                     Paragraph summary = new Paragraph(
                         $"\nTotal Patients: {schedules.Select(s => s.Child.Name).Distinct().Count()}" +
                         $"\nTotal Vaccines: {schedules.Count}" +
-                        $"\nTotal Purchase Value: {schedules.Count}" +
+                        $"\nTotal Purchase Value: {totalPurchase}" +
                         $"\nTotal Sale Value: ₹{totalSale:N0}" +
                         $"\nTotal Profit: ₹{totalProfit:N0}" +
-                        $"\nTotal Consultation: ₹{totalPurchase:N0}"+
-                        $"\nGrand total cash: ₹{totalSale:N0}",             
+                        $"\nTotal Consultation: ₹{totalConsultation:N0}"+
+                        $"\nGrand total cash: ₹{totalSale+totalConsultation:N0}",             
                         headerFont);
                     summary.SpacingBefore = 20f;
                     document.Add(summary);

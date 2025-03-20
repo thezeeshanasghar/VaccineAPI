@@ -27,7 +27,8 @@ namespace VaccineAPI.ModelDTO
     public DateTime Date { get; set; }
     
     public bool IsPaid { get; set; }
-    
+
+    public long DoctorId { get; set; }
     public string VaccineName { get; set; }
 }
 }

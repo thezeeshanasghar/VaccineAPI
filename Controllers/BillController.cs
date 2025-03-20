@@ -32,8 +32,39 @@ namespace VaccineAPI.Controllers
             return new Response<List<BillDTO>>(true, null, billDTOs);
         }
 
+        [HttpGet("doctor/{doctorId}")]  // Changed route to avoid conflict
+        public Response<List<BillDTO>> GetByDoctor(long doctorId)
+        {
+            var bills = _db.Bills
+                .Include(b => b.Doctor)
+                    .ThenInclude(d => d.User)
+                .Where(b => b.DoctorId == doctorId)
+                .ToList();
+
+            if (!bills.Any())
+                return new Response<List<BillDTO>>(false, $"No bills found for doctor ID {doctorId}", null);
+
+            var billDTOs = _mapper.Map<List<BillDTO>>(bills);
+            return new Response<List<BillDTO>>(true, null, billDTOs);
+        }
+
+        // [HttpGet("{id:int}")]  // Added constraint to differentiate from doctorId
+        // public Response<BillDTO> Getbyid(int id)
+        // {
+        //     var bill = _db.Bills
+        //         .Include(b => b.Doctor)
+        //             .ThenInclude(d => d.User)
+        //         .FirstOrDefault(b => b.Id == id);
+
+        //     if (bill == null)
+        //         return new Response<BillDTO>(false, "Bill not found", null);
+
+        //     var billDTO = _mapper.Map<BillDTO>(bill);
+        //     return new Response<BillDTO>(true, null, billDTO);
+        // }
+
         [HttpGet("{id}")]
-        public Response<BillDTO> Get(int id)
+        public Response<BillDTO> Getbyid(int id)
         {
             var bill = _db.Bills.Find(id);
             if (bill == null)

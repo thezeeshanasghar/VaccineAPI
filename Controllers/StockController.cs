@@ -85,17 +85,30 @@ namespace VaccineAPI.Controllers
                 return new Response<List<StockDTO>>(false, $"Validation error: {errors}", null);
             }
 
+            if (!stockDTOs.Any())
+            {
+                return new Response<List<StockDTO>>(false, "No stocks provided", null);
+            }
+
             using var transaction = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Create or get the Bill first
                 var firstStock = stockDTOs.First();
+                // Validate doctor exists
+                var doctor = await _db.Doctors.FindAsync(firstStock.DoctorId);
+                if (doctor == null)
+                {
+                    return new Response<List<StockDTO>>(false, "Doctor not found", null);
+                }
+
+                // Create Bill
                 var bill = new Bill
                 {
                     BillNo = firstStock.BillNo,
-                    Supplier = firstStock.Supplier ?? "",
+                    Supplier = firstStock.Supplier?.Trim() ?? "",
                     Date = firstStock.Date != default ? firstStock.Date : DateTime.Now,
-                    IsPaid = firstStock.IsPaid
+                    IsPaid = firstStock.IsPaid,
+                    DoctorId = firstStock.DoctorId
                 };
 
                 _db.Bills.Add(bill);
@@ -105,31 +118,45 @@ namespace VaccineAPI.Controllers
 
                 foreach (var stockDTO in stockDTOs)
                 {
+                    // Validate stock data
                     if (stockDTO.StockAmount <= 0 || stockDTO.Quantity <= 0)
                     {
                         await transaction.RollbackAsync();
-                        return new Response<List<StockDTO>>(false, "StockAmount and Quantity must be greater than zero.", null);
+                        return new Response<List<StockDTO>>(false,
+                            "StockAmount and Quantity must be greater than zero.", null);
+                    }
+
+                    // Validate brand exists
+                    var brand = await _db.Brands.FindAsync(stockDTO.BrandId);
+                    if (brand == null)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<StockDTO>>(false,
+                            $"Brand with ID {stockDTO.BrandId} not found", null);
                     }
 
                     var stock = new Stock
                     {
                         BrandId = stockDTO.BrandId,
-                        BillId = bill.Id, // Use the new bill's ID
+                        BillId = bill.Id,
                         Quantity = stockDTO.Quantity,
                         StockAmount = stockDTO.StockAmount
                     };
 
                     _db.Stocks.Add(stock);
 
+                    // Update or Create BrandAmount
                     var brandAmount = await _db.BrandAmounts
-                        .FirstOrDefaultAsync(ba => ba.BrandId == stockDTO.BrandId);
+                        .FirstOrDefaultAsync(ba => ba.BrandId == stockDTO.BrandId
+                            && ba.DoctorId == stockDTO.DoctorId);
 
-                    decimal unitPrice = Math.Round(stock.StockAmount);
+                    decimal unitPrice = Math.Round(stockDTO.StockAmount, 2);
 
                     if (brandAmount != null)
                     {
                         brandAmount.Count += stock.Quantity;
                         brandAmount.PurchasedAmt = (int)unitPrice;
+                        brandAmount.DoctorId = stockDTO.DoctorId;
                         _db.Entry(brandAmount).State = EntityState.Modified;
                     }
                     else
@@ -138,6 +165,7 @@ namespace VaccineAPI.Controllers
                         {
                             BrandId = stock.BrandId,
                             Count = stock.Quantity,
+                            DoctorId = stockDTO.DoctorId,
                             PurchasedAmt = (int)unitPrice
                         };
                         _db.BrandAmounts.Add(brandAmount);
@@ -145,6 +173,7 @@ namespace VaccineAPI.Controllers
 
                     await _db.SaveChangesAsync();
 
+                    // Get result with all relationships
                     var resultStock = await _db.Stocks
                         .Include(s => s.Bill)
                         .Include(s => s.Brand)
@@ -152,20 +181,23 @@ namespace VaccineAPI.Controllers
                         .FirstOrDefaultAsync(s => s.Id == stock.Id);
 
                     var resultDto = _mapper.Map<StockDTO>(resultStock);
-                    resultDto.IsPaid = bill.IsPaid; // Include IsPaid in response
+                    resultDto.IsPaid = bill.IsPaid;
                     resultStocks.Add(resultDto);
                 }
 
                 await transaction.CommitAsync();
 
-                return new Response<List<StockDTO>>(true,
-                    $"Stocks created successfully. Bill #{bill.BillNo} {(bill.IsPaid ? "is paid" : "is pending payment")}.",
-                    resultStocks);
+                var message = $"Stocks created successfully. Bill #{bill.BillNo} " +
+                    $"{(bill.IsPaid ? "is paid" : "is pending payment")}. " +
+                    $"Total items: {resultStocks.Count}";
+
+                return new Response<List<StockDTO>>(true, message, resultStocks);
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return new Response<List<StockDTO>>(false, $"Error creating stocks: {ex.Message}", null);
+                return new Response<List<StockDTO>>(false,
+                    $"Error creating stocks: {ex.Message}", null);
             }
         }
 

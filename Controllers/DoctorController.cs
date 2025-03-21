@@ -146,9 +146,6 @@ namespace VaccineAPI.Controllers
             doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);
             doctorDTO.DisplayName = textInfo.ToTitleCase(doctorDTO.DisplayName);
             {
-
-                // 1- send email to doctor
-
                 // 2- save User first
                 User userDB = new User();
                 userDB.MobileNumber = doctorDTO.MobileNumber;
@@ -157,7 +154,6 @@ namespace VaccineAPI.Controllers
                 userDB.UserType = "DOCTOR";
                 _db.Users.Add(userDB);
                 _db.SaveChanges();
-
                 // 2- save Doctor 
                 Doctor doctorDB = _mapper.Map<Doctor>(doctorDTO);
                 doctorDB.ValidUpto = DateTime.Now.AddDays(30);
@@ -168,6 +164,25 @@ namespace VaccineAPI.Controllers
                 _db.SaveChanges();
                 doctorDTO.Id = doctorDB.Id;
 
+                 var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
+                 bool brandamount = _db.BrandAmounts.Any(x => x.DoctorId == doctorDTO.Id);
+                 if (brandamount == false)
+                 {
+                     foreach (var vaccine in vaccines)
+                     {
+                         var brands = vaccine.Brands;
+                         foreach (var brand in brands)
+                         {
+                             BrandAmount ba = new BrandAmount();
+                             ba.Amount = 0;
+                             ba.DoctorId = doctorDB.Id;
+                             ba.Count = 0;
+                             ba.BrandId = brand.Id;
+                             _db.BrandAmounts.Add(ba);
+                             _db.SaveChanges();
+                         }
+                     }
+                 }
 
                 var body = "Hi " + doctorDTO.FirstName + " " + doctorDTO.LastName + ",\n"
                     + "You are successfully registered in vaccinationcentre.com\n\n"

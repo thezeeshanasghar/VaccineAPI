@@ -47,15 +47,28 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPost]
-        public Response<ClinicDTO> Post([FromBody] ClinicDTO clinicDTO)
+        public Response<ClinicDTO> Add([FromBody] ClinicDTO clinicDTO)
         {
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
             {
-                Clinic clinicDb = _mapper.Map<Clinic>(clinicDTO);
-                _db.Clinics.Add(clinicDb);
+                var dbClinic = _mapper.Map<Clinic>(clinicDTO);
+                _db.Clinics.Add(dbClinic);
                 _db.SaveChanges();
-                clinicDTO.Id = clinicDb.Id;
+
+                // Get all clinics for this doctor
+                var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
+                
+                // If this is the only clinic for the doctor, set it as online
+                if (clinicList.Count == 1)
+                {
+                    dbClinic.IsOnline = true;
+                    _db.Clinics.Attach(dbClinic);
+                    _db.Entry(dbClinic).State = EntityState.Modified;
+                    _db.SaveChanges();
+                }
+
+                clinicDTO.Id = dbClinic.Id;
                 return new Response<ClinicDTO>(true, null, clinicDTO);
             }
         }
@@ -107,29 +120,38 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPut("editClinic")]
-        public Response<ClinicDTO> EditClinic(ClinicDTO clinicDTO)
+        public Response<ClinicDTO> Edit([FromBody] ClinicDTO clinicDTO)
         {
             {
                 var dbClinic = _db.Clinics.Where(c => c.Id == clinicDTO.Id).FirstOrDefault();
                 if (clinicDTO.IsOnline)
                 {
                     dbClinic.IsOnline = true;
-
                 }
 
-                var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).Where(x => x.Id != clinicDTO.Id).ToList();
-                if (clinicList.Count != 0)
-                    foreach (var clinic in clinicList)
+                // Get all clinics for this doctor
+                var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
+                
+                // If this is the only clinic for the doctor, set it as online
+                if (clinicList.Count == 1)
+                {
+                    dbClinic.IsOnline = true;
+                }
+                else if (clinicList.Count > 1)
+                {
+                    // If there are multiple clinics, set others to offline when one is set online
+                    foreach (var clinic in clinicList.Where(x => x.Id != clinicDTO.Id))
                     {
                         clinic.IsOnline = false;
                         _db.Clinics.Attach(clinic);
                         _db.Entry(clinic).State = EntityState.Modified;
                     }
+                }
+
                 _db.SaveChanges();
                 clinicDTO.Name = dbClinic.Name;
                 return new Response<ClinicDTO>(true, null, clinicDTO);
             }
-
         }
 
         [HttpDelete("{id}")]

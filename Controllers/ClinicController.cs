@@ -51,27 +51,24 @@ namespace VaccineAPI.Controllers
         {
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
-            {
-                var dbClinic = _mapper.Map<Clinic>(clinicDTO);
-                _db.Clinics.Add(dbClinic);
-                _db.SaveChanges();
 
-                // Get all clinics for this doctor
-                var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
-                
-                // If this is the only clinic for the doctor, set it as online
-                if (clinicList.Count == 1)
-                {
-                    dbClinic.IsOnline = true;
-                    _db.Clinics.Attach(dbClinic);
-                    _db.Entry(dbClinic).State = EntityState.Modified;
-                    _db.SaveChanges();
-                }
+            var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
 
-                clinicDTO.Id = dbClinic.Id;
-                return new Response<ClinicDTO>(true, null, clinicDTO);
-            }
+            // Map DTO to entity
+            var dbClinic = _mapper.Map<Clinic>(clinicDTO);
+
+            // If it's the first clinic for the doctor, set IsOnline to true, otherwise false
+            dbClinic.IsOnline = clinicList.Count == 0;
+
+            _db.Clinics.Add(dbClinic);
+            _db.SaveChanges();
+
+            clinicDTO.Id = dbClinic.Id;
+            clinicDTO.IsOnline = dbClinic.IsOnline; // Ensure the DTO reflects the correct value
+
+            return new Response<ClinicDTO>(true, null, clinicDTO);
         }
+
 
         [HttpPut("{id}")]
         public Response<ClinicDTO> Put(int Id, ClinicDTO clinicDTO)

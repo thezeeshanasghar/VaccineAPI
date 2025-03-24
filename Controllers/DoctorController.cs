@@ -190,7 +190,7 @@ namespace VaccineAPI.Controllers
                     + "ID/Mobile Number: " + doctorDTO.MobileNumber + "\n"
                     + "Password: " + doctorDTO.Password + "\n"
                     + "Web Link: https://doctor.vaccinationcentre.com";
-                UserEmail.SendEmail(doctorDTO.FirstName, doctorDTO.Email, body);
+                UserEmail.SendEmail( doctorDTO.Email, body);
             }
             return new Response<DoctorDTO>(true, null, doctorDTO);
         }

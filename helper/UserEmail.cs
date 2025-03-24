@@ -34,7 +34,7 @@ namespace VaccineAPI
             body += "Visit http://myapi.vaccinationcentre.com/api/child/" + child.Id + "/Download-Schedule-PDF to view vaccination schedule.\n";
             //TODO: website and android link
             // SendEmail(child.Email, body,);
-            SendEmail(child.Name, child.Email, body);
+            SendEmail( child.Email, body);
         }
 
 

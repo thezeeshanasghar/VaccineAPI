@@ -134,22 +134,26 @@ namespace VaccineAPI.Controllers
                         table.AddCell(new Phrase(item.Brand?.Name ?? "", normalFont));
                         // table.AddCell(new Phrase(item.Brand?.Vaccine?.Name ?? "", normalFont));
                         table.AddCell(new Phrase(item.Count.ToString(), normalFont));
-                        table.AddCell(new Phrase($"₹{item.Amount:N2}", normalFont));
-                        table.AddCell(new Phrase($"₹{item.Amount*item.Count}", normalFont));
                         table.AddCell(new Phrase($"₹{item.PurchasedAmt:N2}", normalFont));
                         table.AddCell(new Phrase($"₹{item.PurchasedAmt*item.Count}", normalFont));
+                        table.AddCell(new Phrase($"₹{item.Amount:N2}", normalFont));
+                        table.AddCell(new Phrase($"₹{item.Amount*item.Count}", normalFont));
                         i++;
                     }
 
-                    // Add totals
-                    PdfPCell totalCell = new PdfPCell(new Phrase("Totals:", headerFont));
-                    totalCell.Colspan = 2;
-                    table.AddCell(totalCell);
-                    table.AddCell(new Phrase(brandAmounts.Sum(x => x.Count).ToString(), headerFont));
-                    table.AddCell(new Phrase($"₹{brandAmounts.Sum(x => x.Amount):N2}", headerFont));
-                    table.AddCell(new Phrase($"₹{brandAmounts.Sum(x => x.PurchasedAmt):N2}", headerFont));
-
                     document.Add(table);
+
+                    decimal totalPurchaseValue = brandAmounts.Sum(x => x.PurchasedAmt * x.Count);
+                    decimal totalSaleValue = brandAmounts.Sum(x => x.Amount * x.Count);
+                    document.Add(new Paragraph("\n"));
+
+                    Font totalFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12);
+                    Paragraph totals = new Paragraph();
+                    totals.Add(new Chunk($"Total Purchase Value: ₹{totalPurchaseValue:N2}\n", totalFont));
+                    totals.Add(new Chunk($"Total Sale Value: ₹{totalSaleValue:N2}\n", totalFont));
+                    totals.Alignment = Element.ALIGN_RIGHT;
+                    totals.SpacingAfter = 30f;
+                    document.Add(totals);
                     document.Close();
 
                     byte[] pdfBytes = ms.ToArray();

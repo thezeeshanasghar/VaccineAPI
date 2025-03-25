@@ -67,11 +67,12 @@ namespace VaccineAPI.Controllers
                 var brandAmount = await _db.BrandAmounts
                     .Include(b => b.Brand)
                         .ThenInclude(b => b.Vaccine)
-                    .FirstOrDefaultAsync(b => b.BrandId == dto.BrandId);
+                    .FirstOrDefaultAsync(b => b.BrandId == dto.BrandId && b.DoctorId == dto.DoctorId);
 
                 if (brandAmount == null)
                 {
-                    return new Response<AdjustStockDTO>(false, "Brand amount not found", null);
+                    return new Response<AdjustStockDTO>(false,
+                        $"Brand amount not found for Doctor ID {dto.DoctorId}", null);
                 }
 
                 // Validate adjustment value
@@ -94,12 +95,10 @@ namespace VaccineAPI.Controllers
                     BrandId = dto.BrandId,
                     Adjustment = dto.Adjustment,
                     Reason = dto.Reason ?? "Stock adjustment",
-                    Date = dto.Date != default ? dto.Date : DateTime.Now  // Add this line
+                    Date = dto.Date != default ? dto.Date : DateTime.Now
                 };
-
                 _db.AdjustStocks.Add(adjustment);
 
-                // Update brand amount count
                 brandAmount.Count = newCount;
                 _db.Entry(brandAmount).State = EntityState.Modified;
 
@@ -112,13 +111,8 @@ namespace VaccineAPI.Controllers
                 resultDto.VaccineName = brandAmount.Brand?.Vaccine?.Name;
 
                 return new Response<AdjustStockDTO>(true,
-                    $"Stock adjusted successfully. New count: {newCount}", resultDto);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                await transaction.RollbackAsync();
-                return new Response<AdjustStockDTO>(false,
-                    "Concurrent update detected. Please refresh and try again.", null);
+                    $"Stock adjusted successfully for Doctor ID {dto.DoctorId}. New count: {newCount}",
+                    resultDto);
             }
             catch (Exception ex)
             {

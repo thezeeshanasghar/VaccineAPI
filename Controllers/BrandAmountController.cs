@@ -86,6 +86,7 @@ namespace VaccineAPI.Controllers
                         .ThenInclude(b => b.Vaccine)
                     .Include(x => x.Doctor)
                     .Where(x => x.DoctorId == doctorId)
+                    .OrderBy(x => x.Brand.Name)
                     .ToList();
 
                 if (!brandAmounts.Any())
@@ -112,14 +113,14 @@ namespace VaccineAPI.Controllers
                     document.Add(date);
 
                     // Create table
-                    PdfPTable table = new PdfPTable(7); // 5 columns
+                    PdfPTable table = new PdfPTable(7);
                     table.WidthPercentage = 100;
                     table.SetWidths(new float[] { 0.25f, 1f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f });
 
                     // Add headers
                     Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12);
                     table.AddCell(new PdfPCell(new Phrase("#", headerFont)));
-                    table.AddCell(new PdfPCell(new Phrase("Item", headerFont)));
+                    table.AddCell(new PdfPCell(new Phrase("Brand Name", headerFont)));
                     table.AddCell(new PdfPCell(new Phrase("Quantity", headerFont)));
                     table.AddCell(new PdfPCell(new Phrase("Purchase Price", headerFont)));
                     table.AddCell(new PdfPCell(new Phrase("Purchase Value", headerFont)));
@@ -132,12 +133,11 @@ namespace VaccineAPI.Controllers
                     {
                         table.AddCell(new Phrase(i.ToString(), normalFont));
                         table.AddCell(new Phrase(item.Brand?.Name ?? "", normalFont));
-                        // table.AddCell(new Phrase(item.Brand?.Vaccine?.Name ?? "", normalFont));
                         table.AddCell(new Phrase(item.Count.ToString(), normalFont));
                         table.AddCell(new Phrase($"₹{item.PurchasedAmt:N2}", normalFont));
-                        table.AddCell(new Phrase($"₹{item.PurchasedAmt*item.Count}", normalFont));
+                        table.AddCell(new Phrase($"₹{(item.PurchasedAmt * item.Count):N2}", normalFont));
                         table.AddCell(new Phrase($"₹{item.Amount:N2}", normalFont));
-                        table.AddCell(new Phrase($"₹{item.Amount*item.Count}", normalFont));
+                        table.AddCell(new Phrase($"₹{(item.Amount * item.Count):N2}", normalFont));
                         i++;
                     }
 
@@ -165,7 +165,6 @@ namespace VaccineAPI.Controllers
                 return BadRequest($"Error generating PDF: {ex.Message}");
             }
         }
-
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

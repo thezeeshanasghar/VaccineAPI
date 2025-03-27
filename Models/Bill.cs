@@ -17,5 +17,7 @@ namespace VaccineAPI.Models
 
         [ForeignKey("DoctorId")]
         public virtual Doctor Doctor { get; set; }
+
+        public virtual ICollection<Stock> Stocks { get; set; }
     }
 }

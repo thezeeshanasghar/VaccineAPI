@@ -38,6 +38,8 @@ namespace VaccineAPI.Controllers
             var bills = _db.Bills
                 .Include(b => b.Doctor)
                     .ThenInclude(d => d.User)
+                .Include(b => b.Stocks)
+                    .ThenInclude(s => s.Brand)
                 .Where(b => b.DoctorId == doctorId)
                 .ToList();
 
@@ -72,6 +74,35 @@ namespace VaccineAPI.Controllers
 
             var billDTO = _mapper.Map<BillDTO>(bill);
             return new Response<BillDTO>(true, null, billDTO);
+        }
+
+        [HttpGet("suppliers")]
+        public Response<List<SupplierDTO>> GetSuppliers()
+        {
+            try
+            {
+                var suppliers = _db.Bills
+                    .Where(b => !string.IsNullOrEmpty(b.Supplier))
+                    .Select(b => new SupplierDTO { Name = b.Supplier })
+                    .Distinct()
+                    .OrderBy(s => s.Name)
+                    .ToList();
+
+                if (!suppliers.Any())
+                {
+                    return new Response<List<SupplierDTO>>(false, "No suppliers found", null);
+                }
+                
+                return new Response<List<SupplierDTO>>(true, null, suppliers);
+            }
+            catch (Exception ex)
+            {
+                return new Response<List<SupplierDTO>>(
+                    false,
+                    $"Error retrieving suppliers: {ex.Message}",
+                    null
+                );
+            }
         }
 
         [HttpPost]

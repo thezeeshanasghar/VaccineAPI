@@ -197,7 +197,7 @@ namespace VaccineAPI.Controllers
             {
                 await transaction.RollbackAsync();
                 return new Response<List<StockDTO>>(false,
-                    $"Error creating stocks: {ex.Message}", null);
+                    $"Error creating stocks: {ex}", null);
             }
         }
 

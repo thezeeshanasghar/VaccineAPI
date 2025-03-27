@@ -195,9 +195,13 @@ namespace VaccineAPI.Controllers
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-                return new Response<List<StockDTO>>(false,
-                    $"Error creating stocks: {ex.Message}", null);
+                // Stringify the exception message and any inner exception message 
+                string errorMessage = $"Error: {ex.Message}";
+                if (ex.InnerException != null)
+                {
+                    errorMessage += $" | Inner Exception: {ex.InnerException.Message}";
+                }
+                return new Response<List<StockDTO>>(false, errorMessage, null);
             }
         }
 

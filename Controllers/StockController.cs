@@ -193,11 +193,17 @@ namespace VaccineAPI.Controllers
 
                 return new Response<List<StockDTO>>(true, message, resultStocks);
             }
+            catch (DbUpdateException dbEx)
+            {
+                await transaction.RollbackAsync();
+                return new Response<List<StockDTO>>(false,
+                    $"An error occurred while creating stocks: {dbEx.InnerException?.Message}", null);
+            }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
                 return new Response<List<StockDTO>>(false,
-                    $"Error creating stocks: {ex}", null);
+                    $"An error occurred while creating stocks: {ex.Message}", null);
             }
         }
 

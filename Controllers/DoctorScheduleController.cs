@@ -58,19 +58,16 @@ namespace VaccineAPI.Controllers
                 .Include(ds => ds.Doctor)
                 .Where(ds => ds.DoctorId == id)
                 .ToList();
-
             if (doctorSchedules == null || doctorSchedules.Count == 0)
             {
                 // If no schedules exist, copy from DoctorId = 1
                 var defaultDoctorSchedules = _db.DoctorSchedules
                     .Where(ds => ds.DoctorId == 1)
                     .ToList();
-
                 if (defaultDoctorSchedules == null || defaultDoctorSchedules.Count == 0)
                 {
                     return new Response<List<DoctorScheduleDTO>>(false, "Default schedules not found", null);
                 }
-
                 // Create schedules for the new doctor
                 foreach (var schedule in defaultDoctorSchedules)
                 {
@@ -84,7 +81,6 @@ namespace VaccineAPI.Controllers
                     _db.DoctorSchedules.Add(newSchedule);
                 }
                 _db.SaveChanges();
-
                 // Fetch the newly created schedules for the new doctor
                 doctorSchedules = _db.DoctorSchedules
                     .Include(ds => ds.Dose)
@@ -94,26 +90,20 @@ namespace VaccineAPI.Controllers
                     .OrderBy(ds => ds.Dose.Name)
                     .ToList();
             }
-
             // Map and return the schedules
             var doctorScheduleDTOs = _mapper.Map<List<DoctorScheduleDTO>>(doctorSchedules);
             return new Response<List<DoctorScheduleDTO>>(true, null, doctorScheduleDTOs);
         }
-
-
 
         [HttpPost]
         public Response<IEnumerable<DoctorScheduleDTO>> Post(IEnumerable<DoctorScheduleDTO> dsDTOS)
         {
             foreach (var DoctorSchedueDTO in dsDTOS)
             {
-
-
                 DoctorSchedule doctorSchduleDB = _mapper.Map<DoctorSchedule>(DoctorSchedueDTO);
                 _db.DoctorSchedules.Add(doctorSchduleDB);
                 _db.SaveChanges();
                 DoctorSchedueDTO.Id = doctorSchduleDB.Id;
-
                 var dose = _db.Doses.SingleOrDefault(a => a.Id == DoctorSchedueDTO.DoseId);
                 var vac = _db.Vaccines.Where(a => a.Id == dose.VaccineId).FirstOrDefault();
                 var brand = _db.Brands.Where(a => a.VaccineId == vac.Id).FirstOrDefault();
@@ -126,12 +116,10 @@ namespace VaccineAPI.Controllers
                     Amount = amount,
                     DoctorId = DoctorSchedueDTO.DoctorId,
                 };
-
                 _db.BrandAmounts.Add(brandAmount);
                 _db.SaveChanges();
             }
             return new Response<IEnumerable<DoctorScheduleDTO>>(true, null, dsDTOS);
-
         }
 
         [HttpPut]
@@ -146,7 +134,6 @@ namespace VaccineAPI.Controllers
             _db.SaveChanges();
             return new Response<List<DoctorSchedule>>(true, null, dsDTOS);
         }
-
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)

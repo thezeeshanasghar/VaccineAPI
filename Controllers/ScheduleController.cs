@@ -1157,9 +1157,9 @@ namespace VaccineAPI.Controllers
 
                 var doseDetails = todaySchedules.Select(s => $" {s.Dose.Name},").ToList();
 
-                body = $"Reminder: The following vaccinations for Child: {child.Name} are due today:\n\n" +
-                       $"{string.Join("\n", doseDetails)}\n\n" +
-                       $"at Clinic: {clinic.Name}\nDoctor: {clinic.Doctor.FirstName} {clinic.Doctor.LastName}\nPhone: {clinic.PhoneNumber}.";
+                body = $"Reminder: Vaccination {string.Join(", ", doseDetails)} of {child.Name} is due. " +
+                       $"Please confirm your appointment. Thanks! Dr {clinic?.Doctor?.FirstName} {clinic?.Doctor?.LastName}, {clinic?.Name} " + 
+                       $"Phone Number: {clinic?.PhoneNumber} Login and check your record at https://vaccinationcentre.com";
             }
             else
             {

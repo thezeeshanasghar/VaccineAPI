@@ -136,7 +136,7 @@ namespace VaccineAPI.Controllers
         //     {
         //          return new ActionResult<Response<Object>>(new Response<Object>(false, "Cannot update the city because it already exists.", null));
         //     }
-            
+
         //     var childs = await _context.Childs.Where(c => c.City == currentCity).ToListAsync();
         //     if (childs == null || !childs.Any())
         //     {
@@ -149,50 +149,71 @@ namespace VaccineAPI.Controllers
         //         child.City = newCity;
         //         _context.Childs.Update(child);
         //     }
-            
+
         //     if (AlreadyCity == null)
         //     {
         //         var city = new City { Name = newCity };
         //         _context.Cities.Add(city);
         //     }
-        
+
         //     await _context.SaveChangesAsync();
 
         //     return new Response<object>(true, "City updated successfully.", null);
         // }
+        // [HttpPut("update")]
+        // public async Task<ActionResult<Response<Object>>> UpdateChildCity(string currentCity, [FromBody] string newCity)
+        // {
+        //     var AlreadyCity = await _context.Cities.FirstOrDefaultAsync(c => c.Name == newCity);
+        //     if (AlreadyCity != null)
+        //     {
+        //         return BadRequest(new Response<Object>(false, "Cannot update the city because it already exists 1.", null));
+        //     }
+
+        //     var childs = await _context.Childs.Where(c => c.City == currentCity).ToListAsync();
+        //     if (childs == null || !childs.Any())
+        //     {
+        //         return NotFound();
+        //     }
+
+        //     foreach (var child in childs)
+        //     {
+        //         // Update the city of each child with the new city
+        //         child.City = newCity;
+        //         _context.Childs.Update(child);
+        //     }
+
+        //     if (AlreadyCity == null)
+        //     {
+        //         var city = new City { Name = newCity };
+        //         _context.Cities.Add(city);
+        //     }
+
+        //     await _context.SaveChangesAsync();
+
+        //     return Ok(new Response<object>(true, "City updated successfully.", null));
+        // }
         [HttpPut("update")]
-        public async Task<ActionResult<Response<Object>>> UpdateChildCity(string currentCity, [FromBody] string newCity)
+        public async Task<ActionResult<Response<Object>>> UpdateChildCity([FromBody] string newCity)
         {
-            var AlreadyCity = await _context.Cities.FirstOrDefaultAsync(c => c.Name == newCity);
-            if (AlreadyCity != null)
+            if (string.IsNullOrWhiteSpace(newCity))
             {
-                return BadRequest(new Response<Object>(false, "Cannot update the city because it already exists 1.", null));
-            }
-            
-            var childs = await _context.Childs.Where(c => c.City == currentCity).ToListAsync();
-            if (childs == null || !childs.Any())
-            {
-                return NotFound();
+                return BadRequest(new Response<Object>(false, "City name cannot be empty.", null));
             }
 
-            foreach (var child in childs)
+            // Check if city already exists
+            var existingCity = await _context.Cities.FirstOrDefaultAsync(c => c.Name.ToLower() == newCity.ToLower());
+            if (existingCity != null)
             {
-                // Update the city of each child with the new city
-                child.City = newCity;
-                _context.Childs.Update(child);
+                return BadRequest(new Response<Object>(false, $"City '{newCity}' already exists.", null));
             }
-            
-            if (AlreadyCity == null)
-            {
-                var city = new City { Name = newCity };
-                _context.Cities.Add(city);
-            }
-        
+
+            // Add new city to Cities table
+            var city = new City { Name = newCity };
+            _context.Cities.Add(city);
             await _context.SaveChangesAsync();
 
-            return Ok(new Response<object>(true, "City updated successfully.", null));
+            return Ok(new Response<object>(true, "City added successfully.", null));
         }
-
 
     }
 }

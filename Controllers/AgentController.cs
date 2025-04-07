@@ -130,36 +130,26 @@ namespace VaccineAPI.Controllers
 
         // PUT: api/Agent/update
         [HttpPut("update")]
-        public async Task<ActionResult<Response<object>>> UpdateChildAgent(string currentAgent, [FromBody] string newAgent)
+        public async Task<ActionResult<Response<Object>>> UpdateAgent([FromBody] string newAgent)
         {
-            var alreadyAgent = await _context.Agents.FirstOrDefaultAsync(c => c.Name == newAgent);
-            if (alreadyAgent != null)
+            if (string.IsNullOrWhiteSpace(newAgent))
             {
-                return BadRequest(new Response<object>(false, "Cannot update the agent because it already exists.", null));
+                return BadRequest(new Response<Object>(false, "Agent name cannot be empty.", null));
             }
 
-            var childs = await _context.Childs.Where(c => c.Agent == currentAgent).ToListAsync();
-            if (childs == null || !childs.Any())
+            // Check if agent already exists
+            var existingAgent = await _context.Agents.FirstOrDefaultAsync(c => c.Name.ToLower() == newAgent.ToLower());
+            if (existingAgent != null)
             {
-                return NotFound();
+                return BadRequest(new Response<Object>(false, $"Agent '{newAgent}' already exists.", null));
             }
 
-            foreach (var child in childs)
-            {
-                // Update the agent of each child with the new agent
-                child.Agent = newAgent;
-                _context.Childs.Update(child);
-            }
-
-            if (alreadyAgent == null)
-            {
-                var agent = new Agent { Name = newAgent };
-                _context.Agents.Add(agent);
-            }
-
+            // Add new agent to Agents table
+            var agent = new Agent { Name = newAgent };
+            _context.Agents.Add(agent);
             await _context.SaveChangesAsync();
 
-            return Ok(new Response<object>(true, "Agent updated successfully.", null));
+            return Ok(new Response<object>(true, "Agent added successfully.", null));
         }
     }
 }

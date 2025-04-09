@@ -1634,27 +1634,35 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf", FileName);
         }
 
-        private HashSet<string> existingInvoiceNumbers = new HashSet<string>();
-        private HashSet<long> existingDoseIds = new HashSet<long>();
-        private long lastInvoiceNumber = 24000000;
         private string GenerateSequentialInvoiceNumber(long doseId, long childId)
         {
+            // Get the last two digits of the current year
+            var currentYear = DateTime.UtcNow.Year;
+            var yearPrefix = currentYear.ToString().Substring(2); // "25" for 2025
+        
+            // Check if an invoice already exists for the given doseId and childId
             var existingInvoice = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == childId);
             if (existingInvoice != null)
             {
                 return existingInvoice.InvoiceId;
             }
+        
+            // Get all valid invoice numbers for the current year
             var validInvoiceNumbers = _db.Invoices
                 .AsEnumerable()
                 .Select(i => i.InvoiceId)
-                .Where(id => !string.IsNullOrEmpty(id) && long.TryParse(id, out _))
-                .Select(long.Parse)
+                .Where(id => !string.IsNullOrEmpty(id) && id.StartsWith(yearPrefix) && long.TryParse(id.Substring(2), out _))
+                .Select(id => long.Parse(id.Substring(2))) // Extract the numeric part after the year prefix
                 .ToList();
-            lastInvoiceNumber = validInvoiceNumbers.Any()
+        
+            // Determine the next invoice number
+            var nextInvoiceNumber = validInvoiceNumbers.Any()
                 ? validInvoiceNumbers.Max() + 1
-                : 24000001;
-            string invoiceNumber = lastInvoiceNumber.ToString();
-
+                : 1; // Start from 1 if no invoices exist for the current year
+        
+            // Format the invoice number as "YY000001"
+            string invoiceNumber = $"{yearPrefix}{nextInvoiceNumber:D6}";
+        
             return invoiceNumber;
         }
 
@@ -2703,7 +2711,7 @@ namespace VaccineAPI.Controllers
             string passport = childDetails.CNIC;
             string mrNumber = childDetails.City;
             string clinicName = childDetails.Clinic.Name;
-            string doctorDetails = $"Dr {childDetails.Clinic.Doctor.DisplayName}\n{childDetails.Clinic.Doctor.Qualification}"; // Adjust based on available fields
+            string doctorDetails = $"{childDetails.Clinic.Doctor.DisplayName}\n{childDetails.Clinic.Doctor.Qualification}"; // Adjust based on available fields
             string clinicAddress = childDetails.Clinic.Address;
             var output = new MemoryStream();
             var customHeight = 650f; 
@@ -2712,6 +2720,7 @@ namespace VaccineAPI.Controllers
             using (var document = new Document(customSize))
             {
                 PdfWriter writer = PdfWriter.GetInstance(document, output);
+                writer.PageEvent = new FooterPageEvent(childId);
                 document.Open();
                 var headerTable = new PdfPTable(2);
                 headerTable.WidthPercentage = 100;
@@ -2814,12 +2823,12 @@ namespace VaccineAPI.Controllers
                 foreach (var schedule in dbSchedules)
                 {
                     string vaccineName = schedule.Dose?.Name ?? "N/A";
-                    string brand = schedule.Brand?.Name ?? "N/A";
+                    string brand = schedule.Brand?.Name ?? "";
                     string manufacturer = schedule.Manufacturer ?? "N/A";
                     string batchLot = schedule.Lot ?? "N/A";
                     string dateGiven = schedule.GivenDate?.ToString("dd/MM/yyyy") ?? "Due"; 
-                    string expiry = schedule.Expiry?.ToString("dd/MM/yyyy"); 
-                    string validity = $"{schedule.Validity}";
+                    string expiry = schedule.Expiry?.ToString("dd/MM/yyyy") ?? "";  
+                    string validity = schedule.Validity?.ToString("dd/MM/yyyy") ?? "";
 
                     vaccineTable.AddCell(new PdfPCell(new Phrase(vaccineName, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                     {
@@ -2902,53 +2911,53 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10))
-                {
-                    SpacingAfter = 20
-                });
+                // document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10))
+                // {
+                //     SpacingAfter = 20
+                // });
 
-                var footerLeft = new PdfPCell(new Phrase($"Baby Medics  IHRA-00568", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
-                {
-                    Border = Rectangle.NO_BORDER,
-                    HorizontalAlignment = PdfPCell.ALIGN_LEFT,
-                    Padding = 5
-                };
-                int currentYear = DateTime.Now.Year;
-                var footerRight = new PdfPCell(new Phrase($"MR No: {currentYear}-{childId}", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
-                {
-                    Border = Rectangle.NO_BORDER,
-                    HorizontalAlignment = PdfPCell.ALIGN_RIGHT,
-                    Padding = 5
-                };
-                footerRight.Phrase.Font.Color = BaseColor.Blue;
+                // var footerLeft = new PdfPCell(new Phrase($"Baby Medics  IHRA-00568", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
+                // {
+                //     Border = Rectangle.NO_BORDER,
+                //     HorizontalAlignment = PdfPCell.ALIGN_LEFT,
+                //     Padding = 5
+                // };
+                // int currentYear = DateTime.Now.Year;
+                // var footerRight = new PdfPCell(new Phrase($"MR No: {currentYear}-{childId}", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
+                // {
+                //     Border = Rectangle.NO_BORDER,
+                //     HorizontalAlignment = PdfPCell.ALIGN_RIGHT,
+                //     Padding = 5
+                // };
+                // footerRight.Phrase.Font.Color = BaseColor.Blue;
 
-                var footerTable = new PdfPTable(2) { WidthPercentage = 100 };
-                footerTable.AddCell(footerLeft);
-                footerTable.AddCell(footerRight);
-                document.Add(footerTable);
+                // var footerTable = new PdfPTable(2) { WidthPercentage = 100 };
+                // footerTable.AddCell(footerLeft);
+                // footerTable.AddCell(footerRight);
+                // document.Add(footerTable);
 
-                var footerDetails = new PdfPCell(new Phrase($"This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
-                {
-                    Border = PdfPCell.NO_BORDER,
-                    HorizontalAlignment = Element.ALIGN_LEFT,
-                    Colspan = 2
-                };
+                // var footerDetails = new PdfPCell(new Phrase($"This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.", FontFactory.GetFont(FontFactory.HELVETICA, 8)))
+                // {
+                //     Border = PdfPCell.NO_BORDER,
+                //     HorizontalAlignment = Element.ALIGN_LEFT,
+                //     Colspan = 2
+                // };
 
-                var footerTableDetails = new PdfPTable(1) { WidthPercentage = 100 };
-                footerTableDetails.AddCell(footerDetails);
-                document.Add(footerTableDetails);
+                // var footerTableDetails = new PdfPTable(1) { WidthPercentage = 100 };
+                // footerTableDetails.AddCell(footerDetails);
+                // document.Add(footerTableDetails);
 
-                var footerContact = new PdfPCell(new Phrase($"Block F, National Police Foundation, Main PWD Road, Islamabad          Phone: 051 5735006     info@vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                {
-                    Border = PdfPCell.NO_BORDER,
-                    HorizontalAlignment = Element.ALIGN_LEFT,
-                    BackgroundColor = BaseColor.LightGray,
-                    Colspan = 2
-                };
-                var footerContactTable = new PdfPTable(1) { WidthPercentage = 100 };
-                footerContactTable.AddCell(footerContact);
-                document.Add(footerContactTable);
-                document.NewPage();
+                // var footerContact = new PdfPCell(new Phrase($"Block F, National Police Foundation, Main PWD Road, Islamabad          Phone: 051 5735006     info@vaccine.pk", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                // {
+                //     Border = PdfPCell.NO_BORDER,
+                //     HorizontalAlignment = Element.ALIGN_LEFT,
+                //     BackgroundColor = BaseColor.LightGray,
+                //     Colspan = 2
+                // };
+                // var footerContactTable = new PdfPTable(1) { WidthPercentage = 100 };
+                // footerContactTable.AddCell(footerContact);
+                // document.Add(footerContactTable);
+                // document.NewPage();
 
                 document.Close();
             }
@@ -2956,6 +2965,58 @@ namespace VaccineAPI.Controllers
             output.Seek(0, SeekOrigin.Begin);
             return output;
         }
+        private class FooterPageEvent : PdfPageEventHelper
+{
+    private int _childId;
+    
+    public FooterPageEvent(int childId)
+    {
+        _childId = childId;
+    }
+    
+    // In your FooterPageEvent class, modify the OnEndPage method:
+
+public override void OnEndPage(PdfWriter writer, Document document)
+{
+    PdfContentByte cb = writer.DirectContent;
+    
+    // Define fixed position for footer
+    float footerY = 100f;  // Adjust as needed
+    
+    // First footer line
+    int currentYear = DateTime.Now.Year;
+    Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+    Font blueFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+    
+    // Left aligned text
+    ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, 
+        new Phrase("Baby Medics  IHRA-00568", regularFont), 
+        document.LeftMargin + 5, footerY, 0);
+    
+    // Right aligned text
+    ColumnText.ShowTextAligned(cb, Element.ALIGN_RIGHT, 
+        new Phrase($"MR No: {currentYear}-{_childId}", blueFont), 
+        document.PageSize.Width - document.RightMargin - 5, footerY, 0);
+    
+    // Second footer line
+    ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, 
+        new Phrase("This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.", regularFont), 
+        document.LeftMargin + 5, footerY - 15, 0);
+    
+    // Contact footer with background - using a table for better control
+    PdfPTable contactTable = new PdfPTable(1);
+    contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+    
+    PdfPCell contactCell = new PdfPCell(new Phrase("Block F, National Police Foundation, Main PWD Road, Islamabad          Phone: 051 5735006     info@vaccine.pk", regularFont));
+    contactCell.BackgroundColor = BaseColor.LightGray;
+    contactCell.Border = Rectangle.NO_BORDER;
+    contactCell.Padding = 5;
+    contactTable.AddCell(contactCell);
+    
+    // Position the table at the specific Y coordinate
+    contactTable.WriteSelectedRows(0, -1, document.LeftMargin, footerY - 20, cb);
+}
+}
 
         [HttpGet("Travel-PDF-Download/{id}")]
         public IActionResult GenerateVerifyTravelPdf(int id)

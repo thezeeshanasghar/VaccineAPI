@@ -25,6 +25,7 @@ namespace VaccineAPI.Models
         public string Address { get; set; }
         public string MonogramImage { get; set; }
         public long DoctorId { get; set; }
+        public string RegNo { get; set; }
        // [JsonIgnore]
         public virtual Doctor Doctor { get; set; }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]

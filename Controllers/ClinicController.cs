@@ -69,13 +69,11 @@ namespace VaccineAPI.Controllers
             return new Response<ClinicDTO>(true, null, clinicDTO);
         }
 
-
         [HttpPut("{id}")]
         public Response<ClinicDTO> Put(int Id, ClinicDTO clinicDTO)
         {
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
-
             {
                 var dbClinic = _db.Clinics.Where(c => c.Id == Id).FirstOrDefault();
                 clinicDTO.IsOnline = false;
@@ -86,6 +84,7 @@ namespace VaccineAPI.Controllers
                 dbClinic.Long = clinicDTO.Long;
                 dbClinic.Address = clinicDTO.Address;
                 dbClinic.MonogramImage = clinicDTO.MonogramImage;
+                dbClinic.RegNo = clinicDTO.RegNo;
                 _db.SaveChanges();
                 foreach (var clinicTiming in clinicDTO.ClinicTimings)
                 {

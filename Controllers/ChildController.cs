@@ -2701,17 +2701,21 @@ namespace VaccineAPI.Controllers
             string relation = childDetails.FatherName; 
             DateTime dob = childDetails.DOB;
             string passport = childDetails.CNIC;
+            string city = childDetails.City;
+            string Nationality = "Pakistani";
             string mrNumber = childDetails.City;
             string clinicName = childDetails.Clinic.Name;
-            string doctorDetails = $"Dr {childDetails.Clinic.Doctor.DisplayName}\n{childDetails.Clinic.Doctor.Qualification}"; // Adjust based on available fields
+            string doctorDetails = $"{childDetails.Clinic.Doctor.DisplayName}"; // Adjust based on available fields
+            string qualification = childDetails.Clinic.Doctor.Qualification;
             string clinicAddress = childDetails.Clinic.Address;
             var output = new MemoryStream();
-            var customHeight = 650f; 
+            var customHeight = 550f; 
             var customWidth = 600f; 
             var customSize = new Rectangle(customWidth, customHeight);
             using (var document = new Document(customSize))
             {
                 PdfWriter writer = PdfWriter.GetInstance(document, output);
+                writer.PageEvent = new FooterPageEvent(_db,childId);
                 document.Open();
                 var headerTable = new PdfPTable(2);
                 headerTable.WidthPercentage = 100;
@@ -2719,20 +2723,47 @@ namespace VaccineAPI.Controllers
 
                 PdfPCell headerCell = new PdfPCell();
                 headerCell.Border = PdfPCell.NO_BORDER;
-                headerCell.AddElement(new Paragraph(clinicName, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12)));
-                headerCell.AddElement(new Paragraph(doctorDetails, FontFactory.GetFont(FontFactory.HELVETICA, 8)));
-                headerCell.AddElement(new Paragraph(clinicAddress, FontFactory.GetFont(FontFactory.HELVETICA, 8)));
+                headerCell.AddElement(new Paragraph(doctorDetails, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
+                string[] words = qualification.Split(' ');
+                string firstLine = string.Join(" ", words.Take(4));
+                string secondLine = string.Join(" ", words.Skip(4));
+                headerCell.AddElement(new Paragraph(firstLine, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
+                if (!string.IsNullOrEmpty(secondLine))
+                {
+                    headerCell.AddElement(new Paragraph(secondLine, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
+                }
+                headerCell.AddElement(new Paragraph(clinicName, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
+                string[] word = clinicAddress.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+    // Take the first 4 words and join them into a single string
+    string firstLines = string.Join(" ", word.Take(6));
+
+    // Take the remaining words (if any) and join them into another string
+    string secondLines = string.Join(" ", word.Skip(6));
+
+    // Add the first line to the PDF cell
+    if (!string.IsNullOrEmpty(firstLine))
+    {
+        headerCell.AddElement(new Paragraph(firstLines, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
+    }
+
+    // Add the second line to the PDF cell (if it exists)
+    if (!string.IsNullOrEmpty(secondLine))
+    {
+        headerCell.AddElement(new Paragraph(secondLines, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
+    }
                 headerTable.AddCell(headerCell);
 
-                string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "clinicLogo.png");
+                string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "logo-vaccinepk-new.png");
                 if (System.IO.File.Exists(logoPath))
                 {
                     var logo = Image.GetInstance(logoPath);
-                    logo.ScaleToFit(150f, 150f);
+                    logo.ScaleToFit(150f, 150f); 
                     PdfPCell logoCell = new PdfPCell(logo)
                     {
                         Border = PdfPCell.NO_BORDER,
-                        HorizontalAlignment = Element.ALIGN_RIGHT
+                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                        PaddingLeft = -15f,
                     };
                     headerTable.AddCell(logoCell);
                 }
@@ -2762,7 +2793,10 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell("Passport No:", cellFontBold, BaseColor.LightGray));
                 patientTable.AddCell(CreateCell(passport, cellFontNormal, BaseColor.White));
-
+                patientTable.AddCell(CreateCell("City:", cellFontBold, BaseColor.LightGray));
+                patientTable.AddCell(CreateCell(city, cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell("Nationality:", cellFontBold, BaseColor.LightGray));
+                patientTable.AddCell(CreateCell(Nationality, cellFontNormal, BaseColor.White)); 
 
                 document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
                 document.Add(patientTable);
@@ -2812,73 +2846,77 @@ namespace VaccineAPI.Controllers
                 }
 
                 foreach (var schedule in dbSchedules)
-                {
-                    string vaccineName = schedule.Dose?.Name ?? "N/A";
-                    string brand = schedule.Brand?.Name ?? "N/A";
-                    string manufacturer = schedule.Manufacturer ?? "N/A";
-                    string batchLot = schedule.Lot ?? "N/A";
-                    string dateGiven = schedule.GivenDate?.ToString("dd/MM/yyyy") ?? "Due"; 
-                    string expiry = schedule.Expiry?.ToString("dd/MM/yyyy"); 
-                    string validity = $"{schedule.Validity}";
+{
+    string vaccineName = schedule.Dose?.Name ?? "N/A";
+    string brand = schedule.Brand?.Name ?? "";
+    string manufacturer = schedule.Manufacturer ?? "N/A";
+    string batchLot = schedule.Lot ?? "N/A";
+    string dateGiven = schedule.GivenDate?.ToString("dd/MM/yyyy") ?? "Due";
+    string expiry = schedule.Expiry?.ToString("dd/MM/yyyy") ?? "";
+    string validity = schedule.Validity?.ToString("dd/MM/yyyy") ?? "";
 
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(vaccineName, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.LEFT_BORDER | Rectangle.BOTTOM_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
+    // Check if this is the last row
+    bool isLastRow = schedule == dbSchedules.Last();
 
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(brand, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
+    // Define border style
+    int borderStyle = isLastRow ? Rectangle.BOTTOM_BORDER : Rectangle.NO_BORDER;
 
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(manufacturer, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
+    vaccineTable.AddCell(new PdfPCell(new Phrase(vaccineName, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+    {
+        Border = Rectangle.LEFT_BORDER | borderStyle,
+        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+        BorderColor = BaseColor.Gray,
+        PaddingBottom = 5
+    });
 
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(batchLot, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
+    vaccineTable.AddCell(new PdfPCell(new Phrase(brand, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+    {
+        Border = borderStyle,
+        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+        BorderColor = BaseColor.Gray,
+        PaddingBottom = 5
+    });
 
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(dateGiven, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
+    vaccineTable.AddCell(new PdfPCell(new Phrase(manufacturer, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+    {
+        Border = borderStyle,
+        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+        BorderColor = BaseColor.Gray,
+        PaddingBottom = 5
+    });
 
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(expiry, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.NO_BORDER | Rectangle.BOTTOM_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
+    vaccineTable.AddCell(new PdfPCell(new Phrase(batchLot, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+    {
+        Border = borderStyle,
+        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+        BorderColor = BaseColor.Gray,
+        PaddingBottom = 5
+    });
 
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(validity, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        Border = Rectangle.RIGHT_BORDER | Rectangle.BOTTOM_BORDER,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
-                        PaddingBottom = 5
-                    });
+    vaccineTable.AddCell(new PdfPCell(new Phrase(dateGiven, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+    {
+        Border = borderStyle,
+        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+        BorderColor = BaseColor.Gray,
+        PaddingBottom = 5
+    });
 
-                }
+    vaccineTable.AddCell(new PdfPCell(new Phrase(expiry, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+    {
+        Border = borderStyle,
+        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+        BorderColor = BaseColor.Gray,
+        PaddingBottom = 5
+    });
 
+    vaccineTable.AddCell(new PdfPCell(new Phrase(validity, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+    {
+        Border = Rectangle.RIGHT_BORDER | borderStyle,
+        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+        BorderColor = BaseColor.Gray,
+        PaddingBottom = 5
+    });
+}
                 document.Add(vaccineTable);
                 document.Add(new Paragraph(" "));
                 document.Add(new Paragraph(" "));
@@ -2956,6 +2994,82 @@ namespace VaccineAPI.Controllers
             output.Seek(0, SeekOrigin.Begin);
             return output;
         }
+private class FooterPageEvent : PdfPageEventHelper
+{
+    private readonly Context _db;
+    private readonly int _childId;
+
+    public FooterPageEvent(Context db, int childId)
+    {
+        _db = db;
+        _childId = childId;
+    }
+
+    public override void OnEndPage(PdfWriter writer, Document document)
+{
+    PdfContentByte cb = writer.DirectContent;
+
+    // Define fixed position for footer
+    float footerY = 100f; // Adjust as needed
+
+    // First footer line
+    int currentYear = DateTime.Now.Year;
+    Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+    Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+    Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+    Font blueFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8);
+
+    // Fetch the clinic name from the database
+    var clinicName = _db.Childs
+        .Include(c => c.Clinic)
+        .Where(c => c.Id == _childId)
+        .Select(c => c.Clinic.Name)
+        .FirstOrDefault();
+
+    if (!string.IsNullOrEmpty(clinicName))
+    {
+        // Add the clinic name to the footer (left-aligned)
+        Phrase phrase = new Phrase();
+        phrase.Add(new Chunk($"{clinicName} ", footerFont1));
+        phrase.Add(new Chunk("IHRA-00568", footerFont));
+        ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT,
+            phrase,
+            document.LeftMargin + 5, footerY + 0, 0);
+    }
+    else
+    {
+        // Handle the case where the clinic name is not found
+        ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT,
+            new Phrase("Clinic: Not Found", footerFont),
+            document.LeftMargin + 5, footerY + 0, 0);
+    }
+
+    // Add MR Number (right-aligned)
+    ColumnText.ShowTextAligned(cb, Element.ALIGN_RIGHT,
+        new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
+        document.PageSize.Width - document.RightMargin - 5, footerY , 0);
+
+    // Add second footer line (left-aligned)
+    ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT,
+        new Phrase("This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.", regularFont),
+        document.LeftMargin + 5, footerY - 25, 0);
+
+    // Add contact information
+    PdfPTable contactTable = new PdfPTable(1);
+    contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+
+    PdfPCell contactCell = new PdfPCell(new Phrase("Block F, National Police Foundation, Main PWD Road, Islamabad           Phone: 051 5735006      info@vaccine.pk", footerFont))
+    {
+        BackgroundColor = BaseColor.LightGray,
+        Border = Rectangle.NO_BORDER,
+        Padding = 5
+    };
+    contactTable.AddCell(contactCell);
+
+    // Add the contact table to the footer
+    contactTable.WriteSelectedRows(0, -1, document.LeftMargin, footerY - 30, cb);
+}
+}
 
         [HttpGet("Travel-PDF-Download/{id}")]
         public IActionResult GenerateVerifyTravelPdf(int id)

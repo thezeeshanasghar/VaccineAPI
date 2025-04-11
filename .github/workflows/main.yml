@@ -6,15 +6,15 @@ on:
 
 jobs:  
   build:  
-    runs-on: windows-latest  
+    runs-on: ubuntu-latest  
     steps:  
-      - uses: actions/checkout@v2  
+      - uses: actions/checkout@v3  
         name: Checkout code  
 
       - name: Setup .NET  
-        uses: actions/setup-dotnet@v1  
+        uses: actions/setup-dotnet@v3  
         with:  
-          dotnet-version: "6.0"  
+          dotnet-version: "7.0.x"  
 
       - name: Restore dependencies  
         run: dotnet restore  
@@ -31,9 +31,10 @@ jobs:
           name: published-app
           path: publish/
 
-  deploy:  
-    runs-on: windows-latest  
+  deploy-ftp:  
+    runs-on: ubuntu-latest  
     needs: build
+    if: false # Disabled FTP deployment in favor of EC2 deployment
     steps:  
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -55,3 +56,32 @@ jobs:
             **/.git*/**  
             **/node_modules/**  
             web.config
+            
+  deploy-ec2:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/staging'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          echo "${{ secrets.EC2_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          
+      - name: Deploy to EC2
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
+          "cd VaccineAPI && \
+          git pull && \
+          docker-compose down && \
+          docker-compose build --no-cache && \
+          docker-compose up -d"
+          
+      - name: Verify Deployment
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
+          "docker ps | grep vaccineapi-api"

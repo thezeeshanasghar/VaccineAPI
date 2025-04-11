@@ -1,29 +1,85 @@
+# VaccineAPI
+
+## Development Setup
+
+```bash
 dotnet clean
 dotnet restore
 dotnet build
 export ASPNETCORE_ENVIRONMENT=Development
 dotnet run --environment Development
+```
 
-dotnet tool install --global dotnet-ef --version 3.\*
-dotnet ef migrations add InitialCreate
-dotnet ef database update
+## Database Operations
 
+### Entity Framework Commands
+```bash
+# Install Entity Framework tools
+dotnet tool install --global dotnet-ef --version 3.*
 dotnet tool install --global dotnet-ef
 
-select * from childs where city is null;
-update Doctors set city = "" where city is null;
-select * from Doctors where ProfileImage is null;
-update Doctors set ProfileImage = "" where ProfileImage is null;
-
-update childs set city='' where city is null
-dotnet watch run --launch-profile https
-dotnet watch run --environment Development
-
-Step 2:
+# Create and apply migrations
 dotnet ef migrations add InitialCreate
 dotnet ef database update
+```
 
-Step 1: 
+### Running with Watch
+```bash
+dotnet watch run --launch-profile https
+dotnet watch run --environment Development
+```
+
+## Database Backup and Retention Strategy
+
+The VaccineAPI implements an automated backup strategy to ensure data safety and disaster recovery capabilities.
+
+### Automated Daily Backups
+
+Backups are automatically created daily at 2:00 AM using a cron job that executes the `db_backup.sh` script:
+
+```bash
+# Crontab entry
+0 2 * * * /home/ec2-user/VaccineAPI/db_backup.sh >> /home/ec2-user/db_backup.log 2>&1
+```
+
+### Backup Process
+
+The backup script performs the following operations:
+1. Dumps the MySQL database from the Docker container
+2. Compresses the backup with gzip
+3. Copies the backup to the EC2 instance's home directory
+4. Uploads the backup to AWS S3 bucket (`vaccine-api-daily-backup`)
+
+### Retention Policy
+
+A 14-day (2-week) retention policy is applied to the S3 bucket. This means:
+- Daily backups are stored for exactly 2 weeks
+- After 14 days, backups are automatically deleted from S3
+- This provides a rolling window of the last 2 weeks of database states
+
+### Manual Backup
+
+If needed, you can manually trigger a backup using:
+
+```bash
+# Run a manual backup
+docker exec vaccineapi-db-1 sh -c "mysqldump -u root -ptest vaccineapi | gzip > /tmp/vaccineapi_backup_$(date +%F).sql.gz"
+docker cp vaccineapi-db-1:/tmp/vaccineapi_backup_$(date +%F).sql.gz .
+```
+
+### Disaster Recovery
+
+In case of VM/server crash:
+1. Provision a new EC2 instance
+2. Clone the VaccineAPI repository
+3. Restore the latest database backup from S3
+4. Deploy the application using Docker Compose
+
+## Database Schema Changes
+
+### SQL Statements for Schema Modifications
+
+```sql
 ALTER TABLE clinics
 DROP COLUMN OffDays;
 
@@ -53,9 +109,6 @@ CREATE TABLE `cities` (
   PRIMARY KEY (`Id`)
 );
 
- INSERT INTO `cities`(`Name`) VALUES ('Abbottabad'), ('Adezai'), ('Ali Bandar'), ('Amir Chah'), ('Attock'), ('Ayubia'), ('Bahawalpur'), ('Baden'), ('Bagh'), ('Bahawalnagar'), ('Burewala'), ('Banda Daud Shah'), ('Bannu'), ('Batagram'), ('Bazdar'), ('Bela'), ('Bellpat'), ('Bhag'), ('Bhakkar'), ('Bhalwal'), ('Bhimber'), ('Birote'), ('Buner'), ('Burj'), ('Chiniot'), ('Chachro'), ('Chagai'), ('Chah Sandan'), ('Chailianwala'), ('Chakdara'), ('Chakku'), ('Chakwal'), ('Chaman'), ('Charsadda'), ('Chhatr'), ('Chichawatni'), ('Chitral'), ('Dadu'), ('Dera Ghazi Khan'), ('Dera Ismail Khan'), ('Dalbandin'), ('Dargai'), ('Darya Khan'), ('Daska'), ('Dera Bugti'), ('Dhana Sar'), ('Digri'), ('Dina'), ('Dinga'), ('Diplo'), ('Diwana'), ('Dokri'), ('Drosh'), ('Duki'), ('Dushi'), ('Duzab'), ('Faisalabad'), ('Fateh Jang'), ('Ghotki'), ('Gwadar'), ('Gujranwala'), ('Gujrat'), ('Gadra'), ('Gajar'), ('Gandava'), ('Garhi Khairo'), ('Garruck'), ('Ghakhar Mandi'), ('Ghanian'), ('Ghauspur'), ('Ghazluna'), ('Girdan'), ('Gulistan'), ('Gwash'), ('Hyderabad'), ('Hala'), ('Haripur'), ('Hab Chauki'), ('Hafizabad'), ('Hameedabad'), ('Hangu'), ('Harnai'), ('Hasilpur'), ('Haveli Lakha'), ('Hinglaj'), ('Hoshab'), ('Islamabad'), ('Islamkot'), ('Ispikan'), ('Jacobabad'), ('Jamshoro'), ('Jhang'), ('Jhelum'), ('Jamesabad'), ('Jampur'), ('Janghar'), ('Jati (Mughalbhin)'), ('Jauharabad'), ('Jhal'), ('Jhal Jhao'), ('Jhatpat'), ('Jhudo'), ('Jiwani'), ('Jungshahi'), ('Karachi'), ('Kotri'), ('Kalam'), ('Kalandi'), ('Kalat'), ('Kamalia'), ('Kamararod'), ('Kamber'), ('Kamokey'), ('Kanak'), ('Kandi'), ('Kandiaro'), ('Kanpur'), ('Kapip'), ('Kappar'), ('Karak City'), ('Karodi'), ('Kashmor'), ('Kasur'), ('Katuri'), ('Keti Bandar'), ('Khairpur'), ('Khanaspur'), ('Khanewal'), ('Kharan'), ('Kharian'), ('Khokhropur'), ('Khora'), ('Khushab'), ('Khuzdar'), ('Kikki'), ('Klupro'), ('Kohan'), ('Kohat'), ('Kohistan'), ('Kohlu'), ('Korak'), ('Korangi'), ('Kot Sarae'), ('Kotli'), ('Lahore'), ('Larkana'), ('Lahri'), ('Lakki Marwat'), ('Lasbela'), ('Latamber'), ('Layyah'), ('Leiah'), ('Liari'), ('Lodhran'), ('Loralai'), ('Lower Dir'), ('Shadan Lund'), ('Multan'), ('Mandi Bahauddin'), ('Mansehra'), ('Mian Chanu'), ('Mirpur'), ('Moro'), ('Mardan'), ('Mach'), ('Madyan'), ('Malakand'), ('Mand'), ('Manguchar'), ('Mashki Chah'), ('Maslti'), ('Mastuj'), ('Mastung'), ('Mathi'), ('Matiari'), ('Mehar'), ('Mekhtar'), ('Merui'), ('Mianwali'), ('Mianez'), ('Mirpur Batoro'), ('Mirpur Khas'), ('Mirpur Sakro'), ('Mithi'), ('Mongora'), ('Murgha Kibzai'), ('Muridke'), ('Musa Khel Bazar'), ('Muzaffar Garh'), ('Muzaffarabad'), ('Nawabshah'), ('Nazimabad'), ('Nowshera'), ('Nagar Parkar'), ('Nagha Kalat'), ('Nal'), ('Naokot'), ('Nasirabad'), ('Nauroz Kalat'), ('Naushara'), ('Nur Gamma'), ('Nushki'), ('Nuttal'), ('Okara'), ('Ormara'), ('Peshawar'), ('Panjgur'), ('Pasni City'), ('Paharpur'), ('Palantuk'), ('Pendoo'), ('Piharak'), ('Pirmahal'), ('Pishin'), ('Plandri'), ('Pokran'), ('Pounch'), ('Quetta'), ('Qambar'), ('Qamruddin Karez'), ('Qazi Ahmad'), ('Qila Abdullah'), ('Qila Ladgasht'), ('Qila Safed'), ('Qila Saifullah'), ('Rawalpindi'), ('Rabwah'), ('Rahim Yar Khan'), ('Rajan Pur'), ('Rakhni'), ('Ranipur'), ('Ratodero'), ('Rawalakot'), ('Renala Khurd'), ('Robat Thana'), ('Rodkhan'), ('Rohri'), ('Sialkot'), ('Sadiqabad'), ('Safdar Abad- (Dhaban Singh)'), ('Sahiwal'), ('Saidu Sharif'), ('Saindak'), ('Sakrand'), ('Sanjawi'), ('Sargodha'), ('Saruna'), ('Shabaz Kalat'), ('Shadadkhot'), ('Shahbandar'), ('Shahpur'), ('Shahpur Chakar'), ('Shakargarh'), ('Shangla'), ('Sharam Jogizai'), ('Sheikhupura'), ('Shikarpur'), ('Shingar'), ('Shorap'), ('Sibi'), ('Sohawa'), ('Sonmiani'), ('Sooianwala'), ('Spezand'), ('Spintangi'), ('Sui'), ('Sujawal'), ('Sukkur'), ('Suntsar'), ('Surab'), ('Swabi'), ('Swat'), ('Tando Adam'), ('Tando Bago'), ('Tangi'), ('Tank City'), ('Tar Ahamd Rind'), ('Thalo'), ('Thatta'), ('Toba Tek Singh'), ('Tordher'), ('Tujal'), ('Tump'), ('Turbat'), ('Umarao'), ('Umarkot'), ('Upper Dir'), ('Uthal'), ('Vehari'), ('Veirwaro'), ('Vitakri'), ('Wadh'), ('Wah Cantt'), ('Warah'), ('Washap'), ('Wasjuk'), ('Wazirabad'), ('Yakmach'), ('Zhob'), ('Other'); 
-
-
 CREATE TABLE Invoices (
     Id INT NOT NULL AUTO_INCREMENT,
     InvoiceId VARCHAR(255) NOT NULL,
@@ -67,8 +120,6 @@ CREATE TABLE Invoices (
     PRIMARY KEY (Id)
 );
 
-
-
 CREATE TABLE `__efmigrationshistory` (
   `MigrationId` varchar(150) NOT NULL,
   `ProductVersion` varchar(32) NOT NULL
@@ -79,17 +130,4 @@ INSERT INTO `__efmigrationshistory` (`MigrationId`, `ProductVersion`) VALUES
 
 ALTER TABLE `__efmigrationshistory`
   ADD PRIMARY KEY (`MigrationId`);
-
-# Run daily at 00:00
-bash db_backup.sh
-
-# Run manually
-docker exec vaccineapi-db-1 sh -c "mysqldump -u root -ptest vaccineapi | gzip > /tmp/vaccineapi_backup_$(date +%F).sql.gz"
-docker cp vaccineapi-db-1:/tmp/vaccineapi_backup_$(date +%F).sql.gz .
-
-# Add to crontab to run daily at 02:00
-   sudo yum install cronie
-   sudo systemctl start crond
-   sudo systemctl enable crond
-crontab -e
-0 2 * * * /path/to/db_backup.sh >> /path/to/backup.log 2>&1
+```

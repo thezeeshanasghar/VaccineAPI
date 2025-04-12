@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# Pre-commit hook to check for C# formatting issues
+# Specifically looking for method indentation problems
+
+echo "Running pre-commit formatting checks..."
+
+# Get all staged C# files
+files=$(git diff --cached --name-only --diff-filter=ACMR | grep '\.cs$')
+
+if [ -z "$files" ]; then
+    echo "No C# files to check."
+    exit 0
+fi
+
+# Flag to track if we found any issues
+found_issues=0
+
+for file in $files; do
+    echo "Checking $file for formatting issues..."
+    
+    # Check for indentation issues with attributes and methods
+    if grep -n "^\s*\[Http" "$file" | grep -v "^\s\{4\}\[Http"; then
+        echo "ERROR: $file has incorrectly indented HTTP attributes. They should be indented with 4 spaces."
+        found_issues=1
+    fi
+    
+    # Check for method declarations that don't follow the correct indentation pattern
+    if grep -n "^\s*public\s\+\(async\s\+\)\?\(Task\(<.*>\)\?\|IActionResult\|ActionResult\|Response\|void\|string\|int\|bool\|.*DTO\)\s\+[A-Za-z0-9_]\+" "$file" | grep -v "^\s\{4\}public"; then
+        echo "ERROR: $file has incorrectly indented method declarations. They should be indented with 4 spaces."
+        found_issues=1
+    fi
+    
+    # Check for empty lines with whitespace
+    if grep -n "^\s\+$" "$file"; then
+        echo "ERROR: $file has lines with trailing whitespace."
+        found_issues=1
+    fi
+    
+    # Check for inconsistent brace style
+    if grep -n "^\s*{" "$file" | grep -v "^\s\{4\}{"; then
+        echo "ERROR: $file has inconsistent brace style. Opening braces should be on a new line with proper indentation."
+        found_issues=1
+    fi
+done
+
+if [ $found_issues -ne 0 ]; then
+    echo "Formatting issues found. Please fix them before committing."
+    echo "Tip: You can use 'dotnet format' to automatically fix some formatting issues."
+    exit 1
+else
+    echo "No formatting issues found. Proceeding with commit."
+fi
+
+exit 0

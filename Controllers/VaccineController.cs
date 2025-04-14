@@ -147,25 +147,21 @@ namespace VaccineAPI.Controllers
         }
 
        [HttpPut("{id}")]
-public Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)
-{
-    var dbVaccine = _db.Vaccines.Where(x => x.Id == id).FirstOrDefault();
+        public Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)
+        {
+            var dbVaccine = _db.Vaccines.Where(x => x.Id == id).FirstOrDefault();
+            if (dbVaccine == null)
+            {
+                return new Response<VaccineDTO>(false, "Vaccine not found", null);
+            }
 
-    if (dbVaccine == null)
-    {
-        return new Response<VaccineDTO>(false, "Vaccine not found", null);
-    }
-
-    // Update the properties of the existing vaccine
-    dbVaccine.Name = vaccineDTO.Name;
-    dbVaccine.MinAge = vaccineDTO.MinAge;
-    dbVaccine.MaxAge = vaccineDTO.MaxAge;
-    dbVaccine.Validity = vaccineDTO.Validity; // Fix: Use dbVaccine instead of dbvaccine
-
-    _db.SaveChanges();
-
-    return new Response<VaccineDTO>(true, null, vaccineDTO);
-}
+            dbVaccine.Name = vaccineDTO.Name;
+            dbVaccine.MinAge = vaccineDTO.MinAge;
+            dbVaccine.MaxAge = vaccineDTO.MaxAge;
+            dbVaccine.Validity = vaccineDTO.Validity; 
+            _db.SaveChanges();
+           return new Response<VaccineDTO>(true, null, vaccineDTO);
+        }        
 
         [HttpDelete("{id}")]
         public Response<string> Delete(long id)

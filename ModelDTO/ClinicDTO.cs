@@ -15,9 +15,10 @@ namespace VaccineAPI.ModelDTO
         public string Address { get; set; }
         public string MonogramImage { get; set; }
         public int ConsultationFee { get; set; }
-          public double Lat { get; set; }
+        public double Lat { get; set; }
         public double Long { get; set; }
         public long DoctorId { get; set; }
+        public string RegNo { get; set; }
         public bool IsOnline { get; set; }
         [JsonIgnore]
         public DoctorDTO Doctor { get; set; }

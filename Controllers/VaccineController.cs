@@ -146,19 +146,22 @@ namespace VaccineAPI.Controllers
             return new Response<VaccineDTO>(true, null, vaccineDTO);
         }
 
-        [HttpPut("{id}")]
+       [HttpPut("{id}")]
         public Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)
         {
             var dbVaccine = _db.Vaccines.Where(x => x.Id == id).FirstOrDefault();
-            //VaccineDTO vaccineDTOs = _mapper.Map<VaccineDTO>(dbVaccine);
-            //  dbVaccine = Mapper.Map<VaccineDTO, Vaccine>(vaccineDTO, dbVaccine);
+            if (dbVaccine == null)
+            {
+                return new Response<VaccineDTO>(false, "Vaccine not found", null);
+            }
+
             dbVaccine.Name = vaccineDTO.Name;
             dbVaccine.MinAge = vaccineDTO.MinAge;
             dbVaccine.MaxAge = vaccineDTO.MaxAge;
+            dbVaccine.Validity = vaccineDTO.Validity; 
             _db.SaveChanges();
-            return new Response<VaccineDTO>(true, null, vaccineDTO);
-
-        }
+           return new Response<VaccineDTO>(true, null, vaccineDTO);
+        }        
 
         [HttpDelete("{id}")]
         public Response<string> Delete(long id)

@@ -17,6 +17,7 @@ namespace VaccineAPI.Models
         public int? MaxAge { get; set; }
 
         public bool isInfinite { get; set; }
+        public int Validity { get; set; }
 
         public virtual ICollection<Brand> Brands { get; set; }
         public virtual ICollection<Dose> Doses { get; set; }

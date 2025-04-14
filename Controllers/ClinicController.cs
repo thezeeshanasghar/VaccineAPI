@@ -29,7 +29,6 @@ namespace VaccineAPI.Controllers
             var list = await _db.Clinics.Include(x => x.ClinicTimings).OrderBy(x => x.Id).ToListAsync();
             //var list = await _db.Clinics.OrderBy(x=>x.Id).ToListAsync();
             List<ClinicDTO> listDTO = _mapper.Map<List<ClinicDTO>>(list);
-
             return new Response<List<ClinicDTO>>(true, null, listDTO);
         }
 
@@ -37,9 +36,7 @@ namespace VaccineAPI.Controllers
         public async Task<Response<ClinicDTO>> GetSingle(long id)
         {
             var dbclinic = await _db.Clinics.Include(x => x.ClinicTimings).Where(x => x.Id == id).FirstOrDefaultAsync();
-
             ClinicDTO clinicDTO = _mapper.Map<ClinicDTO>(dbclinic);
-
             if (dbclinic == null)
                 return new Response<ClinicDTO>(false, "Not Found", null);
 
@@ -54,10 +51,9 @@ namespace VaccineAPI.Controllers
 
             var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
 
-            // Map DTO to entity
             var dbClinic = _mapper.Map<Clinic>(clinicDTO);
 
-            // If it's the first clinic for the doctor, set IsOnline to true, otherwise false
+
             dbClinic.IsOnline = clinicList.Count == 0;
 
             _db.Clinics.Add(dbClinic);

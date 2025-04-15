@@ -32,7 +32,7 @@ namespace VaccineAPI.ModelDTO
         public string Manufacturer { get; set; } = "";
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; } 
-        public DateTime? Validity { get; set; }
+        public int? Validity { get; set; }
         public List<ScheduleBrandDTO> ScheduleBrands { get; set; }
         public long DoctorId { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]

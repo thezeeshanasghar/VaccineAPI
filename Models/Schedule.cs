@@ -24,7 +24,7 @@ namespace VaccineAPI.Models
         public string Manufacturer { get; set; } = "";
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }
-        public DateTime? Validity { get; set; }
+        public int? Validity { get; set; }
         public long ChildId { get; set; }
         public virtual Child Child { get; set; }
         public long DoseId { get; set; }

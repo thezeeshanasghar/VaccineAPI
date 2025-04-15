@@ -158,7 +158,7 @@ namespace VaccineAPI.Controllers
             dbVaccine.Name = vaccineDTO.Name;
             dbVaccine.MinAge = vaccineDTO.MinAge;
             dbVaccine.MaxAge = vaccineDTO.MaxAge;
-            dbVaccine.Validity = vaccineDTO.Validity; 
+            dbVaccine.Validity = vaccineDTO.Validity;
             _db.SaveChanges();
            return new Response<VaccineDTO>(true, null, vaccineDTO);
         }        

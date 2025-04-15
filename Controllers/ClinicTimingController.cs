@@ -204,6 +204,7 @@ namespace VaccineAPI.Controllers
         dbClinic.PhoneNumber = request.PhoneNumber;
         dbClinic.Address = request.Address;
         dbClinic.MonogramImage = request.MonogramImage;
+        dbClinic.RegNo = request.RegNo;
         // dbClinic.IsOnline = request.IsOnline;
 
         // Update clinic timings

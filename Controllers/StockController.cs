@@ -68,8 +68,10 @@ namespace VaccineAPI.Controllers
                 var stock = stocks.First(s => s.Id == dto.Id);
                 dto.BillNo = stock.Bill?.BillNo;
                 dto.Supplier = stock.Bill?.Supplier;
-                dto.Date = stock.Bill?.Date ?? DateTime.MinValue;
+                dto.BillDate = stock.Bill?.BillDate ?? DateTime.MinValue;
                 dto.IsPaid = stock.Bill?.IsPaid ?? false;
+                dto.PaidDate = stock.Bill?.PaidDate ?? DateTime.MinValue;
+                dto.DoctorId = stock.Bill?.DoctorId ?? 0;
             }
             return new Response<List<StockDTO>>(true, null, stockDTOs);
         }
@@ -106,9 +108,10 @@ namespace VaccineAPI.Controllers
                 {
                     BillNo = firstStock.BillNo,
                     Supplier = firstStock.Supplier?.Trim() ?? "",
-                    Date = firstStock.Date != default ? firstStock.Date : DateTime.Now,
+                    BillDate = firstStock.BillDate != default ? firstStock.BillDate : DateTime.Now,
                     IsPaid = firstStock.IsPaid,
-                    DoctorId = firstStock.DoctorId
+                    DoctorId = firstStock.DoctorId,
+                    PaidDate = firstStock.PaidDate : 00-00-0000
                 };
 
                 _db.Bills.Add(bill);

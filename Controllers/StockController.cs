@@ -111,7 +111,7 @@ namespace VaccineAPI.Controllers
                     BillDate = firstStock.BillDate != default ? firstStock.BillDate : DateTime.Now,
                     IsPaid = firstStock.IsPaid,
                     DoctorId = firstStock.DoctorId,
-                    PaidDate = firstStock.PaidDate : 00-00-0000
+                    PaidDate = firstStock.PaidDate,
                 };
 
                 _db.Bills.Add(bill);

@@ -9,15 +9,11 @@ namespace VaccineAPI.Models
         public int Id { get; set; }
         public string BillNo { get; set; }
         public string Supplier { get; set; }
-        public DateTime Date { get; set; }
+        public DateTime BillDate { get; set; }
         public bool IsPaid { get; set; }
-
-        [Required]
+        public DateTime PaidDate { get; set; }
         public long DoctorId { get; set; }
-
-        [ForeignKey("DoctorId")]
         public virtual Doctor Doctor { get; set; }
-
         public virtual ICollection<Stock> Stocks { get; set; }
     }
 }

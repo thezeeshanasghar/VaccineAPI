@@ -76,34 +76,34 @@ namespace VaccineAPI.Controllers
             return new Response<BillDTO>(true, null, billDTO);
         }
 
-        [HttpGet("suppliers")]
-        public Response<List<SupplierDTO>> GetSuppliers()
-        {
-            try
-            {
-                var suppliers = _db.Bills
-                    .Where(b => !string.IsNullOrEmpty(b.Supplier))
-                    .Select(b => new SupplierDTO { Name = b.Supplier })
-                    .Distinct()
-                    .OrderBy(s => s.Name)
-                    .ToList();
+        // [HttpGet("suppliers")]
+        // public Response<List<SupplierDTO>> GetSuppliers()
+        // {
+        //     try
+        //     {
+        //         var suppliers = _db.Bills
+        //             .Where(b => !string.IsNullOrEmpty(b.Supplier))
+        //             .Select(b => new SupplierDTO { Name = b.Supplier })
+        //             .Distinct()
+        //             .OrderBy(s => s.Name)
+        //             .ToList();
 
-                if (!suppliers.Any())
-                {
-                    return new Response<List<SupplierDTO>>(false, "No suppliers found", null);
-                }
+        //         if (!suppliers.Any())
+        //         {
+        //             return new Response<List<SupplierDTO>>(false, "No suppliers found", null);
+        //         }
                 
-                return new Response<List<SupplierDTO>>(true, null, suppliers);
-            }
-            catch (Exception ex)
-            {
-                return new Response<List<SupplierDTO>>(
-                    false,
-                    $"Error retrieving suppliers: {ex.Message}",
-                    null
-                );
-            }
-        }
+        //         return new Response<List<SupplierDTO>>(true, null, suppliers);
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         return new Response<List<SupplierDTO>>(
+        //             false,
+        //             $"Error retrieving suppliers: {ex.Message}",
+        //             null
+        //         );
+        //     }
+        // }
 
         [HttpPost]
         public Response<BillDTO> Post(BillDTO billDTO)
@@ -136,6 +136,32 @@ namespace VaccineAPI.Controllers
             _db.Bills.Remove(bill);
             _db.SaveChanges();
             return new Response<BillDTO>(true, "Bill deleted successfully", null);
+        }
+
+        [HttpGet("Suppliers")]
+        public Response<IEnumerable<string>> GetSupplierNames()
+        {
+            try
+            {
+                // Fetch distinct agent names where Agent is not null/empty and matches the given DoctorId
+                var supplierNames = _db.Bills
+                    .Where(c => !string.IsNullOrEmpty(c.Supplier) )
+                    .Select(c => c.Supplier)
+                    .Distinct()
+                    .ToList();
+
+                if (!supplierNames.Any())
+                {
+                    return new Response<IEnumerable<string>>(false, "No suppliers found for the specified doctor", null);
+                }
+
+                return new Response<IEnumerable<string>>(true, "suppliers retrieved successfully", supplierNames);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error retrieving suppliers: {ex.Message}");
+                return new Response<IEnumerable<string>>(false, "An error occurred while retrieving suppliers", null);
+            }
         }
     }
 }

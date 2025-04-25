@@ -19,6 +19,7 @@ namespace VaccineAPI.ModelDTO
         public string Email { get; set; }
         public string ProfileImage { get; set; }
         public string DoctorType { get; set; }
+        public long PAId { get; set; }
     }
 
 }

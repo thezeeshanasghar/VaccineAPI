@@ -127,6 +127,15 @@ namespace VaccineAPI.Controllers
                 else
                     userDTO.ChildId = childDB.Id;
             }
+            else if (userDTO.UserType.Equals("PA"))
+            {
+                var paDb = _db.PersonalAssistant.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
+                if (paDb == null)
+                    return new Response<UserDTO>(false, "Personal Assistant not found.", null);
+                else
+                    userDTO.PAId = paDb.Id;
+            }
+            
 
             return new Response<UserDTO>(true, null, userDTO);
         }

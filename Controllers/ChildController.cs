@@ -1078,7 +1078,6 @@ namespace VaccineAPI.Controllers
             {
                 Child childDB = _mapper.Map<Child>(childDTO);
 
-                // check for existing parent
 
                 User user =
                     _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
@@ -1184,7 +1183,6 @@ namespace VaccineAPI.Controllers
                                 {
                                     cvd.DoseId = ds.DoseId;
                                 }
-
 
                                 // if (ds.Dose.Name.StartsWith("BCG") || ds.Dose.Name.StartsWith("HBV") ||
                                 //     ds.Dose.Name.Equals("OPV # 1"))
@@ -3135,6 +3133,32 @@ namespace VaccineAPI.Controllers
                 ContentType = "text/html",
                 StatusCode = 200
             };
+        }
+
+        [HttpGet("agents/{doctorId}")]
+        public Response<IEnumerable<string>> GetAgentNamesByDoctorId(long doctorId)
+        {
+            try
+            {
+                // Fetch distinct agent names where Agent is not null/empty and matches the given DoctorId
+                var agentNames = _db.Childs
+                    .Where(c => !string.IsNullOrEmpty(c.Agent) && c.Clinic.DoctorId == doctorId)
+                    .Select(c => c.Agent)
+                    .Distinct()
+                    .ToList();
+
+                if (!agentNames.Any())
+                {
+                    return new Response<IEnumerable<string>>(false, "No agents found for the specified doctor", null);
+                }
+
+                return new Response<IEnumerable<string>>(true, "Agents retrieved successfully", agentNames);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error retrieving agents: {ex.Message}");
+                return new Response<IEnumerable<string>>(false, "An error occurred while retrieving agents", null);
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
-using System ;
+using System;
 
 namespace VaccineAPI.ModelDTO
 {
@@ -15,9 +15,9 @@ namespace VaccineAPI.ModelDTO
         public string Session { get; set; }
         public bool IsOpen { get; set; }
         public long ClinicId { get; set; }
-         [JsonIgnore]
+        [JsonIgnore]
         public ClinicDTO Clinic { get; set; }
-       
+
     }
 
 }

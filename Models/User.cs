@@ -21,7 +21,7 @@ namespace VaccineAPI.Models
         public virtual ICollection<Child> Childs { get; set; }
         public virtual ICollection<Doctor> Doctors { get; set; }
         public virtual ICollection<Message> Messages { get; set; }
-        
+
     }
 
 }

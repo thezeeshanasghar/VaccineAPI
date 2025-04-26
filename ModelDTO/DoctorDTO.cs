@@ -33,7 +33,7 @@ namespace VaccineAPI.ModelDTO
         public string Qualification { get; set; }
         public string AdditionalInfo { get; set; }
         // public long UserId { get; set; }
-        
+
         // [JsonIgnore]
         public UserDTO User { get; set; }
 

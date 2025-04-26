@@ -14,7 +14,7 @@ namespace VaccineAPI.Models
         public virtual Doctor Doctor { get; set; }
         public int GapInDays { get; set; }  // min age is treating as gap in days
         public bool? IsActive { get; set; }
-        
+
     }
 
 }

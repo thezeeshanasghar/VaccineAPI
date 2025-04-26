@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
-using System ;
+using System;
 
 namespace VaccineAPI.Models
 {
@@ -16,7 +16,7 @@ namespace VaccineAPI.Models
         public bool IsOpen { get; set; }
         public long ClinicId { get; set; }
         public virtual Clinic Clinic { get; set; }
-       
+
     }
 
 }

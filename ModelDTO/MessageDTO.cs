@@ -8,7 +8,7 @@ namespace VaccineAPI.ModelDTO
 
     public class MessageDTO
     {
-        
+
         public int Id { get; set; }
         public string MobileNumber { get; set; }
         public string SMS { get; set; }

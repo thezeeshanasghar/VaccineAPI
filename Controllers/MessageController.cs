@@ -25,7 +25,7 @@ namespace VaccineAPI.Controllers
 
         [HttpGet]
         // public async Task<Response<List<MessageDTO>>> GetAll()
-        public Response<List<MessageDTO>> Get([FromQuery]string mobileNumber = "", [FromQuery]string fromDate = "", [FromQuery]string toDate = "")
+        public Response<List<MessageDTO>> Get([FromQuery] string mobileNumber = "", [FromQuery] string fromDate = "", [FromQuery] string toDate = "")
         {
             List<Message> dbMessages = new List<Message>();
             var prevDays = DateTime.Now.AddDays(-10);
@@ -70,46 +70,46 @@ namespace VaccineAPI.Controllers
             var messageDTOs = _mapper.Map<List<MessageDTO>>(dbMessages.OrderByDescending(x => x.Created));
             return new Response<List<MessageDTO>>(true, null, messageDTOs);
         }
-          protected bool IsJson(string input)
+        protected bool IsJson(string input)
         {
             input = input.Trim();
             return input.StartsWith("{") && input.EndsWith("}")
                    || input.StartsWith("[") && input.EndsWith("]");
         }
 
-         [HttpGet("{id}/doctor")]
+        [HttpGet("{id}/doctor")]
         public Response<List<MessageDTO>> Get(int id)
         {
-    
-    
-                {
-                    var dbMessages = _db.Messages.Where(x => x.UserId == id).Include(x=>x.User).OrderByDescending(x => x.Created).ToList();
-                    var messageDTOs = _mapper.Map<List<MessageDTO>>(dbMessages);
-                    // foreach (var msg in messageDTOs)
-                    // {
-                    //     if (IsJson(msg.ApiResponse))
-                    //     {
-                    //         JObject json = JObject.Parse(msg.ApiResponse);
-                    //         msg.ApiResponse = (string)json["returnString"];
-                    //     }
-                    //     else
-                    //     {
-                    //         XmlDocument xmlDoc = new XmlDocument();
-                    //         xmlDoc.LoadXml(msg.ApiResponse);
 
-                    //         string xpath = "Response";
-                    //         var parentNode = xmlDoc.SelectNodes(xpath);
 
-                    //         foreach (XmlNode childrenNode in parentNode)
-                    //             msg.ApiResponse = childrenNode.FirstChild.InnerText;
-                    //     }
-                    // }
+            {
+                var dbMessages = _db.Messages.Where(x => x.UserId == id).Include(x => x.User).OrderByDescending(x => x.Created).ToList();
+                var messageDTOs = _mapper.Map<List<MessageDTO>>(dbMessages);
+                // foreach (var msg in messageDTOs)
+                // {
+                //     if (IsJson(msg.ApiResponse))
+                //     {
+                //         JObject json = JObject.Parse(msg.ApiResponse);
+                //         msg.ApiResponse = (string)json["returnString"];
+                //     }
+                //     else
+                //     {
+                //         XmlDocument xmlDoc = new XmlDocument();
+                //         xmlDoc.LoadXml(msg.ApiResponse);
 
-                    return new Response<List<MessageDTO>>(true, null, messageDTOs);
-                }
+                //         string xpath = "Response";
+                //         var parentNode = xmlDoc.SelectNodes(xpath);
+
+                //         foreach (XmlNode childrenNode in parentNode)
+                //             msg.ApiResponse = childrenNode.FirstChild.InnerText;
+                //     }
+                // }
+
+                return new Response<List<MessageDTO>>(true, null, messageDTOs);
             }
+        }
 
-            
+
 
         [HttpPost]
         public Response<MessageDTO> Post([FromBody] MessageDTO msg)
@@ -127,7 +127,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

@@ -31,7 +31,7 @@ namespace VaccineAPI.Controllers
 
                 // Current Month Child Count
                 var currentMonthChildCount = await _db.Childs
-                    .CountAsync(c => c.DOB.Month == currentMonth 
+                    .CountAsync(c => c.DOB.Month == currentMonth
                                     && c.DOB.Year == currentYear
                                     && c.Clinic.DoctorId == doctorId);
 

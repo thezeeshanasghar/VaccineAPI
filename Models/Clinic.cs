@@ -26,13 +26,13 @@ namespace VaccineAPI.Models
         public string MonogramImage { get; set; }
         public long DoctorId { get; set; }
         public string RegNo { get; set; }
-       // [JsonIgnore]
+        // [JsonIgnore]
         public virtual Doctor Doctor { get; set; }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
         public virtual ICollection<Child> Childs { get; set; }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
         public virtual ICollection<ClinicTiming> ClinicTimings { get; set; }
-         
+
     }
 
 }

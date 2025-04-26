@@ -26,9 +26,9 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public async Task<Response<List<FollowUpDTO>>> GetAll()
         {
-            var list = await _db.FollowUps.OrderBy(x=>x.Id).ToListAsync();
+            var list = await _db.FollowUps.OrderBy(x => x.Id).ToListAsync();
             List<FollowUpDTO> listDTO = _mapper.Map<List<FollowUpDTO>>(list);
-           
+
             return new Response<List<FollowUpDTO>>(true, null, listDTO);
         }
 
@@ -37,8 +37,8 @@ namespace VaccineAPI.Controllers
         {
             var single = await _db.FollowUps.FindAsync(id);
             if (single == null)
-             return new Response<FollowUp>(false, "Not Found", null);
-             return new Response<FollowUp>(true, null, single);   
+                return new Response<FollowUp>(false, "Not Found", null);
+            return new Response<FollowUp>(true, null, single);
         }
 
         [HttpGet("doctor/{doctorId}")]
@@ -52,7 +52,7 @@ namespace VaccineAPI.Controllers
                 .ThenInclude(c => c.User) // Include User data through Child
                 .Where(f => f.DoctorId == doctorId) // Filter by DoctorId
                 .Where(c => c.NextVisitDate == inputDate.Date)
-                .Where(f => f.Child.IsInactive==false)
+                .Where(f => f.Child.IsInactive == false)
                 .OrderBy(x => x.Child.Id)
                 .ToList();
             IEnumerable<FollowUpDTO> followUpDTOs = _mapper.Map<IEnumerable<FollowUpDTO>>(
@@ -61,47 +61,47 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTOs);
         }
 
-         [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
+        [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<FollowUpDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId)
         {
-                {
-                    var doctor = _db.Clinics.Where(x => x.Id == OnlineClinicId).Include(x=>x.Doctor).First<Clinic>().Doctor;
-                    long[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<long>();
-                  
-                  //  int[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<int>();
+            {
+                var doctor = _db.Clinics.Where(x => x.Id == OnlineClinicId).Include(x => x.Doctor).First<Clinic>().Doctor;
+                long[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<long>();
 
-                    IEnumerable<FollowUp> followups = new List<FollowUp>();
-                    DateTime AddedDateTime = DateTime.UtcNow.AddHours(5).AddDays(GapDays);
-                    DateTime pakistanTime = DateTime.UtcNow.AddHours(5);
-                    if (GapDays == 0)
-                        followups = _db.FollowUps.Include(x=> x.Child).ThenInclude(x=>x.User)
-                            .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
+                //  int[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<int>();
+
+                IEnumerable<FollowUp> followups = new List<FollowUp>();
+                DateTime AddedDateTime = DateTime.UtcNow.AddHours(5).AddDays(GapDays);
+                DateTime pakistanTime = DateTime.UtcNow.AddHours(5);
+                if (GapDays == 0)
+                    followups = _db.FollowUps.Include(x => x.Child).ThenInclude(x => x.User)
+                        .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
                        //     .Where(c => System.Data.Entity.DbFunctions.TruncateTime(c.NextVisitDate) == System.Data.Entity.DbFunctions.TruncateTime(pakistanTime))
-                           .Where(c => c.NextVisitDate == inputDate.Date)
-                            .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate).ToList<FollowUp>();
-                    else if (GapDays > 0)
-                    {
-                        AddedDateTime = AddedDateTime.AddDays(1);
-                        followups = _db.FollowUps.Include(x=> x.Child).ThenInclude(x=>x.User)
-                        
-                            .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                            .Where(c => c.NextVisitDate > pakistanTime && c.NextVisitDate <= AddedDateTime)
-                            .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate)
-                            .ToList<FollowUp>();
+                       .Where(c => c.NextVisitDate == inputDate.Date)
+                        .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate).ToList<FollowUp>();
+                else if (GapDays > 0)
+                {
+                    AddedDateTime = AddedDateTime.AddDays(1);
+                    followups = _db.FollowUps.Include(x => x.Child).ThenInclude(x => x.User)
 
-                    }
-                    else if (GapDays < 0)
-                    {
-                        followups = _db.FollowUps.Include(x=> x.Child).ThenInclude(x=>x.User)
-                        //    .Where(c => ClinicIDs.Contains(c.Child.ClinicID))
-                            .Where(c => c.NextVisitDate < pakistanTime.Date && c.NextVisitDate >= AddedDateTime)
-                            .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate)
-                            .ToList<FollowUp>();
-                    }
-                        
-                    IEnumerable<FollowUpDTO> followUpDTO = _mapper.Map<IEnumerable<FollowUpDTO>>(followups);
-                    return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTO);
+                        .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
+                        .Where(c => c.NextVisitDate > pakistanTime && c.NextVisitDate <= AddedDateTime)
+                        .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate)
+                        .ToList<FollowUp>();
+
                 }
+                else if (GapDays < 0)
+                {
+                    followups = _db.FollowUps.Include(x => x.Child).ThenInclude(x => x.User)
+                        //    .Where(c => ClinicIDs.Contains(c.Child.ClinicID))
+                        .Where(c => c.NextVisitDate < pakistanTime.Date && c.NextVisitDate >= AddedDateTime)
+                        .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate)
+                        .ToList<FollowUp>();
+                }
+
+                IEnumerable<FollowUpDTO> followUpDTO = _mapper.Map<IEnumerable<FollowUpDTO>>(followups);
+                return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTO);
+            }
         }
 
         [HttpGet("followupmail/{ChildId}")]
@@ -173,24 +173,24 @@ namespace VaccineAPI.Controllers
         [HttpGet("sms-alert/{childId}")]
         public Response<FollowUpDTO> SendSMSAlertToOneChild(int childId)
         {
-                {
-                    var dbChildFollowup = _db.FollowUps.Where(x => x.ChildId == childId).OrderByDescending(x => x.Id).FirstOrDefault();
-                    UserSMS u = new UserSMS(_db);
-                    u.ParentFollowUpSMSAlert(dbChildFollowup);
-                    FollowUpDTO followupDTO = _mapper.Map<FollowUpDTO>(dbChildFollowup);
-                    return new Response<FollowUpDTO>(true, null, followupDTO);
-                }
+            {
+                var dbChildFollowup = _db.FollowUps.Where(x => x.ChildId == childId).OrderByDescending(x => x.Id).FirstOrDefault();
+                UserSMS u = new UserSMS(_db);
+                u.ParentFollowUpSMSAlert(dbChildFollowup);
+                FollowUpDTO followupDTO = _mapper.Map<FollowUpDTO>(dbChildFollowup);
+                return new Response<FollowUpDTO>(true, null, followupDTO);
+            }
         }
 
         [HttpPost]
         public Response<FollowUpDTO> Post(FollowUpDTO FollowUpDto)
         {
-                {
-                    FollowUp dbFollowUp = _mapper.Map<FollowUp>(FollowUpDto);
-                    _db.FollowUps.Add(dbFollowUp);
-                    _db.SaveChanges();
-                    return new Response<FollowUpDTO>(true, null, FollowUpDto);
-                }
+            {
+                FollowUp dbFollowUp = _mapper.Map<FollowUp>(FollowUpDto);
+                _db.FollowUps.Add(dbFollowUp);
+                _db.SaveChanges();
+                return new Response<FollowUpDTO>(true, null, FollowUpDto);
+            }
         }
 
         [HttpPut("{id}")]
@@ -265,7 +265,7 @@ namespace VaccineAPI.Controllers
             headerCell.AddElement(new Paragraph(clinicAddress, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
             headerCell.AddElement(new Paragraph(clinicPhone, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
             headerTable.AddCell(headerCell);
-            
+
             PdfPCell childDetailsCell = new PdfPCell();
             string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "ClinicTeeka.png");
             if (System.IO.File.Exists(logoPath))
@@ -288,15 +288,15 @@ namespace VaccineAPI.Controllers
 
             var heading = new Paragraph("VISIT HISTORY", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14))
             {
-                Alignment = Element.ALIGN_CENTER 
+                Alignment = Element.ALIGN_CENTER
             };
-            document.Add(heading); 
+            document.Add(heading);
 
             var followUpHeaderTable = new PdfPTable(7);
             followUpHeaderTable.HorizontalAlignment = 0;
             followUpHeaderTable.TotalWidth = 510f;
             followUpHeaderTable.LockedWidth = true;
-            followUpHeaderTable.SpacingBefore = 15; 
+            followUpHeaderTable.SpacingBefore = 15;
             float[] widths = new float[] { 0.5f, 1.5f, 1.5f, 1f, 1f, 1f, 1f };
             followUpHeaderTable.SetWidths(widths);
 
@@ -358,7 +358,7 @@ namespace VaccineAPI.Controllers
                     BorderColor = BaseColor.LightGray,
                     HorizontalAlignment = Element.ALIGN_CENTER
                 });
-                
+
                 // Growth Velocity = Height Difference / Time Difference in Years
                 if (previousHeight.HasValue && previousVisitDate.HasValue)
                 {

@@ -7,7 +7,7 @@ namespace VaccineAPI.Models
 
     public class Dose
     {
-         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
         public Dose()
         {
             this.DoctorSchedules = new HashSet<DoctorSchedule>();
@@ -20,9 +20,9 @@ namespace VaccineAPI.Models
         public int? MinGap { get; set; }
         public int? DoseOrder { get; set; }
         public long VaccineId { get; set; }
-         [JsonIgnore]
-      //  public Vaccine Vaccine { get; set; }
-         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        [JsonIgnore]
+        //  public Vaccine Vaccine { get; set; }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
         public virtual ICollection<DoctorSchedule> DoctorSchedules { get; set; }
         public virtual Vaccine Vaccine { get; set; }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]

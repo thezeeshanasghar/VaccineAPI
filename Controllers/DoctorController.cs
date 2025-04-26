@@ -164,25 +164,25 @@ namespace VaccineAPI.Controllers
                 _db.SaveChanges();
                 doctorDTO.Id = doctorDB.Id;
 
-                 var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
-                 bool brandamount = _db.BrandAmounts.Any(x => x.DoctorId == doctorDTO.Id);
-                 if (brandamount == false)
-                 {
-                     foreach (var vaccine in vaccines)
-                     {
-                         var brands = vaccine.Brands;
-                         foreach (var brand in brands)
-                         {
-                             BrandAmount ba = new BrandAmount();
-                             ba.Amount = 0;
-                             ba.DoctorId = doctorDB.Id;
-                             ba.Count = 0;
-                             ba.BrandId = brand.Id;
-                             _db.BrandAmounts.Add(ba);
-                             _db.SaveChanges();
-                         }
-                     }
-                 }
+                var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
+                bool brandamount = _db.BrandAmounts.Any(x => x.DoctorId == doctorDTO.Id);
+                if (brandamount == false)
+                {
+                    foreach (var vaccine in vaccines)
+                    {
+                        var brands = vaccine.Brands;
+                        foreach (var brand in brands)
+                        {
+                            BrandAmount ba = new BrandAmount();
+                            ba.Amount = 0;
+                            ba.DoctorId = doctorDB.Id;
+                            ba.Count = 0;
+                            ba.BrandId = brand.Id;
+                            _db.BrandAmounts.Add(ba);
+                            _db.SaveChanges();
+                        }
+                    }
+                }
 
                 var body = "Hi " + doctorDTO.FirstName + " " + doctorDTO.LastName + ",\n"
                     + "You are successfully registered in vaccinationcentre.com\n\n"
@@ -190,7 +190,7 @@ namespace VaccineAPI.Controllers
                     + "ID/Mobile Number: " + doctorDTO.MobileNumber + "\n"
                     + "Password: " + doctorDTO.Password + "\n"
                     + "Web Link: https://doctor.vaccinationcentre.com";
-                UserEmail.SendEmail( doctorDTO.Email, body);
+                UserEmail.SendEmail(doctorDTO.Email, body);
             }
             return new Response<DoctorDTO>(true, null, doctorDTO);
         }

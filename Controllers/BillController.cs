@@ -92,7 +92,7 @@ namespace VaccineAPI.Controllers
         //         {
         //             return new Response<List<SupplierDTO>>(false, "No suppliers found", null);
         //         }
-                
+
         //         return new Response<List<SupplierDTO>>(true, null, suppliers);
         //     }
         //     catch (Exception ex)
@@ -145,7 +145,7 @@ namespace VaccineAPI.Controllers
             {
                 // Fetch distinct agent names where Agent is not null/empty and matches the given DoctorId
                 var supplierNames = _db.Bills
-                    .Where(c => !string.IsNullOrEmpty(c.Supplier) )
+                    .Where(c => !string.IsNullOrEmpty(c.Supplier))
                     .Select(c => c.Supplier)
                     .Distinct()
                     .ToList();

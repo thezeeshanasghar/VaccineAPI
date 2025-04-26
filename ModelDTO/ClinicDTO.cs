@@ -22,11 +22,11 @@ namespace VaccineAPI.ModelDTO
         public bool IsOnline { get; set; }
         [JsonIgnore]
         public DoctorDTO Doctor { get; set; }
-        
-      //  [JsonIgnore]
+
+        //  [JsonIgnore]
         public int childrenCount { get; set; }
         public List<ClinicTimingDTO> ClinicTimings { get; set; }
-         
+
     }
 
 }

@@ -18,8 +18,8 @@ namespace VaccineAPI.Models
         public float? Height { get; set; }
         public float? OFC { get; set; }
         public float? BloodPressure { get; set; }
-        public float? BloodSugar{ get; set; }
-         public long ChildId { get; set; }
+        public float? BloodSugar { get; set; }
+        public long ChildId { get; set; }
         public virtual Child Child { get; set; }
         public long DoctorId { get; set; }
         public virtual Doctor Doctor { get; set; }

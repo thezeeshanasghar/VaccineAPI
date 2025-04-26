@@ -7,7 +7,7 @@ namespace VaccineAPI.Models
 
     public class Brand
     {
-          [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
         public Brand()
         {
             this.BrandAmounts = new HashSet<BrandAmount>();

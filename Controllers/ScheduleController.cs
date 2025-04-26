@@ -1158,7 +1158,7 @@ namespace VaccineAPI.Controllers
                 var doseDetails = todaySchedules.Select(s => $" {s.Dose.Name},").ToList();
 
                 body = $"Reminder: Vaccination {string.Join(" ", doseDetails)} of {child.Name} is due.\n " +
-                       $"Please confirm your appointment. Thanks! Dr {clinic?.Doctor?.FirstName} {clinic?.Doctor?.LastName}, {clinic?.Name} \n" + 
+                       $"Please confirm your appointment. Thanks! Dr {clinic?.Doctor?.FirstName} {clinic?.Doctor?.LastName}, {clinic?.Name} \n" +
                        $"Phone Number: {clinic?.PhoneNumber} Login and check your record at https://vaccinationcentre.com";
             }
             else
@@ -1604,7 +1604,7 @@ namespace VaccineAPI.Controllers
                     // Create table
                     PdfPTable table = new PdfPTable(6);
                     table.WidthPercentage = 100;
-                    table.SetWidths(new float[] {  1.5f, 2f, 1.5f, 1.2f, 1.2f, 1.2f });
+                    table.SetWidths(new float[] { 1.5f, 2f, 1.5f, 1.2f, 1.2f, 1.2f });
 
                     // Add headers
                     string[] headers = { "Patient", "Vaccines", "Purchase Value", "Sale Value", "Profit", "Consultation" };
@@ -1687,13 +1687,13 @@ namespace VaccineAPI.Controllers
                     { HorizontalAlignment = Element.ALIGN_RIGHT, });
 
                     table.AddCell(new PdfPCell(new Phrase($"₹{totalSale:N0}", headerFont))
-                    { HorizontalAlignment = Element.ALIGN_RIGHT,  });
+                    { HorizontalAlignment = Element.ALIGN_RIGHT, });
 
                     table.AddCell(new PdfPCell(new Phrase($"₹{totalProfit:N0}", headerFont))
-                    { HorizontalAlignment = Element.ALIGN_RIGHT,  });
+                    { HorizontalAlignment = Element.ALIGN_RIGHT, });
 
                     table.AddCell(new PdfPCell(new Phrase($"₹{totalProfit:N0}", headerFont))
-                    { HorizontalAlignment = Element.ALIGN_RIGHT,  });
+                    { HorizontalAlignment = Element.ALIGN_RIGHT, });
 
                     document.Add(table);
 
@@ -1704,8 +1704,8 @@ namespace VaccineAPI.Controllers
                         $"\nTotal Purchase Value: {schedules.Count}" +
                         $"\nTotal Sale Value: ₹{totalSale:N0}" +
                         $"\nTotal Profit: ₹{totalProfit:N0}" +
-                        $"\nTotal Consultation: ₹{totalPurchase:N0}"+
-                        $"\nGrand total cash: ₹{totalSale:N0}",             
+                        $"\nTotal Consultation: ₹{totalPurchase:N0}" +
+                        $"\nGrand total cash: ₹{totalSale:N0}",
                         headerFont);
                     summary.SpacingBefore = 20f;
                     document.Add(summary);

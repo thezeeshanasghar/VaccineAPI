@@ -109,11 +109,11 @@ namespace VaccineAPI.Controllers
                 return new Response<List<BrandDTO>>(true, null, brandDTOs);
             }
         }
-          [HttpPost]
+        [HttpPost]
         public async Task<Response<VaccineDTO>> Post(VaccineDTO vaccineDTO)
         {
             Vaccine vaccinedb = _mapper.Map<Vaccine>(vaccineDTO);
-            
+
             _db.Vaccines.Add(vaccinedb);
             await _db.SaveChangesAsync();
 
@@ -122,9 +122,9 @@ namespace VaccineAPI.Controllers
             Brand dbBrand = new Brand
             {
                 VaccineId = vaccinedb.Id,
-                Name = "Local" 
+                Name = "Local"
             };
-        
+
             _db.Brands.Add(dbBrand);
             await _db.SaveChangesAsync();
 
@@ -135,9 +135,9 @@ namespace VaccineAPI.Controllers
                 BrandAmount newBrandAmount = new BrandAmount
                 {
                     DoctorId = doctor.Id,
-                    BrandId = dbBrand.Id,  
-                    Amount = 0,  
-                    Count = 0    
+                    BrandId = dbBrand.Id,
+                    Amount = 0,
+                    Count = 0
                 };
                 brandAmounts.Add(newBrandAmount);
             }
@@ -146,7 +146,7 @@ namespace VaccineAPI.Controllers
             return new Response<VaccineDTO>(true, null, vaccineDTO);
         }
 
-       [HttpPut("{id}")]
+        [HttpPut("{id}")]
         public Response<VaccineDTO> Put(long id, VaccineDTO vaccineDTO)
         {
             var dbVaccine = _db.Vaccines.Where(x => x.Id == id).FirstOrDefault();
@@ -160,8 +160,8 @@ namespace VaccineAPI.Controllers
             dbVaccine.MaxAge = vaccineDTO.MaxAge;
             dbVaccine.Validity = vaccineDTO.Validity;
             _db.SaveChanges();
-           return new Response<VaccineDTO>(true, null, vaccineDTO);
-        }        
+            return new Response<VaccineDTO>(true, null, vaccineDTO);
+        }
 
         [HttpDelete("{id}")]
         public Response<string> Delete(long id)

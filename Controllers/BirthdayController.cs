@@ -70,7 +70,7 @@ Website: https://vaccinationcentre.com";
 
                 try
                 {
-                    UserEmail.SendEmail(emailTo,emailBody,$"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!");
+                    UserEmail.SendEmail(emailTo, emailBody, $"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!");
 
                     return new Response<object>(true,
                         "Birthday email sent successfully.",
@@ -117,7 +117,7 @@ Website: https://vaccinationcentre.com";
                     c.DOB.Month == inputDate.Month
                     && c.DOB.Day == inputDate.Day
                     && c.Clinic.DoctorId == doctorId // Filter by DoctorId
-                    && c.IsInactive==false // Filter out inactive records
+                    && c.IsInactive == false // Filter out inactive records
                 )
                 .ToList();
 

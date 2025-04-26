@@ -7,7 +7,7 @@ namespace VaccineAPI.ModelDTO
 
     public class BookingDTO
     {
-        public string ChildName  { get; set; }
+        public string ChildName { get; set; }
         public string FatherName { get; set; }
         public string DOB { get; set; }
         public string Vaccines { get; set; }

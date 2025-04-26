@@ -123,7 +123,7 @@ namespace VaccineAPI.Controllers
 
                 // Get all clinics for this doctor
                 var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
-                
+
                 // If this is the only clinic for the doctor, set it as online
                 if (clinicList.Count == 1)
                 {

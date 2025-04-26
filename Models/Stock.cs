@@ -4,30 +4,30 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VaccineAPI.Models
 {
     // [Table("stock")]
-   public class Stock
-{
-    [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
+    public class Stock
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int Id { get; set; }
 
-    [Required]
-    public long BrandId { get; set; }
+        [Required]
+        public long BrandId { get; set; }
 
-    [Required]
-    [Range(1, int.MaxValue)]
-    public int Quantity { get; set; }
+        [Required]
+        [Range(1, int.MaxValue)]
+        public int Quantity { get; set; }
 
-    [Required]
-    [Column(TypeName = "decimal(18,2)")]
-    public decimal StockAmount { get; set; }
+        [Required]
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal StockAmount { get; set; }
 
-    [Required]
-    public int BillId { get; set; }
+        [Required]
+        public int BillId { get; set; }
 
-    [ForeignKey("BrandId")]
-    public virtual Brand Brand { get; set; }
+        [ForeignKey("BrandId")]
+        public virtual Brand Brand { get; set; }
 
-    [ForeignKey("BillId")]
-    public virtual Bill Bill { get; set; }
-}
+        [ForeignKey("BillId")]
+        public virtual Bill Bill { get; set; }
+    }
 }

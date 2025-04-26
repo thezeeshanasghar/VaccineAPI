@@ -936,8 +936,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        [HttpGet("{id}/Download-Schedule-PDF")] 
-
+        [HttpGet("{id}/Download-Schedule-PDF")]
         public IActionResult GenerateVerifySchedule(int id)
         {
             var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/{id}/Verification-Schedule-PDF";
@@ -1183,50 +1182,6 @@ namespace VaccineAPI.Controllers
                                 {
                                     cvd.DoseId = ds.DoseId;
                                 }
-
-                                // if (ds.Dose.Name.StartsWith("BCG") || ds.Dose.Name.StartsWith("HBV") ||
-                                //     ds.Dose.Name.Equals("OPV # 1"))
-                                // {
-                                //     cvd.IsDone = true;
-                                //     cvd.Due2EPI = true;
-                                //     cvd.GivenDate = childDB.DOB;
-                                // }
-                                // else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 1", StringComparison.OrdinalIgnoreCase) ||
-                                //            ds.Dose.Name.Equals("Pneumococcal # 1", StringComparison.OrdinalIgnoreCase) ||
-                                //            ds.Dose.Name.Equals("Rota Virus GE # 1", StringComparison.OrdinalIgnoreCase))
-                                // // ds.Dose.Name.Equals ("DTaP 1", StringComparison.OrdinalIgnoreCase)
-                                // {
-                                //     cvd.IsDone = true;
-                                //     cvd.Due2EPI = true;
-                                //     DateTime d = childDB.DOB;
-                                //     cvd.GivenDate = d.AddDays(42);
-                                // }
-                                // else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 2", StringComparison.OrdinalIgnoreCase) ||
-                                //            ds.Dose.Name.Equals("Pneumococcal # 2", StringComparison.OrdinalIgnoreCase) ||
-                                //            ds.Dose.Name.Equals("Rota Virus GE # 2", StringComparison.OrdinalIgnoreCase))
-                                // // ds.Dose.Name.Equals ("DTaP 2", StringComparison.OrdinalIgnoreCase)
-                                // {
-                                //     cvd.IsDone = true;
-                                //     cvd.Due2EPI = true;
-                                //     DateTime d = childDB.DOB;
-                                //     cvd.GivenDate = d.AddDays(70);
-                                // }
-                                // else if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib # 3", StringComparison.OrdinalIgnoreCase) ||
-                                //            ds.Dose.Name.Equals("Pneumococcal # 3", StringComparison.OrdinalIgnoreCase))
-                                // // ds.Dose.Name.Equals ("DTaP 3", StringComparison.OrdinalIgnoreCase)
-                                // {
-                                //     cvd.IsDone = true;
-                                //     cvd.Due2EPI = true;
-                                //     DateTime d = childDB.DOB;
-                                //     cvd.GivenDate = d.AddDays(98);
-                                // }
-                                // else if (ds.Dose.Name.Equals("Measles # 1", StringComparison.OrdinalIgnoreCase))
-                                // {
-                                //     cvd.IsDone = true;
-                                //     cvd.Due2EPI = true;
-                                //     DateTime d = childDB.DOB;
-                                //     cvd.GivenDate = d.AddMonths(9);
-                                // }
                             }
 
                             if (ds.Dose.Name.StartsWith("HPV") && ds.Dose.DoseOrder == 3) cvd.IsSkip = true;
@@ -1302,9 +1257,6 @@ namespace VaccineAPI.Controllers
                 //  u.ParentSMS(c);
                 return new Response<ChildDTO>(true, null, childDTO);
             }
-            // var cache = Configuration.CacheOutputConfiguration().GetCacheOutputProvider(Request);
-            // cache.RemoveStartsWith(Configuration.CacheOutputConfiguration().MakeBaseCachekey((DoctorController t) =>
-            // t.GetAllChildsOfaDoctor(0, 0, 20, "")));
         }
 
         [HttpPost("followup")]
@@ -1637,14 +1589,14 @@ namespace VaccineAPI.Controllers
             // Get the last two digits of the current year
             var currentYear = DateTime.UtcNow.Year;
             var yearPrefix = currentYear.ToString().Substring(2); // "25" for 2025
-        
+
             // Check if an invoice already exists for the given doseId and childId
             var existingInvoice = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == childId);
             if (existingInvoice != null)
             {
                 return existingInvoice.InvoiceId;
             }
-        
+
             // Get all valid invoice numbers for the current year
             var validInvoiceNumbers = _db.Invoices
                 .AsEnumerable()
@@ -1652,15 +1604,15 @@ namespace VaccineAPI.Controllers
                 .Where(id => !string.IsNullOrEmpty(id) && id.StartsWith(yearPrefix) && long.TryParse(id.Substring(2), out _))
                 .Select(id => long.Parse(id.Substring(2))) // Extract the numeric part after the year prefix
                 .ToList();
-        
+
             // Determine the next invoice number
             var nextInvoiceNumber = validInvoiceNumbers.Any()
                 ? validInvoiceNumbers.Max() + 1
                 : 1; // Start from 1 if no invoices exist for the current year
-        
+
             // Format the invoice number as "YY000001"
             string invoiceNumber = $"{yearPrefix}{nextInvoiceNumber:D6}";
-        
+
             return invoiceNumber;
         }
 
@@ -1685,7 +1637,7 @@ namespace VaccineAPI.Controllers
             var fileName = $"{dbChild.Name.Replace(" ", "")}_Invoice_{DateTime.UtcNow.AddHours(5).Date:MMMM-dd-yyyy}.pdf";
             return File(output.ToArray(), "application/pdf", fileName);
         }
-        
+
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Verification-Invoice-PDF")]
         public IActionResult VerificationInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
         {
@@ -2078,8 +2030,8 @@ namespace VaccineAPI.Controllers
                 Name = childData.Name ?? "Unknown",
                 FatherName = childData.FatherName ?? "Unknown",
             };
-            
-             var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
+
+            var qrCodeUrl = $"{baseUrl}/child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Download-Invoice-PDF";
             try
             {
 
@@ -2106,14 +2058,14 @@ namespace VaccineAPI.Controllers
 
 
             }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error generating QR code: {ex.Message}");
-                }
-                document.Close();
-                output.Seek(0, SeekOrigin.Begin);
-                return output;
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error generating QR code: {ex.Message}");
             }
+            document.Close();
+            output.Seek(0, SeekOrigin.Begin);
+            return output;
+        }
 
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
         public IActionResult GenerateVerifyInvoicePdf(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
@@ -2471,7 +2423,7 @@ namespace VaccineAPI.Controllers
                 return NotFound(new { message = "Child not found." });
             }
 
-              MemoryStream output = CreatePID(childId);
+            MemoryStream output = CreatePID(childId);
 
             if (output == null)
             {
@@ -2628,7 +2580,7 @@ namespace VaccineAPI.Controllers
                 PaddingBottom = 6f,
                 PaddingTop = 6f
             });
-            
+
             document.Add(detailsTable);
 
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
@@ -2673,7 +2625,11 @@ namespace VaccineAPI.Controllers
                 return null;
             }
 
-            return File(output.ToArray(), "application/pdf", "Immunization-Record.pdf");
+            var childDetails = _db.Childs.Where(x => x.Id == childId).FirstOrDefault();
+            var fileName = childDetails.Name.Replace(" ", "_") + "_Travel_Immunization_" +
+                          DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+            Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileName}\"");
+            return File(output.ToArray(), "application/pdf");
         }
 
         [HttpGet("Travel-PDF-Download-Verification/{childId}")]
@@ -2704,24 +2660,25 @@ namespace VaccineAPI.Controllers
                 return null;
             }
             string patientName = childDetails.Name;
-            string relation = childDetails.FatherName; 
+            string relation = childDetails.FatherName;
             DateTime dob = childDetails.DOB;
             string passport = childDetails.CNIC;
             string city = childDetails.City;
             string Nationality = "Pakistani";
             string mrNumber = childDetails.City;
             string clinicName = childDetails.Clinic.Name;
-            string doctorDetails = $"{childDetails.Clinic.Doctor.DisplayName}"; // Adjust based on available fields
-            string qualification = childDetails.Clinic.Doctor.Qualification;
+            string doctorDetails = childDetails.Clinic.Doctor.DisplayName;
+            string additionalInfo = childDetails.Clinic.Doctor.AdditionalInfo;
             string clinicAddress = childDetails.Clinic.Address;
+            string clinicPhoneNumber = childDetails.Clinic.PhoneNumber;
             var output = new MemoryStream();
-            var customHeight = 550f; 
-            var customWidth = 600f; 
+            var customHeight = 550f;
+            var customWidth = 600f;
             var customSize = new Rectangle(customWidth, customHeight);
             using (var document = new Document(customSize))
             {
                 PdfWriter writer = PdfWriter.GetInstance(document, output);
-                writer.PageEvent = new FooterPageEvent(_db,childId);
+                writer.PageEvent = new FooterPageEvent(_db, childId);
                 document.Open();
                 var headerTable = new PdfPTable(2);
                 headerTable.WidthPercentage = 100;
@@ -2730,37 +2687,16 @@ namespace VaccineAPI.Controllers
                 PdfPCell headerCell = new PdfPCell();
                 headerCell.Border = PdfPCell.NO_BORDER;
                 headerCell.AddElement(new Paragraph(doctorDetails, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
-                string[] words = qualification.Split(' ');
-                string firstLine = string.Join(" ", words.Take(4));
-                string secondLine = string.Join(" ", words.Skip(4));
-                headerCell.AddElement(new Paragraph(firstLine, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
-                if (!string.IsNullOrEmpty(secondLine))
-                {
-                    headerCell.AddElement(new Paragraph(secondLine, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
-                }
+                headerCell.AddElement(new Paragraph(additionalInfo, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
                 headerCell.AddElement(new Paragraph(clinicName, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
-                string[] word = clinicAddress.Split(
-                    new[] { ' ' },
-                    StringSplitOptions.RemoveEmptyEntries
-                );
-                string firstLines = string.Join(" ", word.Take(6));
-                string secondLines = string.Join(" ", word.Skip(6));
-                if (!string.IsNullOrEmpty(firstLine))
-                {
-                    headerCell.AddElement(new Paragraph(firstLines, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
-                }
-
-                if (!string.IsNullOrEmpty(secondLine))
-                {
-                    headerCell.AddElement(new Paragraph(secondLines, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
-                }
-
+                headerCell.AddElement(new Paragraph(clinicAddress, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
+                headerCell.AddElement(new Paragraph("Phone: " + clinicPhoneNumber, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
                 headerTable.AddCell(headerCell);
                 string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "logo-vaccinepk-new.png");
                 if (System.IO.File.Exists(logoPath))
                 {
                     var logo = Image.GetInstance(logoPath);
-                    logo.ScaleToFit(150f, 150f); 
+                    logo.ScaleToFit(150f, 150f);
                     PdfPCell logoCell = new PdfPCell(logo)
                     {
                         Border = PdfPCell.NO_BORDER,
@@ -2780,8 +2716,8 @@ namespace VaccineAPI.Controllers
                 document.Add(title);
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
                 patientTable.SetWidths(new float[] { 2, 2, 2, 2 });
-                patientTable.DefaultCell.BorderColor = BaseColor.LightGray; 
-                patientTable.DefaultCell.BorderWidth = 0.5f; 
+                patientTable.DefaultCell.BorderColor = BaseColor.LightGray;
+                patientTable.DefaultCell.BorderWidth = 0.5f;
                 var cellFontBold = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
                 var cellFontNormal = FontFactory.GetFont(FontFactory.HELVETICA, 10);
                 patientTable.AddCell(CreateCell("Name:", cellFontBold, BaseColor.LightGray));
@@ -2795,7 +2731,7 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell("City:", cellFontBold, BaseColor.LightGray));
                 patientTable.AddCell(CreateCell(city, cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell("Nationality:", cellFontBold, BaseColor.LightGray));
-                patientTable.AddCell(CreateCell(Nationality, cellFontNormal, BaseColor.White)); 
+                patientTable.AddCell(CreateCell(Nationality, cellFontNormal, BaseColor.White));
                 document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
                 document.Add(patientTable);
 
@@ -2848,7 +2784,7 @@ namespace VaccineAPI.Controllers
                     string brand = schedule.Brand?.Name ?? "";
                     string manufacturer = schedule.Manufacturer ?? "N/A";
                     string batchLot = schedule.Lot ?? "N/A";
-                    string dateGiven = (schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue) ? schedule.GivenDate.Value.ToString("dd/MM/yyyy"): "Due";
+                    string dateGiven = (schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue) ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
                     string expiry = schedule.Expiry?.ToString("dd/MM/yyyy") ?? "";
                     string validity = schedule.Validity?.ToString("dd/MM/yyyy") ?? "";
 
@@ -2940,83 +2876,6 @@ namespace VaccineAPI.Controllers
             return output;
         }
 
-
-        // private class FooterPageEvent : PdfPageEventHelper
-        // {
-        //     private readonly Context _db;
-        //     private readonly int _childId;
-
-        //     public FooterPageEvent(Context db, int childId)
-        //     {
-        //         _db = db;
-        //         _childId = childId;
-        //     }
-
-        //     public override void OnEndPage(PdfWriter writer, Document document)
-        //     {
-        //         PdfContentByte cb = writer.DirectContent;
-        //         float footerY = 100f; 
-        //         int currentYear = DateTime.Now.Year;
-        //         Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-        //         Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
-        //         Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
-        //         Font blueFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8);
-
-        //         var clinicDetails = _db
-        //             .Childs.Include(c => c.Clinic)
-        //             .Where(c => c.Id == _childId)
-        //             .Select(c => new { c.Clinic.Name, c.Clinic.RegNo })
-        //             .FirstOrDefault();
-
-        //         if (clinicDetails != null)
-        //         {
-        //             var clinicName = clinicDetails.Name;
-        //             var RegNo = clinicDetails.RegNo;
-        //             Phrase phrase = new Phrase();
-        //             phrase.Add(new Chunk($"{clinicName} ", footerFont1));
-        //             phrase.Add(new Chunk($"{RegNo}", footerFont));
-        //             ColumnText.ShowTextAligned(
-        //                 cb,
-        //                 Element.ALIGN_LEFT,
-        //                 phrase,
-        //                 document.LeftMargin + 5,
-        //                 footerY + 0,
-        //                 0
-        //             );
-        //         }
-        //         else
-        //         {
-        //             ColumnText.ShowTextAligned(
-        //                 cb,
-        //                 Element.ALIGN_LEFT,
-        //                 new Phrase("Clinic: Not Found", footerFont),
-        //                 document.LeftMargin + 5,
-        //                 footerY + 0,
-        //                 0
-        //             );
-        //         }
-        //         ColumnText.ShowTextAligned(
-        //             cb,
-        //             Element.ALIGN_RIGHT,
-        //             new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
-        //             document.PageSize.Width - document.RightMargin - 5,
-        //             footerY,
-        //             0
-        //         );
-        //         ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, new Phrase("This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.", regularFont),document.LeftMargin + 5, footerY - 25, 0 );
-        //         PdfPTable contactTable = new PdfPTable(1);
-        //         contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
-        //         PdfPCell contactCell = new PdfPCell(new Phrase("Block F, National Police Foundation, Main PWD Road, Islamabad           Phone: 051 5735006        info@vaccine.pk",footerFont))
-        //         {
-        //             BackgroundColor = BaseColor.LightGray,
-        //             Border = Rectangle.NO_BORDER,
-        //             Padding = 5,
-        //         };
-        //         contactTable.AddCell(contactCell);
-        //         contactTable.WriteSelectedRows(0, -1, document.LeftMargin, footerY - 30, cb);
-        //     }
-        // }
-
         private class FooterPageEvent : PdfPageEventHelper
         {
             private readonly Context _db;
@@ -3061,10 +2920,10 @@ namespace VaccineAPI.Controllers
                     Phrase phrase = new Phrase();
                     phrase.Add(new Chunk($"{clinicName} ", footerFont1));
                     phrase.Add(new Chunk($"({regNo})", footerFont));
-                    ColumnText.ShowTextAligned(cb,Element.ALIGN_LEFT,phrase,document.LeftMargin + 5,footerY + 0, 0);
+                    ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerY + 0, 0);
                     PdfPTable contactTable = new PdfPTable(1);
                     contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
-                    PdfPCell contactCell = new PdfPCell(new Phrase($"{address}           Phone: {phoneNumber}        info@vaccine.pk", footerFont ))
+                    PdfPCell contactCell = new PdfPCell(new Phrase($"{address}           Phone: {phoneNumber}        info@vaccine.pk", footerFont))
                     {
                         BackgroundColor = BaseColor.LightGray,
                         Border = Rectangle.NO_BORDER,
@@ -3089,7 +2948,7 @@ namespace VaccineAPI.Controllers
                     cb,
                     Element.ALIGN_RIGHT,
                     new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
-                    document.PageSize.Width - document.RightMargin - 5,footerY, 0
+                    document.PageSize.Width - document.RightMargin - 5, footerY, 0
                 );
 
                 // Add footer text

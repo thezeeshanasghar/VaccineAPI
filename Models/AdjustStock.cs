@@ -20,7 +20,7 @@ namespace VaccineAPI.Models
         // [Required]
         // [StringLength(200)]
         public string Reason { get; set; }
-               
+
         public DateTime Date { get; set; }
 
         // Navigation property

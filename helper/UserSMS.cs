@@ -7,15 +7,15 @@ using VaccineAPI.ModelDTO;
 
 namespace VaccineAPI
 {
-    public  class UserSMS
+    public class UserSMS
     {
-       public Context _db;
-         
+        public Context _db;
+
 
         public UserSMS(Context context)
         {
             _db = context;
-        
+
         }
         static TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
         public string DoctorSMS(DoctorDTO doctor)
@@ -48,10 +48,10 @@ namespace VaccineAPI
                   + "\nClinic: " + child.Clinic.PhoneNumber + "\nhttps://vaccs.io/";
 
             var response2 = SendSMS(child.User.CountryCode, child.User.MobileNumber, child.Email, sms2);
-             addMessageToDB(child.User.MobileNumber, response1, sms1, child.Clinic.Doctor.User.Id);
-             addMessageToDB(child.User.MobileNumber, response2, sms2, child.Clinic.Doctor.User.Id);
-             minusDoctorSMSCount(child.Clinic.Doctor);
-             minusDoctorSMSCount(child.Clinic.Doctor);
+            addMessageToDB(child.User.MobileNumber, response1, sms1, child.Clinic.Doctor.User.Id);
+            addMessageToDB(child.User.MobileNumber, response2, sms2, child.Clinic.Doctor.User.Id);
+            minusDoctorSMSCount(child.Clinic.Doctor);
+            minusDoctorSMSCount(child.Clinic.Doctor);
             return response1 + response2;
 
         }
@@ -119,19 +119,19 @@ namespace VaccineAPI
             sms1 += "Kindly confirm your appointment at " + followUp.Doctor.PhoneNo;
 
             var response1 = SendSMS(followUp.Child.User.CountryCode, followUp.Child.User.MobileNumber, followUp.Child.Email, sms1);
-           addMessageToDB(followUp.Child.User.MobileNumber, response1, sms1, followUp.Child.Clinic.Doctor.User.Id);
+            addMessageToDB(followUp.Child.User.MobileNumber, response1, sms1, followUp.Child.Clinic.Doctor.User.Id);
             minusDoctorSMSCount(followUp.Child.Clinic.Doctor);
 
             return response1;
         }
 
-         public void addMessageToDB(string mobileNumber, string apiResponse, string sms, long userId)
+        public void addMessageToDB(string mobileNumber, string apiResponse, string sms, long userId)
         {
-           // using (VDEntities entities = new VDEntities())
-        
-        //  using (VDEntities entities = new VDEntities())
+            // using (VDEntities entities = new VDEntities())
+
+            //  using (VDEntities entities = new VDEntities())
             {
-               
+
                 Message m = new Message();
                 m.MobileNumber = mobileNumber;
                 m.ApiResponse = apiResponse;
@@ -143,30 +143,30 @@ namespace VaccineAPI
         }
         public void minusDoctorSMSCount(Doctor doctor)
         {
-           // using (VDEntities entities = new VDEntities())
+            // using (VDEntities entities = new VDEntities())
             {
-                Doctor dbDoctor = _db.Doctors.Where(x=>x.Id == doctor.Id).FirstOrDefault();
-                dbDoctor.SMSLimit--; 
+                Doctor dbDoctor = _db.Doctors.Where(x => x.Id == doctor.Id).FirstOrDefault();
+                dbDoctor.SMSLimit--;
                 _db.SaveChanges();
             }
         }
-        
+
         public string SendSMS(string CountryCode, string MobileNumber, string Email, string text)
         {
 
-        //     //string webTarget = "http://icworldsms.com:82/Service.asmx/SendSMS?SessionId=Ud1vaibfSexGvkohsFVVVEzoWrhUKfpylFZqOFVy9EB7CaifKP&CompaignName=text&MobileNo={0}&MaskName=VACCS+IO&Message={1}&MessageType=English";
-        //     //string url = String.Format(webTarget, "0" + MobileNumber, HttpUtility.0UrlEncode(text));
+            //     //string webTarget = "http://icworldsms.com:82/Service.asmx/SendSMS?SessionId=Ud1vaibfSexGvkohsFVVVEzoWrhUKfpylFZqOFVy9EB7CaifKP&CompaignName=text&MobileNo={0}&MaskName=VACCS+IO&Message={1}&MessageType=English";
+            //     //string url = String.Format(webTarget, "0" + MobileNumber, HttpUtility.0UrlEncode(text));
 
-          //  string webTarget = "http://58.65.138.38:8181/sc/smsApi/sendSms?username=vccsio&password=123456&mobileNumber={0}&message={1}&mask=VACCS%20IO";
-          string webTarget = "https://brandyourtext.com/sms/api/send?username=vaccsio&password=123456&mask=VACCS%20IO&mobile={0}&message={1}";
-         // view-source:https://brandyourtext.com/sms/api/send?username=vaccsio&password=123456&mask=VACCS%20IO&mobile=3143041544&message=Test%20Message
+            //  string webTarget = "http://58.65.138.38:8181/sc/smsApi/sendSms?username=vccsio&password=123456&mobileNumber={0}&message={1}&mask=VACCS%20IO";
+            string webTarget = "https://brandyourtext.com/sms/api/send?username=vaccsio&password=123456&mask=VACCS%20IO&mobile={0}&message={1}";
+            // view-source:https://brandyourtext.com/sms/api/send?username=vaccsio&password=123456&mask=VACCS%20IO&mobile=3143041544&message=Test%20Message
             string url = String.Format(webTarget, "92" + MobileNumber, HttpUtility.UrlEncode(text));
 
-          return Controllers.VaccineController.sendRequest(url);
-        
-           //return ("temprorarily");
+            return Controllers.VaccineController.sendRequest(url);
+
+            //return ("temprorarily");
         }
 
-        
+
     }
 }

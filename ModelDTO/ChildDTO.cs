@@ -31,7 +31,7 @@ namespace VaccineAPI.ModelDTO
         public bool IsVerified { get; set; }
         public bool IsInactive { get; set; }
         public long ClinicId { get; set; }
-        
+
         [JsonIgnore]
         public ClinicDTO Clinic { get; set; }
 
@@ -47,6 +47,6 @@ namespace VaccineAPI.ModelDTO
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime InvoiceDate { get; set; }
 
-   }
+    }
 
 }

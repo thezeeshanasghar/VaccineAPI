@@ -1078,8 +1078,7 @@ namespace VaccineAPI.Controllers
                 Child childDB = _mapper.Map<Child>(childDTO);
 
 
-                User user =
-                    _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
+                User user = _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
 
                 if (user == null)
                 {

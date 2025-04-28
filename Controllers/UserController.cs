@@ -134,9 +134,9 @@ namespace VaccineAPI.Controllers
                     return new Response<UserDTO>(false, "Personal Assistant not found.", null);
                 else
                     userDTO.PAId = paDb.Id;
+                    userDTO.DoctorId = paDb.DoctorId;
             }
             
-
             return new Response<UserDTO>(true, null, userDTO);
         }
 

@@ -35,6 +35,18 @@ namespace VaccineAPI.Controllers
             return Ok(personalAssistant);
         }
 
+        [HttpGet("doctor/{doctorId:long}")]
+        public ActionResult<IEnumerable<PersonalAssistant>> GetByDoctorId(long doctorId)
+        {
+            var personalAssistants = _db.PersonalAssistant.Where(pa => pa.DoctorId == doctorId).ToList();
+            if (!personalAssistants.Any())
+            {
+                return NotFound(new { message = "No Personal Assistants found for the given Doctor ID." });
+            }
+
+            return Ok(personalAssistants);
+        }
+
         [HttpPost]
         public ActionResult<PersonalAssistant> Create([FromBody] PersonalAssistant personalAssistant)
         {
@@ -63,8 +75,14 @@ namespace VaccineAPI.Controllers
                 return NotFound(new { message = "Personal Assistant not found." });
             }
 
-            existingAssistant.Name = personalAssistant.Name;
-            existingAssistant.DoctorId = personalAssistant.DoctorId;
+            existingAssistant.AllowStock = personalAssistant.AllowStock;
+            existingAssistant.AllowAlert = personalAssistant.AllowAlert;
+            existingAssistant.AllowClinic = personalAssistant.AllowClinic;
+            existingAssistant.AllowSchedule = personalAssistant.AllowSchedule;
+            existingAssistant.AllowVacation = personalAssistant.AllowVacation;
+            existingAssistant.AllowAnalytics = personalAssistant.AllowAnalytics;
+            existingAssistant.AllowChild = personalAssistant.AllowChild;
+            existingAssistant.IsVerified = personalAssistant.IsVerified;
 
             _db.Entry(existingAssistant).State = EntityState.Modified;
             _db.SaveChanges();

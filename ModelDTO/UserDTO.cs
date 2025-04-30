@@ -20,6 +20,7 @@ namespace VaccineAPI.ModelDTO
         public string ProfileImage { get; set; }
         public string DoctorType { get; set; }
         public long PAId { get; set; }
+        public bool IsVerified { get; set; }
     }
 
 }

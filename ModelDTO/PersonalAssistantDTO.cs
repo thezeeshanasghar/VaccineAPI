@@ -4,6 +4,7 @@ namespace VaccineAPI.ModelDTO
     {
         public long Id { get; set; }
         public string Name { get; set; }
+        public string Email { get; set; }
         public long DoctorId { get; set; }
         public string MobileNumber { get; set; }
         public string Password { get; set; }

@@ -66,7 +66,26 @@ namespace VaccineAPI
 
             SendEmail(child.Email, body);
         }
+        
+        #endregion
+        
+        #region Personal Assistant Email
+        
+        public static void PersonalAssistantLoginDetails(PersonalAssistant pa, string password)
+        {
+            string body = ""
+                   + "Hello " + "<b>" + pa.Name + "</b>, <br /><br />"
+                   + "You have been registered as a Personal Assistant in the Vaccination Centre system.<br /><br />"
+                   + "Your login details are:<br />"
+                   + "Mobile Number: " + pa.User.MobileNumber + "<br />"
+                   + "Password: " + password + "<br /><br />"
+                   + "Please login at: <a href='https://doctor.vaccinationcentre.com/loginpa'>https://doctor.vaccinationcentre.com/loginpa</a><br /><br />"
+                   + "Regards,<br />"
+                   + "Vaccination Centre Team";
 
+            SendEmail(pa.Email, body, "Your Personal Assistant Account Details");
+        }
+        
         #endregion
 
         public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com")

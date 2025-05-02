@@ -119,7 +119,6 @@ namespace VaccineAPI.Controllers
                 return new Response<PersonalAssistantDTO>(false, "Personal Assistant with this mobile number already exists.", null);
             }
 
-            // Validate email is provided
             if (string.IsNullOrEmpty(personalAssistantDTO.Email))
             {
                 return new Response<PersonalAssistantDTO>(false, "Email address is required.", null);
@@ -130,7 +129,7 @@ namespace VaccineAPI.Controllers
                 MobileNumber = personalAssistantDTO.MobileNumber,
                 Password = personalAssistantDTO.Password,
                 CountryCode = personalAssistantDTO.CountryCode,
-                UserType = "PA", // UserType for Personal Assistant
+                UserType = "PA",
             };
             _db.Users.Add(user);
             _db.SaveChanges();
@@ -141,7 +140,6 @@ namespace VaccineAPI.Controllers
                 Email = personalAssistantDTO.Email,
                 DoctorId = personalAssistantDTO.DoctorId,
                 UserId = user.Id,
-                // Default values for new PA
                 AllowStock = false,
                 AllowAlert = false,
                 AllowClinic = false,
@@ -158,17 +156,13 @@ namespace VaccineAPI.Controllers
 
             try
             {
-                // Load relations needed for email
                 personalAssistant.User = user;
                 
-                // Send login details via email
                 UserEmail.PersonalAssistantLoginDetails(personalAssistant, personalAssistantDTO.Password);
             }
             catch (Exception ex)
             {
-                // Log the error but continue with the signup process
                 Console.WriteLine($"Error sending email: {ex.Message}");
-                // Could return a partial success message
                 return new Response<PersonalAssistantDTO>(true, "Signup successful but failed to send email notification.", personalAssistantDTO);
             }
 

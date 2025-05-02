@@ -105,24 +105,6 @@ namespace VaccineAPI.Controllers
             return Ok(new { message = "Personal Assistant deleted successfully." });
         }
 
-        // [HttpPost("login")]
-        // public ActionResult<Response<PersonalAssistant>> Login([FromBody] PersonalAssistantDTO PersonalAssistantDTO)
-        // {
-        //     if (PersonalAssistantDTO == null || string.IsNullOrEmpty(PersonalAssistantDTO.MobileNumber) || string.IsNullOrEmpty(PersonalAssistantDTO.Password))
-        //     {
-        //         return BadRequest(new { message = "Invalid login data." });
-        //     }
-
-        //     var personalAssistant = _db.Users.FirstOrDefault(pa =>pa.MobileNumber == PersonalAssistantDTO.MobileNumber && pa.UserType == "PA");
-
-        //     if (personalAssistant == null)
-        //     {
-        //         return Unauthorized(new { message = "Invalid Mobile Number or Password." });
-        //     }
-
-        //     return Ok( new Response<PersonalAssistant>(true, "Login successful.", personalAssistant));
-        // }
-
         [HttpPost("signup")]
         public ActionResult<Response<PersonalAssistantDTO>> Signup([FromBody] PersonalAssistantDTO personalAssistantDTO)
         {
@@ -134,7 +116,12 @@ namespace VaccineAPI.Controllers
             var existingUser = _db.Users.FirstOrDefault(x => x.MobileNumber == personalAssistantDTO.MobileNumber && x.UserType == "PA");
             if (existingUser != null)
             {
-                return new Response<PersonalAssistantDTO>( false,"Personal Assistant with this mobile number already exists.",null);
+                return new Response<PersonalAssistantDTO>(false, "Personal Assistant with this mobile number already exists.", null);
+            }
+
+            if (string.IsNullOrEmpty(personalAssistantDTO.Email))
+            {
+                return new Response<PersonalAssistantDTO>(false, "Email address is required.", null);
             }
 
             var user = new User
@@ -142,7 +129,7 @@ namespace VaccineAPI.Controllers
                 MobileNumber = personalAssistantDTO.MobileNumber,
                 Password = personalAssistantDTO.Password,
                 CountryCode = personalAssistantDTO.CountryCode,
-                UserType = "PA", // UserType for Personal Assistant
+                UserType = "PA",
             };
             _db.Users.Add(user);
             _db.SaveChanges();
@@ -150,15 +137,36 @@ namespace VaccineAPI.Controllers
             var personalAssistant = new PersonalAssistant
             {
                 Name = personalAssistantDTO.Name,
+                Email = personalAssistantDTO.Email,
                 DoctorId = personalAssistantDTO.DoctorId,
-                UserId = user.Id, // Link to the User table
+                UserId = user.Id,
+                AllowStock = false,
+                AllowAlert = false,
+                AllowClinic = false,
+                AllowSchedule = false,
+                AllowVacation = false,
+                AllowAnalytics = false,
+                AllowChild = false,
+                IsVerified = false
             };
             _db.PersonalAssistant.Add(personalAssistant);
             _db.SaveChanges();
 
             personalAssistantDTO.Id = personalAssistant.Id;
 
-            return new Response<PersonalAssistantDTO>(true,"Signup successful.",personalAssistantDTO );
+            try
+            {
+                personalAssistant.User = user;
+                
+                UserEmail.PersonalAssistantLoginDetails(personalAssistant, personalAssistantDTO.Password);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending email: {ex.Message}");
+                return new Response<PersonalAssistantDTO>(true, "Signup successful but failed to send email notification.", personalAssistantDTO);
+            }
+
+            return new Response<PersonalAssistantDTO>(true, "Signup successful. Login details sent to email.", personalAssistantDTO);
         }
     }
 }

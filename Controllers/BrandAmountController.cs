@@ -115,7 +115,7 @@ namespace VaccineAPI.Controllers
                     // Create table
                     PdfPTable table = new PdfPTable(7);
                     table.WidthPercentage = 100;
-                    table.SetWidths(new float[] { 0.25f, 1f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f });
+                    table.SetWidths(new float[] { 0.15f, 1.22f, 0.3f, 0.5f, 0.5f, 0.5f, 0.5f });
 
                     // Add headers
                     Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12);
@@ -132,7 +132,7 @@ namespace VaccineAPI.Controllers
                     foreach (var item in brandAmounts)
                     {
                         table.AddCell(new Phrase(i.ToString(), normalFont));
-                        table.AddCell(new Phrase(item.Brand?.Name ?? "", normalFont));
+                        table.AddCell(new Phrase(item.Brand?.Name + " (" + item.Brand?.Vaccine?.Name + ")", normalFont));
                         table.AddCell(new Phrase(item.Count.ToString(), normalFont));
                         table.AddCell(new Phrase($"₹{item.PurchasedAmt:N2}", normalFont));
                         table.AddCell(new Phrase($"₹{(item.PurchasedAmt * item.Count):N2}", normalFont));

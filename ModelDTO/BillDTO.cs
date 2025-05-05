@@ -13,6 +13,7 @@ namespace VaccineAPI.ModelDTO
         public DateTime PaidDate { get; set; }
         [Required]
         public long DoctorId { get; set; }
+        public long ClinicId { get; set; }
         public string DoctorName { get; set; }
     }
 }

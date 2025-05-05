@@ -18,6 +18,8 @@ namespace VaccineAPI.ModelDTO
         public BrandDTO Brand { get; set; }
 
         public long DoctorId { get; set; }
+        public long ClinicId { get; set; }
+        public ClinicDTO Clinic { get; set; }
         [JsonIgnore]
         public DoctorDTO Doctor { get; set; }
         public string VaccineName { get; set; }

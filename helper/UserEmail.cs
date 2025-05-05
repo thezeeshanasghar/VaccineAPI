@@ -46,10 +46,7 @@ namespace VaccineAPI
             //TODO: website and android link
             SendEmail(child.Email, body);
         }
-        #endregion
 
-        #region Child Email
-        //Forgot Password Email
         public static void DoctorForgotPassword(Doctor doctor)
         {
             string body = ""
@@ -58,6 +55,9 @@ namespace VaccineAPI
 
             SendEmail(doctor.Email, body);
         }
+      
+      
+      
         public static void ParentForgotPassword(Child child)
         {
             string body = ""
@@ -66,10 +66,7 @@ namespace VaccineAPI
 
             SendEmail(child.Email, body);
         }
-        
-        #endregion
-        
-        #region Personal Assistant Email
+
         
         public static void PersonalAssistantLoginDetails(PersonalAssistant pa, string password)
         {
@@ -86,7 +83,6 @@ namespace VaccineAPI
             SendEmail(pa.Email, body, "Your Personal Assistant Account Details");
         }
         
-        #endregion
 
         public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com")
         {

@@ -14,6 +14,8 @@ namespace VaccineAPI.Models
         public DateTime PaidDate { get; set; }
         public long DoctorId { get; set; }
         public virtual Doctor Doctor { get; set; }
+        public long ClinicId { get; set; }
+        public virtual Clinic Clinic { get; set; }
         public virtual ICollection<Stock> Stocks { get; set; }
     }
 }

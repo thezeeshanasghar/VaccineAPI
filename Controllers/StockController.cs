@@ -112,6 +112,8 @@ namespace VaccineAPI.Controllers
                     IsPaid = firstStock.IsPaid,
                     DoctorId = firstStock.DoctorId,
                     PaidDate = firstStock.PaidDate,
+                    ClinicId = firstStock.ClinicId
+                    
                 };
 
                 _db.Bills.Add(bill);

@@ -138,10 +138,10 @@ namespace VaccineAPI.Controllers
                 }
                 else
                     userDTO.PAId = paDb.Id;
-                    userDTO.DoctorId = paDb.DoctorId;
-                    userDTO.IsVerified = paDb.IsVerified;
+                userDTO.DoctorId = paDb.DoctorId;
+                userDTO.IsVerified = paDb.IsVerified;
             }
-            
+
             return new Response<UserDTO>(true, null, userDTO);
         }
 

@@ -46,10 +46,7 @@ namespace VaccineAPI
             //TODO: website and android link
             SendEmail(child.Email, body);
         }
-        #endregion
 
-        #region Child Email
-        //Forgot Password Email
         public static void DoctorForgotPassword(Doctor doctor)
         {
             string body = ""
@@ -58,6 +55,9 @@ namespace VaccineAPI
 
             SendEmail(doctor.Email, body);
         }
+      
+      
+      
         public static void ParentForgotPassword(Child child)
         {
             string body = ""
@@ -66,24 +66,23 @@ namespace VaccineAPI
 
             SendEmail(child.Email, body);
         }
-<<<<<<< Updated upstream
-=======
-        
+
         
         public static void PersonalAssistantLoginDetails(PersonalAssistant pa, string password)
         {
             string body = ""
-                   + "Hello " + pa.Name + "\n\n"
-                   + "You have been registered as a Personal Assistant in the Vaccination Centre system.\n\n"
-                   + "Your login details are:\n"
-                   + "Mobile Number: " + pa.User.MobileNumber + "\n"
-                   + "Password: " + password + "\n\n"
-                   + "Please login at: https://doctor.vaccinationcentre.com/loginpa\n\n"
-                   + "Regards,\n"
+                   + "Hello " + "<b>" + pa.Name + "</b>, <br /><br />"
+                   + "You have been registered as a Personal Assistant in the Vaccination Centre system.<br /><br />"
+                   + "Your login details are:<br />"
+                   + "Mobile Number: " + pa.User.MobileNumber + "<br />"
+                   + "Password: " + password + "<br /><br />"
+                   + "Please login at: <a href='https://doctor.vaccinationcentre.com/loginpa'>https://doctor.vaccinationcentre.com/loginpa</a><br /><br />"
+                   + "Regards,<br />"
                    + "Vaccination Centre Team";
->>>>>>> Stashed changes
 
-        #endregion
+            SendEmail(pa.Email, body, "Your Personal Assistant Account Details");
+        }
+        
 
         public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com")
         {

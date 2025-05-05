@@ -105,6 +105,24 @@ namespace VaccineAPI.Controllers
         //     }
         // }
 
+         [HttpGet("clinic/{clinicId}")]  // Changed route to avoid conflict
+        public Response<List<BillDTO>> GetByClinic(long clinicId)
+        {
+            var bills = _db.Bills
+                .Include(b => b.Doctor)
+                    .ThenInclude(d => d.User)
+                .Include(b => b.Stocks)
+                    .ThenInclude(s => s.Brand)
+                .Where(b => b.ClinicId == clinicId)
+                .ToList();
+
+            if (!bills.Any())
+                return new Response<List<BillDTO>>(false, $"No bills found for clinic ID {clinicId}", null);
+
+            var billDTOs = _mapper.Map<List<BillDTO>>(bills);
+            return new Response<List<BillDTO>>(true, null, billDTOs);
+        }
+
         [HttpPost]
         public Response<BillDTO> Post(BillDTO billDTO)
         {

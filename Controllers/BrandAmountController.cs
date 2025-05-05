@@ -36,6 +36,31 @@ namespace VaccineAPI.Controllers
             return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
         }
 
+        [HttpGet("clinic/{Id}")]
+        public Response<List<BrandAmountDTO>> Getonclinic(int Id)
+        {
+            var brandAmountDBs = _db.BrandAmounts.Include(x => x.Brand).ThenInclude(b => b.Vaccine).Include(x => x.Clinic).Where(x => x.ClinicId == Id).ToList();
+
+            if (brandAmountDBs == null || !brandAmountDBs.Any())
+            {
+                return new Response<List<BrandAmountDTO>>(false,"No brands found for the given clinic ID.",null);
+            }
+
+            var brandAmountDTOs = _mapper.Map<List<BrandAmountDTO>>(brandAmountDBs);
+
+            foreach (var baDTO in brandAmountDTOs)
+            {
+                var brand = _db.Brands.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == baDTO.BrandId);
+
+                if (brand?.Vaccine != null)
+                {
+                    baDTO.VaccineName = brand.Vaccine.Name;
+                }
+            }
+
+            return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
+        }
+
         // [HttpPost]
         // public async Task<ActionResult<BrandAmount>> Post(BrandAmount BrandAmount)
         // {

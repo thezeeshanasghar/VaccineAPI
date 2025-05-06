@@ -59,30 +59,44 @@ namespace VaccineAPI.Controllers
         [HttpPost("{vaccineId}")]
         public async Task<Response<BrandDTO>> Post(BrandDTO vaccineBrandDTO)
         {
+            // Map the DTO to the Brand entity
             Brand dbVaccineBrand = _mapper.Map<Brand>(vaccineBrandDTO);
 
+            // Add the new brand to the database
             _db.Brands.Add(dbVaccineBrand);
             await _db.SaveChangesAsync();
 
-            var doctors = await _db.Doctors.ToListAsync();
+            // Retrieve all doctors and their associated clinics
+            var doctors = await _db.Doctors.Include(d => d.Clinics).ToListAsync();
             List<BrandAmount> brandAmounts = new List<BrandAmount>();
 
+            // Loop through each doctor and their clinics
             foreach (var doctor in doctors)
             {
-                BrandAmount newBrandAmount = new BrandAmount
+                foreach (var clinic in doctor.Clinics)
                 {
-                    DoctorId = doctor.Id,
-                    BrandId = dbVaccineBrand.Id,
-                    Amount = 0,
-                    Count = 0,
-                };
-                brandAmounts.Add(newBrandAmount);
+                    // Create a BrandAmount entry for each clinic
+                    BrandAmount newBrandAmount = new BrandAmount
+                    {
+                        ClinicId = clinic.Id, // Use the clinic's ID
+                        DoctorId = doctor.Id, // Use the doctor's ID
+                        BrandId = dbVaccineBrand.Id, // Use the newly created brand's ID
+                        Amount = 0,
+                        Count = 0,
+                    };
+                    brandAmounts.Add(newBrandAmount);
+                }
             }
+
+            // Add all BrandAmount entries to the database
             _db.BrandAmounts.AddRange(brandAmounts);
 
+            // Save changes to the database
             await _db.SaveChangesAsync();
 
+            // Update the DTO with the new brand's ID
             vaccineBrandDTO.Id = dbVaccineBrand.Id;
+
             return new Response<BrandDTO>(true, null, vaccineBrandDTO);
         }
 

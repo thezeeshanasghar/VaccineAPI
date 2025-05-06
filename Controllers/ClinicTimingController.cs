@@ -27,7 +27,6 @@ namespace VaccineAPI.Controllers
         {
             var list = await _db.ClinicTimings.OrderBy(x => x.Id).ToListAsync();
             List<ClinicTimingDTO> listDTO = _mapper.Map<List<ClinicTimingDTO>>(list);
-
             return new Response<List<ClinicTimingDTO>>(true, null, listDTO);
         }
 
@@ -35,9 +34,7 @@ namespace VaccineAPI.Controllers
         public async Task<Response<ClinicTimingDTO>> GetSingle(long id)
         {
             var dbclinictiming = await _db.ClinicTimings.FirstOrDefaultAsync();
-
             ClinicTimingDTO clinictimingDTO = _mapper.Map<ClinicTimingDTO>(dbclinictiming);
-
             if (dbclinictiming == null)
                 return new Response<ClinicTimingDTO>(false, "Not Found", null);
 
@@ -49,7 +46,6 @@ namespace VaccineAPI.Controllers
         {
             _db.ClinicTimings.Update(ClinicTiming);
             await _db.SaveChangesAsync();
-
             return CreatedAtAction(nameof(GetSingle), new { id = ClinicTiming.Id }, ClinicTiming);
         }
 
@@ -61,7 +57,6 @@ namespace VaccineAPI.Controllers
 
             _db.Entry(ClinicTiming).State = EntityState.Modified;
             await _db.SaveChangesAsync();
-
             return NoContent();
         }
 
@@ -69,15 +64,12 @@ namespace VaccineAPI.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var obj = await _db.ClinicTimings.FindAsync(id);
-
             if (obj == null)
                 return NotFound();
 
             _db.ClinicTimings.Remove(obj);
             await _db.SaveChangesAsync();
-
             return NoContent();
-
         }
 
         [Route("api/clintimings/{clinicId}")]
@@ -113,9 +105,7 @@ namespace VaccineAPI.Controllers
                         existingTiming.ClinicId = updatedTiming.ClinicId;
                     }
                 }
-
                 await _db.SaveChangesAsync();
-
                 return NoContent();
             }
             catch (Exception ex)
@@ -124,14 +114,11 @@ namespace VaccineAPI.Controllers
             }
         }
 
-
-
-
-        ////////// Updated APi
         public class ClinicIdsRequestModel
         {
             public List<long> ClinicIds { get; set; }
         }
+
         [HttpPatch("children/schedules")]
         public async Task<ActionResult<IEnumerable<long>>> GetChildIdsWithSchedulesFromClinic([FromBody] ClinicIdsRequestModel model, [FromQuery] string fromDate, [FromQuery] string toDate)
         {
@@ -196,9 +183,7 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                // Update clinic data
                 var dbClinic = await _db.Clinics.FindAsync(clinicId);
-
                 dbClinic.Name = request.Name;
                 dbClinic.ConsultationFee = request.ConsultationFee;
                 dbClinic.PhoneNumber = request.PhoneNumber;
@@ -207,7 +192,6 @@ namespace VaccineAPI.Controllers
                 dbClinic.RegNo = request.RegNo;
                 // dbClinic.IsOnline = request.IsOnline;
 
-                // Update clinic timings
                 var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();
                 var existingTimings = await _db.ClinicTimings
                     .Where(t => timingIds.Contains(t.Id) && t.ClinicId == dbClinic.Id)
@@ -228,7 +212,6 @@ namespace VaccineAPI.Controllers
                     }
                     else
                     {
-                        // If the timing is new, add it to the database
                         var newTiming = new ClinicTiming
                         {
                             Day = updatedTiming.Day,
@@ -238,13 +221,11 @@ namespace VaccineAPI.Controllers
                             EndTime = updatedTiming.EndTime,
                             ClinicId = dbClinic.Id
                         };
-
                         _db.ClinicTimings.Add(newTiming);
                     }
                 }
                 await _db.SaveChangesAsync();
 
-                // Return the updated clinic data
                 return Ok(new ClinicDTO
                 {
                     Id = dbClinic.Id,
@@ -269,8 +250,6 @@ namespace VaccineAPI.Controllers
                 return StatusCode(500, ex.Message);
             }
         }
-
-
     }
 
 }

@@ -48,19 +48,31 @@ namespace VaccineAPI.Controllers
         {
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
-
             var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
-
             var dbClinic = _mapper.Map<Clinic>(clinicDTO);
-
-
             dbClinic.IsOnline = clinicList.Count == 0;
-
             _db.Clinics.Add(dbClinic);
             _db.SaveChanges();
-
             clinicDTO.Id = dbClinic.Id;
-            clinicDTO.IsOnline = dbClinic.IsOnline; // Ensure the DTO reflects the correct value
+            clinicDTO.IsOnline = dbClinic.IsOnline;
+            var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
+
+            foreach (var vaccine in vaccines)
+            {
+                foreach (var brand in vaccine.Brands)
+                {
+                    BrandAmount ba = new BrandAmount
+                    {
+                        Amount = 0,
+                        DoctorId = clinicDTO.DoctorId, 
+                        Count = 0,
+                        BrandId = brand.Id,
+                        ClinicId = dbClinic.Id, 
+                    };
+                    _db.BrandAmounts.Add(ba);
+                }
+            }
+            _db.SaveChanges();
 
             return new Response<ClinicDTO>(true, null, clinicDTO);
         }

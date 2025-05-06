@@ -190,6 +190,7 @@ namespace VaccineAPI.Controllers
                 return BadRequest($"Error generating PDF: {ex.Message}");
             }
         }
+        
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

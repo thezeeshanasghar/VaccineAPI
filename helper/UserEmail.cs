@@ -83,7 +83,7 @@ namespace VaccineAPI
             SendEmail(pa.Email, body, "Your Personal Assistant Account Details");
         }
         
-
+        #endregion
         public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com")
         {
             using (var client = new HttpClient())

@@ -12,10 +12,11 @@ namespace VaccineAPI.Models
 
         // [Required]
         public long BrandId { get; set; }
-
+        public long ClinicId { get; set; }
         // [Required]
         // [Range(-10000, 10000)]
         public int Adjustment { get; set; }
+        public decimal Price { get; set; }
 
         // [Required]
         // [StringLength(200)]

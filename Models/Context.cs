@@ -33,6 +33,7 @@ namespace VaccineAPI.Models
         public DbSet<Stock> Stocks { get; set; }
         public DbSet<AdjustStock> AdjustStocks { get; set; }
         public DbSet<PersonalAssistant> PersonalAssistant { get; set; }
+        public DbSet<PaAccess> PaAccess { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

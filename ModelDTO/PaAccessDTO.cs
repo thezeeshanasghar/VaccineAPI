@@ -1,3 +1,5 @@
+using VaccineAPI.Models;
+
 namespace VaccineAPI.ModelDTO
 {
     public class PaAccessDTO

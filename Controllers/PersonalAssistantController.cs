@@ -157,8 +157,18 @@ namespace VaccineAPI.Controllers
             try
             {
                 personalAssistant.User = user;
-                
-                UserEmail.PersonalAssistantLoginDetails(personalAssistant, personalAssistantDTO.Password);
+
+                  string body = ""
+                   + "Hello " + personalAssistant.Name + "\n\n"
+                   + "You have been registered as a Personal Assistant in the Vaccination Centre system.\n\n"
+                   + "Your login details are:\n"
+                   + "Mobile Number: " + personalAssistant.User.MobileNumber + "\n"
+                   + "Password: " + personalAssistant.User.Password + "\n\n"
+                   + "Please login at: https://doctor.vaccinationcentre.com/loginpa\n\n"
+                   + "Regards,\n"
+                   + "Vaccination Centre Team";
+
+                UserEmail.SendEmail(personalAssistant.Email, body, "Your Personal Assistant Account Details");
             }
             catch (Exception ex)
             {

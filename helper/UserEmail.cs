@@ -71,13 +71,13 @@ namespace VaccineAPI
         public static void PersonalAssistantLoginDetails(PersonalAssistant pa, string password)
         {
             string body = ""
-                   + "Hello " + "<b>" + pa.Name + "</b>, <br /><br />"
-                   + "You have been registered as a Personal Assistant in the Vaccination Centre system.<br /><br />"
-                   + "Your login details are:<br />"
-                   + "Mobile Number: " + pa.User.MobileNumber + "<br />"
-                   + "Password: " + password + "<br /><br />"
-                   + "Please login at: <a href='https://doctor.vaccinationcentre.com/loginpa'>https://doctor.vaccinationcentre.com/loginpa</a><br /><br />"
-                   + "Regards,<br />"
+                   + "Hello " + pa.Name + "\n\n"
+                   + "You have been registered as a Personal Assistant in the Vaccination Centre system.\n\n"
+                   + "Your login details are:\n"
+                   + "Mobile Number: " + pa.User.MobileNumber + "\n"
+                   + "Password: " + password + "\n\n"
+                   + "Please login at: https://doctor.vaccinationcentre.com/loginpa\n\n"
+                   + "Regards,\n"
                    + "Vaccination Centre Team";
 
             SendEmail(pa.Email, body, "Your Personal Assistant Account Details");

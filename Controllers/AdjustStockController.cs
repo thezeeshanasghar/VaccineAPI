@@ -67,7 +67,7 @@ namespace VaccineAPI.Controllers
                 var brandAmount = await _db.BrandAmounts
                     .Include(b => b.Brand)
                         .ThenInclude(b => b.Vaccine)
-                    .FirstOrDefaultAsync(b => b.BrandId == dto.BrandId && b.DoctorId == dto.DoctorId);
+                    .FirstOrDefaultAsync(b => b.BrandId == dto.BrandId && b.DoctorId == dto.DoctorId && b.ClinicId == dto.ClinicId);
 
                 if (brandAmount == null)
                 {
@@ -88,17 +88,29 @@ namespace VaccineAPI.Controllers
                     return new Response<AdjustStockDTO>(false,
                         $"Insufficient inventory. Current: {brandAmount.Count}, Adjustment: {dto.Adjustment}", null);
                 }
-
+                if(brandAmount.PurchasedAmt == 0)
+                {
+                    brandAmount.PurchasedAmt = dto.Price;
+                }
+                else
+                {
+                    // Calculate average price for purchased amount
+                    brandAmount.PurchasedAmt = (brandAmount.PurchasedAmt + dto.Price) / 2;
+                }
+                
                 // Create adjustment record
                 var adjustment = new AdjustStock
                 {
                     BrandId = dto.BrandId,
                     Adjustment = dto.Adjustment,
                     Reason = dto.Reason ?? "Stock adjustment",
-                    Date = dto.Date != default ? dto.Date : DateTime.Now
+                    Price = dto.Price,
+                    Date = dto.Date != default ? dto.Date : DateTime.Now,
+                    ClinicId = dto.ClinicId,
                 };
                 _db.AdjustStocks.Add(adjustment);
-
+                
+                // brandAmount.PurchasedAmt = dto.Price;
                 brandAmount.Count = newCount;
                 _db.Entry(brandAmount).State = EntityState.Modified;
 
@@ -117,8 +129,8 @@ namespace VaccineAPI.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return new Response<AdjustStockDTO>(false,
-                    $"Error adjusting stock: {ex.Message}", null);
+                var innerExceptionMessage =ex.InnerException != null ? ex.InnerException.Message : "No inner exception";
+                return new Response<AdjustStockDTO>(false,$"Error adjusting stock: {ex.Message}. Inner Exception: {innerExceptionMessage}",null);
             }
         }
 

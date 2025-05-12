@@ -2647,6 +2647,17 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf");
         }
 
+            private string GetYearOrMonthFromDays(int days)
+            {
+                if (days == 365)
+                    return "1 Year";
+                else if (days % 365 == 0)
+                    return $"{days / 365} Years";
+                else if (days % 30 == 0)
+                    return $"{days / 30} Months";
+                else
+                    return $"{days} Days";
+            }
         private MemoryStream CreateTravelPdf(int childId)
         {
             var childDetails = _db.Childs
@@ -2663,7 +2674,7 @@ namespace VaccineAPI.Controllers
             DateTime dob = childDetails.DOB;
             string passport = childDetails.CNIC;
             string city = childDetails.City;
-            string Nationality = "Pakistani";
+            string Nationality = childDetails.Nationality;
             string mrNumber = childDetails.City;
             string clinicName = childDetails.Clinic.Name;
             string doctorDetails = childDetails.Clinic.Doctor.DisplayName;
@@ -2785,7 +2796,7 @@ namespace VaccineAPI.Controllers
                     string batchLot = schedule.Lot ?? "N/A";
                     string dateGiven = (schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue) ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
                     string expiry = schedule.Expiry?.ToString("dd/MM/yyyy") ?? "";
-                    string validity = schedule.Validity?.ToString("dd/MM/yyyy") ?? "";
+                    string validity = schedule.Validity != null ? GetYearOrMonthFromDays((int)schedule.Validity) : "N/A";   
 
                     // Check if this is the last row
                     bool isLastRow = schedule == dbSchedules.Last();

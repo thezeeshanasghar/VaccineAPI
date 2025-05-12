@@ -20,7 +20,7 @@ namespace VaccineAPI
         static TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
         public string DoctorSMS(DoctorDTO doctor)
         {
-            string body = "Hi " + textInfo.ToTitleCase(doctor.FirstName) + " " + textInfo.ToTitleCase(doctor.LastName) + " \n"
+            string body = "Hi " + textInfo.ToTitleCase(doctor.FirstName) + " \n"
                 + "You are Succesfully registered in registered in vaccinationcentre.com\n\n"
                 + "Id: " + doctor.MobileNumber + "\n"
                 + "Password: " + doctor.Password + "\n"
@@ -39,7 +39,7 @@ namespace VaccineAPI
             if (child.Gender == "Girl")
                 sms1 += "Your Daughter " + textInfo.ToTitleCase(child.Name);
 
-            sms1 += " has been registered with Dr. " + textInfo.ToTitleCase(child.Clinic.Doctor.FirstName) + " " + textInfo.ToTitleCase(child.Clinic.Doctor.LastName);
+            sms1 += " has been registered with Dr. " + textInfo.ToTitleCase(child.Clinic.Doctor.FirstName);
             sms1 += " at " + child.Clinic.Name.Replace("&", "and") + "\n";
 
             var response1 = SendSMS(child.User.CountryCode, child.User.MobileNumber, child.Email, sms1);
@@ -73,7 +73,7 @@ namespace VaccineAPI
                 sms1 += scheduleDate.Date.ToString("MM-dd-yyyy");
 
             sms1 += " at " + textInfo.ToTitleCase(child.Clinic.Name) + "\n";
-            sms1 += "Plz confirm your appointment with Dr. " + textInfo.ToTitleCase(child.Clinic.Doctor.FirstName) + " " + textInfo.ToTitleCase(child.Clinic.Doctor.LastName);
+            sms1 += "Plz confirm your appointment with Dr. " + textInfo.ToTitleCase(child.Clinic.Doctor.FirstName);
             sms1 += " @ " + child.Clinic.Doctor.PhoneNo + " OR " + child.Clinic.PhoneNumber;
             var response1 = SendSMS(child.User.CountryCode, child.User.MobileNumber, child.Email, sms1);
             addMessageToDB(child.User.MobileNumber, response1, sms1, child.Clinic.Doctor.User.Id);
@@ -115,7 +115,7 @@ namespace VaccineAPI
             else
                 sms1 += followUp.NextVisitDate;
 
-            sms1 += " with Dr. " + textInfo.ToTitleCase(followUp.Doctor.FirstName) + " " + textInfo.ToTitleCase(followUp.Doctor.LastName) + " at " + textInfo.ToTitleCase(followUp.Child.Clinic.Name) + ". ";
+            sms1 += " with Dr. " + textInfo.ToTitleCase(followUp.Doctor.FirstName) + " at " + textInfo.ToTitleCase(followUp.Child.Clinic.Name) + ". ";
             sms1 += "Kindly confirm your appointment at " + followUp.Doctor.PhoneNo;
 
             var response1 = SendSMS(followUp.Child.User.CountryCode, followUp.Child.User.MobileNumber, followUp.Child.Email, sms1);

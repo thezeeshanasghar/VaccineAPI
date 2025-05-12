@@ -99,7 +99,7 @@ namespace VaccineAPI.Controllers
             if (userDetails != null)
             {
 
-                var body = "Hi " + doctor.FirstName + " " + doctor.LastName + ",\n"
+                var body = "Hi " + doctor.FirstName + ",\n"
                 + "Welcome to vaccinationcentre.com\n\n"
                 + "Your account credentials are:\n"
                 + "ID/Mobile Number: " + userDetails.MobileNumber + "\n"
@@ -143,7 +143,7 @@ namespace VaccineAPI.Controllers
 
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.FirstName);
-            doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);
+            // doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);
             doctorDTO.DisplayName = textInfo.ToTitleCase(doctorDTO.DisplayName);
             {
                 // 2- save User first
@@ -184,7 +184,7 @@ namespace VaccineAPI.Controllers
                 //     }
                 // }
 
-                var body = "Hi " + doctorDTO.FirstName + " " + doctorDTO.LastName + ",\n"
+                var body = "Hi " + doctorDTO.FirstName + ",\n"
                     + "You are successfully registered in vaccinationcentre.com\n\n"
                     + "Your account credentials are:\n"
                     + "ID/Mobile Number: " + doctorDTO.MobileNumber + "\n"
@@ -232,7 +232,6 @@ namespace VaccineAPI.Controllers
 
             var dbDoctor = _db.Doctors.Where(c => c.Id == Id).FirstOrDefault();
             dbDoctor.FirstName = doctorDTO.FirstName;
-            dbDoctor.LastName = doctorDTO.LastName;
             dbDoctor.DisplayName = doctorDTO.DisplayName;
             dbDoctor.Email = doctorDTO.Email;
             dbDoctor.PMDC = doctorDTO.PMDC;

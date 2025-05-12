@@ -1115,7 +1115,7 @@ namespace VaccineAPI.Controllers
                     {
                         var doseId = specificSchedule.DoseId;
                         var dose = _db.Doses.Where(x => x.Id == doseId).FirstOrDefault();
-                        body = $"Reminder: Vaccination  {dose.Name}, For Child: {child.Name},  is due today. Kindly Book an appointment at Clinic: {clinics.Name}, with Doctor: {doctor.FirstName} {doctor.LastName}, at Phone: {clinics.PhoneNumber} ";
+                        body = $"Reminder: Vaccination  {dose.Name}, For Child: {child.Name},  is due today. Kindly Book an appointment at Clinic: {clinics.Name}, with Doctor: {doctor.FirstName}, at Phone: {clinics.PhoneNumber} ";
                     }
                     else
                     {
@@ -1158,7 +1158,7 @@ namespace VaccineAPI.Controllers
                 var doseDetails = todaySchedules.Select(s => $" {s.Dose.Name},").ToList();
 
                 body = $"Reminder: Vaccination {string.Join(" ", doseDetails)} of {child.Name} is due.\n " +
-                       $"Please confirm your appointment. Thanks! Dr {clinic?.Doctor?.FirstName} {clinic?.Doctor?.LastName}, {clinic?.Name} \n" +
+                       $"Please confirm your appointment. Thanks! Dr {clinic?.Doctor?.FirstName} {clinic?.Name} \n" +
                        $"Phone Number: {clinic?.PhoneNumber} Login and check your record at https://vaccinationcentre.com";
             }
             else

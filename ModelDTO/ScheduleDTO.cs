@@ -28,7 +28,7 @@ namespace VaccineAPI.ModelDTO
         public List<BrandDTO> Brands { get; set; }
         public BrandDTO Brand { get; set; }
         public long? BrandId { get; set; }
-        public int? Amount { get; set; }
+        public decimal Amount { get; set; }
         public string Manufacturer { get; set; } = "";
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }

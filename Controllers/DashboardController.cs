@@ -77,7 +77,7 @@ namespace VaccineAPI.Controllers
                                 s.GivenDate.HasValue &&
                                 s.GivenDate.Value.Month == currentMonth &&
                                 s.GivenDate.Value.Year == currentYear)
-                    .SumAsync(s => s.Amount ?? 0);
+                    .SumAsync(s => s.Amount);
 
                 var dashboardData = new DashboardDTO
                 {

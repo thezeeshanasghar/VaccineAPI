@@ -8,7 +8,7 @@ namespace VaccineAPI.ModelDTO
     public class BrandAmountDTO
     {
         public long Id { get; set; }
-        public int Amount { get; set; }
+        public decimal Amount { get; set; }
         public int Count { get; set; }
         // public string SupName { get; set; } // Supplier Name
         public decimal PurchasedAmt { get; set; } // Purchased Vaccine Amount

@@ -86,7 +86,7 @@ namespace VaccineAPI.Controllers
                     TotalAlertsCount = totalAlertsCount,
                     FutureAlertsCount = futureAlertsCount,
                     GivenDosesCount = givenDosesCount,
-                    TotalRevenue = totalRevenue
+                    TotalRevenue = totalRevenue ?? 0m
                 };
 
                 return Ok(dashboardData);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -464,7 +464,7 @@ namespace VaccineAPI.Controllers
                         .Where(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId)
                         .FirstOrDefault();
                     if (brandAmount != null)
-                        scheduleDTO.Amount = brandAmount.Amount;
+                        scheduleDTO.Amount = brandAmount?.Amount;
                     else
                         scheduleDTO.Amount = schedule.Amount;
                     scheduleDTO.Date = schedule.Date;

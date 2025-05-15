@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -210,45 +210,50 @@ namespace VaccineAPI.Controllers
                 // for MENACWY Rules on brand Selection start
                 if (dbSchedule.Dose.Name.StartsWith("MenACWY") && dbSchedule.Dose.DoseOrder == 1)
                 {
-                    var doseBrand = _db.Brands
-                        .Where(x => x.Id == scheduleDTO.BrandId)
-                        .FirstOrDefault();
+                    var doseBrand = _db.Brands.FirstOrDefault(x => x.Id == scheduleDTO.BrandId);
                     var daysDifference = Convert.ToInt32(
                         (scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays
                     );
 
                     if (doseBrand != null)
+                    {
                         if (daysDifference > 729 && doseBrand.Name.Equals("MENACTRA"))
                         {
-                            var nextDose = _db.Doses
-                                .Where(
-                                    x =>
-                                        x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2
-                                )
-                                .FirstOrDefault();
-                            var nextSchedule = _db.Schedules
-                                .Where(
-                                    x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id
-                                )
-                                .FirstOrDefault();
-                            if (nextSchedule != null)
-                                nextSchedule.IsSkip = true;
+                            var nextDose = _db.Doses.FirstOrDefault(x =>
+                                x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2
+                            );
+
+                            if (nextDose != null)
+                            {
+                                var nextSchedule = _db.Schedules.FirstOrDefault(x =>
+                                    x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id
+                                );
+
+                                if (nextSchedule != null)
+                                {
+                                    nextSchedule.IsSkip = true;
+                                }
+                            }
                         }
                         else if (daysDifference > 364 && doseBrand.Name.Equals("NIMENRIX"))
                         {
-                            var nextDose = _db.Doses
-                                .Where(
-                                    x =>
-                                        x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2
-                                )
-                                .FirstOrDefault();
-                            var nextSchedule = _db.Schedules
-                                .Where(
-                                    x => x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id
-                                )
-                                .FirstOrDefault();
-                            nextSchedule.IsSkip = true;
+                            var nextDose = _db.Doses.FirstOrDefault(x =>
+                                x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2
+                            );
+
+                            if (nextDose != null)
+                            {
+                                var nextSchedule = _db.Schedules.FirstOrDefault(x =>
+                                    x.ChildId == dbSchedule.Child.Id && x.DoseId == nextDose.Id
+                                );
+
+                                if (nextSchedule != null)
+                                {
+                                    nextSchedule.IsSkip = true;
+                                }
+                            }
                         }
+                    }
                 }
 
                 // for MENACWY Rules on brand Selection end
@@ -460,7 +465,7 @@ namespace VaccineAPI.Controllers
                         .Where(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId)
                         .FirstOrDefault();
                     if (brandAmount != null)
-                        scheduleDTO.Amount = brandAmount.Amount;
+                        scheduleDTO.Amount = brandAmount?.Amount;
                     else
                         scheduleDTO.Amount = schedule.Amount?? 0;
                     scheduleDTO.Date = schedule.Date;

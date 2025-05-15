@@ -7,7 +7,7 @@ namespace VaccineAPI.Models
     public class BrandAmount
     {
         public long Id { get; set; }
-        public int Amount { get; set; }
+        public decimal Amount { get; set; }
         public int Count { get; set; }
 
         // public string SupName { get; set; } // Supplier Name
@@ -24,5 +24,5 @@ namespace VaccineAPI.Models
         public long ClinicId { get; set; }
         [JsonIgnore]
         public virtual Clinic Clinic { get; set; }
-    }
+    } 
 }

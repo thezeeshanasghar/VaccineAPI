@@ -42,23 +42,29 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("doctor/{doctorId}")]
-        public Response<IEnumerable<FollowUpDTO>> GetFollowUpsByDoctor(
-            long doctorId,
-            DateTime inputDate
-        )
+        public Response<IEnumerable<FollowUpDTO>> GetFollowUpsByDoctor(long doctorId, DateTime inputDate)
         {
-            List<FollowUp> followUps = _db
-                .FollowUps.Include(f => f.Child) // Include related Child data
-                .ThenInclude(c => c.User) // Include User data through Child
-                .Where(f => f.DoctorId == doctorId) // Filter by DoctorId
-                .Where(c => c.NextVisitDate == inputDate.Date)
-                .Where(f => f.Child.IsInactive == false)
-                .OrderBy(x => x.Child.Id)
-                .ToList();
-            IEnumerable<FollowUpDTO> followUpDTOs = _mapper.Map<IEnumerable<FollowUpDTO>>(
-                followUps
-            );
-            return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTOs);
+            try{
+                var followUps = _db
+                    .FollowUps.Include(f => f.Child) 
+                    .ThenInclude(c => c.User) 
+                    .Where(f => f.DoctorId == doctorId)
+                    .Where(f =>f.NextVisitDate.HasValue && f.NextVisitDate.Value.Date == inputDate.Date) // Handle nullable DateTime
+                    .Where(f => f.Child.IsInactive == false).ToList();
+
+                var groupedFollowUps = followUps
+                    .GroupBy(f => f.Child.Id) 
+                    .Select(g => g.First()) 
+                    .OrderBy(f => f.Child.Id) .ToList();
+
+                IEnumerable<FollowUpDTO> followUpDTOs = _mapper.Map<IEnumerable<FollowUpDTO>>(groupedFollowUps);
+
+                return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTOs);
+            }
+            catch (Exception ex)
+            {
+                return new Response<IEnumerable<FollowUpDTO>>(false,$"An error occurred: {ex.Message}",null);
+            }
         }
 
         [HttpGet("alert/{GapDays}/{OnlineClinicId}")]

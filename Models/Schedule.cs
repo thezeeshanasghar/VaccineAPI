@@ -12,6 +12,7 @@ namespace VaccineAPI.Models
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? Circle { get; set; }
+        public bool? IsPAApprove{get; set;}
         public bool IsDone { get; set; }
         public bool? IsSkip { get; set; }
         public bool? IsDisease { get; set; }
@@ -20,7 +21,8 @@ namespace VaccineAPI.Models
         public DateTime? GivenDate { get; set; }
         public long? BrandId { get; set; }
         public virtual Brand Brand { get; set; }
-        public int? Amount { get; set; }
+
+        public decimal? Amount { get; set; }
         public string Manufacturer { get; set; } = "";
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }

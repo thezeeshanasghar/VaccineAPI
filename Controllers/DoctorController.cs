@@ -142,9 +142,13 @@ namespace VaccineAPI.Controllers
             }
 
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
-            doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.FirstName);
-            // doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);
-            doctorDTO.DisplayName = textInfo.ToTitleCase(doctorDTO.DisplayName);
+            if (!string.IsNullOrEmpty(doctorDTO.FirstName))
+                doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.FirstName);
+            if (!string.IsNullOrEmpty(doctorDTO.DisplayName))
+                doctorDTO.DisplayName = textInfo.ToTitleCase(doctorDTO.DisplayName);
+            if (!string.IsNullOrEmpty(doctorDTO.Qualification))
+                doctorDTO.Qualification = textInfo.ToTitleCase(doctorDTO.Qualification);
+            
             {
                 // 2- save User first
                 User userDB = new User();

@@ -2650,8 +2650,10 @@ namespace VaccineAPI.Controllers
         }
 
             private string GetYearOrMonthFromDays(int days)
-            {
-                if (days == 365)
+            {  
+                 if (days == 30000)
+                    return "Life Time";
+                else if (days == 365)
                     return "1 Year";
                 else if (days % 365 == 0)
                     return $"{days / 365} Years";

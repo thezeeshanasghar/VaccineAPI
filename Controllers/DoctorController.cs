@@ -142,6 +142,7 @@ namespace VaccineAPI.Controllers
             }
 
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
+
             if (!string.IsNullOrEmpty(doctorDTO.DisplayName))
                 doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.DisplayName);
             if (!string.IsNullOrEmpty(doctorDTO.DisplayName))

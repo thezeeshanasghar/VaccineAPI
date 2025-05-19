@@ -30,7 +30,7 @@ namespace VaccineAPI.ModelDTO
         public bool AllowInventory { get; set; }
         public int SMSLimit { get; set; }
         public string DoctorType { get; set; }
-        public string Qualification { get; set; }
+        public string? Qualification { get; set; }
         public string AdditionalInfo { get; set; }
         // public long UserId { get; set; }
 

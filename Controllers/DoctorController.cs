@@ -142,9 +142,13 @@ namespace VaccineAPI.Controllers
             }
 
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
-            doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.FirstName);
-            // doctorDTO.LastName = textInfo.ToTitleCase(doctorDTO.LastName);
-            doctorDTO.DisplayName = textInfo.ToTitleCase(doctorDTO.DisplayName);
+            if (!string.IsNullOrEmpty(doctorDTO.DisplayName))
+                doctorDTO.FirstName = textInfo.ToTitleCase(doctorDTO.DisplayName);
+            if (!string.IsNullOrEmpty(doctorDTO.DisplayName))
+                doctorDTO.DisplayName = textInfo.ToTitleCase(doctorDTO.DisplayName);
+            if (!string.IsNullOrEmpty(doctorDTO.Qualification))
+                doctorDTO.Qualification = textInfo.ToTitleCase(doctorDTO.Qualification);
+            
             {
                 // 2- save User first
                 User userDB = new User();
@@ -184,7 +188,7 @@ namespace VaccineAPI.Controllers
                 //     }
                 // }
 
-                var body = "Hi " + doctorDTO.FirstName + ",\n"
+                var body = "Hi " + doctorDTO.DisplayName + ",\n"
                     + "You are successfully registered in vaccinationcentre.com\n\n"
                     + "Your account credentials are:\n"
                     + "ID/Mobile Number: " + doctorDTO.MobileNumber + "\n"

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -192,7 +192,6 @@ namespace VaccineAPI.Controllers
                         dbSchedule.Height = scheduleDTO.Height;
                         dbSchedule.Circle = scheduleDTO.Circle;
                         dbSchedule.IsDone = scheduleDTO.IsDone;
-                        dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                         dbSchedule.GivenDate = scheduleDTO.GivenDate;
                         dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                         dbSchedule.IsDisease = scheduleDTO.IsDisease;
@@ -300,6 +299,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Lot = scheduleDTO.Lot;
                 dbSchedule.Expiry = scheduleDTO.Expiry;
                 dbSchedule.Validity = scheduleDTO.Validity;
+                dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
                 ScheduleDTO newData = _mapper.Map<ScheduleDTO>(dbSchedule);
                 _db.SaveChanges();

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -299,6 +299,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Lot = scheduleDTO.Lot;
                 dbSchedule.Expiry = scheduleDTO.Expiry;
                 dbSchedule.Validity = scheduleDTO.Validity;
+                dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
                 ScheduleDTO newData = _mapper.Map<ScheduleDTO>(dbSchedule);
                 _db.SaveChanges();
@@ -466,7 +467,7 @@ namespace VaccineAPI.Controllers
                     if (brandAmount != null)
                         scheduleDTO.Amount = brandAmount?.Amount;
                     else
-                        scheduleDTO.Amount = schedule.Amount;
+                        scheduleDTO.Amount = schedule.Amount?? 0;
                     scheduleDTO.Date = schedule.Date;
                     scheduleDTO.InvoiceDate = schedule.GivenDate;
                     scheduleDTO.IsDone = schedule.IsDone;
@@ -1722,6 +1723,26 @@ namespace VaccineAPI.Controllers
             catch (Exception ex)
             {
                 return BadRequest($"Error generating PDF: {ex.Message}");
+            }
+        }
+
+        [HttpPatch("{id}/ispaapprove")]
+        public async Task<IActionResult> PatchIsPAApprove(long id)
+        {
+            try
+            {
+                var schedule = await _db.Schedules.FirstOrDefaultAsync(s => s.Id == id);
+                if (schedule == null)
+                {
+                    return NotFound(new { message = "Schedule not found." });
+                }
+                schedule.IsPAApprove = true;
+                await _db.SaveChangesAsync();
+                return Ok(new { message = "IsPAApprove updated successfully.", schedule });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = $"An error occurred: {ex.Message}" });
             }
         }
     }

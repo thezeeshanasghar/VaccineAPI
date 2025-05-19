@@ -47,6 +47,16 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public async Task<ActionResult<PaAccess>> Create(PaAccess paAccess)
         {
+             var existingAccess = await _db.PaAccess.FirstOrDefaultAsync(pa => pa.PersonalAssistantId == paAccess.PersonalAssistantId && pa.ClinicId == paAccess.ClinicId);
+             if (existingAccess != null)
+             {
+                return BadRequest(new { message = "PAAccess already exists for this doctor and clinic." });
+             }
+            var personalAssistant = await _db.PersonalAssistant.FindAsync(paAccess.PersonalAssistantId);
+            if (personalAssistant == null)
+            {
+                return BadRequest("Invalid PersonalAssistantId.");
+            }
             if (paAccess == null)
             {
                 return BadRequest(new { message = "Invalid data." });
@@ -73,7 +83,7 @@ namespace VaccineAPI.Controllers
                 return NotFound(new { message = "PA Access not found." });
             }
 
-            existingPaAccess.PaId = paAccess.PaId;
+            existingPaAccess.PersonalAssistantId = paAccess.PersonalAssistantId;
             existingPaAccess.ClinicId = paAccess.ClinicId;
 
             _db.Entry(existingPaAccess).State = EntityState.Modified;

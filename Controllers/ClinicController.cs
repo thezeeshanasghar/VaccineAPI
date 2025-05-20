@@ -161,6 +161,9 @@ namespace VaccineAPI.Controllers
         [HttpDelete("{id}")]
         public Response<string> Delete(int Id)
         {
+            var relatedBrandAmounts = _db.BrandAmounts.Where(b => b.ClinicId == Id);
+            _db.BrandAmounts.RemoveRange(relatedBrandAmounts);
+
             var dbClinic = _db.Clinics.Where(c => c.Id == Id).FirstOrDefault();
             _db.Clinics.Remove(dbClinic);
             _db.SaveChanges();

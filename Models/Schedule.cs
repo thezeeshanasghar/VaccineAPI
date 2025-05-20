@@ -12,7 +12,7 @@ namespace VaccineAPI.Models
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? Circle { get; set; }
-        public bool? IsPAApprove{get; set;}
+        public bool IsPAApprove{get; set;}
         public bool IsDone { get; set; }
         public bool? IsSkip { get; set; }
         public bool? IsDisease { get; set; }

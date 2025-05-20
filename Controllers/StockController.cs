@@ -151,16 +151,23 @@ namespace VaccineAPI.Controllers
                     _db.Stocks.Add(stock);
 
                     // Update or Create BrandAmount
-                    var brandAmount = await _db.BrandAmounts
-                        .FirstOrDefaultAsync(ba => ba.BrandId == stockDTO.BrandId
-                            && ba.DoctorId == stockDTO.DoctorId);
-
-                    decimal unitPrice = Math.Round(stockDTO.StockAmount, 2);
+                    var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
+                        ba.BrandId == stockDTO.BrandId && ba.ClinicId == stockDTO.ClinicId
+                    );
+                    decimal unitPrice = 0;
+                    if (brandAmount.PurchasedAmt == 0)
+                    {
+                        unitPrice = stockDTO.StockAmount;
+                    }
+                    else
+                    {
+                        unitPrice = (brandAmount.PurchasedAmt + stockDTO.StockAmount) / 2;
+                    }
 
                     if (brandAmount != null)
                     {
                         brandAmount.Count += stock.Quantity;
-                        brandAmount.PurchasedAmt = (int)unitPrice;
+                        brandAmount.PurchasedAmt = unitPrice;
                         brandAmount.DoctorId = stockDTO.DoctorId;
                         _db.Entry(brandAmount).State = EntityState.Modified;
                     }
@@ -270,7 +277,7 @@ namespace VaccineAPI.Controllers
                 // Update or create BrandAmount
                 var brandAmount = await _db.BrandAmounts
                     .FirstOrDefaultAsync(ba => ba.BrandId == stockDTO.BrandId
-                        && ba.DoctorId == stockDTO.DoctorId);
+                        && ba.ClinicId == stockDTO.ClinicId);
 
                 decimal unitPrice = Math.Round(stockDTO.StockAmount, 2);
 

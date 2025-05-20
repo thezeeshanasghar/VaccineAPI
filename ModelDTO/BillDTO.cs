@@ -11,6 +11,7 @@ namespace VaccineAPI.ModelDTO
         public DateTime BillDate { get; set; }
         public bool IsPaid { get; set; }
         public DateTime PaidDate { get; set; }
+        public bool IsPAApprove{get; set;}
         [Required]
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }

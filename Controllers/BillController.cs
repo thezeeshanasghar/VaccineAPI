@@ -181,5 +181,25 @@ namespace VaccineAPI.Controllers
                 return new Response<IEnumerable<string>>(false, "An error occurred while retrieving suppliers", null);
             }
         }
+
+        [HttpPatch("{id}/ispaapprove")]
+        public async Task<IActionResult> PatchIsPAApprove(long id)
+        {
+            try
+            {
+                var schedule = await _db.Bills.FirstOrDefaultAsync(s => s.Id == id);
+                if (schedule == null)
+                {
+                    return NotFound(new { message = "Schedule not found." });
+                }
+                schedule.IsPAApprove = true;
+                await _db.SaveChangesAsync();
+                return Ok(new { message = "IsPAApprove updated successfully.", schedule });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = $"An error occurred: {ex.Message}" });
+            }
+        }
     }
 }

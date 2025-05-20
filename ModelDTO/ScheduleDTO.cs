@@ -18,7 +18,7 @@ namespace VaccineAPI.ModelDTO
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? Circle { get; set; }
-        public bool? IsPAApprove { get; set; }
+        public bool IsPAApprove { get; set; }
         public bool IsDone { get; set; }
         public bool Due2EPI { get; set; }
         public bool? IsSkip { get; set; }

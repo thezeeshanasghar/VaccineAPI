@@ -72,6 +72,7 @@ namespace VaccineAPI.Controllers
                 dto.IsPaid = stock.Bill?.IsPaid ?? false;
                 dto.PaidDate = stock.Bill?.PaidDate ?? DateTime.MinValue;
                 dto.DoctorId = stock.Bill?.DoctorId ?? 0;
+                dto.ClinicId = stock.Bill?.ClinicId ?? 0;
             }
             return new Response<List<StockDTO>>(true, null, stockDTOs);
         }
@@ -229,102 +230,102 @@ namespace VaccineAPI.Controllers
         //     return new Response<StockDTO>(true, "Stock updated successfully", stockDTO);
         // }
 
-        [HttpPut("{id}")]
-        public async Task<Response<StockDTO>> Put(int id, [FromBody] StockDTO stockDTO)
-        {
-            if (id != stockDTO.Id)
-                return new Response<StockDTO>(false, "ID mismatch", null);
+        // [HttpPut("{id}")]
+        // public async Task<Response<StockDTO>> Put(int id, [FromBody] StockDTO stockDTO)
+        // {
+        //     if (id != stockDTO.Id)
+        //         return new Response<StockDTO>(false, "ID mismatch", null);
 
-            if (!ModelState.IsValid)
-            {
-                var errors = string.Join("; ", ModelState.Values
-                    .SelectMany(v => v.Errors)
-                    .Select(e => e.ErrorMessage));
-                return new Response<StockDTO>(false, $"Validation error: {errors}", null);
-            }
+        //     if (!ModelState.IsValid)
+        //     {
+        //         var errors = string.Join("; ", ModelState.Values
+        //             .SelectMany(v => v.Errors)
+        //             .Select(e => e.ErrorMessage));
+        //         return new Response<StockDTO>(false, $"Validation error: {errors}", null);
+        //     }
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
-            try
-            {
-                // Find the stock
-                var stock = await _db.Stocks
-                    .Include(s => s.Bill)
-                    .FirstOrDefaultAsync(s => s.Id == id);
+        //     using var transaction = await _db.Database.BeginTransactionAsync();
+        //     try
+        //     {
+        //         // Find the stock
+        //         var stock = await _db.Stocks
+        //             .Include(s => s.Bill)
+        //             .FirstOrDefaultAsync(s => s.Id == id);
 
-                if (stock == null)
-                    return new Response<StockDTO>(false, "Stock not found", null);
+        //         if (stock == null)
+        //             return new Response<StockDTO>(false, "Stock not found", null);
 
-                // Update stock details
-                stock.BrandId = stockDTO.BrandId;
-                stock.Quantity = stockDTO.Quantity;
-                stock.StockAmount = stockDTO.StockAmount;
+        //         // Update stock details
+        //         stock.BrandId = stockDTO.BrandId;
+        //         stock.Quantity = stockDTO.Quantity;
+        //         stock.StockAmount = stockDTO.StockAmount;
 
-                _db.Entry(stock).State = EntityState.Modified;
+        //         _db.Entry(stock).State = EntityState.Modified;
 
-                // Update the associated Bill if provided
-                if (stock.Bill != null)
-                {
-                    stock.Bill.BillNo = stockDTO.BillNo;
-                    stock.Bill.Supplier = stockDTO.Supplier?.Trim() ?? stock.Bill.Supplier;
-                    stock.Bill.BillDate = stockDTO.BillDate != default ? stockDTO.BillDate : stock.Bill.BillDate;
-                    stock.Bill.IsPaid = stockDTO.IsPaid;
-                    stock.Bill.PaidDate = stockDTO.PaidDate != default ? stockDTO.PaidDate : stock.Bill.PaidDate;
-                    stock.Bill.DoctorId = stockDTO.DoctorId != default ? stockDTO.DoctorId : stock.Bill.DoctorId;
+        //         // Update the associated Bill if provided
+        //         if (stock.Bill != null)
+        //         {
+        //             stock.Bill.BillNo = stockDTO.BillNo;
+        //             stock.Bill.Supplier = stockDTO.Supplier?.Trim() ?? stock.Bill.Supplier;
+        //             stock.Bill.BillDate = stockDTO.BillDate != default ? stockDTO.BillDate : stock.Bill.BillDate;
+        //             stock.Bill.IsPaid = stockDTO.IsPaid;
+        //             stock.Bill.PaidDate = stockDTO.PaidDate != default ? stockDTO.PaidDate : stock.Bill.PaidDate;
+        //             stock.Bill.DoctorId = stockDTO.DoctorId != default ? stockDTO.DoctorId : stock.Bill.DoctorId;
 
-                    _db.Entry(stock.Bill).State = EntityState.Modified;
-                }
+        //             _db.Entry(stock.Bill).State = EntityState.Modified;
+        //         }
 
-                // Update or create BrandAmount
-                var brandAmount = await _db.BrandAmounts
-                    .FirstOrDefaultAsync(ba => ba.BrandId == stockDTO.BrandId
-                        && ba.ClinicId == stockDTO.ClinicId);
+        //         // Update or create BrandAmount
+        //         var brandAmount = await _db.BrandAmounts
+        //             .FirstOrDefaultAsync(ba => ba.BrandId == stockDTO.BrandId
+        //                 && ba.ClinicId == stockDTO.ClinicId);
 
-                decimal unitPrice = Math.Round(stockDTO.StockAmount, 2);
+        //         decimal unitPrice = Math.Round(stockDTO.StockAmount, 2);
 
-                if (brandAmount != null)
-                {
-                    brandAmount.Count = stockDTO.Quantity;
-                    brandAmount.PurchasedAmt = (int)unitPrice;
-                    _db.Entry(brandAmount).State = EntityState.Modified;
-                }
-                else
-                {
-                    brandAmount = new BrandAmount
-                    {
-                        BrandId = stock.BrandId,
-                        Count = stock.Quantity,
-                        DoctorId = stockDTO.DoctorId,
-                        PurchasedAmt = (int)unitPrice
-                    };
-                    _db.BrandAmounts.Add(brandAmount);
-                }
+        //         if (brandAmount != null)
+        //         {
+        //             brandAmount.Count = stockDTO.Quantity;
+        //             brandAmount.PurchasedAmt = (int)unitPrice;
+        //             _db.Entry(brandAmount).State = EntityState.Modified;
+        //         }
+        //         else
+        //         {
+        //             brandAmount = new BrandAmount
+        //             {
+        //                 BrandId = stock.BrandId,
+        //                 Count = stock.Quantity,
+        //                 DoctorId = stockDTO.DoctorId,
+        //                 PurchasedAmt = (int)unitPrice
+        //             };
+        //             _db.BrandAmounts.Add(brandAmount);
+        //         }
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+        //         await _db.SaveChangesAsync();
+        //         await transaction.CommitAsync();
 
-                // Fetch updated stock with relationships
-                var updatedStock = await _db.Stocks
-                    .Include(s => s.Bill)
-                    .Include(s => s.Brand)
-                        .ThenInclude(b => b.Vaccine)
-                    .FirstOrDefaultAsync(s => s.Id == stock.Id);
+        //         // Fetch updated stock with relationships
+        //         var updatedStock = await _db.Stocks
+        //             .Include(s => s.Bill)
+        //             .Include(s => s.Brand)
+        //                 .ThenInclude(b => b.Vaccine)
+        //             .FirstOrDefaultAsync(s => s.Id == stock.Id);
 
-                var resultDto = _mapper.Map<StockDTO>(updatedStock);
-                resultDto.IsPaid = updatedStock.Bill?.IsPaid ?? false;
+        //         var resultDto = _mapper.Map<StockDTO>(updatedStock);
+        //         resultDto.IsPaid = updatedStock.Bill?.IsPaid ?? false;
 
-                return new Response<StockDTO>(true, "Stock and Bill updated successfully", resultDto);
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                string errorMessage = $"Error: {ex.Message}";
-                if (ex.InnerException != null)
-                {
-                    errorMessage += $" | Inner Exception: {ex.InnerException.Message}";
-                }
-                return new Response<StockDTO>(false, errorMessage, null);
-            }
-        }
+        //         return new Response<StockDTO>(true, "Stock and Bill updated successfully", resultDto);
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         await transaction.RollbackAsync();
+        //         string errorMessage = $"Error: {ex.Message}";
+        //         if (ex.InnerException != null)
+        //         {
+        //             errorMessage += $" | Inner Exception: {ex.InnerException.Message}";
+        //         }
+        //         return new Response<StockDTO>(false, errorMessage, null);
+        //     }
+        // }
 
         [HttpDelete("{id}")]
         public Response<StockDTO> Delete(int id)
@@ -336,6 +337,137 @@ namespace VaccineAPI.Controllers
             _db.Stocks.Remove(stock);
             _db.SaveChanges();
             return new Response<StockDTO>(true, "Stock deleted successfully", null);
+        }
+
+        [HttpPut]
+        public async Task<Response<List<StockDTO>>> Edit([FromBody] List<StockDTO> stockDTOs)
+        {
+            if (!ModelState.IsValid)
+            {
+                var errors = string.Join("; ",ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+                return new Response<List<StockDTO>>(false, $"Validation error: {errors}", null);
+            }
+
+            if (!stockDTOs.Any())
+            {
+                return new Response<List<StockDTO>>(false, "No stocks provided", null);
+            }
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var firstStock = stockDTOs.First();
+                // Validate doctor exists
+                var doctor = await _db.Doctors.FindAsync(firstStock.DoctorId);
+                if (doctor == null)
+                {
+                    return new Response<List<StockDTO>>(false, "Doctor not found", null);
+                }
+
+                var resultStocks = new List<StockDTO>();
+
+                foreach (var stockDTO in stockDTOs)
+                {
+                    // Validate stock exists
+                    var stock = await _db.Stocks.Include(s => s.Bill)
+                        .FirstOrDefaultAsync(s => s.Id == stockDTO.Id);
+
+                    if (stock == null)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<StockDTO>>(false,$"Stock with ID {stockDTO.Id} not found",null);
+                    }
+
+                    // Validate stock data
+                    if (stockDTO.StockAmount <= 0 || stockDTO.Quantity <= 0)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<StockDTO>>(false,"StockAmount and Quantity must be greater than zero.",null);
+                    }
+
+                    // Validate brand exists
+                    var brand = await _db.Brands.FindAsync(stockDTO.BrandId);
+                    if (brand == null)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<StockDTO>>(false,$"Brand with ID {stockDTO.BrandId} not found",null);
+                    }
+
+                    // Update stock details
+                    stock.BrandId = stockDTO.BrandId;
+                    stock.Quantity = stockDTO.Quantity;
+                    stock.StockAmount = stockDTO.StockAmount;
+
+                    _db.Entry(stock).State = EntityState.Modified;
+
+                    // Update the associated Bill if provided
+                    if (stock.Bill != null)
+                    {
+                        stock.Bill.BillNo = stockDTO.BillNo;
+                        stock.Bill.Supplier = stockDTO.Supplier?.Trim() ?? stock.Bill.Supplier;
+                        stock.Bill.BillDate = stockDTO.BillDate != default ? stockDTO.BillDate : stock.Bill.BillDate;
+                        stock.Bill.IsPaid = stockDTO.IsPaid;
+                        stock.Bill.PaidDate = stockDTO.PaidDate != default ? stockDTO.PaidDate : stock.Bill.PaidDate;
+                        stock.Bill.DoctorId = stockDTO.DoctorId != default ? stockDTO.DoctorId : stock.Bill.DoctorId;
+
+                        _db.Entry(stock.Bill).State = EntityState.Modified;
+                    }
+
+                    // Update or create BrandAmount
+                    var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
+                        ba.BrandId == stockDTO.BrandId && ba.ClinicId == stockDTO.ClinicId
+                    );
+
+                    decimal unitPrice = Math.Round(stockDTO.StockAmount, 2);
+
+                    if (brandAmount != null)
+                    {
+                        brandAmount.Count = stockDTO.Quantity;
+                        brandAmount.PurchasedAmt = (int)unitPrice;
+                        _db.Entry(brandAmount).State = EntityState.Modified;
+                    }
+                    else
+                    {
+                        brandAmount = new BrandAmount
+                        {
+                            BrandId = stock.BrandId,
+                            Count = stock.Quantity,
+                            DoctorId = stockDTO.DoctorId,
+                            PurchasedAmt = (int)unitPrice,
+                        };
+                        _db.BrandAmounts.Add(brandAmount);
+                    }
+
+                    await _db.SaveChangesAsync();
+
+                    // Fetch updated stock with relationships
+                    var updatedStock = await _db
+                        .Stocks.Include(s => s.Bill)
+                        .Include(s => s.Brand)
+                        .ThenInclude(b => b.Vaccine)
+                        .FirstOrDefaultAsync(s => s.Id == stock.Id);
+
+                    var resultDto = _mapper.Map<StockDTO>(updatedStock);
+                    resultDto.IsPaid = updatedStock.Bill?.IsPaid ?? false;
+                    resultStocks.Add(resultDto);
+                }
+
+                await transaction.CommitAsync();
+
+                var message = $"Stocks updated successfully. Total items: {resultStocks.Count}";
+
+                return new Response<List<StockDTO>>(true, message, resultStocks);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                string errorMessage = $"Error: {ex.Message}";
+                if (ex.InnerException != null)
+                {
+                    errorMessage += $" | Inner Exception: {ex.InnerException.Message}";
+                }
+                return new Response<List<StockDTO>>(false, errorMessage, null);
+            }
         }
     }
 }

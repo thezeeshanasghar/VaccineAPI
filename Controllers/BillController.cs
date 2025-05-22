@@ -1,10 +1,10 @@
-using Microsoft.AspNetCore.Mvc;
-using AutoMapper;
-using VaccineAPI.Models;
-using VaccineAPI.ModelDTO;
 using System.Collections.Generic;
 using System.Linq;
+using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using VaccineAPI.ModelDTO;
+using VaccineAPI.Models;
 
 namespace VaccineAPI.Controllers
 {
@@ -32,19 +32,23 @@ namespace VaccineAPI.Controllers
             return new Response<List<BillDTO>>(true, null, billDTOs);
         }
 
-        [HttpGet("doctor/{doctorId}")]  // Changed route to avoid conflict
+        [HttpGet("doctor/{doctorId}")] // Changed route to avoid conflict
         public Response<List<BillDTO>> GetByDoctor(long doctorId)
         {
-            var bills = _db.Bills
-                .Include(b => b.Doctor)
-                    .ThenInclude(d => d.User)
+            var bills = _db
+                .Bills.Include(b => b.Doctor)
+                .ThenInclude(d => d.User)
                 .Include(b => b.Stocks)
-                    .ThenInclude(s => s.Brand)
+                .ThenInclude(s => s.Brand)
                 .Where(b => b.DoctorId == doctorId)
                 .ToList();
 
             if (!bills.Any())
-                return new Response<List<BillDTO>>(false, $"No bills found for doctor ID {doctorId}", null);
+                return new Response<List<BillDTO>>(
+                    false,
+                    $"No bills found for doctor ID {doctorId}",
+                    null
+                );
 
             var billDTOs = _mapper.Map<List<BillDTO>>(bills);
             return new Response<List<BillDTO>>(true, null, billDTOs);
@@ -105,19 +109,24 @@ namespace VaccineAPI.Controllers
         //     }
         // }
 
-         [HttpGet("clinic/{clinicId}")]  // Changed route to avoid conflict
+        [HttpGet("clinic/{clinicId}")] // Changed route to avoid conflict
         public Response<List<BillDTO>> GetByClinic(long clinicId)
         {
-            var bills = _db.Bills
-                .Include(b => b.Doctor)
-                    .ThenInclude(d => d.User)
+            var bills = _db
+                .Bills.Include(b => b.Doctor)
+                .ThenInclude(d => d.User)
                 .Include(b => b.Stocks)
-                    .ThenInclude(s => s.Brand)
+                .ThenInclude(s => s.Brand)
                 .Where(b => b.ClinicId == clinicId)
+                .OrderByDescending(x => x.Id)
                 .ToList();
 
             if (!bills.Any())
-                return new Response<List<BillDTO>>(false, $"No bills found for clinic ID {clinicId}", null);
+                return new Response<List<BillDTO>>(
+                    false,
+                    $"No bills found for clinic ID {clinicId}",
+                    null
+                );
 
             var billDTOs = _mapper.Map<List<BillDTO>>(bills);
             return new Response<List<BillDTO>>(true, null, billDTOs);
@@ -162,23 +171,35 @@ namespace VaccineAPI.Controllers
             try
             {
                 // Fetch distinct agent names where Agent is not null/empty and matches the given DoctorId
-                var supplierNames = _db.Bills
-                    .Where(c => !string.IsNullOrEmpty(c.Supplier))
+                var supplierNames = _db
+                    .Bills.Where(c => !string.IsNullOrEmpty(c.Supplier))
                     .Select(c => c.Supplier)
                     .Distinct()
                     .ToList();
 
                 if (!supplierNames.Any())
                 {
-                    return new Response<IEnumerable<string>>(false, "No suppliers found for the specified doctor", null);
+                    return new Response<IEnumerable<string>>(
+                        false,
+                        "No suppliers found for the specified doctor",
+                        null
+                    );
                 }
 
-                return new Response<IEnumerable<string>>(true, "suppliers retrieved successfully", supplierNames);
+                return new Response<IEnumerable<string>>(
+                    true,
+                    "suppliers retrieved successfully",
+                    supplierNames
+                );
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error retrieving suppliers: {ex.Message}");
-                return new Response<IEnumerable<string>>(false, "An error occurred while retrieving suppliers", null);
+                return new Response<IEnumerable<string>>(
+                    false,
+                    "An error occurred while retrieving suppliers",
+                    null
+                );
             }
         }
 
@@ -187,14 +208,62 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var schedule = await _db.Bills.FirstOrDefaultAsync(s => s.Id == id);
-                if (schedule == null)
+                var Bill = await _db.Bills.FirstOrDefaultAsync(s => s.Id == id);
+                if (Bill == null)
                 {
-                    return NotFound(new { message = "Schedule not found." });
+                    return NotFound(new { message = "Bill not found." });
                 }
-                schedule.IsPAApprove = true;
+                Bill.IsPAApprove = true;
                 await _db.SaveChangesAsync();
-                return Ok(new { message = "IsPAApprove updated successfully.", schedule });
+                return Ok(new { message = "IsPAApprove updated successfully.", Bill });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = $"An error occurred: {ex.Message}" });
+            }
+        }
+
+        [HttpPatch("{id}")]
+        public async Task<IActionResult> EditBill(long id, [FromBody] BillDTO billDTO)
+        {
+            if (id != billDTO.Id)
+            {
+                return BadRequest(new { message = "ID mismatch between route and body." });
+            }
+
+            try
+            {
+                // Validate the clinic exists
+                if (billDTO.ClinicId != default)
+                {
+                    var clinic = await _db.Clinics.FindAsync(billDTO.ClinicId);
+                    if (clinic == null)
+                    {
+                        return NotFound(
+                            new { message = $"Clinic with ID {billDTO.ClinicId} not found." }
+                        );
+                    }
+                }
+
+                // Find the bill by ID
+                var bill = await _db.Bills.FirstOrDefaultAsync(b => b.Id == id);
+                if (bill == null)
+                {
+                    return NotFound(new { message = "Bill not found." });
+                }
+
+                // Update the fields
+                bill.BillNo = billDTO.BillNo ?? bill.BillNo;
+                bill.Supplier = billDTO.Supplier?.Trim() ?? bill.Supplier;
+                bill.BillDate = billDTO.BillDate != default ? billDTO.BillDate : bill.BillDate;
+                bill.IsPaid = billDTO.IsPaid;
+                bill.PaidDate = billDTO.PaidDate != default ? billDTO.PaidDate : bill.PaidDate;
+                bill.ClinicId = billDTO.ClinicId != default ? billDTO.ClinicId : bill.ClinicId;
+
+                // Save changes
+                await _db.SaveChangesAsync();
+
+                return Ok(new { message = "Bill updated successfully.", Bill = bill });
             }
             catch (Exception ex)
             {

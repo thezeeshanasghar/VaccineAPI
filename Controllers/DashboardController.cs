@@ -69,15 +69,18 @@ namespace VaccineAPI.Controllers
                                 s.GivenDate.Value.Year == currentYear)
                     .CountAsync();
 
-                // Current Month Revenue
-                var totalRevenue = await _db.Schedules
-                    .Include(s => s.Child.Clinic)
-                    .Where(s => s.Child.Clinic.DoctorId == doctorId &&
-                                s.IsDone == true &&
-                                s.GivenDate.HasValue &&
-                                s.GivenDate.Value.Month == currentMonth &&
-                                s.GivenDate.Value.Year == currentYear)
-                    .SumAsync(s => s.Amount);
+                var totalRevenue =await _db.Schedules.Include(s => s.Child.Clinic)
+                        .Where(s =>s.Child.Clinic.DoctorId == doctorId
+                            && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Month == currentMonth
+                            && s.GivenDate.Value.Year == currentYear)
+                        .SumAsync(s => s.Amount ?? 0) 
+                    + await _db.AdjustStocks.Where(sa => _db.Clinics.Any(c => c.Id == sa.ClinicId && c.DoctorId == doctorId)
+                            && sa.Date.Month == currentMonth
+                            && sa.Date.Year == currentYear
+                            && sa.Adjustment < 0)
+                        .SumAsync(sa => sa.Price); 
 
                 var dashboardData = new DashboardDTO
                 {
@@ -86,7 +89,8 @@ namespace VaccineAPI.Controllers
                     TotalAlertsCount = totalAlertsCount,
                     FutureAlertsCount = futureAlertsCount,
                     GivenDosesCount = givenDosesCount,
-                    TotalRevenue = totalRevenue ?? 0m
+                    TotalRevenue = (totalRevenue),
+                    // TotalIncreasedStock = totalIncreasedStock,
                 };
 
                 return Ok(dashboardData);

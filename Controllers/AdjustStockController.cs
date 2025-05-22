@@ -88,17 +88,18 @@ namespace VaccineAPI.Controllers
                     return new Response<AdjustStockDTO>(false,
                         $"Insufficient inventory. Current: {brandAmount.Count}, Adjustment: {dto.Adjustment}", null);
                 }
-                if(brandAmount.PurchasedAmt == 0)
+                if (dto.Adjustment > 0)
                 {
-                    brandAmount.PurchasedAmt = dto.Price;
+                    if (brandAmount.PurchasedAmt == 0)
+                    {
+                        brandAmount.PurchasedAmt = dto.Price;
+                    }
+                    else
+                    {
+                        brandAmount.PurchasedAmt =((brandAmount.PurchasedAmt * brandAmount.Count)+ (dto.Price * dto.Adjustment))
+                         / (brandAmount.Count + dto.Adjustment);
+                    }
                 }
-                else
-                {
-                    // Calculate average price for purchased amount
-                    brandAmount.PurchasedAmt = (brandAmount.PurchasedAmt + dto.Price) / 2;
-                }
-                
-                // Create adjustment record
                 var adjustment = new AdjustStock
                 {
                     BrandId = dto.BrandId,

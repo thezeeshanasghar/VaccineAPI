@@ -570,14 +570,12 @@ namespace VaccineAPI.Controllers
 
                 foreach (var schedule in dbChildSchedules)
                 {
-                    schedule.Weight =
-                        (scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
-                    schedule.Height =
-                        (scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
-                    schedule.Circle =
-                        (scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
+                    schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
+                    schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
+                    schedule.Circle =(scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
                     schedule.IsDone = scheduleDTO.IsDone;
                     schedule.GivenDate = scheduleDTO.GivenDate.Date;
+                    schedule.IsPAApprove= scheduleDTO.IsPAApprove;
 
                     if (scheduleDTO.ScheduleBrands.Count > 0)
                     {

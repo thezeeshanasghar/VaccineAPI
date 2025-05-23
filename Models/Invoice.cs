@@ -9,9 +9,7 @@ namespace VaccineAPI.Models
         public decimal Amount { get; set; }
         public long ChildId { get; set; }
         public long DoctorId { get; set; }
-
         public long ClinicId { get; set; }
-
         public long DoseId { get; set; }
     }
 }

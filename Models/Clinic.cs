@@ -15,7 +15,7 @@ namespace VaccineAPI.Models
         }
         public long Id { get; set; }
         public string Name { get; set; }
-        public int ConsultationFee { get; set; }
+        public decimal ConsultationFee { get; set; }
         // public string StartTime { get; set; }
         // public string EndTime { get; set; }
         public double Lat { get; set; }

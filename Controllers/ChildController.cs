@@ -1406,10 +1406,10 @@ namespace VaccineAPI.Controllers
                                                 int DoctorId)
         {
             Stream stream;
-            int amount = 0;
+            decimal amount = 0.00M;
             int count = 1;
             int col = 3;
-            int consultaionFee = 0;
+            decimal consultaionFee = 0.00M;
             string childName = "";
             var document = new Document(PageSize.A4, 50, 50, 25, 25);
 
@@ -1943,7 +1943,7 @@ namespace VaccineAPI.Controllers
                     vaccinetable.AddCell(CreateCell("Consultation / Visit Charges", "left", 1, "left", "invoiceRecords"));
                     vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
                     vaccinetable.AddCell(CreateCell("", " ", 1, "right", "invoiceRecords"));
-                    vaccinetable.AddCell(CreateCell(consultaionFee.ToString(), " ", 1, "right", "invoiceRecords"));
+                    vaccinetable.AddCell(CreateCell(consultaionFee.ToString("F2"), " ", 1, "right", "invoiceRecords"));
                 }
 
                 vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
@@ -1951,9 +1951,7 @@ namespace VaccineAPI.Controllers
                 vaccinetable.AddCell(CreateCell("Total", "backgroudLightGray", 1, "left", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell((count).ToString(), "backgroudLightGray", 1, "right", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell(" ", "backgroudLightGray", 1, "right", "invoiceRecords"));
-                vaccinetable.AddCell(CreateCell(("PKR " + (amount + consultaionFee) + "/-").ToString(), "backgroudLightGray", 1,
-                                                "right", "invoiceRecords"));
-
+                vaccinetable.AddCell(CreateCell(("PKR " + (amount + consultaionFee).ToString("F2") + "/-"),"backgroudLightGray", 1, "right", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell("Amount in words", " ", 1, "left", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell(ConvertWholeNumber((amount + consultaionFee).ToString()) + " Only", " ", 4,

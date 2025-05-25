@@ -1951,7 +1951,7 @@ namespace VaccineAPI.Controllers
                 vaccinetable.AddCell(CreateCell("Total", "backgroudLightGray", 1, "left", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell((count).ToString(), "backgroudLightGray", 1, "right", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell(" ", "backgroudLightGray", 1, "right", "invoiceRecords"));
-                vaccinetable.AddCell(CreateCell(("PKR " + (amount + consultaionFee).ToString("F2") + "/-"),"backgroudLightGray", 1, "right", "invoiceRecords"));
+                vaccinetable.AddCell(CreateCell(("PKR " + string.Format("{0:F2}", (amount + consultaionFee))), "backgroudLightGray", 1, "right", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell("Amount in words", " ", 1, "left", "invoiceRecords"));
                 vaccinetable.AddCell(CreateCell(ConvertWholeNumber((amount + consultaionFee).ToString()) + " Only", " ", 4,
@@ -2647,19 +2647,19 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf");
         }
 
-            private string GetYearOrMonthFromDays(int days)
-            {  
-                 if (days == 30000)
-                    return "Life Time";
-                else if (days == 365)
-                    return "1 Year";
-                else if (days % 365 == 0)
-                    return $"{days / 365} Years";
-                else if (days % 30 == 0)
-                    return $"{days / 30} Months";
-                else
-                    return $"{days} Days";
-            }
+        private string GetYearOrMonthFromDays(int days)
+        {
+            if (days == 30000)
+                return "Life Time";
+            else if (days == 365)
+                return "1 Year";
+            else if (days % 365 == 0)
+                return $"{days / 365} Years";
+            else if (days % 30 == 0)
+                return $"{days / 30} Months";
+            else
+                return $"{days} Days";
+        }
         private MemoryStream CreateTravelPdf(int childId)
         {
             var childDetails = _db.Childs
@@ -2798,7 +2798,7 @@ namespace VaccineAPI.Controllers
                     string batchLot = schedule.Lot ?? "N/A";
                     string dateGiven = (schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue) ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
                     string expiry = schedule.Expiry?.ToString("dd/MM/yyyy") ?? "";
-                    string validity = schedule.Validity != null ? GetYearOrMonthFromDays((int)schedule.Validity) : "N/A";   
+                    string validity = schedule.Validity != null ? GetYearOrMonthFromDays((int)schedule.Validity) : "N/A";
 
                     // Check if this is the last row
                     bool isLastRow = schedule == dbSchedules.Last();

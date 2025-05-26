@@ -41,7 +41,7 @@ namespace VaccineAPI.Controllers
             var personalAssistants = _db.PersonalAssistant.Where(pa => pa.DoctorId == doctorId).ToList();
             if (!personalAssistants.Any())
             {
-                return NotFound(new { message = "No Personal Assistants found for the given Doctor ID." });
+                return Ok(new { message = "No Personal Assistants found for the given Doctor ID." });
             }
 
             return Ok(personalAssistants);

@@ -21,13 +21,17 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<City>>> GetAllCities()
         {
-            return await _context.Cities.ToListAsync();
+            return await _context.Cities.OrderBy(city => city.Name).ToListAsync();
         }
+
         [HttpGet("Names")]
         public async Task<ActionResult<IEnumerable<string>>> GetAllCityNames()
         {
-            var cityNames = await _context.Cities.Select(city => city.Name).ToListAsync();
-            return cityNames;
+            var cityNames = await _context
+                .Cities.OrderBy(city => city.Name)
+                .Select(city => city.Name)
+                .ToListAsync();
+            return Ok(cityNames); 
         }
 
         // GET: api/City/5

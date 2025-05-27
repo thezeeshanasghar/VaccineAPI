@@ -1743,5 +1743,270 @@ namespace VaccineAPI.Controllers
                 return StatusCode(500, new { message = $"An error occurred: {ex.Message}" });
             }
         }
+
+        [HttpGet("clinic-report-pdf/{clinicId}")]
+        public IActionResult GenerateClinicReportPdf(
+            long clinicId,
+            [FromQuery] string fromDate,
+            [FromQuery] string toDate
+        )
+        {
+            try
+            {
+                // Parse the date range
+                var parsedFromDate = DateTime.Parse(fromDate);
+                var parsedToDate = DateTime.Parse(toDate);
+
+                // Fetch clinic and doctor details
+                var clinic = _db
+                    .Clinics.Include(c => c.Doctor)
+                    .FirstOrDefault(c => c.Id == clinicId);
+
+                if (clinic == null)
+                {
+                    return NotFound("Clinic not found.");
+                }
+
+                var doctorName = clinic.Doctor?.DisplayName ?? "Unknown Doctor";
+                var clinicName = clinic.Name ?? "Unknown Clinic";
+
+                // Fetch schedules
+                var schedules = _db
+                    .Schedules.Include(s => s.Child)
+                    .ThenInclude(c => c.Clinic)
+                    .ThenInclude(clinic => clinic.Doctor)
+                    .Include(s => s.Dose)
+                    .ThenInclude(d => d.Vaccine)
+                    .Where(s =>
+                        s.Child.ClinicId == clinicId
+                        && s.GivenDate.HasValue
+                        && s.GivenDate.Value.Date >= parsedFromDate.Date
+                        && s.GivenDate.Value.Date <= parsedToDate.Date
+                        && s.IsDone == true
+                    )
+                    .Select(s => new
+                    {
+                        s.Child.Id,
+                        s.Child.Name,
+                        VaccineName = s.Dose.Vaccine.Name,
+                        DoseName = s.Dose.Name,
+                        GivenDate = s.GivenDate.Value,
+                        DoctorName = s.Child.Clinic.Doctor.DisplayName,
+                        InvoicePrice = _db.Invoices.Where(i =>
+                                i.ChildId == s.ChildId
+                                && i.DoctorId == s.Child.Clinic.DoctorId
+                                && i.ClinicId == s.Child.ClinicId
+                                && i.DoseId == s.DoseId
+                            )
+                            .Select(i => (decimal?)i.Amount) // Cast to nullable decimal
+                            .FirstOrDefault() ?? 0m, // Default to 0m (decimal)
+                    })
+                    .OrderBy(s => s.GivenDate)
+                    .ToList();
+
+                if (!schedules.Any())
+                {
+                    return NotFound("No data found for the specified clinic and date range.");
+                }
+
+                // Group schedules by patient and then by date
+                var groupedSchedules = schedules
+                    .GroupBy(s => new { s.Id, s.Name })
+                    .Select(patientGroup => new
+                    {
+                        Patient = patientGroup.Key,
+                        Dates = patientGroup.GroupBy(s => s.GivenDate.Date),
+                    });
+
+                // Generate PDF
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    Document document = new Document(PageSize.A4, 25, 25, 30, 30);
+                    PdfWriter writer = PdfWriter.GetInstance(document, ms);
+                    document.Open();
+
+                    // Header setup
+                    Font titleFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 16);
+                    Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+                    Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
+
+                    // Add clinic and doctor details
+                    Paragraph clinicDetails = new Paragraph(
+                        $"Clinic: {clinicName} Doctor: {doctorName}",
+                        titleFont
+                    );
+                    clinicDetails.Alignment = Element.ALIGN_CENTER;
+                    clinicDetails.SpacingAfter = 10f;
+                    document.Add(clinicDetails);
+
+                    // Paragraph title = new Paragraph($"Clinic Report (ID: {clinicId})", titleFont);
+                    // title.Alignment = Element.ALIGN_CENTER;
+                    // title.SpacingAfter = 20f;
+                    // document.Add(title);
+
+                    Paragraph dateRange = new Paragraph(
+                        $"Date Range: {parsedFromDate:yyyy-MM-dd} to {parsedToDate:yyyy-MM-dd}",
+                        normalFont
+                    );
+                    dateRange.Alignment = Element.ALIGN_CENTER;
+                    dateRange.SpacingAfter = 20f;
+                    document.Add(dateRange);
+
+                    // Create table
+                    PdfPTable table = new PdfPTable(3); // Removed the extra column for grouping
+                    table.WidthPercentage = 100;
+                    table.SetWidths(new float[] { 2f, 2f, 1.5f }); // Adjusted column widths
+
+                    // Add headers
+                    string[] headers =
+                    {
+                        "Vaccine",
+                        "Dose",
+                        "Price", // New column for Price
+                        // "Total Price"
+                    };
+                    
+
+                    // Add grouped data rows
+                    foreach (var patientGroup in groupedSchedules)
+                    {
+                        // Add patient name as a row spanning all columns
+                        var patientCell = new PdfPCell(
+                            new Phrase($"Patient: {patientGroup.Patient.Name}", headerFont)
+                        )
+                        {
+                            Colspan = 5,
+                            HorizontalAlignment = Element.ALIGN_LEFT,
+                            Padding = 5,
+                            BackgroundColor = BaseColor.LightGray,
+                        };
+                        table.AddCell(patientCell);
+
+                        // Add rows grouped by date
+                        foreach (var dateGroup in patientGroup.Dates)
+                        {
+                            // Add date as a row spanning all columns
+                            var dateCell = new PdfPCell(
+                                new Phrase($"Date: {dateGroup.Key:yyyy-MM-dd}", normalFont)
+                            )
+                            {
+                                Colspan = 5,
+                                HorizontalAlignment = Element.ALIGN_LEFT,
+                                Padding = 5,
+                                BackgroundColor = BaseColor.LightGray,
+                            };
+                            table.AddCell(dateCell);
+
+                            foreach (string header in headers)
+                            {
+                                var cell = new PdfPCell(new Phrase(header, headerFont))
+                                {
+                                    HorizontalAlignment = Element.ALIGN_CENTER,
+                                    Padding = 5,
+                                };
+                                table.AddCell(cell);
+                            }
+                            // Add rows for each schedule on this date
+                            foreach (var schedule in dateGroup)
+                            {
+                                
+                                table.AddCell(
+                                    new PdfPCell(
+                                        new Phrase(
+                                            schedule.VaccineName ?? "Unknown Vaccine",
+                                            normalFont
+                                        )
+                                    )
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_LEFT,
+                                    }
+                                );
+                                table.AddCell(
+                                    new PdfPCell(
+                                        new Phrase(schedule.DoseName ?? "Unknown Dose", normalFont)
+                                    )
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_LEFT,
+                                    }
+                                );
+                                // table.AddCell(
+                                //     new PdfPCell(
+                                //         new Phrase(
+                                //             schedule.GivenDate.ToString("yyyy-MM-dd"),
+                                //             normalFont
+                                //         )
+                                //     )
+                                //     {
+                                //         HorizontalAlignment = Element.ALIGN_CENTER,
+                                //     }
+                                // );
+                                // table.AddCell(
+                                //     new PdfPCell(
+                                //         new Phrase(
+                                //             schedule.DoctorName ?? "Unknown Doctor",
+                                //             normalFont
+                                //         )
+                                //     )
+                                //     {
+                                //         HorizontalAlignment = Element.ALIGN_LEFT,
+                                //     }
+                                // );
+                                table.AddCell(
+                                    new PdfPCell(
+                                        new Phrase($"₹{schedule.InvoicePrice:N2}", normalFont)
+                                    )
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                                    }
+                                
+                                );
+                                // Add total price for the patient group
+                              
+                                    // if (dateGroup == patientGroup.Dates.Last())
+                                    // {
+                                    //     table.AddCell(
+                                    //         new PdfPCell(
+                                    //             new Phrase($"₹{patientGroup.Dates.Sum(d => d.Sum(s => s.InvoicePrice)):N2}", normalFont)
+                                    //         )
+                                    //         {
+                                    //             HorizontalAlignment = Element.ALIGN_RIGHT,
+                                    //         }
+                                    //     );
+                                    // }
+                                    // else
+                                    // {
+                                    //     table.AddCell(new PdfPCell(new Phrase("", normalFont))
+                                    //     {
+                                    //         HorizontalAlignment = Element.ALIGN_RIGHT,
+                                    //     });
+                                    // }
+                            }
+                              decimal totalPriceForPatient = patientGroup.Dates.Sum(d => d.Sum(s => s.InvoicePrice));
+                                var totalCell = new PdfPCell(new Phrase($"Total for {patientGroup.Patient.Name}: ₹{totalPriceForPatient:N2}", normalFont))
+                                {
+                                    Colspan = 5,
+                                    HorizontalAlignment = Element.ALIGN_RIGHT,
+                                    Padding = 5,
+                                    BackgroundColor = BaseColor.LightGray,
+                                };
+                                table.AddCell(totalCell);
+                        }
+                    }
+
+                    document.Add(table);
+                    
+                    Paragraph summary = new Paragraph($"\nTotal Patients: {groupedSchedules.Count()}"+ $"\nTotal Vaccines Administered: {schedules.Count}"+ $"\nTotal Price: ₹{schedules.Sum(s => s.InvoicePrice):N2}",headerFont);
+                    summary.SpacingBefore = 20f;
+                    document.Add(summary);
+
+                    document.Close();
+                    return File(ms.ToArray(),"application/pdf",$"ClinicReport_{clinicId}_{parsedFromDate:yyyyMMdd}_{parsedToDate:yyyyMMdd}.pdf");
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error generating PDF: {ex.Message}");
+            }
+        }
     }
 }

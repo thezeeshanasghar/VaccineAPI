@@ -1900,89 +1900,10 @@ namespace VaccineAPI.Controllers
                     upperTable.AddCell(imageCell);
 
                     document.Add(upperTable);
-                    // PdfPTable upperTable = new PdfPTable(3);
-                    // float[] upperTableWidths = new float[] { 230f, 75f, 230f };
-                    // upperTable.HorizontalAlignment = 0;
-                    // upperTable.TotalWidth = 510f;
-                    // upperTable.LockedWidth = true;
-                    // upperTable.SetWidths(upperTableWidths);
-
-                    // // Add static data for doctor name
-                    // upperTable.AddCell(
-                    //     CreateCell(doctorName, "bold", 2, "left", "description")
-                    // );
-
-                    // // Handle clinic logo with static path
-                    // var logoPath = Path.Combine(
-                    //     _host.ContentRootPath,
-                    //     MonogramImage
-                    // );
-                    // PdfPCell imageCell = new PdfPCell(new Phrase(""))
-                    // {
-                    //     Colspan = 1,
-                    //     Rowspan = 2,
-                    //     Border = 0,
-                    //     FixedHeight = 50f,
-                    //     HorizontalAlignment = Element.ALIGN_RIGHT,
-                    // };
-                    // if (System.IO.File.Exists(logoPath))
-                    // {
-                    //     var img = Image.GetInstance(logoPath);
-                    //     img.ScaleAbsolute(160f, 50f);
-                    //     imageCell = new PdfPCell(img, false)
-                    //     {
-                    //         Colspan = 1,
-                    //         Rowspan = 2,
-                    //         Border = 0,
-                    //         FixedHeight = 50f,
-                    //         HorizontalAlignment = Element.ALIGN_RIGHT,
-                    //     };
-                    // }
-                    // upperTable.AddCell(imageCell);
-
-                    // // Add static data for clinic name and address
-                    // upperTable.AddCell(CreateCell(clinicName, "bold", 2, "left", "description"));
-                    // upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
-                    // upperTable.AddCell(
-                    //     CreateCell(address, "unbold", 2, "left", "description")
-                    // );
-
-                    // // Add static data for patient details
-                    // upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
-                    // upperTable.AddCell(
-                    //     CreateCell(phoneNumber, "", 2, "left", "description")
-                    // );
-                    // upperTable.AddCell(CreateCell("", "", 1, "right", "description"));
-                    // // upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
-
-                    // // // Add static data for CNIC and DOB
-                    // // upperTable.AddCell(
-                    // //     CreateCell("CNIC/Passport: 61101-1231231-1", "", 1, "right", "description")
-                    // // );
-                    // // upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
-                    // // upperTable.AddCell(
-                    // //     CreateCell("DOB: 2025-05-12", "", 1, "right", "description")
-                    // // );
-
-                    // document.Add(upperTable);
 
                     Font titleFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 16);
                     Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
                     Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
-
-                    // Add clinic and doctor details
-                    // Paragraph clinicDetails = new Paragraph(
-                    //     $"Clinic: {clinicName} Doctor: {doctorName}",
-                    //     titleFont
-                    // );
-                    // clinicDetails.Alignment = Element.ALIGN_CENTER;
-                    // clinicDetails.SpacingAfter = 10f;
-                    // document.Add(clinicDetails);
-
-                    // Paragraph title = new Paragraph($"Clinic Report (ID: {clinicId})", titleFont);
-                    // title.Alignment = Element.ALIGN_CENTER;
-                    // title.SpacingAfter = 20f;
-                    // document.Add(title);
 
                     Paragraph dateRange = new Paragraph(
                         $"Date Range: {parsedFromDate:yyyy-MM-dd} to {parsedToDate:yyyy-MM-dd}",
@@ -2010,38 +1931,10 @@ namespace VaccineAPI.Controllers
                         };
                         table.AddCell(cell);
                     }
-                    // Add grouped data rows
                     foreach (var patientGroup in groupedSchedules)
                     {
-                        // Add patient name as a row spanning all columns
-                        // var patientCell = new PdfPCell(
-                        //     new Phrase($"Patient: {patientGroup.Patient.Name}", headerFont)
-                        // )
-                        // {
-                        //     Colspan = 5,
-                        //     HorizontalAlignment = Element.ALIGN_LEFT,
-                        //     Padding = 5,
-                        //     BackgroundColor = BaseColor.LightGray,
-                        // };
-                        // table.AddCell(patientCell);
-
-                        // Add rows grouped by date
                         foreach (var dateGroup in patientGroup.Dates)
                         {
-                            // Add date as a row spanning all columns
-                            // var dateCell = new PdfPCell(
-                            //     new Phrase($"Date: {dateGroup.Key:yyyy-MM-dd}", normalFont)
-                            // )
-                            // {
-                            //     Colspan = 5,
-                            //     HorizontalAlignment = Element.ALIGN_LEFT,
-                            //     Padding = 5,
-                            //     BackgroundColor = BaseColor.LightGray,
-                            // };
-                            // table.AddCell(dateCell);
-
-                          
-                            // Add rows for each schedule on this date
                             bool isFirstRowForDate = true;
                             foreach (var schedule in dateGroup)
                             {
@@ -2058,7 +1951,6 @@ namespace VaccineAPI.Controllers
                                             HorizontalAlignment = Element.ALIGN_LEFT,
                                         }
                                     );
-                                    // Add patient name and date only for the first row
                                     table.AddCell(
                                         new PdfPCell(
                                             new Phrase(
@@ -2071,7 +1963,7 @@ namespace VaccineAPI.Controllers
                                         }
                                     );
 
-                                    isFirstRowForDate = false; // Set flag to false after the first row
+                                    isFirstRowForDate = false; 
                                 }
                                 else
                                 {
@@ -2081,7 +1973,6 @@ namespace VaccineAPI.Controllers
                                             HorizontalAlignment = Element.ALIGN_LEFT,
                                         }
                                     );
-                                    // Add empty cells for subsequent rows
                                     table.AddCell(
                                         new PdfPCell(new Phrase("", normalFont))
                                         {
@@ -2108,28 +1999,6 @@ namespace VaccineAPI.Controllers
                                         HorizontalAlignment = Element.ALIGN_RIGHT,
                                     }
                                 );
-                                // table.AddCell(
-                                //     new PdfPCell(
-                                //         new Phrase(
-                                //             schedule.GivenDate.ToString("yyyy-MM-dd"),
-                                //             normalFont
-                                //         )
-                                //     )
-                                //     {
-                                //         HorizontalAlignment = Element.ALIGN_CENTER,
-                                //     }
-                                // );
-                                // table.AddCell(
-                                //     new PdfPCell(
-                                //         new Phrase(
-                                //             schedule.DoctorName ?? "Unknown Doctor",
-                                //             normalFont
-                                //         )
-                                //     )
-                                //     {
-                                //         HorizontalAlignment = Element.ALIGN_LEFT,
-                                //     }
-                                // );
                                 table.AddCell(
                                     new PdfPCell(
                                         new Phrase($"₹{schedule.InvoicePrice:N2}", normalFont)
@@ -2138,26 +2007,6 @@ namespace VaccineAPI.Controllers
                                         HorizontalAlignment = Element.ALIGN_RIGHT,
                                     }
                                 );
-                                // Add total price for the patient group
-
-                                // if (dateGroup == patientGroup.Dates.Last())
-                                // {
-                                //     table.AddCell(
-                                //         new PdfPCell(
-                                //             new Phrase($"₹{patientGroup.Dates.Sum(d => d.Sum(s => s.InvoicePrice)):N2}", normalFont)
-                                //         )
-                                //         {
-                                //             HorizontalAlignment = Element.ALIGN_RIGHT,
-                                //         }
-                                //     );
-                                // }
-                                // else
-                                // {
-                                //     table.AddCell(new PdfPCell(new Phrase("", normalFont))
-                                //     {
-                                //         HorizontalAlignment = Element.ALIGN_RIGHT,
-                                //     });
-                                // }
                             }
                             decimal totalPriceForPatient = patientGroup.Dates.Sum(d =>
                                 d.Sum(s => s.InvoicePrice)

@@ -187,30 +187,104 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/schedule")]
         public Response<IEnumerable<ScheduleDTO>> GetChildSchedule(int id)
         {
+            try
             {
-                var child = _db.Childs.Include(x => x.Schedules).Include(x => x.User).FirstOrDefault(c => c.Id == id);
+                var child = _db
+                    .Childs.AsNoTracking()
+                    .Include(x => x.Schedules)
+                    .Include(x => x.User)
+                    .FirstOrDefault(c => c.Id == id);
+
                 if (child == null)
-                    return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
-                else
                 {
-                    var dbSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
-                    for (int i = 0; i < dbSchedules.Count; i++)
-                    {
-                        var dbSchedule = dbSchedules.ElementAt(i);
-                        dbSchedule.Dose =
-                            _db.Schedules.Include("Dose").Where<Schedule>(x => x.Id == dbSchedule.Id).FirstOrDefault().Dose;
-                        dbSchedule.Brand = _db.Brands.Where<Brand>(x => x.Id == dbSchedule.BrandId).FirstOrDefault();
-                    }
-
-                    var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
-
-                    // foreach (var scheduleDTO in schedulesDTO)
-                    //    scheduleDTO.Dose = Mapper.Map<DoseDTO>(entities.Schedules.Include("Dose").Where<Schedule>(x => x.ID ==
-                    //    scheduleDTO.ID).FirstOrDefault<Schedule>().Dose);
-                    return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
+                    return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
                 }
+
+                var dbSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
+
+                foreach (var dbSchedule in dbSchedules)
+                {
+                    dbSchedule.Dose = _db
+                        .Schedules.Include(x => x.Dose)
+                        .AsNoTracking()
+                        .FirstOrDefault(x => x.Id == dbSchedule.Id)
+                        ?.Dose;
+
+                    dbSchedule.Brand = _db
+                        .Brands.AsNoTracking()
+                        .FirstOrDefault(x => x.Id == dbSchedule.BrandId);
+                }
+
+                var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
+
+                return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetChildSchedule: {ex.Message}");
+                return new Response<IEnumerable<ScheduleDTO>>(
+                    false,
+                    $"An error occurred: {ex.Message}",
+                    null
+                );
             }
         }
+
+        // [HttpGet("{id}/schedule")]
+        // public Response<IEnumerable<ScheduleDTO>> GetChildSchedule(int id)
+        // {
+        //     var child = _db
+        //         .Childs.Include(x => x.Schedules)
+        //         .ThenInclude(s => s.Dose)
+        //         .Include(x => x.Schedules)
+        //         .ThenInclude(s => s.Brand)
+        //         .Include(x => x.User)
+        //         .FirstOrDefault(c => c.Id == id);
+
+        //     if (child == null)
+        //         return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
+
+        //     var dbSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
+        //     var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
+
+        //     return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
+        // }
+
+        // [HttpGet("{id}/schedule")]
+        // public Response<IEnumerable<ScheduleDTO>> GetChildSchedule(int id)
+        // {
+        //     {
+        //         var child = _db
+        //             .Childs.Include(x => x.Schedules)
+        //             .Include(x => x.User)
+        //             .FirstOrDefault(c => c.Id == id);
+        //         if (child == null)
+        //             return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
+        //         else
+        //         {
+        //             var dbSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
+        //             for (int i = 0; i < dbSchedules.Count; i++)
+        //             {
+        //                 var dbSchedule = dbSchedules.ElementAt(i);
+        //                 dbSchedule.Dose = _db
+        //                     .Schedules.Include("Dose")
+        //                     .Where<Schedule>(x => x.Id == dbSchedule.Id)
+        //                     .FirstOrDefault()
+        //                     .Dose;
+        //                 dbSchedule.Brand = _db
+        //                     .Brands.Where<Brand>(x => x.Id == dbSchedule.BrandId)
+        //                     .FirstOrDefault();
+        //             }
+
+        //             var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
+
+        //             // foreach (var scheduleDTO in schedulesDTO)
+        //             //    scheduleDTO.Dose = Mapper.Map<DoseDTO>(entities.Schedules.Include("Dose").Where<Schedule>(x => x.ID ==
+        //             //    scheduleDTO.ID).FirstOrDefault<Schedule>().Dose);
+        //             return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
+        //         }
+        //     }
+        // }
 
         // csv file start
         [HttpGet("{id}/downloadcsv")]

@@ -178,6 +178,10 @@ namespace VaccineAPI.Controllers
         public Response<ChildDTO> GetSingle(int Id)
         {
             var dbChild = _db.Childs.Include(c => c.User).Where(c => c.Id == Id).FirstOrDefault();
+             if (dbChild == null)
+             {
+                return new Response<ChildDTO>(false, "Child not found", null);
+             }
             ChildDTO childDTO = _mapper.Map<ChildDTO>(dbChild);
             childDTO.CountryCode = dbChild.User.CountryCode;
             childDTO.MobileNumber = dbChild.User.MobileNumber;
@@ -189,29 +193,36 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                // First check if child exists
-                var childExists = _db.Childs.Any(c => c.Id == id);
-                if (!childExists)
+                var child = _db
+                    .Childs.AsNoTracking().Include(x => x.Schedules).Include(x => x.User).FirstOrDefault(c => c.Id == id);
+
+                if (child == null)
                 {
                     return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
                 }
 
-                // Load schedules with related data in a single query
-                var schedules = _db.Schedules
-                    .Where(s => s.ChildId == id)
-                    .Include(s => s.Dose)
-                    .Include(s => s.Brand)
-                    .OrderBy(s => s.Date)
-                    .ToList();
+                var dbSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
 
-                var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(schedules);
+                foreach (var dbSchedule in dbSchedules)
+                {
+                    dbSchedule.Dose = _db.Schedules.Include(x => x.Dose)
+                        .AsNoTracking().FirstOrDefault(x => x.Id == dbSchedule.Id)?.Dose;
+
+                    dbSchedule.Brand = _db.Brands.AsNoTracking().FirstOrDefault(x => x.Id == dbSchedule.BrandId);
+                }
+
+                var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
+
                 return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
             }
             catch (Exception ex)
             {
-                // Log the full exception details
-                Console.WriteLine($"Error in GetChildSchedule: {ex}");
-                return new Response<IEnumerable<ScheduleDTO>>(false, $"Error retrieving schedule: {ex.Message}", null);
+                Console.WriteLine($"Error in GetChildSchedule: {ex.Message}");
+                return new Response<IEnumerable<ScheduleDTO>>(
+                    false,
+                    $"An error occurred: {ex.Message}",
+                    null
+                );
             }
         }
 

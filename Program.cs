@@ -17,7 +17,15 @@ var serverVersion = new MySqlServerVersion(new Version(8, 0, 31));
 
 builder.Services.AddDbContext<VaccineAPI.Models.Context>(
     dbContextOptions => dbContextOptions
-        .UseMySql(connectionString, serverVersion)
+        .UseMySql(connectionString, serverVersion, options => {
+            options.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null);
+            options.CommandTimeout(60);
+            options.MaxBatchSize(100);
+            options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+        })
         .LogTo(Console.WriteLine, LogLevel.Information)
         .EnableSensitiveDataLogging()
         .EnableDetailedErrors()

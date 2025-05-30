@@ -189,44 +189,25 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var child = _db
-                    .Childs.AsNoTracking()
+                var child = _db.Childs
                     .Include(x => x.Schedules)
+                        .ThenInclude(s => s.Dose)
+                    .Include(x => x.Schedules)
+                        .ThenInclude(s => s.Brand)
                     .Include(x => x.User)
                     .FirstOrDefault(c => c.Id == id);
 
                 if (child == null)
-                {
                     return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
-                }
 
                 var dbSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
-
-                foreach (var dbSchedule in dbSchedules)
-                {
-                    dbSchedule.Dose = _db
-                        .Schedules.Include(x => x.Dose)
-                        .AsNoTracking()
-                        .FirstOrDefault(x => x.Id == dbSchedule.Id)
-                        ?.Dose;
-
-                    dbSchedule.Brand = _db
-                        .Brands.AsNoTracking()
-                        .FirstOrDefault(x => x.Id == dbSchedule.BrandId);
-                }
-
                 var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
 
                 return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GetChildSchedule: {ex.Message}");
-                return new Response<IEnumerable<ScheduleDTO>>(
-                    false,
-                    $"An error occurred: {ex.Message}",
-                    null
-                );
+                return new Response<IEnumerable<ScheduleDTO>>(false, $"Error retrieving schedule: {ex.Message}", null);
             }
         }
 

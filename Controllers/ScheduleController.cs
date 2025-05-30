@@ -1724,6 +1724,31 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        private PdfPCell CreateCell(
+            string text,
+            string fontStyle,
+            int colspan,
+            string alignment,
+            string description
+        )
+        {
+            Font font =
+                fontStyle == "bold"
+                    ? FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)
+                    : FontFactory.GetFont(FontFactory.HELVETICA, 10);
+
+            PdfPCell cell = new PdfPCell(new Phrase(text, font))
+            {
+                Colspan = colspan,
+                Border = 0,
+                HorizontalAlignment =
+                    alignment == "left" ? Element.ALIGN_LEFT : Element.ALIGN_RIGHT,
+                Padding = 5,
+            };
+
+            return cell;
+        }
+
         [HttpPatch("{id}/ispaapprove")]
         public async Task<IActionResult> PatchIsPAApprove(long id)
         {
@@ -1741,6 +1766,288 @@ namespace VaccineAPI.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = $"An error occurred: {ex.Message}" });
+            }
+        }
+
+        [HttpGet("clinic-report-pdf/{clinicId}")]
+        public IActionResult GenerateClinicReportPdf(
+            long clinicId,
+            [FromQuery] string fromDate,
+            [FromQuery] string toDate
+        )
+        {
+            try
+            {
+                // Parse the date range
+                var parsedFromDate = DateTime.Parse(fromDate);
+                var parsedToDate = DateTime.Parse(toDate);
+
+                // Fetch clinic and doctor details
+                var clinic = _db
+                    .Clinics.Include(c => c.Doctor)
+                    .FirstOrDefault(c => c.Id == clinicId);
+
+                if (clinic == null)
+                {
+                    return NotFound("Clinic not found.");
+                }
+
+                var doctorName = clinic.Doctor?.DisplayName ?? "Unknown Doctor";
+                var additionalInfo = clinic.Doctor?.AdditionalInfo ?? "No additional info";
+                var clinicName = clinic.Name ?? "Unknown Clinic";
+                var MonogramImage = clinic.MonogramImage ?? "default-monogram.png";
+                var address = clinic.Address ?? "Unknown Address";
+                var phoneNumber = clinic.PhoneNumber ?? "Unknown Phone Number";
+
+
+                // Fetch schedules
+                var schedules = _db
+                    .Schedules.Include(s => s.Child)
+                    .ThenInclude(c => c.Clinic)
+                    .ThenInclude(clinic => clinic.Doctor)
+                    .Include(s => s.Dose)
+                    .ThenInclude(d => d.Vaccine)
+                    .Include(s => s.Brand)
+                    .Where(s =>
+                        s.Child.ClinicId == clinicId
+                        && s.GivenDate.HasValue
+                        && s.GivenDate.Value.Date >= parsedFromDate.Date
+                        && s.GivenDate.Value.Date <= parsedToDate.Date
+                        && s.IsDone == true
+                    )
+                    .Select(s => new
+                    {
+                        s.Child.Id,
+                        s.Child.Name,
+                        VaccineName = s.Dose.Vaccine.Name,
+                        DoseName = s.Dose.Name,
+                        GivenDate = s.GivenDate.Value,
+                        DoctorName = s.Child.Clinic.Doctor.DisplayName,
+                        InvoicePrice = _db.Invoices.Where(i =>
+                                i.ChildId == s.ChildId
+                                && i.DoctorId == s.Child.Clinic.DoctorId
+                                && i.ClinicId == s.Child.ClinicId
+                                && i.DoseId == s.DoseId
+                            )
+                            .Select(i => (decimal?)i.Amount) // Cast to nullable decimal
+                            .FirstOrDefault() ?? 0m, // Default to 0m (decimal)
+                        BrandName = s.Brand.Name ?? "Unknown Brand",})
+                    .OrderBy(s => s.GivenDate)
+                    .ToList();
+
+                if (!schedules.Any())
+                {
+                    return NotFound("No data found for the specified clinic and date range.");
+                }
+
+                // Group schedules by patient and then by date
+                var groupedSchedules = schedules
+                    .GroupBy(s => new { s.Id, s.Name })
+                    .Select(patientGroup => new
+                    {
+                        Patient = patientGroup.Key,
+                        Dates = patientGroup.GroupBy(s => s.GivenDate.Date),
+                    });
+
+                // Generate PDF
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    Document document = new Document(PageSize.A4, 25, 25, 30, 30);
+                    PdfWriter writer = PdfWriter.GetInstance(document, ms);
+                    document.Open();
+
+                    // Header setup
+                    PdfPTable upperTable = new PdfPTable(2);
+                    float[] upperTableWidths = new float[] { 350f, 160f };
+                    upperTable.HorizontalAlignment = 0;
+                    upperTable.TotalWidth = 510f;
+                    upperTable.LockedWidth = true;
+                    upperTable.SetWidths(upperTableWidths);
+
+                    // Add static data for doctor name and clinic details on the left
+                    PdfPCell leftCell = new PdfPCell(
+                        new Phrase(
+                            $"{doctorName}\n{additionalInfo}\n{clinicName}\n{address}\n{phoneNumber}",
+                            FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10) // Changed to bold font
+                        )
+                    )
+                    {
+                        Border = 0,
+                        HorizontalAlignment = Element.ALIGN_LEFT,
+                        Padding = 5,
+                    };
+                    upperTable.AddCell(leftCell);
+
+                    // Handle clinic logo on the right
+                    var logoPath = Path.Combine(_host.ContentRootPath, MonogramImage);
+                    PdfPCell imageCell = new PdfPCell(new Phrase(""))
+                    {
+                        Border = 0,
+                        FixedHeight = 50f,
+                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                    };
+                    if (System.IO.File.Exists(logoPath))
+                    {
+                        var img = Image.GetInstance(logoPath);
+                        img.ScaleAbsolute(160f, 50f);
+                        imageCell = new PdfPCell(img, false)
+                        {
+                            Border = 0,
+                            FixedHeight = 50f,
+                            HorizontalAlignment = Element.ALIGN_RIGHT,
+                        };
+                    }
+                    upperTable.AddCell(imageCell);
+
+                    document.Add(upperTable);
+
+                    Font titleFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 16);
+                    Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+                    Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
+
+                    Paragraph dateRange = new Paragraph(
+                        $"Date Range: {parsedFromDate:yyyy-MM-dd} to {parsedToDate:yyyy-MM-dd}",
+                        normalFont
+                    );
+                    dateRange.Alignment = Element.ALIGN_CENTER;
+                    dateRange.SpacingAfter = 20f;
+                    document.Add(dateRange);
+
+                    // Create table
+                    PdfPTable table = new PdfPTable(5); // Removed the extra column for grouping
+                    table.WidthPercentage = 100;
+                    table.SetWidths(new float[] { 1.5f, 2f, 2f, 2f, 1.5f }); // Adjusted column widths
+
+                    // Add headers
+                    string[] headers = { "Date", "Patient", "Item", "Quantity", "Price" };
+
+                    foreach (string header in headers)
+                    {
+                        var cell = new PdfPCell(new Phrase(header, headerFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            Padding = 5,
+                            BackgroundColor = BaseColor.LightGray,
+                        };
+                        table.AddCell(cell);
+                    }
+                    foreach (var patientGroup in groupedSchedules)
+                    {
+                        foreach (var dateGroup in patientGroup.Dates)
+                        {
+                            bool isFirstRowForDate = true;
+                            foreach (var schedule in dateGroup)
+                            {
+                                if (isFirstRowForDate)
+                                {
+                                      table.AddCell(
+                                        new PdfPCell(
+                                            new Phrase(
+                                                schedule.GivenDate.ToString("yyyy-MM-dd"),
+                                                normalFont
+                                            )
+                                        )
+                                        {
+                                            HorizontalAlignment = Element.ALIGN_LEFT,
+                                        }
+                                    );
+                                    table.AddCell(
+                                        new PdfPCell(
+                                            new Phrase(
+                                                patientGroup.Patient.Name ?? "Unknown Patient",
+                                                headerFont
+                                            )
+                                        )
+                                        {
+                                            HorizontalAlignment = Element.ALIGN_LEFT,
+                                        }
+                                    );
+
+                                    isFirstRowForDate = false; 
+                                }
+                                else
+                                {
+                                    table.AddCell(
+                                        new PdfPCell(new Phrase("", normalFont))
+                                        {
+                                            HorizontalAlignment = Element.ALIGN_LEFT,
+                                        }
+                                    );
+                                    table.AddCell(
+                                        new PdfPCell(new Phrase("", normalFont))
+                                        {
+                                            HorizontalAlignment = Element.ALIGN_LEFT,
+                                        }
+                                    );
+                                }
+                                table.AddCell(
+                                    new PdfPCell(
+                                        new Phrase(
+                                            schedule.BrandName ?? "Unknown Vaccine",
+                                            normalFont
+                                        )
+                                    )
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_LEFT,
+                                    }
+                                );
+                                table.AddCell(
+                                    new PdfPCell(
+                                        new Phrase("1" ?? "Unknown Dose", normalFont)
+                                    )
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                                    }
+                                );
+                                table.AddCell(
+                                    new PdfPCell(
+                                        new Phrase($"₹{schedule.InvoicePrice:N2}", normalFont)
+                                    )
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                                    }
+                                );
+                            }
+                            decimal totalPriceForPatient = patientGroup.Dates.Sum(d =>
+                                d.Sum(s => s.InvoicePrice)
+                            );
+                            var totalCell = new PdfPCell(
+                                new Phrase(
+                                    $"Total for {patientGroup.Patient.Name}: ₹{totalPriceForPatient:N2}",
+                                    headerFont
+                                )
+                            )
+                            {
+                                Colspan = 5,
+                                HorizontalAlignment = Element.ALIGN_RIGHT,
+                                Padding = 5,
+                            };
+                            table.AddCell(totalCell);
+                        }
+                    }
+
+                    document.Add(table);
+
+                    Paragraph summary = new Paragraph(
+                        $"\nTotal Patients: {groupedSchedules.Count()}"
+                            + $"\nTotal Vaccines Administered: {schedules.Count}"
+                            + $"\nTotal Price: ₹{schedules.Sum(s => s.InvoicePrice):N2}",
+                        headerFont
+                    );
+                    summary.SpacingBefore = 20f;
+                    document.Add(summary);
+
+                    document.Close();
+                    return File(
+                        ms.ToArray(),
+                        "application/pdf",
+                        $"ClinicReport_{clinicId}_{parsedFromDate:yyyyMMdd}_{parsedToDate:yyyyMMdd}.pdf"
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error generating PDF: {ex.Message}");
             }
         }
     }

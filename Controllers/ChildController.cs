@@ -1871,7 +1871,7 @@ namespace VaccineAPI.Controllers
 
                         // Retrieve the brand amount
                         var brandAmount = _db.BrandAmounts
-                            .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId);
+                            .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId && x.Clinic.IsOnline == true);
 
                         // Check if the invoice already exists
                         var existingInvoice = _db.Invoices
@@ -1894,6 +1894,21 @@ namespace VaccineAPI.Controllers
                             _db.Invoices.Add(existingInvoice);
                         }
 
+                        var existingFee = _db.Fee
+                            .FirstOrDefault(f => f.InvoiceId == invoiceNumber); 
+
+                        if (existingFee == null)
+                        {
+                              if(consultaionFee != 0)
+                            {
+                                var fee = new Fee
+                                {
+                                     InvoiceId = invoiceNumber,
+                                     Amount = consultaionFee,
+                                };
+                                _db.Fee.Add(fee);
+                            }
+                        }
                         // Determine if the schedule's amount is empty or zero
                         bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
 
@@ -1921,7 +1936,7 @@ namespace VaccineAPI.Controllers
                         vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
 
                         var brandAmount1 =
-                            _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault();
+                            _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId && x.Clinic.IsOnline == true).FirstOrDefault();
                         if (brandAmount != null && schedule.Amount == null)
                         {
                             amount = amount + Convert.ToInt32(brandAmount.Amount);

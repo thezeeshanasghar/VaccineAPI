@@ -389,14 +389,19 @@ namespace VaccineAPI.Controllers
         private Stream CreateSchedulePdf(int childId)
         {
             // Access db data
-            var dbChild = _db.Childs.Include(x => x.User)
+            var dbChild = _db.Childs
+                                  .Include(x => x.User)
                                   .Include(x => x.Clinic)
                                   .ThenInclude(x => x.Doctor)
                                   .ThenInclude(x => x.User)
                                   .Where(x => x.Id == childId)
                                   .FirstOrDefault();
-            var dbDoctor = dbChild.Clinic.Doctor;
-            var child = _db.Childs.Include(x => x.Schedules)
+
+            if (dbChild == null) return null;
+
+            var dbDoctor = dbChild.Clinic?.Doctor; // Use ?. for null-conditional access
+            var child = _db.Childs
+                                .Include(x => x.Schedules)
                                 .ThenInclude(x => x.Dose)
                                 .Include(x => x.Schedules)
                                 .ThenInclude(x => x.Brand)
@@ -426,7 +431,7 @@ namespace VaccineAPI.Controllers
                 writer.PageEvent = new PDFFooter(child);
                 document.Open();
                 // QR Code URL
-                var baseUrl = "https://myapi.vaccinationcentre.com/api";
+                var baseUrl = "https://localhost:5001/api";
                 var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Schedule-PDF";
 
                 try
@@ -436,6 +441,10 @@ namespace VaccineAPI.Controllers
                     {
                         var qrCode = new BitmapByteQRCode(qrCodeData);
                         byte[] qrCodeImage = qrCode.GetGraphic(18);
+
+                        // Check if qrCodeImage is null or empty before proceeding
+                        if (qrCodeImage != null && qrCodeImage.Length > 0)
+                        {
                         using (MemoryStream ms = new MemoryStream(qrCodeImage))
                         {
                             var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
@@ -446,6 +455,12 @@ namespace VaccineAPI.Controllers
                             float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
                             pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                             writer.DirectContent.AddImage(pdfQrCode);
+                            }
+                        }
+                        else
+                        {
+                            // Optional: Log a warning or handle the case where QR code image is not generated
+                            Console.WriteLine($"Warning: QR code image for child ID {childId} was null or empty.");
                         }
                     }
                 }
@@ -461,11 +476,14 @@ namespace VaccineAPI.Controllers
                 upperTable.TotalWidth = 510f;
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths(upperTableWidths);
-                upperTable.AddCell(CreateCell(dbDoctor.DisplayName, "bold", 2, "left", "description"));
-                var imgPath = dbChild.Clinic.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
+
+                // Add doctor display name, or a placeholder if null
+                upperTable.AddCell(CreateCell(dbDoctor?.DisplayName ?? "", "bold", 2, "left", "description"));
+
+                var imgPath = dbChild.Clinic?.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
 
                 // Handle clinic logo
-                var logoPath = dbChild.Clinic.MonogramImage != null ?
+                var logoPath = dbChild.Clinic?.MonogramImage != null ?
                     Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
                 PdfPCell imageCell = new PdfPCell(new Phrase(""))
                 {
@@ -490,15 +508,15 @@ namespace VaccineAPI.Controllers
                 }
                 upperTable.AddCell(imageCell);
 
-                upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "unbold", 2, "left", "description"));
-                upperTable.AddCell(CreateCell(dbChild.Clinic.Name, "bold", 2, "left", "description"));
+                upperTable.AddCell(CreateCell(dbDoctor?.AdditionalInfo ?? "", "unbold", 2, "left", "description"));
+                upperTable.AddCell(CreateCell(dbChild.Clinic?.Name ?? "", "bold", 2, "left", "description"));
 
-                upperTable.AddCell(CreateCell(dbChild.Name, "bold", 1, "right", "description"));
+                upperTable.AddCell(CreateCell(dbChild.Name ?? "", "bold", 1, "right", "description"));
 
-                upperTable.AddCell(CreateCell(dbChild.Clinic.Address, "unbold", 2, "left", "description"));
+                upperTable.AddCell(CreateCell(dbChild.Clinic?.Address ?? "", "unbold", 2, "left", "description"));
 
-                upperTable.AddCell(CreateCell("S/D/W/o " + dbChild.FatherName, "", 1, "right", "description"));
-                upperTable.AddCell(CreateCell("Phone: " + dbChild.Clinic.PhoneNumber, "", 2, "left", "description"));
+                upperTable.AddCell(CreateCell("S/D/W/o " + (dbChild.FatherName ?? ""), "", 1, "right", "description"));
+                upperTable.AddCell(CreateCell("Phone: " + (dbChild.Clinic?.PhoneNumber ?? ""), "", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
                                                 "description"));
                 upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
@@ -516,7 +534,7 @@ namespace VaccineAPI.Controllers
                 document.Add(upperTable);
 
                 // iTextSharp.TEXT.Font myFont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
-                Paragraph title = new Paragraph("IMMUNIZATION RECORD");
+                Paragraph title = new Paragraph("Immunization Record");
                 title.Font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
@@ -949,33 +967,177 @@ namespace VaccineAPI.Controllers
             }
         }
 
+
         [HttpGet("{id}/Download-Schedule-PDF")]
         public IActionResult GenerateVerifySchedule(int id)
         {
-            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/{id}/Verification-Schedule-PDF";
+            // Fetch child and schedule data with all necessary includes
+            var child = _db.Childs
+                .Include(c => c.Schedules)
+                    .ThenInclude(s => s.Dose)
+                .Include(c => c.Schedules)
+                    .ThenInclude(s => s.Brand)
+                .Include(c => c.Clinic)
+                    .ThenInclude(cl => cl.Doctor)
+                .FirstOrDefault(c => c.Id == id);
+
+            if (child == null)
+            {
+                return NotFound($"Child with ID {id} not found");
+            }
+
+            // Get all schedules, ordered by date
+            var allSchedules = child.Schedules.OrderBy(s => s.Date).ToList();
+
+            var fileUrl = $"https://localhost:5001/api/Child/{id}/Verification-Schedule-PDF";
+
+            // Build vaccine rows
+            var vaccineRows = new StringBuilder();
+            foreach (var schedule in allSchedules)
+            {
+                string status;
+                if (schedule.IsDone == true && schedule.IsDisease != true && schedule.Due2EPI != true)
+                {
+                    status = "Given";
+                }
+                else if (schedule.IsDone == true && schedule.IsDisease != true && schedule.Due2EPI == true)
+                {
+                    status = "By EPI";
+                }
+                else if (schedule.IsDone == false && schedule.IsDisease != true && !checkForMissed(schedule.Date))
+                {
+                    status = "Due";
+                }
+                else if (schedule.IsDone == false && schedule.IsDisease != true && checkForMissed(schedule.Date))
+                {
+                    status = "Missed";
+                }
+                else
+                {
+                    status = "Diseased";
+                }
+
+                vaccineRows.Append($@"
+            <tr>
+                <td>{schedule.Dose?.Name}</td>
+                <td>{status}</td>
+                <td>{schedule.Brand?.Name}</td>
+                <td>{schedule.Manufacturer}</td>
+                <td>{schedule.Lot}</td>
+                <td>{(schedule.IsDone == true ? schedule.GivenDate?.ToString("dd MMM yyyy") : schedule.Date.ToString("dd MMM yyyy"))}</td>
+                <td>{GetYearOrMonthFromDays((int?)schedule.Validity ?? 0)}</td>
+            </tr>");
+            }
 
             string htmlContent = $@"
-                            <!DOCTYPE html>
-                            <html lang='en'>
-                            <head>
-                                <meta charset='UTF-8'>
-                                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-                                <title>QR Code Viewer</title>
-                            </head>
-                            <body style='font-family: Arial, sans-serif; text-align: center; padding: 20px;'>
-                                <h1>Immunization Record</h1>
-                                <p><a href='{fileUrl}' target='_blank'>click here</a> to view the details.</p>
-                                <iframe src='{fileUrl}' width='600' height='900' style='border: 1px solid #ccc;'></iframe>
-                            </body>
-                            </html>";
+    <!DOCTYPE html>
+    <html lang='en'>
+    <head>
+        <meta charset='UTF-8'>
+        <title>Vaccination Record</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                padding: 20px;
+                margin: 0;
+            }}
+            .container {{
+                max-width: 800px;
+                margin: auto;
+                background-color: #fff;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+            }}
+            th, td {{
+                padding: 6px;
+                border: 1px solid #ddd;
+                text-align: left;
+            }}
+            .success-box {{
+                background-color: #d4edda;
+                padding: 10px 15px;
+                border-left: 5px solid #28a745;
+                border-radius: 5px;
+                margin-bottom: 20px;
+            }}
+            .pdf-section {{
+                max-width: 800px;
+                margin: 40px auto 0 auto;
+                background-color: #fff;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            }}
+            /* REMOVING .fetch-btn style as it's no longer used */
+        </style>
+    </head>
+    <body>
+        <div class='container'>
+            <!-- Fetch Record Link (styled with radio button appearance) -->
+            <div style='padding: 15px; border-bottom: 1px solid #ddd;'>
+                <input type='radio' checked style='margin-right: 10px;'> <a href='{fileUrl}' target='_blank' style='text-decoration: none; color: inherit;'>Click here to fetch record</a>
+            </div>
 
-            return new ContentResult
-            {
-                Content = htmlContent,
-                ContentType = "text/html",
-                StatusCode = 200
-            };
-        }
+            <!-- Status -->
+            <div class='success-box'>
+                <strong>Status:</strong> {(child.IsInactive == true ? "Inactive" : "Vaccinated")}
+            </div>
+
+            <!-- Patient Info -->
+            <table>
+                <tr><td><strong>MR No.</strong></td><td>{DateTime.Now.Year.ToString().Substring(2)}{child.Id}</td></tr>
+                <tr><td><strong>Name</strong></td><td>{child.Name}</td></tr>
+                <tr><td><strong>S/D/W/o</strong></td><td>{child.FatherName}</td></tr>
+                <tr><td><strong>Passport/CNIC</strong></td><td>{child.CNIC}</td></tr>
+                <tr><td><strong>City</strong></td><td>{child.City}</td></tr>
+            </table>
+
+            <!-- Vaccine Table -->
+            <h3>Vaccines</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Vaccine</th>
+                        <th>Status</th>
+                        <th>Brand</th>
+                        <th>Manufacturer</th>
+                        <th>Batch/Lot</th>
+                        <th>Date</th>
+                        <th>Validity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {vaccineRows}
+                </tbody>
+            </table>
+
+            <!-- Doctor Info -->
+            <p><strong>Physician/Doctor:</strong> {child.Clinic?.Doctor?.DisplayName} - {child.Clinic?.Doctor?.AdditionalInfo}</p>
+            <p><strong>Center:</strong> {child.Clinic?.Name} ({child.Clinic?.RegNo})</p>
+        </div>
+
+        <!-- PDF Embed Section -->
+        <div class='pdf-section'>
+            <h3>Vaccination PDF:</h3>
+            <iframe src='{fileUrl}' width='100%' height='600px' style='border: 1px solid #ccc;'></iframe>
+        </div>
+    </body>
+    </html>";
+
+    return new ContentResult
+    {
+        Content = htmlContent,
+        ContentType = "text/html",
+        StatusCode = 200
+    };
+}
 
         [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)

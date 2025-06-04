@@ -178,10 +178,10 @@ namespace VaccineAPI.Controllers
         public Response<ChildDTO> GetSingle(int Id)
         {
             var dbChild = _db.Childs.Include(c => c.User).Where(c => c.Id == Id).FirstOrDefault();
-             if (dbChild == null)
-             {
+            if (dbChild == null)
+            {
                 return new Response<ChildDTO>(false, "Child not found", null);
-             }
+            }
             ChildDTO childDTO = _mapper.Map<ChildDTO>(dbChild);
             childDTO.CountryCode = dbChild.User.CountryCode;
             childDTO.MobileNumber = dbChild.User.MobileNumber;
@@ -397,7 +397,10 @@ namespace VaccineAPI.Controllers
                                   .Where(x => x.Id == childId)
                                   .FirstOrDefault();
 
-            if (dbChild == null) return null;
+            if (dbChild == null) 
+            {
+                return null;
+            }
 
             var dbDoctor = dbChild.Clinic?.Doctor; // Use ?. for null-conditional access
             var child = _db.Childs
@@ -445,16 +448,16 @@ namespace VaccineAPI.Controllers
                         // Check if qrCodeImage is null or empty before proceeding
                         if (qrCodeImage != null && qrCodeImage.Length > 0)
                         {
-                        using (MemoryStream ms = new MemoryStream(qrCodeImage))
-                        {
-                            var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
-                            pdfQrCode.ScaleAbsolute(60f, 60f);
-                            float marginLeft = document.PageSize.Width / 2 - pdfQrCode.ScaledWidth / 2;
-                            float qrCodeXPosition = marginLeft;
-                            float marginTop = 0f - 4f;
-                            float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
-                            pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
-                            writer.DirectContent.AddImage(pdfQrCode);
+                            using (MemoryStream ms = new MemoryStream(qrCodeImage))
+                            {
+                                var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
+                                pdfQrCode.ScaleAbsolute(60f, 60f);
+                                float marginLeft = document.PageSize.Width / 2 - pdfQrCode.ScaledWidth / 2;
+                                float qrCodeXPosition = marginLeft;
+                                float marginTop = 0f - 4f;
+                                float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
+                                pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
+                                writer.DirectContent.AddImage(pdfQrCode);
                             }
                         }
                         else
@@ -1131,13 +1134,13 @@ namespace VaccineAPI.Controllers
     </body>
     </html>";
 
-    return new ContentResult
-    {
-        Content = htmlContent,
-        ContentType = "text/html",
-        StatusCode = 200
-    };
-}
+            return new ContentResult
+            {
+                Content = htmlContent,
+                ContentType = "text/html",
+                StatusCode = 200
+            };
+        }
 
         [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)
@@ -2033,7 +2036,8 @@ namespace VaccineAPI.Controllers
 
                         // Retrieve the brand amount
                         var brandAmount = _db.BrandAmounts
-                            .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId);
+                            .Include(x => x.Clinic)
+                            .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId && x.Clinic.IsOnline == true);
 
                         // Check if the invoice already exists
                         var existingInvoice = _db.Invoices
@@ -2083,7 +2087,10 @@ namespace VaccineAPI.Controllers
                         vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
 
                         var brandAmount1 =
-                            _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault();
+                            _db.BrandAmounts
+                            .Include(x => x.Clinic)
+                            .Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId && x.Clinic.IsOnline == true)
+                            .FirstOrDefault();
                         if (brandAmount != null && schedule.Amount == null)
                         {
                             amount = amount + Convert.ToInt32(brandAmount.Amount);

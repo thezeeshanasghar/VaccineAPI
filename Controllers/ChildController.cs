@@ -2036,7 +2036,6 @@ namespace VaccineAPI.Controllers
 
                         // Retrieve the brand amount
                         var brandAmount = _db.BrandAmounts
-                            .Include(x => x.Clinic)
                             .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId && x.Clinic.IsOnline == true);
 
                         // Check if the invoice already exists
@@ -2059,11 +2058,24 @@ namespace VaccineAPI.Controllers
                             };
                             _db.Invoices.Add(existingInvoice);
                         }
+                          var existingFee = _db.Fee
+                            .FirstOrDefault(f => f.InvoiceId == invoiceNumber); 
 
-                        // Determine if the schedule's amount is empty or zero
+                        if (existingFee == null)
+                        {
+                              if(consultaionFee != 0)
+                            {
+                                var fee = new Fee
+                                {
+                                     InvoiceId = invoiceNumber,
+                                     Amount = consultaionFee,
+                                };
+                                _db.Fee.Add(fee);
+                            }
+                        }
+
                         bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
 
-                        // Update invoice amount logic
                         if (brandAmount != null && isAmountEmptyOrZero)
                         {
                             existingInvoice.Amount = brandAmount.Amount != 0 ? brandAmount.Amount : 0;
@@ -2087,10 +2099,7 @@ namespace VaccineAPI.Controllers
                         vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
 
                         var brandAmount1 =
-                            _db.BrandAmounts
-                            .Include(x => x.Clinic)
-                            .Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId && x.Clinic.IsOnline == true)
-                            .FirstOrDefault();
+                            _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId && x.Clinic.IsOnline == true).FirstOrDefault();
                         if (brandAmount != null && schedule.Amount == null)
                         {
                             amount = amount + Convert.ToInt32(brandAmount.Amount);

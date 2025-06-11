@@ -307,7 +307,7 @@ namespace VaccineAPI.Controllers
             return new Response<DoctorDTO>(true, null, doctorDTOs);
         }
 
-        [HttpGet("{id}/{currentPage}/childs/")]
+         [HttpGet("{id}/{currentPage}/childs/")]
         public Response<IEnumerable<ChildDTO>> GetAllChildsOfaDoctor(int id, int currentPage, [FromQuery] string searchKeyword)
         {
             {

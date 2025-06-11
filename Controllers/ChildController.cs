@@ -2688,6 +2688,7 @@ namespace VaccineAPI.Controllers
             else
                 return $"{days} Days";
         }
+        
         private MemoryStream CreateTravelPdf(int childId)
         {
             var childDetails = _db.Childs

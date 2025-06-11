@@ -320,25 +320,43 @@ namespace VaccineAPI.Controllers
                     // var doctorClinics = doctor.Clinics;
                     var doctorClinics = _db.Clinics.Include(x => x.Childs).Where(x => x.DoctorId == doctor.Id).ToList();
 
-                    foreach (var clinic in doctorClinics)
+                   foreach (var clinic in doctorClinics)
                     {
-                        var doctorChilds = _db.Childs.Include(x => x.User).Where(x => x.ClinicId == clinic.Id).ToList();
+                        var doctorChilds = _db
+                            .Childs.Include(x => x.User)
+                            .Where(x => x.ClinicId == clinic.Id)
+                            .ToList();
                         if (!String.IsNullOrEmpty(searchKeyword))
                         {
-                            searchKeyword = searchKeyword.Trim();
-                            if (searchKeyword.StartsWith("+")) searchKeyword = searchKeyword.Substring(1);
-                            if (searchKeyword.StartsWith("0")) searchKeyword = searchKeyword.Substring(1);
-                            if (searchKeyword.StartsWith("00")) searchKeyword = searchKeyword.Substring(2);
-                            if (searchKeyword.StartsWith("92")) searchKeyword = searchKeyword.Substring(2);
-                            childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(
-                                clinic.Childs.Where(x => x.Name.Trim().ToLower().Contains(searchKeyword.ToLower()) ||
-                                   x.FatherName.Trim().ToLower().Contains(searchKeyword.ToLower()) ||
-                                   x.Email.Trim().Contains(searchKeyword.ToLower()) ||
-                                   x.User.MobileNumber.Trim().Contains(searchKeyword.ToLower())).ToList<Child>()));
+                            // Normalize the search keyword
+                            searchKeyword = NormalizePhoneNumber(searchKeyword);
 
+                            childDTOs.AddRange(
+                                _mapper.Map<List<ChildDTO>>(
+                                    clinic
+                                        .Childs.Where(x =>
+                                            x.Name.Trim()
+                                                .ToLower()
+                                                .Contains(searchKeyword.ToLower())
+                                            || x.FatherName.Trim()
+                                                .ToLower()
+                                                .Contains(searchKeyword.ToLower())
+                                            || x.Email.Trim().Contains(searchKeyword.ToLower())
+                                            || NormalizePhoneNumber(
+                                                    x.User.CountryCode + x.User.MobileNumber
+                                                )
+                                                .Contains(searchKeyword) // Normalize phone number
+                                        )
+                                        .ToList<Child>()
+                                )
+                            );
                         }
                         else
-                            childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(clinic.Childs.ToList<Child>()));
+                        {
+                            childDTOs.AddRange(
+                                _mapper.Map<List<ChildDTO>>(clinic.Childs.ToList<Child>())
+                            );
+                        }
                     }
                     foreach (var item in childDTOs)
                     {
@@ -348,6 +366,22 @@ namespace VaccineAPI.Controllers
                     return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs.OrderByDescending(x => x.Id).ToList().Skip(15 * currentPage).Take(15));
                 }
             }
+        }
+
+        private string NormalizePhoneNumber(string phoneNumber)
+        {
+            if (string.IsNullOrEmpty(phoneNumber))
+                return string.Empty;
+
+            phoneNumber = phoneNumber.Trim();
+            if (phoneNumber.StartsWith("+"))
+                phoneNumber = phoneNumber.Substring(1);
+            if (phoneNumber.StartsWith("00"))
+                phoneNumber = phoneNumber.Substring(2);
+            if (phoneNumber.StartsWith("0"))
+                phoneNumber = phoneNumber.Substring(1);
+
+            return phoneNumber;
         }
 
         [HttpDelete("{id}")]

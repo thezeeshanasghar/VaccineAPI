@@ -323,19 +323,36 @@ namespace VaccineAPI.Controllers
                     foreach (var clinic in doctorClinics)
                     {
                         var doctorChilds = _db.Childs.Include(x => x.User).Where(x => x.ClinicId == clinic.Id).ToList();
-                        if (!String.IsNullOrEmpty(searchKeyword))
+                       if (!String.IsNullOrEmpty(searchKeyword))
                         {
                             searchKeyword = searchKeyword.Trim();
-                            if (searchKeyword.StartsWith("+")) searchKeyword = searchKeyword.Substring(1);
-                            if (searchKeyword.StartsWith("0")) searchKeyword = searchKeyword.Substring(1);
-                            if (searchKeyword.StartsWith("00")) searchKeyword = searchKeyword.Substring(2);
-                            if (searchKeyword.StartsWith("92")) searchKeyword = searchKeyword.Substring(2);
-                            childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(
-                                clinic.Childs.Where(x => x.Name.Trim().ToLower().Contains(searchKeyword.ToLower()) ||
-                                   x.FatherName.Trim().ToLower().Contains(searchKeyword.ToLower()) ||
-                                   x.Email.Trim().Contains(searchKeyword.ToLower()) ||
-                                   x.User.MobileNumber.Trim().Contains(searchKeyword.ToLower())).ToList<Child>()));
+                            if (searchKeyword.StartsWith("+"))
+                                searchKeyword = searchKeyword.Substring(1);
+                            if (searchKeyword.StartsWith("0"))
+                                searchKeyword = searchKeyword.Substring(1);
+                            if (searchKeyword.StartsWith("00"))
+                                searchKeyword = searchKeyword.Substring(2);
+                            if (searchKeyword.StartsWith("92"))
+                                searchKeyword = searchKeyword.Substring(2);
 
+                            childDTOs.AddRange(
+                                _mapper.Map<List<ChildDTO>>(
+                                    clinic
+                                        .Childs.Where(x =>
+                                            x.Name.Trim()
+                                                .ToLower()
+                                                .Contains(searchKeyword.ToLower())
+                                            || x.FatherName.Trim()
+                                                .ToLower()
+                                                .Contains(searchKeyword.ToLower())
+                                            || x.Email.Trim().Contains(searchKeyword.ToLower())
+                                            || (x.User.CountryCode + x.User.MobileNumber)
+                                                .Trim()
+                                                .Contains(searchKeyword) // Merged Country Code and Mobile Number
+                                        )
+                                        .ToList<Child>()
+                                )
+                            );
                         }
                         else
                             childDTOs.AddRange(_mapper.Map<List<ChildDTO>>(clinic.Childs.ToList<Child>()));

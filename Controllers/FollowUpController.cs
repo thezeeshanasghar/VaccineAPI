@@ -1,10 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
+using System.Text;
 using AutoMapper;
 using VaccineAPI.ModelDTO;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
+using System.Globalization;
+using CsvHelper;
 using static VaccineAPI.Controllers.ChildController;
 
 
@@ -173,6 +176,303 @@ namespace VaccineAPI.Controllers
             {
                 // Log the error details here
                 return new Response<object>(false, $"Error sending email: {ex.Message}", null);
+            }
+        }
+
+        [HttpGet("followup-alert/{GapDays}/{OnlineClinicId}")]
+        public Response<IEnumerable<ChildDTO>> GetFollowUpAlert(int GapDays, long OnlineClinicId)
+        {
+            try
+            {
+                // Fetch follow-up schedules based on GapDays and OnlineClinicId
+                List<FollowUp> followUps = GetFollowUpData(GapDays, OnlineClinicId, _db);
+
+                if (followUps == null || !followUps.Any())
+                {
+                    return new Response<IEnumerable<ChildDTO>>(false, "No follow-ups found.", null);
+                }
+
+                // Map follow-ups to ChildDTO
+                IEnumerable<ChildDTO> childInfoDTOs = followUps
+                    .Where(f => f.Child != null) // Ensure Child is not null
+                    .Select(f => new ChildDTO
+                    {
+                        Id = f.Child.Id,
+                        Name = f.Child.Name,
+                        Email = f.Child.Email,
+                        ClinicId = f.Child.ClinicId,
+                    });
+
+                foreach (var child in childInfoDTOs)
+                {
+                    if (string.IsNullOrEmpty(child.Email))
+                    {
+                        continue; // Skip if no email is available
+                    }
+
+                    var ChildId = child.Id;
+                    var ClinicId = child.ClinicId;
+
+                    // Fetch clinic and doctor details
+                    var clinic = _db
+                        .Clinics.Include(x => x.Doctor)
+                        .FirstOrDefault(x => x.Id == ClinicId);
+
+                    if (clinic == null || clinic.Doctor == null)
+                    {
+                        Console.WriteLine($"Clinic or Doctor not found for ClinicId: {ClinicId}");
+                        continue;
+                    }
+
+                    // Fetch follow-ups for the child
+                    var dbFollowUps = followUps
+                        .Where(f => f.ChildId == ChildId)
+                        .OrderBy(f => f.NextVisitDate)
+                        .ToList();
+
+                    string body;
+                    if (dbFollowUps.Any())
+                    {
+                        // Generate email content for follow-up alerts
+                        var followUpDetails = dbFollowUps
+                            .Select(f => $" {f.Disease} on {f.NextVisitDate:dd-MM-yyyy}")
+                            .ToList();
+
+                        body =
+                            $@"Dear Parent/Guardian of {child.Name},
+
+Your follow-up visit is scheduled as follows:
+
+Appointment Date: {dbFollowUps.First().NextVisitDate:dd-MM-yyyy}
+Reason: {dbFollowUps.First().Disease}
+Clinic: {clinic.Name}
+Doctor: {clinic.Doctor.DisplayName}
+
+Please confirm your appointment by contacting us at {clinic.PhoneNumber}.
+
+You can view your complete vaccination record at: https://vaccinationcentre.com
+
+Thanks,
+{clinic.Name}
+
+Note: This is an automated reminder. Please do not reply to this email.";
+                    }
+                    else
+                    {
+                        body = "No upcoming follow-up schedules found.";
+                    }
+
+                    // Send email
+                    try
+                    {
+                        UserEmail.SendEmail(child.Email, body);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Error sending email: " + ex.Message);
+                    }
+                }
+
+                return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in GetFollowUpAlert: " + ex.Message);
+                return new Response<IEnumerable<ChildDTO>>(
+                    false,
+                    "An error occurred while processing the request.",
+                    null
+                );
+            }
+        }
+
+        private static List<FollowUp> GetFollowUpData(int GapDays, long OnlineClinicId, Context db)
+        {
+            try
+            {
+                var doctor = db
+                    .Clinics.Where(x => x.Id == OnlineClinicId)
+                    .Include(x => x.Doctor)
+                    .FirstOrDefault()
+                    ?.Doctor;
+
+                if (doctor == null)
+                {
+                    Console.WriteLine($"Doctor not found for OnlineClinicId: {OnlineClinicId}");
+                    return new List<FollowUp>();
+                }
+
+                var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
+
+                if (clinics == null || !clinics.Any())
+                {
+                    Console.WriteLine($"No clinics found for DoctorId: {doctor.Id}");
+                    return new List<FollowUp>();
+                }
+
+                long[] ClinicIDs = clinics.Select(x => x.Id).ToArray();
+
+                DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+                DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
+
+                List<FollowUp> followUps = new List<FollowUp>();
+
+                if (GapDays == 0)
+                {
+                    followUps = db
+                        .FollowUps.Include(f => f.Child)
+                        .ThenInclude(c => c.Clinic)
+                        .Where(f => ClinicIDs.Contains(f.Child.ClinicId))
+                        .Where(f =>
+                            f.NextVisitDate.HasValue
+                            && f.NextVisitDate.Value.Date == CurrentPakDateTime.Date
+                        )
+                        .OrderBy(f => f.Child.Id)
+                        .ThenBy(f => f.NextVisitDate)
+                        .ToList();
+                }
+                else
+                {
+                    followUps = db
+                        .FollowUps.Include(f => f.Child)
+                        .ThenInclude(c => c.Clinic)
+                        .Where(f => ClinicIDs.Contains(f.Child.ClinicId))
+                        .Where(f =>
+                            f.NextVisitDate.HasValue
+                            && f.NextVisitDate.Value.Date > CurrentPakDateTime.Date
+                            && f.NextVisitDate.Value.Date <= AddedDateTime.Date
+                        )
+                        .OrderBy(f => f.Child.Id)
+                        .ThenBy(f => f.NextVisitDate)
+                        .ToList();
+                }
+
+                return followUps;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in GetFollowUpData: " + ex.Message);
+                return new List<FollowUp>();
+            }
+        }
+
+        // [HttpGet("export-followups-csv")]
+        // public IActionResult ExportFollowUpsToCsv([FromBody] List<long> followUpIds)
+        // {
+        //     try
+        //     {
+        //         if (followUpIds == null || !followUpIds.Any())
+        //         {
+        //             return BadRequest("No follow-up IDs provided.");
+        //         }
+
+        //         var followUps = _db
+        //             .FollowUps.Include(f => f.Child)
+        //             .ThenInclude(c => c.User)
+        //             .Include(f => f.Child)
+        //             .ThenInclude(c => c.Clinic)
+        //             .Where(f => followUpIds.Contains(f.Id))
+        //             .ToList();
+
+        //         if (!followUps.Any())
+        //         {
+        //             return NotFound("No follow-ups found for the provided IDs.");
+        //         }
+
+        //         var followUpCsvData = followUps
+        //             .Select(f => new FollowUpCsvDTO
+        //             {
+        //                 ChildName = f.Child.Name,
+        //                 FatherName = f.Child.FatherName,
+        //                 DOB = f.Child.DOB.ToString("yyyy-MM-dd"),
+        //                 ClinicName = f.Child.Clinic.Name,
+        //                 DoctorName = f.Child.Clinic.Doctor.DisplayName,
+        //                 NextVisitDate = f.NextVisitDate?.ToString("yyyy-MM-dd"),
+        //                 Disease = f.Disease,
+        //                 Weight = f.Weight?.ToString("F2"),
+        //                 Height = f.Height?.ToString("F2"),
+        //                 OFC = f.OFC?.ToString("F2"),
+        //                 Email = f.Child.Email,
+        //                 Phone = f.Child.User.MobileNumber,
+        //             })
+        //             .ToList();
+
+        //         var stream = new MemoryStream();
+        //         using (var writeFile = new StreamWriter(stream, Encoding.UTF8, 512, true))
+        //         {
+        //             var csv = new CsvWriter(writeFile, CultureInfo.InvariantCulture);
+        //             csv.WriteRecords(followUpCsvData);
+        //         }
+        //         stream.Position = 0; 
+        //         return File(stream, "text/csv", "FollowUps.csv");
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         Console.WriteLine("Error exporting follow-ups to CSV: " + ex.Message);
+        //         return StatusCode(500, "An error occurred while generating the CSV file.");
+        //     }
+        // }
+
+        [HttpGet("export-followups-csv")]
+        public IActionResult ExportFollowUpsToCsv([FromQuery(Name = "arr[]")] long[] arr)
+        {
+            try
+            {
+                if (arr == null || !arr.Any())
+                {
+                    return BadRequest("No follow-up IDs provided.");
+                }
+
+                var stream = new MemoryStream();
+                using (var writeFile = new StreamWriter(stream, Encoding.UTF8, 512, true))
+                {
+                    var csv = new CsvWriter(writeFile, CultureInfo.InvariantCulture);
+
+                    foreach (long id in arr)
+                    {
+                        // Fetch follow-ups for the given child ID
+                        var followUps = _db
+                            .FollowUps.Where(f => f.ChildId == id)
+                            .Include(f => f.Child)
+                            .ThenInclude(c => c.User)
+                            .Include(f => f.Child)
+                            .ThenInclude(c => c.Clinic)
+                            .ToList();
+
+                        if (!followUps.Any())
+                        {
+                            continue; // Skip if no follow-ups are found for the child
+                        }
+
+                        // Map follow-ups to a DTO for CSV export
+                        var followUpCsvData = followUps.Select(f => new FollowUpCsvDTO
+                        {
+                            ChildName = f.Child.Name,
+                            FatherName = f.Child.FatherName,
+                            DOB = f.Child.DOB.ToString("yyyy-MM-dd"),
+                            ClinicName = f.Child.Clinic.Name,
+                            DoctorName = f.Child.Clinic.Doctor.DisplayName,
+                            CurrentVisitDate = f.CurrentVisitDate?.ToString("yyyy-MM-dd"),
+                            NextVisitDate = f.NextVisitDate?.ToString("yyyy-MM-dd"),
+                            Disease = f.Disease,
+                            Weight = f.Weight?.ToString("F2"),
+                            Height = f.Height?.ToString("F2"),
+                            OFC = f.OFC?.ToString("F2"),
+                            Phone = f.Child.User.MobileNumber,
+                            Email = f.Child.Email,
+                        });
+
+                        csv.WriteRecords(followUpCsvData);
+                    }
+                }
+
+                stream.Position = 0; // Reset stream position
+                return File(stream, "application/octet-stream", "FollowUps.csv");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error exporting follow-ups to CSV: " + ex.Message);
+                return StatusCode(500, "An error occurred while generating the CSV file.");
             }
         }
 

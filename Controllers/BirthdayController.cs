@@ -28,7 +28,6 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                // Get child with all required information
                 var child = _db.Childs
                     .Include(c => c.User)
                     .Include(c => c.Clinic)
@@ -48,8 +47,6 @@ namespace VaccineAPI.Controllers
                 var emailTo = child.Email;
                 var today = DateTime.Today;
                 var age = today.Year - child.DOB.Year;
-
-                // Create birthday email content
                 string emailBody = $@"Dear {child.Name},
 
 🎉 Happy {age}{GetOrdinalSuffix(age)} Birthday! 🎂
@@ -97,6 +94,102 @@ Website: https://vaccinationcentre.com";
                 return new Response<object>(
                     false,
                     $"Error processing birthday email: {ex.Message}",
+                    null
+                );
+            }
+        }
+
+        [HttpGet("birthdaymail/bulk/{doctorId}")]
+        public Response<object> SendBulkBirthdayEmails(long doctorId)
+        {
+            try
+            {
+                var today = DateTime.Today;
+                var children = _db
+                    .Childs.Include(c => c.User)
+                    .Include(c => c.Clinic)
+                    .ThenInclude(c => c.Doctor)
+                    .Where(c =>
+                        c.DOB.Month == today.Month
+                        && c.DOB.Day == today.Day
+                        && c.Clinic.DoctorId == doctorId
+                        && c.IsInactive == false
+                        && !string.IsNullOrEmpty(c.Email)
+                    ) 
+                    .ToList();
+
+                if (!children.Any())
+                {
+                    return new Response<object>(false, "No birthdays found for today.", null);
+                }
+
+                var emailsSent = new List<object>();
+
+                foreach (var child in children)
+                {
+                    var emailTo = child.Email;
+                    var age = today.Year - child.DOB.Year;
+                    string emailBody =
+                        $@"Dear {child.Name},
+
+🎉 Happy {age}{GetOrdinalSuffix(age)} Birthday! 🎂
+
+We hope your special day is filled with joy, laughter, and wonderful memories!
+
+From,
+{child.Clinic.Doctor.DisplayName}
+{child.Clinic.Name}
+
+Stay healthy and keep smiling! 😊
+
+Best wishes from all of us at {child.Clinic.Name}
+
+Note: This is an automated birthday wish. For any medical queries, please contact the clinic directly.
+Contact: {child.Clinic.PhoneNumber}
+Website: https://vaccinationcentre.com";
+
+                    try
+                    {
+                        UserEmail.SendEmail(
+                            emailTo,
+                            emailBody,
+                            $"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!"
+                        );
+
+                        emailsSent.Add(
+                            new
+                            {
+                                ChildId = child.Id,
+                                Name = child.Name,
+                                Email = emailTo,
+                                Age = age,
+                                ClinicName = child.Clinic.Name,
+                            }
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to send email to {child.Name}: {ex.Message}");
+                    }
+                }
+
+                if (!emailsSent.Any())
+                {
+                    return new Response<object>(false, "No emails were sent.", null);
+                }
+
+                return new Response<object>(
+                    true,
+                    "Bulk birthday emails sent successfully.",
+                    emailsSent
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in SendBulkBirthdayEmails: " + ex.Message);
+                return new Response<object>(
+                    false,
+                    "An error occurred while processing the request.",
                     null
                 );
             }

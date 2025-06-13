@@ -7,6 +7,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using System.Text;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.Globalization;
+using CsvHelper;
 
 namespace VaccineAPI.Controllers
 {
@@ -195,37 +200,82 @@ Website: https://vaccinationcentre.com";
             }
         }
 
-        [HttpGet("{doctorId}")]
-        public Response<IEnumerable<ChildDTO>> GetBirthdayAlertByDoctor(
-            DateTime inputDate,
-            long doctorId
-        )
+        [HttpGet("export-birthdays-csv")]
+        public IActionResult ExportBirthdaysToCsv([FromQuery(Name = "arr[]")] long[] arr)
         {
-            // Filter records where DOB matches the input date (month and day) and DoctorId matches
+            try
+            {
+                if (arr == null || !arr.Any())
+                {
+                    return BadRequest("No child IDs provided.");
+                }
+                List<Child> allChildren = new List<Child>();
+                foreach (long id in arr)
+                {
+                    var children = _db
+                        .Childs.Where(f => f.Id == id)
+                        .Include(c => c.User)
+                        .Include(c => c.Clinic)
+                        .ThenInclude(c => c.Doctor)
+                        .Where(c =>
+                            c.Id == id && !string.IsNullOrEmpty(c.Email)
+                        )
+                        .ToList();
+
+                    allChildren.AddRange(children);
+                }
+                if (!allChildren.Any())
+                {
+                    return NotFound("No children found for the provided IDs.");
+                }
+                var stream = new MemoryStream();
+                using (var writeFile = new StreamWriter(stream, Encoding.UTF8, 512, true))
+                {
+                    var csv = new CsvWriter(writeFile, CultureInfo.InvariantCulture);
+                    var birthdayCsvData = allChildren.Select(c => new BirthdayCsvDTO
+                    {
+                        ChildName = c.Name ?? "N/A",
+                        FatherName = c.FatherName ?? "N/A",
+                        DOB = c.DOB.ToString("yyyy-MM-dd") ?? "N/A",
+                        ClinicName = c.Clinic?.Name ?? "N/A",
+                        DoctorName = c.Clinic?.Doctor?.DisplayName ?? "N/A",
+                        Age = DateTime.Today.Year - c.DOB.Year,
+                        Phone = c.User?.MobileNumber ?? "N/A",
+                        Email = c.Email ?? "N/A",
+                    });
+                    csv.WriteRecords(birthdayCsvData);
+                }
+                stream.Position = 0;
+                return File(stream, "application/octet-stream", "Birthdays.csv");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error exporting birthdays to CSV: " + ex.Message);
+                return StatusCode(500, "An error occurred while generating the CSV file.");
+            }
+        }
+
+        [HttpGet("{doctorId}")]
+        public Response<IEnumerable<ChildDTO>> GetBirthdayAlertByDoctor(DateTime inputDate,long doctorId)
+        {
             List<Child> childs = _db
-                .Childs.Include(c => c.User) // Include User
-                .Include(c => c.Clinic) // Include Clinic
-                .ThenInclude(cl => cl.Doctor) // Include Doctor via Clinic
+                .Childs.Include(c => c.User)
+                .Include(c => c.Clinic)
+                .ThenInclude(cl => cl.Doctor)
                 .Where(c =>
                     c.DOB.Month == inputDate.Month
                     && c.DOB.Day == inputDate.Day
-                    && c.Clinic.DoctorId == doctorId // Filter by DoctorId
-                    && c.IsInactive == false // Filter out inactive records
+                    && c.Clinic.DoctorId == doctorId 
+                    && c.IsInactive == false 
                 )
                 .ToList();
 
-            // Map entities to DTOs
             IEnumerable<ChildDTO> childDTOs = _mapper.Map<IEnumerable<ChildDTO>>(childs);
 
-            // Return the response
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
 
-        private static List<Child> GetBirthdayAlertData(
-            int GapDays,
-            long OnlineClinicId,
-            Context db
-        )
+        private static List<Child> GetBirthdayAlertData(int GapDays,long OnlineClinicId,Context db)
         {
             return db
                 .Childs.Where(x =>

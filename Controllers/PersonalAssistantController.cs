@@ -87,7 +87,7 @@ namespace VaccineAPI.Controllers
             _db.Entry(existingAssistant).State = EntityState.Modified;
             _db.SaveChanges();
 
-            return NoContent();
+            return Ok(new Response<PersonalAssistant>(true, "Personal Assistant updated successfully.", existingAssistant));
         }
 
         [HttpDelete("{id:long}")]

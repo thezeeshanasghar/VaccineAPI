@@ -356,63 +356,6 @@ Note: This is an automated reminder. Please do not reply to this email.";
             }
         }
 
-        // [HttpGet("export-followups-csv")]
-        // public IActionResult ExportFollowUpsToCsv([FromBody] List<long> followUpIds)
-        // {
-        //     try
-        //     {
-        //         if (followUpIds == null || !followUpIds.Any())
-        //         {
-        //             return BadRequest("No follow-up IDs provided.");
-        //         }
-
-        //         var followUps = _db
-        //             .FollowUps.Include(f => f.Child)
-        //             .ThenInclude(c => c.User)
-        //             .Include(f => f.Child)
-        //             .ThenInclude(c => c.Clinic)
-        //             .Where(f => followUpIds.Contains(f.Id))
-        //             .ToList();
-
-        //         if (!followUps.Any())
-        //         {
-        //             return NotFound("No follow-ups found for the provided IDs.");
-        //         }
-
-        //         var followUpCsvData = followUps
-        //             .Select(f => new FollowUpCsvDTO
-        //             {
-        //                 ChildName = f.Child.Name,
-        //                 FatherName = f.Child.FatherName,
-        //                 DOB = f.Child.DOB.ToString("yyyy-MM-dd"),
-        //                 ClinicName = f.Child.Clinic.Name,
-        //                 DoctorName = f.Child.Clinic.Doctor.DisplayName,
-        //                 NextVisitDate = f.NextVisitDate?.ToString("yyyy-MM-dd"),
-        //                 Disease = f.Disease,
-        //                 Weight = f.Weight?.ToString("F2"),
-        //                 Height = f.Height?.ToString("F2"),
-        //                 OFC = f.OFC?.ToString("F2"),
-        //                 Email = f.Child.Email,
-        //                 Phone = f.Child.User.MobileNumber,
-        //             })
-        //             .ToList();
-
-        //         var stream = new MemoryStream();
-        //         using (var writeFile = new StreamWriter(stream, Encoding.UTF8, 512, true))
-        //         {
-        //             var csv = new CsvWriter(writeFile, CultureInfo.InvariantCulture);
-        //             csv.WriteRecords(followUpCsvData);
-        //         }
-        //         stream.Position = 0; 
-        //         return File(stream, "text/csv", "FollowUps.csv");
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         Console.WriteLine("Error exporting follow-ups to CSV: " + ex.Message);
-        //         return StatusCode(500, "An error occurred while generating the CSV file.");
-        //     }
-        // }
-
         [HttpGet("export-followups-csv")]
         public IActionResult ExportFollowUpsToCsv([FromQuery(Name = "arr[]")] long[] arr)
         {
@@ -422,51 +365,43 @@ Note: This is an automated reminder. Please do not reply to this email.";
                 {
                     return BadRequest("No follow-up IDs provided.");
                 }
-
+                List<FollowUp> allFollowUps = new List<FollowUp>();
+                foreach (long id in arr)
+                {
+                    var followUps = _db.FollowUps.Where(f => f.ChildId == id)
+                        .Include(f => f.Child)
+                        .ThenInclude(c => c.User)
+                        .Include(f => f.Child)
+                        .ThenInclude(c => c.Clinic)
+                        .ToList();
+                    allFollowUps.AddRange(followUps);
+                }
+                if (!allFollowUps.Any())
+                {
+                    return NotFound("No follow-ups found for the provided IDs.");
+                }
                 var stream = new MemoryStream();
                 using (var writeFile = new StreamWriter(stream, Encoding.UTF8, 512, true))
                 {
                     var csv = new CsvWriter(writeFile, CultureInfo.InvariantCulture);
-
-                    foreach (long id in arr)
+                    var followUpCsvData = allFollowUps.Select(f => new FollowUpCsvDTO
                     {
-                        // Fetch follow-ups for the given child ID
-                        var followUps = _db
-                            .FollowUps.Where(f => f.ChildId == id)
-                            .Include(f => f.Child)
-                            .ThenInclude(c => c.User)
-                            .Include(f => f.Child)
-                            .ThenInclude(c => c.Clinic)
-                            .ToList();
-
-                        if (!followUps.Any())
-                        {
-                            continue; // Skip if no follow-ups are found for the child
-                        }
-
-                        // Map follow-ups to a DTO for CSV export
-                        var followUpCsvData = followUps.Select(f => new FollowUpCsvDTO
-                        {
-                            ChildName = f.Child.Name,
-                            FatherName = f.Child.FatherName,
-                            DOB = f.Child.DOB.ToString("yyyy-MM-dd"),
-                            ClinicName = f.Child.Clinic.Name,
-                            DoctorName = f.Child.Clinic.Doctor.DisplayName,
-                            CurrentVisitDate = f.CurrentVisitDate?.ToString("yyyy-MM-dd"),
-                            NextVisitDate = f.NextVisitDate?.ToString("yyyy-MM-dd"),
-                            Disease = f.Disease,
-                            Weight = f.Weight?.ToString("F2"),
-                            Height = f.Height?.ToString("F2"),
-                            OFC = f.OFC?.ToString("F2"),
-                            Phone = f.Child.User.MobileNumber,
-                            Email = f.Child.Email,
-                        });
-
-                        csv.WriteRecords(followUpCsvData);
-                    }
+                        ChildName = f.Child?.Name ?? "N/A",
+                        FatherName = f.Child?.FatherName ?? "N/A",
+                        DOB = f.Child?.DOB.ToString("yyyy-MM-dd") ?? "N/A",
+                        ClinicName = f.Child?.Clinic?.Name ?? "N/A",
+                        CurrentVisitDate = f.CurrentVisitDate?.ToString("yyyy-MM-dd") ?? "N/A",
+                        NextVisitDate = f.NextVisitDate?.ToString("yyyy-MM-dd") ?? "N/A",
+                        Disease = f.Disease ?? "N/A",
+                        Weight = f.Weight?.ToString("F2") ?? "N/A",
+                        Height = f.Height?.ToString("F2") ?? "N/A",
+                        OFC = f.OFC?.ToString("F2") ?? "N/A",
+                        Phone = f.Child?.User?.MobileNumber ?? "N/A",
+                        Email = f.Child?.Email ?? "N/A",
+                    });
+                    csv.WriteRecords(followUpCsvData);
                 }
-
-                stream.Position = 0; // Reset stream position
+                stream.Position = 0; 
                 return File(stream, "application/octet-stream", "FollowUps.csv");
             }
             catch (Exception ex)

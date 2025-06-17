@@ -1765,6 +1765,21 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        public class PdfFooter : PdfPageEventHelper
+        {
+            public override void OnEndPage(PdfWriter writer, Document document)
+            {
+                string dateTimeStamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+                PdfPTable footerTable = new PdfPTable(1);
+                footerTable.TotalWidth =document.PageSize.Width - document.LeftMargin - document.RightMargin;
+                footerTable.DefaultCell.Border = Rectangle.NO_BORDER;
+                footerTable.DefaultCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                footerTable.AddCell(new Phrase($"Printed on: {dateTimeStamp}", footerFont));
+                footerTable.WriteSelectedRows(0,-1,document.LeftMargin,document.BottomMargin - 10,writer.DirectContent);
+            }
+        }
+
         [HttpGet("clinic-report-pdf/{clinicId}")]
         public IActionResult GenerateClinicReportPdf(long clinicId,[FromQuery] string fromDate,[FromQuery] string toDate)
         {
@@ -1854,15 +1869,14 @@ namespace VaccineAPI.Controllers
                 {
                     Document document = new Document(PageSize.A4, 25, 25, 30, 30);
                     PdfWriter writer = PdfWriter.GetInstance(document, ms);
+                    writer.PageEvent = new PdfFooter();
                     document.Open();
-
                     PdfPTable upperTable = new PdfPTable(2);
                     float[] upperTableWidths = new float[] { 350f, 160f };
                     upperTable.HorizontalAlignment = 0;
                     upperTable.TotalWidth = 510f;
                     upperTable.LockedWidth = true;
                     upperTable.SetWidths(upperTableWidths);
-
                     PdfPCell leftCell = new PdfPCell(
                         new Phrase(
                             $"{doctorName}\n{additionalInfo}\n{clinicName}\n{address}\n{phoneNumber}",

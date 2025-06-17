@@ -62,8 +62,6 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}")]
         public async Task<Response<VaccineDTO>> GetSingle(long id)
         {
-
-
             var dbvaccine = await _db.Vaccines.Include(X => X.Doses).Include(x => x.Brands).Where(x => x.Id == id).FirstOrDefaultAsync();
             VaccineDTO vaccineDTO = _mapper.Map<VaccineDTO>(dbvaccine);
             vaccineDTO.NumOfBrands = dbvaccine.Brands.Count();
@@ -109,37 +107,37 @@ namespace VaccineAPI.Controllers
                 return new Response<List<BrandDTO>>(true, null, brandDTOs);
             }
         }
+
         [HttpPost]
         public async Task<Response<VaccineDTO>> Post(VaccineDTO vaccineDTO)
         {
             Vaccine vaccinedb = _mapper.Map<Vaccine>(vaccineDTO);
-
             _db.Vaccines.Add(vaccinedb);
             await _db.SaveChangesAsync();
-
             vaccineDTO.Id = vaccinedb.Id;
-
-            Brand dbBrand = new Brand
-            {
-                VaccineId = vaccinedb.Id,
-                Name = "Local"
-            };
-
+            Brand dbBrand = new Brand { VaccineId = vaccinedb.Id, Name = "Local" };
             _db.Brands.Add(dbBrand);
             await _db.SaveChangesAsync();
-
             var doctors = await _db.Doctors.ToListAsync();
             List<BrandAmount> brandAmounts = new List<BrandAmount>();
             foreach (var doctor in doctors)
             {
-                BrandAmount newBrandAmount = new BrandAmount
+                if (doctor == null)
                 {
-                    DoctorId = doctor.Id,
-                    BrandId = dbBrand.Id,
-                    Amount = 0,
-                    Count = 0
-                };
-                brandAmounts.Add(newBrandAmount);
+                    continue;
+                }
+                foreach (var clinic in doctor.Clinics)
+                {
+                    BrandAmount newBrandAmount = new BrandAmount
+                    {
+                        DoctorId = doctor.Id,
+                        BrandId = dbBrand.Id,
+                        ClinicId = clinic.Id,
+                        Amount = 0,
+                        Count = 0,
+                    };
+                    brandAmounts.Add(newBrandAmount);
+                }
             }
             _db.BrandAmounts.AddRange(brandAmounts);
             await _db.SaveChangesAsync();

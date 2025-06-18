@@ -1247,17 +1247,13 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<ChildDTO> Post(ChildDTO childDTO)
         {
-
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             childDTO.Name = textInfo.ToTitleCase(childDTO.Name);
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
-
             {
                 Child childDB = _mapper.Map<Child>(childDTO);
-
-
+                childDB.IsPAApprove = childDTO.IsPAApprove;
                 User user = _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
-
                 if (user == null)
                 {
                     User userDB = new User();
@@ -1267,7 +1263,6 @@ namespace VaccineAPI.Controllers
                     userDB.UserType = "PARENT";
                     _db.Users.Add(userDB);
                     _db.SaveChanges();
-
                     childDB.UserId = userDB.Id;
                     _db.Childs.Add(childDB);
                     _db.SaveChanges();
@@ -1288,37 +1283,29 @@ namespace VaccineAPI.Controllers
                 childDTO.Id = childDB.Id;
                 if (childDTO.Type == "regular")
                 {
-                    // get doctor schedule and apply it to child and save in Schedule table
                     Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x => x.Doctor).FirstOrDefault();
                     Doctor doctor = clinic.Doctor;
-
                     List<DoctorSchedule> dss = _db.DoctorSchedules.Where(x => x.DoctorId == doctor.Id).ToList();
-
-                    // IEnumerable<DoctorSchedule> dss = doctor.DoctorSchedules;
                     foreach (DoctorSchedule ds in dss)
                     {
                         var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).Include(x => x.Vaccine).FirstOrDefault();
-
-                        //  if (childDTO.ChildVaccines.Any(x => x.Id == dbDose.Vaccine.Id))
                         {
                             Schedule cvd = new Schedule();
                             cvd.ChildId = childDTO.Id;
                             cvd.DoseId = ds.DoseId;
-                            if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith("HPV")) continue;
+                            if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith("HPV"))
+                                continue;
 
-                            if (childDTO.IsSkip == true && ds.IsActive != true  // skip unactive doses
-                            )
+                            if (childDTO.IsSkip == true && ds.IsActive != true)
                                 continue;
 
                             if (childDTO.IsEPIDone)
                             {
-
                                 var dob = childDTO.DOB.Date;
                                 DateTime comparisonDate2002 = DateTime.Parse("01/01/2002");
                                 DateTime comparisonDate2009 = DateTime.Parse("01/01/2009");
                                 DateTime comparisonDate2015 = DateTime.Parse("01/01/2015");
                                 DateTime comparisonDate2021 = DateTime.Parse("01/04/2021");
-
                                 if (dob < comparisonDate2002)
                                 {
                                     if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
@@ -1327,7 +1314,6 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
                                 else if (dob > comparisonDate2021)
                                 {
                                     if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
@@ -1336,7 +1322,6 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
                                 else if (dob > comparisonDate2002 && dob < comparisonDate2009)
                                 {
                                     if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
@@ -1345,7 +1330,6 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
                                 else if (dob > comparisonDate2009 && dob < comparisonDate2015)
                                 {
                                     if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
@@ -1354,27 +1338,22 @@ namespace VaccineAPI.Controllers
                                         ds.GapInDays = 0;
                                     }
                                 }
-
                                 else
                                 {
                                     cvd.DoseId = ds.DoseId;
                                 }
                             }
-
                             if (ds.Dose.Name.StartsWith("HPV") && ds.Dose.DoseOrder == 3) cvd.IsSkip = true;
-
                             cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
                             cvd.DiseaseYear = "";
                             _db.Schedules.Add(cvd);
                             _db.SaveChanges();
                         }
                     }
-
                     var dob2 = childDTO.DOB.Date;
                     DateTime comparisonDate2012 = DateTime.Parse("01/01/2012");
                     DateTime comparisonDate2018 = DateTime.Parse("01/01/2018");
                     DateTime comparisonDate2020 = DateTime.Parse("01/01/2020");
-
                     if (childDTO.IsEPIDone)
                     {
                         if (dob2 > comparisonDate2020)
@@ -1412,9 +1391,7 @@ namespace VaccineAPI.Controllers
                             ;
                         }
                     }
-
                     _db.SaveChanges();
-
                 }
                 Child c = _db.Childs.Where(x => x.Id == childDTO.Id)
                               .Include(x => x.User)
@@ -1429,9 +1406,6 @@ namespace VaccineAPI.Controllers
                 {
                     Console.WriteLine(e);
                 }
-                // generate SMS and save it to the db
-                //  UserSMS u = new UserSMS(_db);
-                //  u.ParentSMS(c);
                 return new Response<ChildDTO>(true, null, childDTO);
             }
         }
@@ -2502,6 +2476,7 @@ namespace VaccineAPI.Controllers
                 dbChild.IsEPIDone = childDTO.IsEPIDone;
                 dbChild.IsVerified = childDTO.IsVerified;
                 dbChild.IsInactive = childDTO.IsInactive;
+                dbChild.IsPAApprove = childDTO.IsPAApprove;
                 dbChild.Nationality = childDTO.Nationality;
                 dbChild.Agent = childDTO.Agent;
                 dbChild.CNIC = childDTO.CNIC;
@@ -2843,6 +2818,7 @@ namespace VaccineAPI.Controllers
         {
             try
             {
+
                 var dbChildren = _db
                     .Childs.Include(c => c.User) .Include(c => c.Schedules) 
                     .Where(c =>c.ClinicId == clinicId&& (c.IsPAApprove == false

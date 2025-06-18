@@ -27,6 +27,7 @@ namespace VaccineAPI.Models
         public bool? IsEPIDone { get; set; }
         public bool? IsVerified { get; set; }
         public bool? IsInactive { get; set; }
+        public bool IsPAApprove { get; set; }
         public string Type { get; set; }
         public string Nationality { get; set; } = "";
         public long ClinicId { get; set; }

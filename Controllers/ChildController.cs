@@ -2838,6 +2838,58 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf");
         }
 
+        [HttpGet("not-approved/{clinicId}")]
+        public Response<IEnumerable<ChildDTO>> GetNotApprovedChildrenByClinic(long clinicId)
+        {
+            try
+            {
+                var dbChildren = _db
+                    .Childs.Include(c => c.User) .Include(c => c.Schedules) 
+                    .Where(c =>c.ClinicId == clinicId&& (c.IsPAApprove == false
+                            || c.Schedules.Any(s => s.IsPAApprove == false && s.IsDone == true)))
+                    .ToList();
+
+                var childDTOs = _mapper.Map<List<ChildDTO>>(dbChildren);
+                foreach (var childDTO in childDTOs)
+                {
+                    var user = dbChildren.FirstOrDefault(c => c.Id == childDTO.Id)?.User;
+                    if (user != null)
+                    {
+                        childDTO.CountryCode = user.CountryCode;
+                        childDTO.MobileNumber = user.MobileNumber;
+                    }
+                }
+                return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching not-approved children for clinic ID {clinicId}: {ex.Message}");
+                return new Response<IEnumerable<ChildDTO>>(false,"An error occurred while fetching not-approved children.",null);
+            }
+        }
+
+        [HttpPut("approve/{id}")]
+        public IActionResult ApproveChild(long id)
+        {
+            try
+            {
+            var child = _db.Childs.FirstOrDefault(c => c.Id == id);
+            if (child == null)
+            {
+                return NotFound(new { success = false, message = "Child not found for the provided ID." });
+            }
+            child.IsPAApprove = true;
+            _db.Entry(child).State = EntityState.Modified;
+            _db.SaveChanges();
+            return Ok(new { success = true, message = "Child approved successfully." });
+            }
+            catch (Exception ex)
+            {
+            Console.WriteLine($"Error approving child: {ex.Message}");
+            return StatusCode(500, new { success = false, message = "An error occurred while approving the child." });
+            }
+        }
+
         private string GetYearOrMonthFromDays(int days)
         {
             if (days == 30000)

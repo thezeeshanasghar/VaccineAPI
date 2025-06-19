@@ -83,10 +83,8 @@ namespace VaccineAPI.Controllers
             existingAssistant.AllowAnalytics = personalAssistant.AllowAnalytics;
             existingAssistant.AllowChild = personalAssistant.AllowChild;
             existingAssistant.IsVerified = personalAssistant.IsVerified;
-
             _db.Entry(existingAssistant).State = EntityState.Modified;
             _db.SaveChanges();
-
             return Ok(new Response<PersonalAssistant>(true, "Personal Assistant updated successfully.", existingAssistant));
         }
 
@@ -98,11 +96,33 @@ namespace VaccineAPI.Controllers
             {
                 return NotFound(new { message = "Personal Assistant not found." });
             }
-
             _db.PersonalAssistant.Remove(personalAssistant);
             _db.SaveChanges();
-
             return Ok(new { message = "Personal Assistant deleted successfully." });
+        }
+
+        [HttpGet("clinics/{paId:long}")]
+        public async Task<ActionResult<IEnumerable<Clinic>>> GetClinicsByPaId(long paId)
+        {
+            try
+            {
+                var clinics = await _db
+                    .PaAccess.Include(pa => pa.Clinic)
+                    .Where(pa => pa.PersonalAssistantId == paId)
+                    .Select(pa => pa.Clinic)
+                    .ToListAsync();
+                if (!clinics.Any())
+                {
+                    return NotFound(new { message = "No clinics found for the provided PA ID." });
+                }
+                // return Ok(clinics);
+                return Ok(new Response<object>(true, "Clinics for given id fetched successfully.", clinics));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching clinics for PA ID {paId}: {ex.Message}");
+                return StatusCode(500,new { message = "An error occurred while fetching clinics." });
+            }
         }
 
         [HttpPost("signup")]
@@ -112,18 +132,15 @@ namespace VaccineAPI.Controllers
             {
                 return BadRequest(new { message = "Invalid data." });
             }
-
             var existingUser = _db.Users.FirstOrDefault(x => x.MobileNumber == personalAssistantDTO.MobileNumber && x.UserType == "PA");
             if (existingUser != null)
             {
                 return new Response<PersonalAssistantDTO>(false, "Personal Assistant with this mobile number already exists.", null);
             }
-
             if (string.IsNullOrEmpty(personalAssistantDTO.Email))
             {
                 return new Response<PersonalAssistantDTO>(false, "Email address is required.", null);
             }
-
             var user = new User
             {
                 MobileNumber = personalAssistantDTO.MobileNumber,
@@ -133,7 +150,6 @@ namespace VaccineAPI.Controllers
             };
             _db.Users.Add(user);
             _db.SaveChanges();
-
             var personalAssistant = new PersonalAssistant
             {
                 Name = personalAssistantDTO.Name,
@@ -151,13 +167,10 @@ namespace VaccineAPI.Controllers
             };
             _db.PersonalAssistant.Add(personalAssistant);
             _db.SaveChanges();
-
             personalAssistantDTO.Id = personalAssistant.Id;
-
             try
             {
                 personalAssistant.User = user;
-
                   string body = ""
                    + "Hello " + personalAssistant.Name + "\n\n"
                    + "You have been registered as a Personal Assistant in the Vaccination Centre system.\n\n"
@@ -167,7 +180,6 @@ namespace VaccineAPI.Controllers
                    + "Please login at: https://doctor.vaccinationcentre.com/loginpa\n\n"
                    + "Regards,\n"
                    + "Vaccination Centre Team";
-
                 UserEmail.SendEmail(personalAssistant.Email, body, "Your Personal Assistant Account Details");
             }
             catch (Exception ex)

@@ -693,7 +693,6 @@ namespace VaccineAPI.Controllers
                 var parsedFromDate = DateTime.Parse(fromDate);
                 var parsedToDate = DateTime.Parse(toDate);
 
-                // Fetch clinic details
                 var clinic = _db
                     .Clinics.Include(c => c.Doctor)
                     .FirstOrDefault(c => c.Id == clinicId);
@@ -702,47 +701,32 @@ namespace VaccineAPI.Controllers
                     return NotFound("Clinic not found.");
                 }
 
-                // Fetch brand details
                 var brand = _db.Brands.FirstOrDefault(b => b.Id == brandId);
                 if (brand == null)
                 {
                     return NotFound("Brand not found.");
                 }
 
-                // Clinic details with null checks
                 var doctorName = clinic.Doctor?.DisplayName ?? "Unknown Doctor";
                 var additionalInfo = clinic.Doctor?.AdditionalInfo ?? "No additional info";
                 var clinicName = clinic.Name ?? "Unknown Clinic";
                 var monogramImage = clinic.MonogramImage ?? "default-monogram.png";
                 var address = clinic.Address ?? "Unknown Address";
                 var phoneNumber = clinic.PhoneNumber ?? "Unknown Phone Number";
-
-                //          var parsedFromDate = DateTime.Parse(fromDate).Date;
-                // var parsedToDate = DateTime.Parse(toDate).Date;
                 var today = DateTime.Today;
 
-                // Get brand
-                // var brand = _db.Brands.FirstOrDefault(b => b.Id == brandId);
-                if (brand == null)
-                    return NotFound("Brand not found.");
-
-                // Get today's inventory
                 var brandAmount = _db.BrandAmounts.FirstOrDefault(b =>
-                    b.BrandId == brandId && b.ClinicId == clinicId
-                );
-
+                    b.BrandId == brandId && b.ClinicId == clinicId);
                 if (brandAmount == null)
                     return NotFound("Brand amount not found.");
 
                 int todaysInventory = brandAmount.Count;
 
-                // Get all schedules from fromDate to today
                 var schedules = _db
                     .Schedules.Where(s =>
                         s.BrandId == brandId
                         && s.GivenDate >= parsedFromDate
-                        && s.GivenDate <= today
-                    )
+                        && s.GivenDate <= today)
                     .ToList();
 
                 var stockPurchases = _db
@@ -820,7 +804,6 @@ namespace VaccineAPI.Controllers
                         + totalFutureVaccines
                         + cumulativeStockPurchased
                         + cumulativeStockAdjusted;
-                    // New logic for stock in hand (up to current date)
                     int cumulativeVaccinesDone = schedules.Where(s => s.GivenDate <= date).Count();
 
                     int cumulativePurchased = stockPurchases
@@ -830,8 +813,6 @@ namespace VaccineAPI.Controllers
                     int cumulativeAdjusted = stockAdjustments
                         .Where(kvp => kvp.Key <= date)
                         .Sum(kvp => kvp.Value);
-
-                    // int stockInHand = todaysInventory - cumulativeVaccinesDone + cumulativePurchased + cumulativeAdjusted;
 
                     reportData.Add(
                         (
@@ -845,63 +826,6 @@ namespace VaccineAPI.Controllers
                     );
                 }
 
-                // Generate list of dates
-                // var allDates = Enumerable
-                //     .Range(0, (parsedToDate - parsedFromDate).Days + 1)
-                //     .Select(offset => parsedFromDate.AddDays(offset))
-                //     .ToList();
-
-                // // Fetch report data
-                // var reportData = (
-                //     from date in allDates
-                //     join bill in _db.Bills on date.Date equals bill.BillDate.Date into billGroup
-                //     from bill in billGroup.DefaultIfEmpty()
-                //     join stock in _db.Stocks on bill.Id equals stock.BillId into stockGroup
-                //     from stock in stockGroup.DefaultIfEmpty()
-                //     join brandAmount in _db.BrandAmounts
-                //         on new { BrandId = stock?.BrandId ?? 0, ClinicId = clinicId } equals new
-                //         {
-                //             brandAmount.BrandId,
-                //             brandAmount.ClinicId,
-                //         }
-                //         into brandAmountGroup
-                //     from brandAmount in brandAmountGroup.DefaultIfEmpty()
-                //     join adjust in _db.AdjustStocks
-                //         on stock?.BrandId ?? 0 equals adjust.BrandId
-                //         into adjustGroup
-                //     from adjust in adjustGroup.DefaultIfEmpty()
-                //     join schedule in _db.Schedules
-                //         on stock?.BrandId ?? 0 equals schedule.BrandId
-                //         into scheduleGroup
-                //     from schedule in scheduleGroup.DefaultIfEmpty()
-                //     where stock == null || stock.BrandId == brandId
-                //     group new
-                //     {
-                //         date,
-                //         stock,
-                //         adjust,
-                //         schedule,
-                //         brandAmount,
-                //     } by date.Date into grouped
-                //     select new
-                //     {
-                //         Date = grouped.Key,
-                //         OpeningStock = grouped.Sum(g => g.brandAmount?.Count ?? 0), // Default to 0 if no data
-                //         Sold = grouped.Sum(g => g.schedule != null ? 1 : 0), // Default to 0 if no data
-                //         Adjust = grouped.Sum(g => g.adjust?.Adjustment ?? 0), // Default to 0 if no data
-                //         Inventory = grouped.Sum(g => g.brandAmount?.Count ?? 0)
-                //             - grouped.Sum(g => g.schedule != null ? 1 : 0)
-                //             + grouped.Sum(g => g.adjust?.Adjustment ?? 0),
-                //     }
-                // ).OrderBy(r => r.Date).ToList();
-
-                // if (!reportData.Any())
-                // {
-                //     return NotFound(
-                //         "No data found for the specified clinic, brand, and date range."
-                //     );
-                // }
-
                 using (MemoryStream ms = new MemoryStream())
                 {
                     Document document = new Document(PageSize.A4, 25, 25, 30, 30);
@@ -909,7 +833,6 @@ namespace VaccineAPI.Controllers
                     writer.PageEvent = new PdfFooter(); // Custom footer if you have one
                     document.Open();
 
-                    // Create upper header with clinic info
                     PdfPTable upperTable = new PdfPTable(2);
                     float[] upperTableWidths = new float[] { 350f, 160f };
                     upperTable.HorizontalAlignment = 0;
@@ -960,8 +883,6 @@ namespace VaccineAPI.Controllers
 
                     upperTable.AddCell(imageCell);
                     document.Add(upperTable);
-
-                    // Titles
                     Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
                     Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
 
@@ -995,10 +916,10 @@ namespace VaccineAPI.Controllers
                     string[] headers =
                     {
                         "Date",
-                        "Inventory",
-                        "Vaccines Done",
-                        "Stock Purchased",
-                        "Stock Adjusted",
+                        "Opening Stock",
+                        "Sold",
+                        "Purchased",
+                        "Adjusted",
                         "Stock In Hand",
                     };
                     foreach (var header in headers)
@@ -1062,106 +983,8 @@ namespace VaccineAPI.Controllers
                             }
                         );
                     }
-
                     document.Add(table);
                     document.Close();
-
-                    // // Report Table
-                    // PdfPTable table = new PdfPTable(5) { WidthPercentage = 100 };
-                    // table.SetWidths(new float[] { 2f, 2f, 2f, 2f, 2f });
-
-                    // string[] headers = { "Date", "Opening Stock", "Sold", "Adjust", "Inventory" };
-                    // foreach (var header in headers)
-                    // {
-                    //     table.AddCell(
-                    //         new PdfPCell(new Phrase(header, headerFont))
-                    //         {
-                    //             HorizontalAlignment = Element.ALIGN_CENTER,
-                    //             Padding = 6,
-                    //             BackgroundColor = BaseColor.LightGray,
-                    //         }
-                    //     );
-                    // }
-
-                    // foreach (var row in reportData)
-                    // {
-                    //     table.AddCell(
-                    //         new PdfPCell(new Phrase(row.Date.ToString("dd-MM-yyyy"), normalFont))
-                    //         {
-                    //             HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         }
-                    //     );
-                    //     table.AddCell(
-                    //         new PdfPCell(new Phrase(row.OpeningStock.ToString(), normalFont))
-                    //         {
-                    //             HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         }
-                    //     );
-                    //     table.AddCell(
-                    //         new PdfPCell(new Phrase(row.Sold.ToString(), normalFont))
-                    //         {
-                    //             HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         }
-                    //     );
-                    //     table.AddCell(
-                    //         new PdfPCell(new Phrase(row.Adjust.ToString(), normalFont))
-                    //         {
-                    //             HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         }
-                    //     );
-                    //     table.AddCell(
-                    //         new PdfPCell(new Phrase(row.Inventory.ToString(), normalFont))
-                    //         {
-                    //             HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         }
-                    //     );
-                    // }
-
-                    // // Summary Row
-                    // table.AddCell(
-                    //     new PdfPCell(new Phrase("Total", headerFont))
-                    //     {
-                    //         HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         BackgroundColor = BaseColor.LightGray,
-                    //     }
-                    // );
-                    // table.AddCell(
-                    //     new PdfPCell(
-                    //         new Phrase(reportData.Sum(r => r.OpeningStock).ToString(), headerFont)
-                    //     )
-                    //     {
-                    //         HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         BackgroundColor = BaseColor.LightGray,
-                    //     }
-                    // );
-                    // table.AddCell(
-                    //     new PdfPCell(new Phrase(reportData.Sum(r => r.Sold).ToString(), headerFont))
-                    //     {
-                    //         HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         BackgroundColor = BaseColor.LightGray,
-                    //     }
-                    // );
-                    // table.AddCell(
-                    //     new PdfPCell(
-                    //         new Phrase(reportData.Sum(r => r.Adjust).ToString(), headerFont)
-                    //     )
-                    //     {
-                    //         HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         BackgroundColor = BaseColor.LightGray,
-                    //     }
-                    // );
-                    // table.AddCell(
-                    //     new PdfPCell(
-                    //         new Phrase(reportData.Sum(r => r.Inventory).ToString(), headerFont)
-                    //     )
-                    //     {
-                    //         HorizontalAlignment = Element.ALIGN_CENTER,
-                    //         BackgroundColor = BaseColor.LightGray,
-                    //     }
-                    // );
-
-                    // document.Add(table);
-                    // document.Close();
 
                     return File(
                         ms.ToArray(),
@@ -1172,7 +995,6 @@ namespace VaccineAPI.Controllers
             }
             catch (Exception ex)
             {
-                // Optional: add logging here
                 return BadRequest($"Error generating PDF: {ex.Message}\n{ex.StackTrace}");
             }
         }

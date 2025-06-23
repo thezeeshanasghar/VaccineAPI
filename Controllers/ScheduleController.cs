@@ -1765,11 +1765,11 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        public class PdfFooter : PdfPageEventHelper
+         public class PdfFooter : PdfPageEventHelper
         {
             public override void OnEndPage(PdfWriter writer, Document document)
             {
-                string dateTimeStamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                string dateTimeStamp = DateTime.Now.ToString("yyyy-MM-dd hh:mm tt");
                 Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
                 PdfPTable footerTable = new PdfPTable(1);
                 footerTable.TotalWidth =document.PageSize.Width - document.LeftMargin - document.RightMargin;
@@ -1877,17 +1877,23 @@ namespace VaccineAPI.Controllers
                     upperTable.TotalWidth = 510f;
                     upperTable.LockedWidth = true;
                     upperTable.SetWidths(upperTableWidths);
-                    PdfPCell leftCell = new PdfPCell(
-                        new Phrase(
-                            $"{doctorName}\n{additionalInfo}\n{clinicName}\n{address}\n{phoneNumber}",
-                            FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)
-                        )
-                    )
+                    Font boldFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+                    Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+                    Phrase phrase = new Phrase();
+                    phrase.Add(new Chunk(doctorName + "\n", boldFont));
+                    phrase.Add(new Chunk(additionalInfo + "\n", regularFont));
+                    phrase.Add(new Chunk(clinicName + "\n", boldFont));
+                    phrase.Add(new Chunk(address + "\n", regularFont));
+                    phrase.Add(new Chunk(phoneNumber, regularFont));
+
+                    // Create the cell
+                    PdfPCell leftCell = new PdfPCell(phrase)
                     {
                         Border = 0,
                         HorizontalAlignment = Element.ALIGN_LEFT,
                         Padding = 5,
                     };
+
                     upperTable.AddCell(leftCell);
 
                     var logoPath = Path.Combine(_host.ContentRootPath, monogramImage);
@@ -1915,12 +1921,19 @@ namespace VaccineAPI.Controllers
                     Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
                     Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
 
+                    Paragraph titletext = new Paragraph(
+                        $"Sales Report",
+                        headerFont
+                    );
+                    titletext.Alignment = Element.ALIGN_CENTER;
+                    document.Add(titletext);
+
                     Paragraph dateRange = new Paragraph(
                         $"Date Range: {parsedFromDate:dd-MM-yyyy} to {parsedToDate:dd-MM-yyyy}",
                         normalFont
                     );
                     dateRange.Alignment = Element.ALIGN_CENTER;
-                    dateRange.SpacingAfter = 20f;
+                    dateRange.SpacingAfter = 10f;
                     document.Add(dateRange);
 
                     PdfPTable table = new PdfPTable(6);
@@ -2081,7 +2094,7 @@ namespace VaccineAPI.Controllers
                     return File(
                         ms.ToArray(),
                         "application/pdf",
-                        $"ClinicReport_{clinicId}_{parsedFromDate:yyyyMMdd}_{parsedToDate:yyyyMMdd}.pdf"
+                        $"SalesReport_{clinicId}_{parsedFromDate:yyyyMMdd}_{parsedToDate:yyyyMMdd}.pdf"
                     );
                 }
             }

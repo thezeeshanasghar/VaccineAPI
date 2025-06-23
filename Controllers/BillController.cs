@@ -936,6 +936,14 @@ namespace VaccineAPI.Controllers
 
                     foreach (var row in reportData)
                     {
+                        if (
+                            row.VaccinesDone == 0
+                            && row.StockPurchased == 0
+                            && row.StockAdjusted == 0
+                        )
+                        {
+                            continue;
+                        }
                         table.AddCell(
                             new PdfPCell(new Phrase(row.Date.ToString("dd-MM-yyyy"), normalFont))
                             {
@@ -943,7 +951,7 @@ namespace VaccineAPI.Controllers
                             }
                         );
                         table.AddCell(
-                            new PdfPCell(new Phrase(row.Inventory.ToString(), normalFont))
+                            new PdfPCell(new Phrase((row.Inventory+row.VaccinesDone).ToString(), normalFont))
                             {
                                 HorizontalAlignment = Element.ALIGN_CENTER,
                             }
@@ -971,7 +979,6 @@ namespace VaccineAPI.Controllers
                                 new Phrase(
                                     (
                                         row.Inventory
-                                        + row.VaccinesDone
                                         + row.StockPurchased
                                         + row.StockAdjusted
                                     ).ToString(),

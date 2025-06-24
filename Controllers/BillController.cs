@@ -5,6 +5,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using System;
+using System.Data;
+using System.Threading.Tasks;
+using AutoMapper;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.IO;
+using Microsoft.AspNetCore.Hosting;
 
 namespace VaccineAPI.Controllers
 {
@@ -14,11 +22,13 @@ namespace VaccineAPI.Controllers
     {
         private readonly Context _db;
         private readonly IMapper _mapper;
+        private readonly IWebHostEnvironment _host;
 
-        public BillController(Context context, IMapper mapper)
+        public BillController(Context context, IMapper mapper, IWebHostEnvironment host)
         {
             _db = context;
             _mapper = mapper;
+            _host = host;
         }
 
         [HttpGet]
@@ -266,6 +276,22 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        public class PdfFooter : PdfPageEventHelper
+        {
+            public override void OnEndPage(PdfWriter writer, Document document)
+            {
+                string dateTimeStamp = DateTime.Now.ToString("yyyy-MM-dd hh:mm tt");
+                Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+                PdfPTable footerTable = new PdfPTable(1);
+                footerTable.TotalWidth =
+                    document.PageSize.Width - document.LeftMargin - document.RightMargin;
+                footerTable.DefaultCell.Border = Rectangle.NO_BORDER;
+                footerTable.DefaultCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                footerTable.AddCell(new Phrase($"Printed on: {dateTimeStamp}", footerFont));
+                footerTable.WriteSelectedRows(0,-1,document.LeftMargin,document.BottomMargin - 10,writer.DirectContent);
+            }
+        }
+        
         [HttpGet("brand-stock-report-pdf")]
         public IActionResult GenerateBrandStockReportPdf(
             [FromQuery] long clinicId,
@@ -312,8 +338,10 @@ namespace VaccineAPI.Controllers
                     .Schedules.Where(s =>
                         s.BrandId == brandId
                         && s.GivenDate >= parsedFromDate
+
                         && s.GivenDate <= today 
                         && s.Child.ClinicId == clinicId)
+
                     .ToList();
 
                 var stockPurchases = _db

@@ -1769,7 +1769,9 @@ namespace VaccineAPI.Controllers
         {
             public override void OnEndPage(PdfWriter writer, Document document)
             {
-                string dateTimeStamp = DateTime.Now.ToString("yyyy-MM-dd hh:mm tt");
+                TimeZoneInfo pakistanTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pakistan Standard Time");
+                DateTime pakistanTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pakistanTimeZone);
+                string dateTimeStamp = pakistanTime.ToString("yyyy-MM-dd hh:mm tt");
                 Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
                 PdfPTable footerTable = new PdfPTable(1);
                 footerTable.TotalWidth =document.PageSize.Width - document.LeftMargin - document.RightMargin;
@@ -1929,7 +1931,7 @@ namespace VaccineAPI.Controllers
                     document.Add(titletext);
 
                     Paragraph dateRange = new Paragraph(
-                        $"Date Range: {parsedFromDate:dd-MM-yyyy} to {parsedToDate:dd-MM-yyyy}",
+                        $"FROM {parsedFromDate:dd-MM-yyyy} TO {parsedToDate:dd-MM-yyyy}",
                         normalFont
                     );
                     dateRange.Alignment = Element.ALIGN_CENTER;

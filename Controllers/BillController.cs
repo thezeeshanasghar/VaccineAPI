@@ -280,7 +280,9 @@ namespace VaccineAPI.Controllers
         {
             public override void OnEndPage(PdfWriter writer, Document document)
             {
-                string dateTimeStamp = DateTime.Now.ToString("yyyy-MM-dd hh:mm tt");
+                TimeZoneInfo pakistanTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pakistan Standard Time");
+                DateTime pakistanTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pakistanTimeZone);
+                string dateTimeStamp = pakistanTime.ToString("yyyy-MM-dd hh:mm tt");
                 Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
                 PdfPTable footerTable = new PdfPTable(1);
                 footerTable.TotalWidth =
@@ -609,6 +611,21 @@ namespace VaccineAPI.Controllers
                             }
                         );
                     }
+                    
+                    int totalSold = reportData.Sum(r => r.VaccinesDone);
+                    int totalPurchased = reportData.Sum(r => r.StockPurchased);
+                    int totalAdjusted = reportData.Sum(r => r.StockAdjusted);
+
+
+                    PdfPCell totalsCell = new PdfPCell(new Phrase($"Total Sold: {totalSold} | Total Purchased: {totalPurchased} | Total Adjusted: {totalAdjusted}", boldFont))
+                    {
+                        Colspan = 6, // Span across all columns
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        Padding = 5,
+                        BackgroundColor = BaseColor.LightGray
+                    };
+                    table.AddCell(totalsCell);
+                  
                     document.Add(table);
                     document.Close();
 

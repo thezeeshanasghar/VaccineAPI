@@ -1,22 +1,18 @@
-using System;
 using System.Collections.Generic;
-using System.Data;
-using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
-
-using Microsoft.AspNetCore.Hosting;
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-
-using AutoMapper;
-using AutoMapper;
-
-using iTextSharp.text;
-using iTextSharp.text.pdf;
-
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using System;
+using System.Data;
+using System.Threading.Tasks;
+using AutoMapper;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.IO;
+using Microsoft.AspNetCore.Hosting;
 
 namespace VaccineAPI.Controllers
 {
@@ -616,19 +612,59 @@ namespace VaccineAPI.Controllers
                         );
                     }
                     
-                    int totalSold = reportData.Sum(r => r.VaccinesDone);
-                    int totalPurchased = reportData.Sum(r => r.StockPurchased);
-                    int totalAdjusted = reportData.Sum(r => r.StockAdjusted);
+                 int totalSold = reportData.Sum(r => r.VaccinesDone);
+int totalPurchased = reportData.Sum(r => r.StockPurchased);
+int totalAdjusted = reportData.Sum(r => r.StockAdjusted);
+int totalInventory = reportData.FirstOrDefault().Inventory;
+int totalStockInHand = reportData.LastOrDefault().StockInHand;
 
+PdfPCell totalDateCell = new PdfPCell(new Phrase("Totals", boldFont))
+{
+    HorizontalAlignment = Element.ALIGN_CENTER,
+    BackgroundColor = BaseColor.LightGray,
+    Padding = 5
+};
+table.AddCell(totalDateCell);
 
-                    PdfPCell totalsCell = new PdfPCell(new Phrase($"Total Sold: {totalSold} | Total Purchased: {totalPurchased} | Total Adjusted: {totalAdjusted}", boldFont))
-                    {
-                        Colspan = 6, // Span across all columns
-                        HorizontalAlignment = Element.ALIGN_CENTER,
-                        Padding = 5,
-                        BackgroundColor = BaseColor.LightGray
-                    };
-                    table.AddCell(totalsCell);
+PdfPCell totalInventoryCell = new PdfPCell(new Phrase(totalInventory.ToString(), boldFont))
+{
+    HorizontalAlignment = Element.ALIGN_CENTER,
+    BackgroundColor = BaseColor.LightGray,
+    Padding = 5
+};
+table.AddCell(totalInventoryCell);
+
+PdfPCell totalSoldCell = new PdfPCell(new Phrase(totalSold.ToString(), boldFont))
+{
+    HorizontalAlignment = Element.ALIGN_CENTER,
+    BackgroundColor = BaseColor.LightGray,
+    Padding = 5
+};
+table.AddCell(totalSoldCell);
+
+PdfPCell totalPurchasedCell = new PdfPCell(new Phrase(totalPurchased.ToString(), boldFont))
+{
+    HorizontalAlignment = Element.ALIGN_CENTER,
+    BackgroundColor = BaseColor.LightGray,
+    Padding = 5
+};
+table.AddCell(totalPurchasedCell);
+
+PdfPCell totalAdjustedCell = new PdfPCell(new Phrase(totalAdjusted.ToString(), boldFont))
+{
+    HorizontalAlignment = Element.ALIGN_CENTER,
+    BackgroundColor = BaseColor.LightGray,
+    Padding = 5
+};
+table.AddCell(totalAdjustedCell);
+
+PdfPCell totalStockInHandCell = new PdfPCell(new Phrase(totalStockInHand.ToString(), boldFont))
+{
+    HorizontalAlignment = Element.ALIGN_CENTER,
+    BackgroundColor = BaseColor.LightGray,
+    Padding = 5
+};
+table.AddCell(totalStockInHandCell);
                   
                     document.Add(table);
                     document.Close();
@@ -894,204 +930,5 @@ namespace VaccineAPI.Controllers
                 return BadRequest($"Error generating PDF: {ex.Message}\n{ex.StackTrace}");
             }
         }
-
-        [HttpGet("supplier-purchase-report-pdf")]
-public IActionResult GenerateSupplierPurchaseReportPdf([FromQuery] long clinicId,[FromQuery] string supplier,[FromQuery] string fromDate,[FromQuery] string toDate)
-{
-    try
-    {
-        var parsedFromDate = DateTime.Parse(fromDate).Date;
-        var parsedToDate = DateTime.Parse(toDate).Date;
-
-        var clinic = _db.Clinics.Include(c => c.Doctor).FirstOrDefault(c => c.Id == clinicId);
-        if (clinic == null)
-        {
-            return NotFound("Clinic not found.");
-        }
-
-        var rawData = _db.Stocks
-            .Join(
-                _db.Bills,
-                stock => stock.BillId,
-                bill => bill.Id,
-                (stock, bill) => new { stock, bill }
-            )
-            .Where(sb =>
-                sb.bill.Supplier == supplier &&
-                sb.bill.ClinicId == clinicId &&
-                sb.bill.BillDate >= parsedFromDate &&
-                sb.bill.BillDate <= parsedToDate
-            )
-            .AsEnumerable() // Perform grouping in memory
-            .ToList();
-
-        var result = rawData
-            .GroupBy(sb => sb.bill.Id)
-            .Select(g => new
-            {
-                Bill = g.First().bill,
-                Stocks = g.Select(sb => sb.stock).ToList()
-            })
-            .OrderBy(r => r.Bill.BillDate) // Sort by BillDate
-            .ToList();
-
-        if (!result.Any())
-        {
-            return NotFound("No data found for the specified criteria.");
-        }
-
-        using (MemoryStream ms = new MemoryStream())
-        {
-            Document document = new Document(PageSize.A4, 25, 25, 30, 30);
-            PdfWriter writer = PdfWriter.GetInstance(document, ms);
-            writer.PageEvent = new PdfFooter(); // Custom footer
-            document.Open();
-
-            PdfPTable upperTable = new PdfPTable(2);
-            upperTable.TotalWidth = 510f;
-            upperTable.LockedWidth = true;
-            upperTable.SetWidths(new float[] { 350f, 160f });
-
-            Font boldFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
-            Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
-
-            Phrase phrase = new Phrase();
-            phrase.Add(new Chunk($"{clinic.Doctor?.DisplayName ?? "Unknown Doctor"}\n", boldFont));
-            phrase.Add(new Chunk($"{clinic.Doctor?.AdditionalInfo ?? "No additional info"}\n", regularFont));
-            phrase.Add(new Chunk($"{clinic.Name ?? "Unknown Clinic"}\n", boldFont));
-            phrase.Add(new Chunk($"{clinic.Address ?? "Unknown Address"}\n", regularFont));
-            phrase.Add(new Chunk($"{clinic.PhoneNumber ?? "Unknown Phone Number"}", regularFont));
-
-
-            PdfPCell leftCell = new PdfPCell(phrase)
-            {
-                Border = 0,
-                HorizontalAlignment = Element.ALIGN_LEFT,
-                Padding = 5,
-            };
-            upperTable.AddCell(leftCell);
-
-            var imageCell = new PdfPCell(new Phrase(""))
-            {
-                Border = 0,
-                FixedHeight = 50f,
-                HorizontalAlignment = Element.ALIGN_RIGHT,
-            };
-
-            if (!string.IsNullOrEmpty(clinic.MonogramImage))
-            {
-                var logoPath = Path.Combine(_host.ContentRootPath, clinic.MonogramImage);
-                if (System.IO.File.Exists(logoPath))
-                {
-                    var img = Image.GetInstance(logoPath);
-                    img.ScaleAbsolute(160f, 50f);
-                    imageCell = new PdfPCell(img, false)
-                    {
-                        Border = 0,
-                        FixedHeight = 50f,
-                        HorizontalAlignment = Element.ALIGN_RIGHT,
-                    };
-                }
-            }
-
-            upperTable.AddCell(imageCell);
-            document.Add(upperTable);
-
-            Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12);
-            Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
-
-            document.Add(new Paragraph("SUPPLIER CLINIC REPORT", headerFont)
-            {
-                Alignment = Element.ALIGN_CENTER,
-            });
-
-            document.Add(new Paragraph($"Supplier Name: {supplier}", normalFont)
-            {
-                Alignment = Element.ALIGN_CENTER,
-            });
-
-            document.Add(new Paragraph($"Date Range: {parsedFromDate:dd-MM-yyyy} to {parsedToDate:dd-MM-yyyy}", normalFont)
-            {
-                Alignment = Element.ALIGN_CENTER,
-                SpacingAfter = 10f,
-            });
- decimal totalAmountSum = 0; // Variable to store the sum of Total Amount for all stocks
-
-foreach (var group in result)
-{
-    decimal billTotalAmount = group.Stocks.Sum(stock => stock.Quantity * stock.StockAmount);
-    PdfPTable billTable = new PdfPTable(5) { WidthPercentage = 100 };
-    billTable.SetWidths(new float[] { 2f, 2f, 2f, 2f, 2f });
-
-    string[] billHeaders = { "Date", "Bill No", "Total Amount", "Status", "Balance Amount" };
-    foreach (var header in billHeaders)
-    {
-        billTable.AddCell(new PdfPCell(new Phrase(header, headerFont))
-        {
-            HorizontalAlignment = Element.ALIGN_CENTER,
-            BackgroundColor = BaseColor.LightGray,
-            Padding = 5,
-        });
-    }
-
-    var bill = group.Bill;
-    billTable.AddCell(new PdfPCell(new Phrase(bill.BillDate.ToString("dd-MM-yyyy"), normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER });
-    billTable.AddCell(new PdfPCell(new Phrase(bill.BillNo.ToString(), normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER });
-    billTable.AddCell(new PdfPCell(new Phrase(billTotalAmount.ToString("F2"), normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER }); // Correct Total Amount
-    billTable.AddCell(new PdfPCell(new Phrase(bill.IsPaid ? "Paid" : "UnPaid", normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER });
-    decimal balanceAmount = bill.IsPaid ? 0 : billTotalAmount; // Calculate balance amount
-    billTable.AddCell(new PdfPCell(new Phrase(balanceAmount.ToString("F2"), normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER }); // Correct Balance Amount
-    document.Add(billTable);
-
-    PdfPTable stockTable = new PdfPTable(5) { WidthPercentage = 100 };
-    stockTable.SetWidths(new float[] { 2f,2f, 2f, 2f, 2f });
-
-    string[] stockHeaders = { "","Item", "Quantity", "Price", "Total Amount" };
-    foreach (var header in stockHeaders)
-    {
-        stockTable.AddCell(new PdfPCell(new Phrase(header, headerFont))
-        {
-            HorizontalAlignment = Element.ALIGN_CENTER,
-            BackgroundColor = BaseColor.LightGray,
-            Padding = 5,
-        });
-    }
-
-    foreach (var stock in group.Stocks)
-    {
-        stockTable.AddCell(new PdfPCell(new Phrase("", normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER });
-        var brand = _db.Brands.FirstOrDefault(b => b.Id == stock.BrandId);
-        stockTable.AddCell(new PdfPCell(new Phrase(brand?.Name ?? "Unknown", normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER });
-        stockTable.AddCell(new PdfPCell(new Phrase(stock.Quantity.ToString(), normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER });
-        stockTable.AddCell(new PdfPCell(new Phrase(stock.StockAmount.ToString("F2"), normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER });
-        decimal totalAmount = stock.Quantity * stock.StockAmount;
-        stockTable.AddCell(new PdfPCell(new Phrase(totalAmount.ToString("F2"), normalFont)) { HorizontalAlignment = Element.ALIGN_CENTER });
-    }
-
-    document.Add(stockTable);
-
-    totalAmountSum += billTotalAmount;
-}
-
-PdfPTable summaryTable = new PdfPTable(1) { WidthPercentage = 100 };
-summaryTable.AddCell(new PdfPCell(new Phrase($"Total Amount Across All Bills: {totalAmountSum:F2}", headerFont))
-{
-    HorizontalAlignment = Element.ALIGN_CENTER,
-    BackgroundColor = BaseColor.LightGray,
-    Padding = 5,
-});
-
-document.Add(summaryTable);
-
-            document.Close();
-
-            return File(ms.ToArray(), "application/pdf", $"SupplierClinicReport_{clinicId}_{supplier}.pdf");
-        }
-    }
-    catch (Exception ex)
-    {
-        return BadRequest($"Error generating PDF: {ex.Message}\n{ex.StackTrace}");
-    }
-}
     }
 }

@@ -2770,7 +2770,7 @@ namespace VaccineAPI.Controllers
 
             Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
 
-            Paragraph footerText1 = new Paragraph($"{dbChild.clinic.Name} ({dbChild.clinic.RegNo})", footerFont)
+            Paragraph footerText1 = new Paragraph($"{dbChild.Clinic.Name} ({dbChild.Clinic.RegNo})", footerFont)
             {
                 IndentationLeft = 20f
             };

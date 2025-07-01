@@ -2655,11 +2655,15 @@ namespace VaccineAPI.Controllers
 
         private MemoryStream CreatePID(long childId)
         {
-            var dbChild = _db.Childs.Find(childId);
-            if (dbChild == null)
-            {
-                return null;
-            }
+             var dbChild = _db.Childs
+                 .Include(c => c.Clinic)
+                 .FirstOrDefault(c => c.Id == childId);
+
+             if (dbChild == null)
+                 return null;
+
+             if (dbChild.Clinic == null)
+                 throw new Exception("Clinic information not found for this child.");
 
             float width = 120f * 2.83465f;
             float height = 80f * 2.83465f;

@@ -3100,8 +3100,8 @@ namespace VaccineAPI.Controllers
                     {
                         var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
                         pdfQrCode.ScaleAbsolute(75f, 75f);
-                        float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 35f;
-                        float qrCodeYPosition = document.PageSize.Height - pdfQrCode.ScaledHeight - 365f;
+                        float qrCodeXPosition = (document.PageSize.Width - pdfQrCode.ScaledWidth) / 2;
+                        float qrCodeYPosition = document.PageSize.Height - pdfQrCode.ScaledHeight - 60f;
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
                     }
@@ -3156,7 +3156,7 @@ namespace VaccineAPI.Controllers
                     Phrase phrase = new Phrase();
                     phrase.Add(new Chunk($"{clinicName} ", footerFont1));
                     phrase.Add(new Chunk($"({regNo})", footerFont));
-                    ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerY + 0, 0);
+                    ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerY + -13, 0); // Added margin from bottom
                     PdfPTable contactTable = new PdfPTable(1);
                     contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
                     PdfPCell contactCell = new PdfPCell(new Phrase($"{address}           Phone: {phoneNumber}        info@vaccine.pk", footerFont))
@@ -3182,9 +3182,9 @@ namespace VaccineAPI.Controllers
 
                 ColumnText.ShowTextAligned(
                     cb,
-                    Element.ALIGN_RIGHT,
+                    Element.ALIGN_CENTER,
                     new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
-                    document.PageSize.Width - document.RightMargin - 5, footerY, 0
+                    document.PageSize.Width / 2, footerY - -305f, 0
                 );
 
                 // Add footer text

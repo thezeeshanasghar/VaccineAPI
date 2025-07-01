@@ -2986,13 +2986,13 @@ namespace VaccineAPI.Controllers
                 var vaccineTable = new PdfPTable(7) { WidthPercentage = 100 };
                 vaccineTable.SetWidths(new float[] { 1.5f, 1, 1.5f, 1, 1, 1, 1 });
                 vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
+                
                 var child = _db.Childs
-                    .Include(x => x.Schedules)
-                        .ThenInclude(x => x.Dose)
-                    .Include(x => x.Schedules)
-                        .ThenInclude(x => x.Brand)
+                    .Include(x => x.Schedules.Where(s => s.IsSkip != true)) // Exclude skipped schedules
+                        .ThenInclude(s => s.Dose)
+                    .Include(x => x.Schedules.Where(s => s.IsSkip != true))
+                        .ThenInclude(s => s.Brand)
                     .FirstOrDefault(c => c.Id == childId);
-
                 if (child == null)
                 {
                     return null;

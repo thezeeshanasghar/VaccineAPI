@@ -366,15 +366,17 @@ namespace VaccineAPI.Controllers
                     .GroupBy(s => s.GivenDate)
                     .ToDictionary(g => g.Key, g => g.Count());
 
-                var stockAdjustments = _db
-                    .AdjustStocks.Where(a =>
-                        a.BrandId == brandId && 
-                        a.Date >= parsedFromDate &&
-                        a.Date <= parsedToDate &&
-                        a.ClinicId == clinicId
-                    )
-                    .GroupBy(a => a.Date)
-                    .ToDictionary(g => g.Key, g => g.Sum(a => a.Adjustment));
+               var stockAdjustments = _db
+    .AdjustStocks
+    .Where(a =>
+        a.BrandId == brandId &&
+        a.Date >= parsedFromDate &&
+        a.Date <= parsedToDate &&
+        a.ClinicId == clinicId
+    )
+    .AsEnumerable()
+    .GroupBy(a => a.Date.Date)
+    .ToDictionary(g => g.Key, g => g.Sum(a => a.Adjustment));
 
                 var allDates = Enumerable
                     .Range(0, (parsedToDate - parsedFromDate).Days + 1)
@@ -399,8 +401,8 @@ namespace VaccineAPI.Controllers
                     int stockPurchasedToday = stockPurchases.ContainsKey(date)
                         ? stockPurchases[date]
                         : 0;
-                    int stockAdjustedToday = stockAdjustments.ContainsKey(date)
-                        ? stockAdjustments[date]
+                    int stockAdjustedToday = stockAdjustments.ContainsKey(date.Date)
+                        ? stockAdjustments[date.Date]
                         : 0;
 
                     int totalFutureVaccines = schedules

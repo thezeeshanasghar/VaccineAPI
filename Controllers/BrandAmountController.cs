@@ -101,8 +101,8 @@ namespace VaccineAPI.Controllers
             return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
         }
 
-        [HttpGet("pdf/{clinicId}")]
-        public IActionResult GetPdf(int clinicId)
+        [HttpGet("brandamountclinicwisepdf/{clinicId}")]
+        public IActionResult GetBrandAmountClinicWisePdf(int clinicId)
         {
             try
             {
@@ -131,6 +131,11 @@ namespace VaccineAPI.Controllers
                     title.SpacingAfter = 20f;
                     document.Add(title);
 
+                    Font title1Font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 18);
+                    Paragraph title1 = new Paragraph(brandAmounts.FirstOrDefault()?.Clinic?.Name ?? "Unknown clinic", title1Font);
+                    title1.Alignment = Element.ALIGN_CENTER;
+                    title1.SpacingAfter = 20f;
+                    document.Add(title1);
                     // Add date
                     Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 12);
                     Paragraph date = new Paragraph($"Date: {DateTime.Now:dd/MM/yyyy}", normalFont);

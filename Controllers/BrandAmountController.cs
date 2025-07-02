@@ -101,16 +101,16 @@ namespace VaccineAPI.Controllers
             return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
         }
 
-        [HttpGet("pdf/{doctorId}")]
-        public IActionResult GetPdf(int doctorId)
+        [HttpGet("pdf/{clinicId}")]
+        public IActionResult GetPdf(int clinicId)
         {
             try
             {
                 var brandAmounts = _db.BrandAmounts
                     .Include(x => x.Brand)
                         .ThenInclude(b => b.Vaccine)
-                    .Include(x => x.Doctor)
-                    .Where(x => x.DoctorId == doctorId)
+                    .Include(x => x.Clinic)
+                    .Where(x => x.ClinicId == clinicId)
                     .OrderBy(x => x.Brand.Name)
                     .ToList();
 

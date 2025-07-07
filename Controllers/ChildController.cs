@@ -2909,7 +2909,7 @@ namespace VaccineAPI.Controllers
             string clinicPhoneNumber = childDetails.Clinic.PhoneNumber;
             var output = new MemoryStream();
             var customHeight = 550f;
-            var customWidth = 600f;
+            var customWidth = 800f;
             var customSize = new Rectangle(customWidth, customHeight);
             using (var document = new Document(customSize))
             {
@@ -3003,17 +3003,21 @@ namespace VaccineAPI.Controllers
                 vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
 
                 string[] headers = { "Vaccine", "Brand", "Manufacturer", "Batch/Lot", "Date Given", "Expiry", "Validity" };
-                foreach (string header in headers)
-                {
-                    vaccineTable.AddCell(new PdfPCell(new Phrase(header, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
-                    {
-                        BorderColor = BaseColor.Gray,
-                        HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        PaddingTop = 5,
-                        Border = Rectangle.TOP_BORDER | (header == "Vaccine" ? Rectangle.LEFT_BORDER : 0) | (header == "Validity" ? Rectangle.RIGHT_BORDER : 0)
-                    });
-                }
-
+               void AddVaccineTableHeader(PdfPTable table)
+{
+    foreach (string header in headers)
+    {
+        table.AddCell(new PdfPCell(new Phrase(header, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
+        {
+            BorderColor = BaseColor.Gray,
+            HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+            PaddingTop = 5,
+            Border = Rectangle.TOP_BORDER | (header == "Vaccine" ? Rectangle.LEFT_BORDER : 0) | (header == "Validity" ? Rectangle.RIGHT_BORDER : 0)
+        });
+    }
+}
+AddVaccineTableHeader(vaccineTable);
+int rowCount = 0;
                 foreach (var schedule in dbSchedules)
                 {
                     string vaccineName = schedule.Dose?.Name ?? "N/A";
@@ -3084,9 +3088,9 @@ namespace VaccineAPI.Controllers
                         PaddingBottom = 5
                     });
                 }
-                document.Add(vaccineTable);
-                document.Add(new Paragraph(" "));
-                document.Add(new Paragraph(" "));
+                document.Add(vaccineTable); 
+                // document.Add(new Paragraph(" "));
+                // document.Add(new Paragraph(" "));
 
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
                 var qrCodeUrl = $"{baseUrl}/Child/Travel-PDF-Download/{childId}";

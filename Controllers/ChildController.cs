@@ -3128,82 +3128,106 @@ int rowCount = 0;
             }
 
             public override void OnEndPage(PdfWriter writer, Document document)
-            {
-                PdfContentByte cb = writer.DirectContent;
-                float footerY = 100f;
-                int currentYear = DateTime.Now.Year;
-                Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-                Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
-                Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
-                Font blueFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8);
+{
+    PdfContentByte cb = writer.DirectContent;
+    float footerY = 100f;
+    int currentYear = DateTime.Now.Year;
+    Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+    Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+    Font footerFont1 = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+    Font blueFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8);
 
-                // Fetch clinic details dynamically
-                var clinicDetails = _db
-                    .Childs.Include(c => c.Clinic)
-                    .Where(c => c.Id == _childId)
-                    .Select(c => new
-                    {
-                        c.Clinic.Name,
-                        c.Clinic.RegNo,
-                        c.Clinic.Address,
-                        c.Clinic.PhoneNumber,
-                    })
-                    .FirstOrDefault();
+    // Fetch clinic details dynamically
+    var clinicDetails = _db
+        .Childs.Include(c => c.Clinic)
+        .Where(c => c.Id == _childId)
+        .Select(c => new
+        {
+            c.Clinic.Name,
+            c.Clinic.RegNo,
+            c.Clinic.Address,
+            c.Clinic.PhoneNumber,
+        })
+        .FirstOrDefault();
 
-                if (clinicDetails != null)
-                {
-                    var clinicName = clinicDetails.Name;
-                    var regNo = clinicDetails.RegNo;
-                    var address = clinicDetails.Address;
-                    var phoneNumber = clinicDetails.PhoneNumber;
+    if (clinicDetails != null)
+    {
+        var clinicName = clinicDetails.Name;
+        var regNo = clinicDetails.RegNo;
+        var address = clinicDetails.Address;
+        var phoneNumber = clinicDetails.PhoneNumber;
+        var email = "info@vaccine.pk";
 
-                    Phrase phrase = new Phrase();
-                    phrase.Add(new Chunk($"{clinicName} ", footerFont1));
-                    phrase.Add(new Chunk($"({regNo})", footerFont));
-                    ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerY + -13, 0); // Added margin from bottom
-                    PdfPTable contactTable = new PdfPTable(1);
-                    contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
-                    PdfPCell contactCell = new PdfPCell(new Phrase($"{address}           Phone: {phoneNumber}        info@vaccine.pk", footerFont))
-                    {
-                        BackgroundColor = BaseColor.LightGray,
-                        Border = Rectangle.NO_BORDER,
-                        Padding = 5,
-                    };
-                    contactTable.AddCell(contactCell);
-                    contactTable.WriteSelectedRows(0, -1, document.LeftMargin, footerY - 30, cb);
-                }
-                else
-                {
-                    ColumnText.ShowTextAligned(
-                        cb,
-                        Element.ALIGN_LEFT,
-                        new Phrase("Clinic details not found", footerFont),
-                        document.LeftMargin + 5,
-                        footerY + 0,
-                        0
-                    );
-                }
+        Phrase phrase = new Phrase();
+        phrase.Add(new Chunk($"{clinicName} ", footerFont1));
+        phrase.Add(new Chunk($"({regNo})", footerFont));
+        ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerY + -13, 0);
 
-                ColumnText.ShowTextAligned(
-                    cb,
-                    Element.ALIGN_CENTER,
-                    new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
-                    document.PageSize.Width / 2, footerY - -305f, 0
-                );
+        // 3-column table for address, phone, email
+        PdfPTable contactTable = new PdfPTable(3);
+        contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+        contactTable.SetWidths(new float[] { 2, 1, 2 });
 
-                // Add footer text
-                ColumnText.ShowTextAligned(
-                    cb,
-                    Element.ALIGN_LEFT,
-                    new Phrase(
-                        "This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.",
-                        regularFont
-                    ),
-                    document.LeftMargin + 5,
-                    footerY - 25,
-                    0
-                );
-            }
+        PdfPCell addressCell = new PdfPCell(new Phrase(address, footerFont))
+        {
+            Border = Rectangle.NO_BORDER,
+            HorizontalAlignment = Element.ALIGN_LEFT,
+            Padding = 5,
+            BackgroundColor = BaseColor.LightGray
+        };
+        PdfPCell phoneCell = new PdfPCell(new Phrase($"Phone: {phoneNumber}", footerFont))
+        {
+            Border = Rectangle.NO_BORDER,
+            HorizontalAlignment = Element.ALIGN_CENTER,
+            Padding = 5,
+            BackgroundColor = BaseColor.LightGray
+        };
+        PdfPCell emailCell = new PdfPCell(new Phrase(email, footerFont))
+        {
+            Border = Rectangle.NO_BORDER,
+            HorizontalAlignment = Element.ALIGN_RIGHT,
+            Padding = 5,
+            BackgroundColor = BaseColor.LightGray
+        };
+
+        contactTable.AddCell(addressCell);
+        contactTable.AddCell(phoneCell);
+        contactTable.AddCell(emailCell);
+
+        contactTable.WriteSelectedRows(0, -1, document.LeftMargin, footerY - 30, cb);
+    }
+    else
+    {
+        ColumnText.ShowTextAligned(
+            cb,
+            Element.ALIGN_LEFT,
+            new Phrase("Clinic details not found", footerFont),
+            document.LeftMargin + 5,
+            footerY + 0,
+            0
+        );
+    }
+
+    ColumnText.ShowTextAligned(
+        cb,
+        Element.ALIGN_CENTER,
+        new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
+        document.PageSize.Width / 2, footerY - -305f, 0
+    );
+
+    // Add footer text
+    ColumnText.ShowTextAligned(
+        cb,
+        Element.ALIGN_LEFT,
+        new Phrase(
+            "This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.",
+            regularFont
+        ),
+        document.LeftMargin + 5,
+        footerY - 25,
+        0
+    );
+}
         }
 
         [HttpGet("Travel-PDF-Download/{id}")]

@@ -386,6 +386,114 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf");
         }
 
+        private string GetYearOrMonthFromDaysSchedule(int days)
+{
+   
+    var ageMap = new Dictionary<int, string>
+    {
+        { 0, "At Birth" },
+        { 7, "1 Week" },
+        { 14, "2 Weeks" },
+        { 21, "3 Weeks" },
+        { 28, "4 Weeks" },
+        { 35, "5 Weeks" },
+        { 42, "6 Weeks" },
+        { 49, "7 Weeks" },
+        { 56, "8 Weeks" },
+        { 63, "9 Weeks" },
+        { 70, "10 Weeks" },
+        { 77, "11 Weeks" },
+        { 84, "3 Months" },
+        { 91, "13 Weeks" },
+        { 98, "14 Weeks" },
+        { 105, "15 Weeks" },
+        { 112, "16 Weeks" },
+        { 119, "17 Weeks" },
+        { 126, "18 Weeks" },
+        { 133, "19 Weeks" },
+        { 140, "20 Weeks" },
+        { 147, "21 Weeks" },
+        { 154, "22 Weeks" },
+        { 161, "23 Weeks" },
+        { 168, "6 Months" },
+        { 212, "7 Months" },
+        { 243, "8 Months" },
+        { 274, "9 Months" },
+        { 304, "10 Months" },
+        { 334, "11 Months" },
+        { 365, "1 Year" },
+        { 395, "13 Months" },
+        { 426, "14 Months" },
+        { 456, "15 Months" },
+        { 486, "16 Months" },
+        { 517, "17 Months" },
+        { 547, "18 Months" },
+        { 578, "19 Months" },
+        { 608, "20 Months" },
+        { 639, "21 Months" },
+        { 669, "22 Months" },
+        { 699, "23 Months" },
+        { 730, "2 Years" },
+        { 760, "25 Months" },
+        { 791, "26 Months" },
+        { 821, "27 Months" },
+        { 851, "28 Months" },
+        { 882, "29 Months" },
+        { 912, "30 Months" },
+        { 943, "31 Months" },
+        { 973, "32 Months" },
+        { 1004, "33 Months" },
+        { 1034, "34 Months" },
+        { 1064, "35 Months" },
+        { 1095, "3 Years" },
+        { 1125, "37 Months" },
+        { 1156, "38 Months" },
+        { 1186, "39 Months" },
+        { 1216, "40 Months" },
+        { 1247, "41 Months" },
+        { 1277, "42 Months" },
+        { 1308, "43 Months" },
+        { 1338, "44 Months" },
+        { 1369, "45 Months" },
+        { 1399, "46 Months" },
+        { 1429, "47 Months" },
+        { 1460, "4 Years" },
+        { 1490, "49 Months" },
+        { 1521, "50 Months" },
+        { 1551, "51 Months" },
+        { 1582, "52 Months" },
+        { 1612, "53 Months" },
+        { 1642, "54 Months" },
+        { 1673, "55 Months" },
+        { 1703, "56 Months" },
+        { 1734, "57 Months" },
+        { 1764, "58 Months" },
+        { 1795, "59 Months" },
+        { 1825, "5 Years" },
+        { 2190, "6 Years" },
+        { 2555, "7 Years" },
+        { 2920, "8 Years" },
+        { 3285, "9 Years" },
+        { 3315, "9 Year 1 Month" },
+        { 3650, "10 Years" },
+        { 3833, "10 Year 6 Months" },
+        { 4015, "11 Years" },
+        { 4380, "12 Years" },
+        { 4745, "13 Years" },
+        { 5110, "14 Years" },
+        { 5475, "15 Years" },
+        { 5840, "16 Years" },
+        { 6205, "17 Years" },
+        { 6570, "18 Years" }
+    };
+    var closest = ageMap
+        .Where(kvp => kvp.Key <= days)
+        .OrderByDescending(kvp => kvp.Key)
+        .FirstOrDefault();
+
+    return closest.Value ?? $"{days} Days";
+}
+
         private Stream CreateSchedulePdf(int childId)
         {
             // Access db data
@@ -409,17 +517,14 @@ namespace VaccineAPI.Controllers
                                 .Include(x => x.Schedules)
                                 .ThenInclude(x => x.Brand)
                                 .FirstOrDefault(c => c.Id == childId);
-            var dbSchedules = child.Schedules.ToList();
+            var dbSchedules = child.Schedules
+            .OrderBy(s => s.Dose.MinAge)
+            .ToList();
 
             var Gender = 1;
             if (dbChild.Gender == "Girl") Gender = 2;
 
-            foreach (var sch in dbSchedules)
-            {
-                if (sch.IsDone == true) sch.Date = sch.GivenDate ?? DateTime.Now;
-            }
-            dbSchedules = dbSchedules.OrderBy(x => x.Date).ToList();
-
+           
             // var scheduleDoses = from schedule in dbSchedules
             //                     group schedule.Dose by schedule.Date into scheduleDose
             //                     select new { Date = scheduleDose.Key, Doses = scheduleDose.ToList() };
@@ -541,7 +646,7 @@ namespace VaccineAPI.Controllers
                 title.Font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
-                float[] widths = new float[] { 20f, 145f, 50f, 70, 70f, 60f, 60f, 60f };
+                float[] widths = new float[] { 60f, 145f, 50f, 70, 90f, 60f, 60f, 60f };
 
                 PdfPTable table = new PdfPTable(8);
                 table.HorizontalAlignment = 0;
@@ -549,7 +654,7 @@ namespace VaccineAPI.Controllers
                 table.LockedWidth = true;
                 table.SpacingBefore = 5;
                 table.SetWidths(widths);
-                table.AddCell(CreateCell("Sr", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Age", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Vaccine", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Status", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Date", "backgroudLightGray", 1, "center", "scheduleRecords"));
@@ -584,19 +689,19 @@ namespace VaccineAPI.Controllers
                 var type3GivenDate = "";
                 // var type4GivenDate = "";
                 // var typestop = false;
+                bool hasFluDone = false;
+                bool hasTyphoidDone = false;
 
                 foreach (var dbSchedule in dbSchedules)
                 {
-                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") &&
-                        !dbSchedule.Dose.Name.StartsWith("Typhoid"))
+                    if (dbSchedule.IsSkip != true)
                     {
                         int doseCount = 0;
                         Paragraph p = new Paragraph();
                         count++;
                         doseCount++;
                         Font font = FontFactory.GetFont(FontFactory.HELVETICA, 10);
-
-                        Font rangevaluefont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+                        Font rangevaluefont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
 
                         Font rangefont = FontFactory.GetFont(FontFactory.HELVETICA, 6);
 
@@ -604,13 +709,13 @@ namespace VaccineAPI.Controllers
                         Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
 
                         {
-                            PdfPCell ageCell = new PdfPCell(new Phrase(count.ToString(), font));
+                            PdfPCell ageCell = new PdfPCell(new Phrase(GetYearOrMonthFromDaysSchedule(dbSchedule.Dose.MinAge), font));
                             ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
                             ageCell.FixedHeight = 15f;
                             ageCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(ageCell);
 
-                            PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, font));
+                            PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, rangevaluefont));
                             dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(dosenameCell);
@@ -780,10 +885,10 @@ namespace VaccineAPI.Controllers
                             // normal ranges end
                         }
                     }
-
                     // for typhoid and flu
-                    if (dbSchedule.Dose.Name.StartsWith("Flu"))
+                    if (dbSchedule.Dose.Name.StartsWith("Flu")&&dbSchedule.IsDone == true)
                     {
+                        hasFluDone = true;
                         if (dbSchedule.IsDone == true)
                         {
                             if (String.IsNullOrEmpty(flu1GivenDate))
@@ -841,8 +946,9 @@ namespace VaccineAPI.Controllers
 
                     //   //typhoid
 
-                    if (dbSchedule.Dose.Name.StartsWith("Typhoid"))
+                    if (dbSchedule.Dose.Name.StartsWith("Typhoid") && dbSchedule.IsDone == true)
                     {
+                        hasTyphoidDone = true;
                         if (dbSchedule.IsDone == true)
                         {
                             if (String.IsNullOrEmpty(type1GivenDate))
@@ -897,7 +1003,8 @@ namespace VaccineAPI.Controllers
                 }
 
                 document.Add(table);
-
+                if (hasFluDone || hasTyphoidDone)
+                {
                 // special vaccines table start
                 float[] lowerwidths = new float[] { 255f, 255f };
                 PdfPTable lowertable = new PdfPTable(2);
@@ -960,7 +1067,7 @@ namespace VaccineAPI.Controllers
 
                 // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 document.Add(lowertable2);
-
+                }
                 // special vaccines table end
                 document.Close();
 

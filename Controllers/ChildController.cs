@@ -519,6 +519,7 @@ namespace VaccineAPI.Controllers
                                 .FirstOrDefault(c => c.Id == childId);
             var dbSchedules = child.Schedules
             .OrderBy(s => s.Dose.MinAge)
+            // .GroupBy(s => s.Dose.MinAge)
             .ToList();
 
             var Gender = 1;
@@ -619,33 +620,84 @@ namespace VaccineAPI.Controllers
                 upperTable.AddCell(CreateCell(dbDoctor?.AdditionalInfo ?? "", "unbold", 2, "left", "description"));
                 upperTable.AddCell(CreateCell(dbChild.Clinic?.Name ?? "", "bold", 2, "left", "description"));
 
-                upperTable.AddCell(CreateCell(dbChild.Name ?? "", "bold", 1, "right", "description"));
+                // upperTable.AddCell(CreateCell(dbChild.Name ?? "", "bold", 1, "right", "description"));
+                 upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
 
                 upperTable.AddCell(CreateCell(dbChild.Clinic?.Address ?? "", "unbold", 2, "left", "description"));
-
-                upperTable.AddCell(CreateCell("S/D/W/o " + (dbChild.FatherName ?? ""), "", 1, "right", "description"));
+                upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
+                // upperTable.AddCell(CreateCell("S/D/W/o " + (dbChild.FatherName ?? ""), "", 1, "right", "description"));
                 upperTable.AddCell(CreateCell("Phone: " + (dbChild.Clinic?.PhoneNumber ?? ""), "", 2, "left", "description"));
-                upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
-                                                "description"));
+                // upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
+                //                                 "description"));
+                upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
+
+                // if (!String.IsNullOrEmpty(dbChild.CNIC))
+                    // upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
+                // else
+                    // upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
+
                 upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
+                // upperTable.AddCell(CreateCell("DOB: " + dbChild.DOB.ToString("dd MMMM, yyyy"), "", 1, "right", "description"));
 
-                if (!String.IsNullOrEmpty(dbChild.CNIC))
-                    upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
-                else
-                    upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
-
-                upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
-                upperTable.AddCell(CreateCell("DOB: " + dbChild.DOB.ToString("dd MMMM, yyyy"), "", 1, "right", "description"));
-
+                string patientName = child.Name;
+                string relation = child.FatherName;
+                DateTime dob = child.DOB;
+                string passport = child.CNIC;
+                string city = child.City;
+                string Nationality = child.Nationality;
+                string mrNumber = child.City;
+                string clinicName = child.Clinic.Name;
+                string doctorDetails = child.Clinic.Doctor.DisplayName;
+                string additionalInfo = child.Clinic.Doctor.AdditionalInfo;
+                string clinicAddress = child.Clinic.Address;
+                string clinicPhoneNumber = child.Clinic.PhoneNumber;
+                string userPhoneNumber = "+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber;
                 // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
                 //  upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
                 document.Add(upperTable);
+                Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11, new BaseColor(144, 238, 144));
+                Paragraph title = new Paragraph("Immunization Record", greenFont);
+                // {
+                //     SpacingBefore = 10f,
+                //     SpacingAfter = 10f
+                // };
+                // title.Font = greenFont;
+                title.Alignment = Element.ALIGN_CENTER;
+                // title.Color = new BaseColor(144, 238, 144);
+                document.Add(title);
+                var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
+                patientTable.SetWidths(new float[] { 2, 2, 2, 2 });
+                patientTable.DefaultCell.BorderColor = BaseColor.LightGray;
+                patientTable.DefaultCell.BorderWidth = 0.5f;
+                var cellFontBold = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+                var cellFontNormal = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+                patientTable.AddCell(CreateCell1("Name:", cellFontBold, new BaseColor(144, 238, 144)));
+                patientTable.AddCell(CreateCell1(patientName, cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell1("S/D/W/o:", cellFontBold, new BaseColor(144, 238, 144)));
+                patientTable.AddCell(CreateCell1(relation, cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell1("Date of Birth:", cellFontBold, new BaseColor(144, 238, 144)));
+                patientTable.AddCell(CreateCell1(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell1("Phone No:", cellFontBold, new BaseColor(144, 238, 144)));
+                patientTable.AddCell(CreateCell1(userPhoneNumber, cellFontNormal, BaseColor.White));
+                // patientTable.AddCell(CreateCell1("City:", cellFontBold, new BaseColor(144, 238, 144)));
+                // patientTable.AddCell(CreateCell1(city, cellFontNormal, BaseColor.White));
+                // patientTable.AddCell(CreateCell1("Nationality:", cellFontBold, new BaseColor(144, 238, 144)));
+                // patientTable.AddCell(CreateCell1(Nationality, cellFontNormal, BaseColor.White));
+                document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
+                document.Add(patientTable);
+                PdfPCell CreateCell1(string text, Font font, BaseColor backgroundColor)
+                {
+                    var cell = new PdfPCell(new Phrase(text, font))
+                    {
+                        BackgroundColor = backgroundColor,
+                        BorderColor = BaseColor.Gray,
+                        BorderWidth = 1f
+                    };
+                    return cell;
+                }
 
                 // iTextSharp.TEXT.Font myFont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
-                Paragraph title = new Paragraph("Immunization Record");
-                title.Font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11);
-                title.Alignment = Element.ALIGN_CENTER;
-                document.Add(title);
+               
                 float[] widths = new float[] { 60f, 145f, 50f, 70, 90f, 60f, 60f, 60f };
 
                 PdfPTable table = new PdfPTable(8);
@@ -654,14 +706,15 @@ namespace VaccineAPI.Controllers
                 table.LockedWidth = true;
                 table.SpacingBefore = 5;
                 table.SetWidths(widths);
-                table.AddCell(CreateCell("Age", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Vaccine", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Status", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Date", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Brand", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Weight", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Height", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("OFC/BMI", "backgroudLightGray", 1, "center", "scheduleRecords"));
+                BaseColor lightGreen = new BaseColor(144, 238, 144);
+                table.AddCell(CreateCell("Age", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Vaccine", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Weight", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Height", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("OFC/BMI", "LightGreen", 1, "center", "scheduleRecords"));
 
                 // table.AddCell(CreateCell("Injected", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 // for typhoid and flu
@@ -691,11 +744,15 @@ namespace VaccineAPI.Controllers
                 // var typestop = false;
                 bool hasFluDone = false;
                 bool hasTyphoidDone = false;
-
+                string previousAge = null;
                 foreach (var dbSchedule in dbSchedules)
                 {
                     if (dbSchedule.IsSkip != true)
                     {
+                             string age = GetYearOrMonthFromDaysSchedule(dbSchedule.Dose.MinAge);
+                             string displayAge = (age == previousAge) ? "" : age;
+                             previousAge = age;
+                            //  int rowSpanCount = dbSchedule.Dose.MinAge.Count();
                         int doseCount = 0;
                         Paragraph p = new Paragraph();
                         count++;
@@ -709,11 +766,14 @@ namespace VaccineAPI.Controllers
                         Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
 
                         {
-                            PdfPCell ageCell = new PdfPCell(new Phrase(GetYearOrMonthFromDaysSchedule(dbSchedule.Dose.MinAge), font));
-                            ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                            ageCell.FixedHeight = 15f;
-                            ageCell.BorderColor = GrayColor.LightGray;
-                            table.AddCell(ageCell);
+                            table.AddCell(new PdfPCell(new Phrase(displayAge, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                             {
+                                //  Border = Rectangle.LEFT_BORDER | borderStyle,
+                                // Colspan = 1,
+                                 HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+                                 BorderColor = BaseColor.Gray,
+                                 PaddingBottom = 5
+                             });                         
 
                             PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, rangevaluefont));
                             dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
@@ -1586,6 +1646,11 @@ namespace VaccineAPI.Controllers
                 //  cell.BackgroundColor = GrayColor.LightGray;
                 cell.FixedHeight = 20f;
             }
+            if (color == "LightGreen")
+            {
+                cell.BackgroundColor = new BaseColor(144, 238, 144);
+                cell.FixedHeight = 20f;
+            }
             if (alignment == "right")
             {
                 cell.HorizontalAlignment = Element.ALIGN_RIGHT;
@@ -1642,6 +1707,12 @@ namespace VaccineAPI.Controllers
                 cell.BackgroundColor = GrayColor.LightGray;
                 cell.FixedHeight = 20f;
             }
+            if (color == "LightGreen")
+            {
+                cell.BackgroundColor = new BaseColor(224, 218, 218);
+                cell.FixedHeight = 20f;
+            }
+    
             if (alignment == "right")
             {
                 cell.HorizontalAlignment = Element.ALIGN_RIGHT;

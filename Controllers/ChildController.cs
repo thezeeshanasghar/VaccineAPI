@@ -532,10 +532,12 @@ namespace VaccineAPI.Controllers
             int count = 0;
 
             //
+
             var document = new Document(PageSize.A4, 45, 45, 30, 30);
             {
                 var output = new MemoryStream();
                 var writer = PdfWriter.GetInstance(document, output);
+                //  writer.PageEvent = new FooterPageEvent(_db, childId);
                 writer.CloseStream = false;
                 writer.PageEvent = new PDFFooter(child);
                 document.Open();
@@ -698,9 +700,9 @@ namespace VaccineAPI.Controllers
 
                 // iTextSharp.TEXT.Font myFont = FontFactory.GetFont (FontFactory.HELVETICA, 10, Font.BOLD);
                
-                float[] widths = new float[] { 60f, 145f, 50f, 70, 90f, 60f, 60f, 60f };
+                float[] widths = new float[] { 60f, 145f, 50f, 70, 70f, 70f };
 
-                PdfPTable table = new PdfPTable(8);
+                PdfPTable table = new PdfPTable(6);
                 table.HorizontalAlignment = 0;
                 table.TotalWidth = 510f;
                 table.LockedWidth = true;
@@ -708,13 +710,14 @@ namespace VaccineAPI.Controllers
                 table.SetWidths(widths);
                 BaseColor lightGreen = new BaseColor(144, 238, 144);
                 table.AddCell(CreateCell("Age", "LightGreen", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Vaccine", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Vaccine", "LightGreen", 1, "center", "scheduleRecords"))                                                                           ;
+                table.AddCell(CreateCell("Dose Order", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Weight", "LightGreen", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("Height", "LightGreen", 1, "center", "scheduleRecords"));
-                table.AddCell(CreateCell("OFC/BMI", "LightGreen", 1, "center", "scheduleRecords"));
+                // table.AddCell(CreateCell("Weight", "LightGreen", 1, "center", "scheduleRecords"));
+                // table.AddCell(CreateCell("Height", "LightGreen", 1, "center", "scheduleRecords"));
+                // table.AddCell(CreateCell("OFC/BMI", "LightGreen", 1, "center", "scheduleRecords"));
 
                 // table.AddCell(CreateCell("Injected", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 // for typhoid and flu
@@ -753,6 +756,7 @@ namespace VaccineAPI.Controllers
                              string displayAge = (age == previousAge) ? "" : age;
                              previousAge = age;
                             //  int rowSpanCount = dbSchedule.Dose.MinAge.Count();
+                            int order=dbSchedule.Dose.DoseOrder ?? 0;
                         int doseCount = 0;
                         Paragraph p = new Paragraph();
                         count++;
@@ -763,15 +767,14 @@ namespace VaccineAPI.Controllers
                         Font rangefont = FontFactory.GetFont(FontFactory.HELVETICA, 6);
 
                         Font boldfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+                        Font boldfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD, new BaseColor(0, 128, 0));
                         Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
-
+                        Font italicfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC, new BaseColor(255, 0, 0));
                         {
                             table.AddCell(new PdfPCell(new Phrase(displayAge, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                              {
-                                //  Border = Rectangle.LEFT_BORDER | borderStyle,
-                                // Colspan = 1,
-                                 HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                                 BorderColor = BaseColor.Gray,
+                                 HorizontalAlignment = PdfPCell.ALIGN_LEFT,
+                                 BorderColor = GrayColor.LightGray,
                                  PaddingBottom = 5
                              });                         
 
@@ -779,69 +782,13 @@ namespace VaccineAPI.Controllers
                             dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(dosenameCell);
+ table.AddCell(new PdfPCell(new Phrase(order.ToString(), FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+        {
+            HorizontalAlignment = PdfPCell.ALIGN_LEFT,
+            BorderColor = GrayColor.LightGray
+        });
 
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                            {
-                                PdfPCell statusCell = new PdfPCell(new Phrase("Given", boldfont));
-                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
-                                statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(statusCell);
-                            }
-                            else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)
-                            {
-                                PdfPCell statusCell = new PdfPCell(new Phrase("By EPI", font));
-                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
-                                statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(statusCell);
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
-                                        !checkForMissed(dbSchedule.Date))
-                            {
-                                PdfPCell statusCell = new PdfPCell(new Phrase("Due", font));
-                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
-                                statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(statusCell);
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
-                                        checkForMissed(dbSchedule.Date))
-                            {
-                                PdfPCell statusCell = new PdfPCell(new Phrase(" Missed", italicfont));
-                                statusCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                                statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(statusCell);
-                            }
-                            else
-                            {
-                                PdfPCell statusCell = new PdfPCell(new Phrase("Diseased", font));
-                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
-                                statusCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(statusCell);
-                            }
-
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                            {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy"), font));
-                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                dateCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(dateCell);
-                            }
-
-                            else if (dbSchedule.IsDisease == true)
-                            {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("yyyy") + " Y", font));
-                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                dateCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(dateCell);
-                            }
-
-                            else
-                            {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font));
-                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                dateCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(dateCell);
-                            }
-                            string brandName = " ";
+         string brandName = " ";
                             if (dbSchedule.BrandId != null && dbSchedule.IsDone != false)
                             {
                                 brandName = dbSchedule.Brand.Name.ToString();
@@ -864,83 +811,146 @@ namespace VaccineAPI.Controllers
                             brandCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(brandCell);
 
-                            // normal ranges code start
+
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
-                                DateTime currentDate = DateTime.UtcNow.AddHours(5);
-                                var ageInMonths = Convert.ToInt32((dbSchedule.GivenDate?.Date.Year - dbChild.DOB.Date.Year) * 12 +
-                                                                    dbSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month +
-                                                                    (dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0
-                                                                    : -1));
-                                NormalRange normalrange =
-                                    _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
-                                // Console.WriteLine (normalrange);
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Given", boldfont1));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase("By EPI", font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
+                                        !checkForMissed(dbSchedule.Date))
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Due", font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
+                                        checkForMissed(dbSchedule.Date))
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase(" Missed", italicfont1));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            else
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Diseased", font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
 
-                                Paragraph pw = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Weight > 0 && normalrange != null)
-                                {
-                                    pw.Add(new Chunk(dbSchedule.Weight.ToString(), rangevaluefont));
-                                    pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
-                                }
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy"), font));
+                                dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(dateCell);
+                            }
 
-                                PdfPCell weightCell = new PdfPCell(pw);
-                                weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                weightCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(weightCell);
-
-                                Paragraph ph = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Height > 0 && normalrange != null)
-                                {
-                                    ph.Add(new Chunk(dbSchedule.Height.ToString(), rangevaluefont));
-                                    ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
-                                }
-
-                                PdfPCell heightCell = new PdfPCell(ph);
-                                heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                heightCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(heightCell);
-
-                                Paragraph pc = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
-                                {
-                                    pc.Add(new Chunk(dbSchedule.Circle.ToString(), rangevaluefont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
-                                }
-
-                                // FOR BMI
-                                if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
-                                {
-                                    double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
-                                    BMI = Math.Round(BMI, 1);
-                                    pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
-                                }
-
-                                PdfPCell circleCell = new PdfPCell(pc);
-                                circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                circleCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(circleCell);
-
+                            else if (dbSchedule.IsDisease == true)
+                            {
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("yyyy") + " Y", font));
+                                dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(dateCell);
                             }
 
                             else
-
                             {
-                                PdfPCell weightCell = new PdfPCell(new Phrase("", font));
-                                weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                weightCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(weightCell);
-
-                                PdfPCell heightCell = new PdfPCell(new Phrase("", font));
-                                heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                heightCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(heightCell);
-
-                                PdfPCell circleCell = new PdfPCell(new Phrase("", font));
-                                circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                                circleCell.BorderColor = GrayColor.LightGray;
-                                table.AddCell(circleCell);
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font));
+                                dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(dateCell);
                             }
+                           
+                            // normal ranges code start
+                            // if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            // {
+                            //     DateTime currentDate = DateTime.UtcNow.AddHours(5);
+                            //     var ageInMonths = Convert.ToInt32((dbSchedule.GivenDate?.Date.Year - dbChild.DOB.Date.Year) * 12 +
+                            //                                         dbSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month +
+                            //                                         (dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0
+                            //                                         : -1));
+                            //     NormalRange normalrange =
+                            //         _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
+                                // Console.WriteLine (normalrange);
+
+                                // Paragraph pw = new Paragraph("", rangevaluefont);
+                                // if (dbSchedule.Weight > 0 && normalrange != null)
+                                // {
+                                //     pw.Add(new Chunk(dbSchedule.Weight.ToString(), rangevaluefont));
+                                //     pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
+                                // }
+
+                                // PdfPCell weightCell = new PdfPCell(pw);
+                                // weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                // weightCell.BorderColor = GrayColor.LightGray;
+                                // table.AddCell(weightCell);
+
+                                // Paragraph ph = new Paragraph("", rangevaluefont);
+                                // if (dbSchedule.Height > 0 && normalrange != null)
+                                // {
+                                //     ph.Add(new Chunk(dbSchedule.Height.ToString(), rangevaluefont));
+                                //     ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
+                                // }
+
+                                // PdfPCell heightCell = new PdfPCell(ph);
+                                // heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                // heightCell.BorderColor = GrayColor.LightGray;
+                                // table.AddCell(heightCell);
+
+                                // Paragraph pc = new Paragraph("", rangevaluefont);
+                                // if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
+                                // {
+                                //     pc.Add(new Chunk(dbSchedule.Circle.ToString(), rangevaluefont));
+                                //     pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                // }
+
+                                // // FOR BMI
+                                // if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
+                                // {
+                                //     double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
+                                //     BMI = Math.Round(BMI, 1);
+                                //     pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
+                                //     pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                // }
+
+                                // PdfPCell circleCell = new PdfPCell(pc);
+                                // circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                // circleCell.BorderColor = GrayColor.LightGray;
+                                // table.AddCell(circleCell);
+
+                            // }
+
+                            // else
+
+                            // {
+                                // PdfPCell weightCell = new PdfPCell(new Phrase("", font));
+                                // weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                // weightCell.BorderColor = GrayColor.LightGray;
+                                // table.AddCell(weightCell);
+
+                                // PdfPCell heightCell = new PdfPCell(new Phrase("", font));
+                                // heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                // heightCell.BorderColor = GrayColor.LightGray;
+                                // table.AddCell(heightCell);
+
+                                // PdfPCell circleCell = new PdfPCell(new Phrase("", font));
+                                // circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                // circleCell.BorderColor = GrayColor.LightGray;
+                                // table.AddCell(circleCell);
+                            // }
 
                             // normal ranges end
                         }
@@ -2715,46 +2725,136 @@ namespace VaccineAPI.Controllers
         }
 
 
-        public class PDFFooter : PdfPageEventHelper
+public class PDFFooter : PdfPageEventHelper
+{
+    private readonly Child child;
+
+    // Fonts for the footer
+    BaseColor lightGreen = new BaseColor(144, 238, 144);
+    private readonly Font footerFont = FontFactory.GetFont("Helvetica", 8f, BaseColor.Black);
+    private readonly Font footerFontBold = FontFactory.GetFont("Helvetica-Bold", 8f, BaseColor.Black);
+
+    public PDFFooter(Child postedChild)
+    {
+        child = postedChild;
+    }
+
+    public override void OnEndPage(PdfWriter writer, Document document)
+    {
+        base.OnEndPage(writer, document);
+
+        PdfContentByte cb = writer.DirectContent;
+
+        // General footer text
+        string footer =
+            "This schedule is valid for all airports, airlines, embassies, and schools worldwide. Vaccines may cause fever, localized redness, and pain. We" +
+            "always use the best available vaccine brand/manufacturer. This schedule provides recommended dates for immunizations based on the" +
+            "individual date of birth, past immunization/disease history. Your physician may update the due dates or add/remove vaccines. Vaccine.pk, its" +
+            "management, or staff hold no responsibility for any loss or damage due to any vaccine given. *OHF = vaccines given at other health facility (not" +
+            "by Vaccine.pk)";
+
+        footer = footer.Replace(Environment.NewLine, string.Empty).Replace("  ", string.Empty);
+
+        Font georgia = FontFactory.GetFont("Georgia", 8f);
+        Chunk beginning = new Chunk(footer, georgia);
+
+        PdfPTable tabFot = new PdfPTable(1);
+        tabFot.SetTotalWidth(new float[] { 510f });
+        tabFot.DefaultCell.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
+
+        PdfPCell cell = new PdfPCell(new Phrase(beginning));
+        cell.Border = 0;
+        cell.PaddingLeft = -21f;
+        cell.PaddingTop = 28f;
+        cell.PaddingRight = 21f;
+        // cell.PaddingBottom = -85f;
+        tabFot.AddCell(cell);
+
+        // Write the main footer
+        tabFot.WriteSelectedRows(0, -85, 65, 135, cb);
+
+        // Clinic details (if available)
+        if (child != null && child.Clinic != null)
         {
-            Child child = new Child();
+            var clinic = child.Clinic;
+            var clinicName = clinic.Name ?? "";
+            var regNo = clinic.RegNo ?? "";
+            var address = clinic.Address ?? "";
+            var phoneNumber = clinic.PhoneNumber ?? "";
+            var email = "info@vaccine.pk";
+            float footerY = 85; // Adjust as needed for vertical position
+            float footerHeight = 110; // Height of the footer area
 
-            public PDFFooter(Child postedChild) { child = postedChild; }
+            Phrase phrase = new Phrase();
+            phrase.Add(new Chunk($"{clinicName} ", footerFontBold));
+            if (!string.IsNullOrEmpty(regNo))
+                phrase.Add(new Chunk($"({regNo})", footerFont));
+            phrase.Add(new Chunk($" Printed on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd"), footerFont));
+            ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerHeight, 0);
 
-            public override void OnStartPage(PdfWriter writer, Document document) { base.OnStartPage(writer, document); }
+            // 3-column table for address, phone, email
+            PdfPTable contactTable = new PdfPTable(2);
+            contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+            contactTable.SetWidths(new float[] { 3,  2 });
 
-            // write on end of each page
-            public override void OnEndPage(PdfWriter writer, Document document)
+var boldFont = FontFactory.GetFont("Helvetica-Bold", 10f, BaseColor.Black);
+var normalFont = FontFactory.GetFont("Helvetica", 10f, BaseColor.Black);
+Phrase AddressPhrase = new Phrase();
+AddressPhrase.Add(new Chunk($"{clinicName},", boldFont));
+AddressPhrase.Add(new Chunk($"{address}", normalFont));
+            PdfPCell addressCell = new PdfPCell(AddressPhrase)
             {
-                base.OnEndPage(writer, document);
-                string footer =
-                    "Vaccines may cause fever, localized redness, and pain. This schedule is valid for production on demand at all airports, embassies, and schools worldwide. We always use the best available vaccine brand/manufacturer. With time and continuous research, the vaccine brand may differ for future doses. " +
-                    "Disclaimer: This schedule provides recommended dates for immunizations based on the individual date of birth, past immunization history, and disease history. Your consultant may update the due dates or add/remove vaccines. Vaccinationcentre.com, its management, or staff hold no responsibility for any loss or damage due to any vaccine given. " +
-                    "*OHF = vaccine given at other health facility (not by vaccinationcentre.com). " +
-                    "Printed on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd");
-                footer = footer.Replace(Environment.NewLine, String.Empty).Replace("  ", String.Empty);
-                Font georgia = FontFactory.GetFont("georgia", 8f);
-                Chunk beginning = new Chunk(footer, georgia);
-                PdfPTable tabFot = new PdfPTable(1);
-                PdfPCell cell;
-                tabFot.SetTotalWidth(new float[] { 510f });
-                tabFot.DefaultCell.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
-                cell = new PdfPCell(new Phrase(beginning));
-                cell.Border = 0;
-                cell.PaddingLeft = -21f;
-                cell.PaddingTop = 28f;
-                cell.PaddingRight = 21f;
-                tabFot.AddCell(cell);
-                tabFot.WriteSelectedRows(0, -1, 65, 100, writer.DirectContent);
+                Border = Rectangle.TOP_BORDER | Rectangle.LEFT_BORDER | Rectangle.BOTTOM_BORDER,
+                HorizontalAlignment = Element.ALIGN_LEFT,
+                PaddingTop = 8,
+                BackgroundColor = new BaseColor(144, 238, 144)
+            };
+            // PdfPCell phoneCell = new PdfPCell(new Phrase($"Phone: {phoneNumber}", footerFont))
+            // {
+            //     Border = Rectangle.NO_BORDER,
+            //     HorizontalAlignment = Element.ALIGN_CENTER,
+            //     Padding = 5,
+            //     BackgroundColor = new BaseColor(144, 238, 144)
+            // };
+// Define fonts for email/phone
 
-            }
+// Build email/phone phrase
+Phrase emailPhrase = new Phrase();
+emailPhrase.Add(new Chunk("Email: ", boldFont));
+emailPhrase.Add(new Chunk($"{email}", normalFont));
+emailPhrase.Add(new Chunk("\nPhone: ", boldFont));
+emailPhrase.Add(new Chunk($"{phoneNumber}", normalFont));
 
-            // write on close of document
-            public override void OnCloseDocument(PdfWriter writer, Document document)
-            {
-                base.OnCloseDocument(writer, document);
-            }
+PdfPCell emailCell = new PdfPCell(emailPhrase)
+{
+    Border = Rectangle.TOP_BORDER | Rectangle.RIGHT_BORDER | Rectangle.BOTTOM_BORDER,
+    HorizontalAlignment = Element.ALIGN_RIGHT,
+    Padding = 5,
+    BackgroundColor = new BaseColor(144, 238, 144)
+};
+
+            contactTable.AddCell(addressCell);
+            // contactTable.AddCell(phoneCell);
+            contactTable.AddCell(emailCell);
+
+            // Write the contact table below the main footer
+            contactTable.WriteSelectedRows(0, -1, document.LeftMargin, footerY - 30, cb);
         }
+        else
+        {
+            // No clinic details found
+            float footerY = 85; // Align with above
+            ColumnText.ShowTextAligned(
+                cb,
+                Element.ALIGN_LEFT,
+                new Phrase("Clinic details not found", footerFont),
+                document.LeftMargin + 5,
+                footerY,
+                0
+            );
+        }
+    }
+}
 
         [HttpGet("PIDVerify/{id}")]
         public IActionResult GeneratePIDPdf(int id)

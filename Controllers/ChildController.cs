@@ -995,11 +995,11 @@ private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
 
                 document.Add(table);
                 if ( !string.IsNullOrEmpty(type1GivenDate) ||
-    !string.IsNullOrEmpty(type2GivenDate) ||
-    !string.IsNullOrEmpty(type3GivenDate) ||
-    !string.IsNullOrEmpty(flu1GivenDate) ||
-    !string.IsNullOrEmpty(flu2GivenDate) ||
-    !string.IsNullOrEmpty(flu3GivenDate))
+                     !string.IsNullOrEmpty(type2GivenDate) ||
+                     !string.IsNullOrEmpty(type3GivenDate) ||
+                     !string.IsNullOrEmpty(flu1GivenDate) ||
+                     !string.IsNullOrEmpty(flu2GivenDate) ||
+                     !string.IsNullOrEmpty(flu3GivenDate))
                 {
                 // special vaccines table start
                 float[] lowerwidths = new float[] { 255f, 255f };
@@ -2673,11 +2673,11 @@ public class PDFFooter : PdfPageEventHelper
 
         // General footer text
         string footer =
-            "This schedule is valid for all airports, airlines, embassies, and schools worldwide. Vaccines may cause fever, localized redness, and pain. We" +
-            "always use the best available vaccine brand/manufacturer. This schedule provides recommended dates for immunizations based on the" +
-            "individual date of birth, past immunization/disease history. Your physician may update the due dates or add/remove vaccines. Vaccine.pk, its" +
-            "management, or staff hold no responsibility for any loss or damage due to any vaccine given. *OHF = vaccines given at other health facility (not" +
-            "by Vaccine.pk)";
+            "This schedule is valid for all airports, airlines, embassies, and schools worldwide. Vaccines may cause fever, localized redness, and pain. We " +
+            "always use the best available vaccine brand/manufacturer. This schedule provides recommended dates for immunizations based on the " +
+            "individual date of birth, past immunization/disease history. Your physician may update the due dates or add/remove vaccines. Vaccine.pk, its " +
+            "management, or staff hold no responsibility for any loss or damage due to any vaccine given. *OHF = vaccines given at other health facility (not " +
+            "by Vaccine.pk) ";
 
         footer = footer.Replace(Environment.NewLine, string.Empty).Replace("  ", string.Empty);
 

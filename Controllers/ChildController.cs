@@ -388,10 +388,9 @@ namespace VaccineAPI.Controllers
         }
 
         private string GetYearOrMonthFromDaysSchedule(int days)
-{
-   
-    var ageMap = new Dictionary<int, string>
-    {
+        {
+        var ageMap = new Dictionary<int, string>
+          {
         { 0, "At Birth" },
         { 1, "1 Day" },
         { 2, "2 Days" },
@@ -498,19 +497,18 @@ namespace VaccineAPI.Controllers
         { 5840, "16 Years" },
         { 6205, "17 Years" },
         { 6570, "18 Years" }
-    };
-    var closest = ageMap
-        .Where(kvp => kvp.Key <= days)
-        .OrderByDescending(kvp => kvp.Key)
-        .FirstOrDefault();
+          };
+          var closest = ageMap
+              .Where(kvp => kvp.Key <= days)
+              .OrderByDescending(kvp => kvp.Key)
+              .FirstOrDefault();                             
+          return closest.Value ?? $"{days} Days";
+        }
 
-    return closest.Value ?? $"{days} Days";
-}
-
-private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
-{
-    return schedules.Count(s => GetYearOrMonthFromDaysSchedule(s.Dose.MinAge) == age);
-}
+        private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
+        {
+            return schedules.Count(s => GetYearOrMonthFromDaysSchedule(s.Dose.MinAge) == age);
+        }
 
         private Stream CreateSchedulePdf(int childId)
         {
@@ -519,9 +517,17 @@ private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
                                   .Include(x => x.User)
                                   .Include(x => x.Clinic)
                                   .ThenInclude(x => x.Doctor)
-                                  .ThenInclude(x => x.User)
                                   .Where(x => x.Id == childId)
                                   .FirstOrDefault();
+                //                     var child = _db.Childs
+                // .Include(x => x.Schedules)
+                //     .ThenInclude(x => x.Dose)
+                // .Include(x => x.Schedules)
+                //     .ThenInclude(x => x.Brand)
+                // .Include(x => x.Clinic)
+                //     .ThenInclude(x => x.Doctor)
+                //         .ThenInclude(d => d.DoctorSchedules) 
+                // .FirstOrDefault(c => c.Id == childId);
 
             if (dbChild == null) 
             {
@@ -533,8 +539,14 @@ private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
                                 .Include(x => x.Schedules)
                                 .ThenInclude(x => x.Dose)
                                 .Include(x => x.Schedules)
-                                .ThenInclude(x => x.Brand)
+                                .ThenInclude(x => x.Brand) 
                                 .FirstOrDefault(c => c.Id == childId);
+
+            var child1 = _db.Childs
+                                .Include(x => x.Clinic)
+                                .ThenInclude(x => x.Doctor)
+                                .ThenInclude(d => d.DoctorSchedules)
+                                .FirstOrDefault(c => c.Id == childId);                    
             var dbSchedules = child.Schedules
             .OrderBy(s => s.Dose.MinAge)
             // .GroupBy(s => s.Dose.MinAge)
@@ -778,15 +790,23 @@ private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
                 bool hasTyphoidDone = false;
                 bool type = false;
                 HashSet<string> addedAges = new HashSet<string>();
-                string previousAge = null;
-                foreach (var dbSchedule in dbSchedules)
+                string previousAgeLabel = null;
+                var groupedSchedules = dbSchedules
+                    .Where(s => s.IsSkip != true)
+                    .GroupBy(s =>
+                        GetYearOrMonthFromDaysSchedule(
+                            child1?.Clinic?.Doctor?.DoctorSchedules
+                                ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
+                        )
+                    );
+                foreach (var group in groupedSchedules)
+                {
+                   bool isFirstRow = true;
+                  int rowSpanCount = group.Count();
+                foreach (var dbSchedule in group)
                 {
                     if (dbSchedule.IsSkip != true)
-                    {
-                             string age = GetYearOrMonthFromDaysSchedule(dbSchedule.Dose.MinAge);
-                             string displayAge = (age == previousAge) ? "" : age;
-                             previousAge = age;
-                            
+                    {                         
                             int order=dbSchedule.Dose.DoseOrder ?? 0;
                         int doseCount = 0;
                         Paragraph p = new Paragraph();
@@ -799,32 +819,27 @@ private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
 
                         Font rangefont = FontFactory.GetFont(FontFactory.HELVETICA, 6);
 
-                        // Font boldfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
                         Font boldfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD, new BaseColor(0, 128, 0));
                         Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
                         Font italicfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC, new BaseColor(255, 0, 0));
                         {
-                               if (!addedAges.Contains(age))
-                                  {
-                                    int rowSpanCount = GetRowSpanCountForAge(age, dbSchedules);
-                                    PdfPCell ageCell = new PdfPCell(new Phrase(age, font))
-                                    {
-                                      HorizontalAlignment = PdfPCell.ALIGN_LEFT,
-                                      BorderColor = GrayColor.LightGray,
-                                      PaddingBottom = 5,
-                                      Rowspan = rowSpanCount
-                                    };
-                                    table.AddCell(ageCell);
-                                    addedAges.Add(age);
-                                 }
-               
-
+                          
+                             if (isFirstRow)
+                              {
+                                  // Add age cell with rowspan
+                                  PdfPCell ageCell = new PdfPCell(new Phrase(group.Key, font));
+                                  ageCell.Rowspan = rowSpanCount;
+                                  ageCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                  table.AddCell(ageCell);
+                                  isFirstRow = false;
+                              }
+                           
                             PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, rangevaluefont));
                             dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(dosenameCell);
 
-                            string brandName = " ";
+                            string brandName = "";
                             if (dbSchedule.BrandId != null && dbSchedule.IsDone != false)
                             {
                                 brandName = dbSchedule.Brand.Name.ToString();
@@ -944,7 +959,6 @@ private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
                                     pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
                                 }
 
-                                // FOR BMI
                                 if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
                                 {
                                     double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
@@ -952,16 +966,12 @@ private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
                                     pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
                                     pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
                                 }
-
                                 PdfPCell circleCell = new PdfPCell(pc);
                                 circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 circleCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(circleCell);
-
                             }
-
                             else
-
                             {
                                 PdfPCell weightCell = new PdfPCell(new Phrase("", font));
                                 weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
@@ -990,22 +1000,22 @@ private int GetRowSpanCountForAge(string age, List<Schedule> schedules)
                         {
                             if (String.IsNullOrEmpty(flu1GivenDate))
                             {
-if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-{
-    flustatus1 = "Given";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-{
-    flustatus1 = "Due";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-{
-   flustatus1 = "Missed";
-}
-else
-{
-    flustatus1 = "Diseased";
-}
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                flustatus1 = "Given";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                            {
+                                flustatus1 = "Due";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                            {
+                               flustatus1 = "Missed";
+                            }
+                            else
+                            {
+                                flustatus1 = "Diseased";
+                            }
 
                             if (dbSchedule.IsDone == true )
                             {
@@ -1019,24 +1029,23 @@ else
                             }
 
                             else if (String.IsNullOrEmpty(flu2GivenDate))
-                            {
-                                
-if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-{
-    flustatus2 = "Given";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-{
-    flustatus2 = "Due";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-{
-    flustatus2 = "Missed";
-}
-else
-{
-    flustatus2 = "Diseased";
-}
+                            { 
+                                if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                                {
+                                    flustatus2 = "Given";
+                                }
+                                else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                                {
+                                    flustatus2 = "Due";
+                                }
+                                else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                                {
+                                   flustatus2 = "Missed";
+                                }
+                                else
+                                {
+                                    flustatus2 = "Diseased";
+                                }
                                 if (dbSchedule.IsDone == true)
                                 {
                                     flu2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
@@ -1045,7 +1054,6 @@ else
                                 {
                                     flu2GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
                                 }
-                                // flu2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                                 flu2Brand = dbSchedule.Brand?.Name.ToString();
                             }
 
@@ -1063,9 +1071,6 @@ else
                                 flu2GivenDate = flu3GivenDate;
                                 flu2Brand = flu3Brand;
 
-                                // flu3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                                // flu3Brand = dbSchedule.Brand?.Name.ToString();
-                                // flu3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
                             }
 
                         }
@@ -1099,23 +1104,22 @@ else
                         {
                             if (String.IsNullOrEmpty(type1GivenDate))
                             {
-                                if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-{
-    typestatus1 = "Given";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-{
-    typestatus1 = "Due";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-{
-   typestatus1 = "Missed";
-}
-else
-{
-    typestatus1 = "Diseased";
-}
-
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                typestatus1 = "Given";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                            {
+                                typestatus1 = "Due";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                            {
+                               typestatus1 = "Missed";
+                            }
+                            else
+                            {
+                                typestatus1 = "Diseased";
+                            }
                             if (dbSchedule.IsDone == true )
                             {
                                 type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
@@ -1127,26 +1131,24 @@ else
                                 // type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                                 type1Brand = dbSchedule.Brand?.Name.ToString();
                             }
-
                             else if (String.IsNullOrEmpty(type2GivenDate))
                             {
-                                 if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-{
-    typestatus2 = "Given";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-{
-    typestatus2 = "Due";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-{
-   typestatus2 = "Missed";
-}
-else
-{
-    typestatus2 = "Diseased";
-}
-
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                typestatus2 = "Given";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                            {
+                                typestatus2 = "Due";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                            {
+                               typestatus2 = "Missed";
+                            }
+                            else
+                            {
+                                typestatus2 = "Diseased";
+                            }
                             if (dbSchedule.IsDone == true )
                             {
                                 type2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
@@ -1206,22 +1208,22 @@ else
                         {
                             if (String.IsNullOrEmpty(vit1GivenDate))
                             {
-                                if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-{
-    vitstatus1 = "Given";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-{
-    vitstatus1 = "Due";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-{
-   vitstatus1 = "Missed";
-}
-else
-{
-    vitstatus1 = "Diseased";
-}
+                                                        if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                vitstatus1 = "Given";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                            {
+                                vitstatus1 = "Due";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                            {
+                               vitstatus1 = "Missed";
+                            }
+                            else
+                            {
+                                vitstatus1 = "Diseased";
+                            }
                             if (dbSchedule.IsDone == true )
                             {
                                 vit1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
@@ -1236,22 +1238,22 @@ else
 
                             else if (String.IsNullOrEmpty(vit2GivenDate))
                             {
-                                 if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-{
-    vitstatus2 = "Given";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-{
-    vitstatus2 = "Due";
-}
-else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-{
-   vitstatus2 = "Missed";
-}
-else
-{
-    vitstatus2 = "Diseased";
-}
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                vitstatus2 = "Given";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                            {
+                                vitstatus2 = "Due";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                            {
+                               vitstatus2 = "Missed";
+                            }
+                            else
+                            {
+                                vitstatus2 = "Diseased";
+                            }
                             if (dbSchedule.IsDone == true )
                             {
                                 vit2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
@@ -1300,6 +1302,7 @@ else
                             // type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
                         }
                     }
+                }
                 }
 
                 document.Add(table);
@@ -2952,85 +2955,85 @@ else
         }
 
 
-public class PDFFooter : PdfPageEventHelper
-{
-    private readonly Child child;
-
-    // Fonts for the footer
-    BaseColor lightGreen = new BaseColor(159, 226, 191);
-    private readonly Font footerFont = FontFactory.GetFont("Helvetica", 8f, BaseColor.Black);
-    private readonly Font footerFontBold = FontFactory.GetFont("Helvetica-Bold", 8f, BaseColor.Black);
-
-    public PDFFooter(Child postedChild)
-    {
-        child = postedChild;
-    }
-
-    public override void OnEndPage(PdfWriter writer, Document document)
-    {
-        base.OnEndPage(writer, document);
-        PdfContentByte cb = writer.DirectContent;
-           if (child != null && child.Clinic != null)
+        public class PDFFooter : PdfPageEventHelper
         {
-            var clinic = child.Clinic;
-            var clinicName = clinic.Name ?? "";
-            var regNo = clinic.RegNo ?? "";
-            var address = clinic.Address ?? "";
-            var phoneNumber = clinic.PhoneNumber ?? "";
-            var email = "vaccinationcentre.com";
-            float footerY = 85; // Adjust as needed for vertical position
-            float footerHeight = 110; // Height of the footer area
+             private readonly Child child;
+
+             // Fonts for the footer
+             BaseColor lightGreen = new BaseColor(159, 226, 191);
+             private readonly Font footerFont = FontFactory.GetFont("Helvetica", 8f, BaseColor.Black);
+             private readonly Font footerFontBold = FontFactory.GetFont("Helvetica-Bold", 8f, BaseColor.Black);
+
+             public PDFFooter(Child postedChild)
+             {
+                 child = postedChild;
+             }
+         
+             public override void OnEndPage(PdfWriter writer, Document document)
+             {
+             base.OnEndPage(writer, document);
+             PdfContentByte cb = writer.DirectContent;
+                if (child != null && child.Clinic != null)
+             {
+             var clinic = child.Clinic;
+             var clinicName = clinic.Name ?? "";
+             var regNo = clinic.RegNo ?? "";
+             var address = clinic.Address ?? "";
+             var phoneNumber = clinic.PhoneNumber ?? "";
+             var email = "vaccinationcentre.com";
+             float footerY = 85; // Adjust as needed for vertical position
+             float footerHeight = 110; // Height of the footer area
 
 
         // General footer text
-        string footer =
-            "Vaccines may cause fever, localized redness, and pain. This schedule is valid for all airports, airlines, embassies, and schools of world. We " +
-            "always use the best available vaccine brand/manufacturer. With time and ongoing research, vaccine brands may differ for future doses." +
-            " Disclaimer: This schedule provides recommended dates for immunization based on the individual date of birth, past immunization, and disease history." +
-            "Your consultant may update the due dates or add/remove vaccines." + clinicName + ", its management, or staff hold no responsibility for any loss or" +
-            "damage due to any vaccines given or change/s in schedule. *OHF = vaccine given at other health facility (not by " + clinicName + ")." +
-            "\nPrinted on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd") + ".";
+             string footer =
+                 "Vaccines may cause fever, localized redness, and pain. This schedule is valid for all airports, airlines, embassies, and schools of world. We " +
+                 "always use the best available vaccine brand/manufacturer. With time and ongoing research, vaccine brands may differ for future doses." +
+                 " Disclaimer: This schedule provides recommended dates for immunization based on the individual date of birth, past immunization, and disease history." +
+                 "Your consultant may update the due dates or add/remove vaccines." + clinicName + ", its management, or staff hold no responsibility for any loss or" +
+                 "damage due to any vaccines given or change/s in schedule. *OHF = vaccine given at other health facility (not by " + clinicName + ")." +
+                 "\nPrinted on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd") + ".";
            
-        footer = footer.Replace(Environment.NewLine, string.Empty).Replace("  ", string.Empty);
+             footer = footer.Replace(Environment.NewLine, string.Empty).Replace("  ", string.Empty);
 
-        Font georgia = FontFactory.GetFont("Georgia", 8f);
-        Chunk beginning = new Chunk(footer, georgia);
+             Font georgia = FontFactory.GetFont("Georgia", 8f);
+             Chunk beginning = new Chunk(footer, georgia);
 
-        PdfPTable tabFot = new PdfPTable(1);
-        tabFot.SetTotalWidth(new float[] { 510f });
-        tabFot.DefaultCell.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
+             PdfPTable tabFot = new PdfPTable(1);
+             tabFot.SetTotalWidth(new float[] { 510f });
+             tabFot.DefaultCell.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
 
-        PdfPCell cell = new PdfPCell(new Phrase(beginning));
-        cell.Border = 0;
-        cell.PaddingLeft = -21f;
-        cell.PaddingTop = 28f;
-        cell.PaddingRight = 21f;
-        // cell.PaddingBottom = -85f;
-        tabFot.AddCell(cell);
+             PdfPCell cell = new PdfPCell(new Phrase(beginning));
+             cell.Border = 0;
+             cell.PaddingLeft = -21f;
+             cell.PaddingTop = 28f;
+             cell.PaddingRight = 21f;
+             // cell.PaddingBottom = -85f;
+             tabFot.AddCell(cell);
 
-        // Write the main footer
-        tabFot.WriteSelectedRows(0, -85, 65, 135, cb);
+             // Write the main footer
+             tabFot.WriteSelectedRows(0, -85, 65, 135, cb);
 
-        // Clinic details (if available)
+             // Clinic details (if available)
      
 
-            Phrase phrase = new Phrase();
-            // phrase.Add(new Chunk($"", footerFontBold));
-            // if (!string.IsNullOrEmpty(regNo))
-            //     phrase.Add(new Chunk($"({regNo})", footerFont));
-            // phrase.Add(new Chunk($" Printed on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd"), footerFont));
-            // ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerHeight, 0);
+                 Phrase phrase = new Phrase();
+                 // phrase.Add(new Chunk($"", footerFontBold));
+                 // if (!string.IsNullOrEmpty(regNo))
+                 //     phrase.Add(new Chunk($"({regNo})", footerFont));
+                 // phrase.Add(new Chunk($" Printed on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd"), footerFont));
+                 // ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerHeight, 0);
 
-            // 3-column table for address, phone, email
-            PdfPTable contactTable = new PdfPTable(2);
-            contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
-            contactTable.SetWidths(new float[] { 3,  2 });
+                        // 3-column table for address, phone, email
+             PdfPTable contactTable = new PdfPTable(2);
+             contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+             contactTable.SetWidths(new float[] { 3,  2 });
 
-var boldFont = FontFactory.GetFont("Helvetica-Bold", 10f, BaseColor.Black);
-var normalFont = FontFactory.GetFont("Helvetica", 10f, BaseColor.Black);
-Phrase AddressPhrase = new Phrase();
-AddressPhrase.Add(new Chunk($"{clinicName},", boldFont));
-AddressPhrase.Add(new Chunk($"{address}", normalFont));
+            var boldFont = FontFactory.GetFont("Helvetica-Bold", 10f, BaseColor.Black);
+            var normalFont = FontFactory.GetFont("Helvetica", 10f, BaseColor.Black);
+            Phrase AddressPhrase = new Phrase();
+            AddressPhrase.Add(new Chunk($"{clinicName},", boldFont));
+            AddressPhrase.Add(new Chunk($"{address}", normalFont));
             PdfPCell addressCell = new PdfPCell(AddressPhrase)
             {
                 Border = Rectangle.TOP_BORDER | Rectangle.LEFT_BORDER | Rectangle.BOTTOM_BORDER,
@@ -3039,39 +3042,39 @@ AddressPhrase.Add(new Chunk($"{address}", normalFont));
                 BackgroundColor = new BaseColor(159, 226, 191)
             };
            
-Phrase emailPhrase = new Phrase();
-// emailPhrase.Add(new Chunk("Site: ", boldFont));
-emailPhrase.Add(new Chunk($"{email}", normalFont));
-// emailPhrase.Add(new Chunk("\nPhone: ", boldFont));
-emailPhrase.Add(new Chunk($"\n{phoneNumber}", normalFont));
+            Phrase emailPhrase = new Phrase();
+            // emailPhrase.Add(new Chunk("Site: ", boldFont));
+            emailPhrase.Add(new Chunk($"{email}", normalFont));
+            // emailPhrase.Add(new Chunk("\nPhone: ", boldFont));
+            emailPhrase.Add(new Chunk($"\n{phoneNumber}", normalFont));
 
-PdfPCell emailCell = new PdfPCell(emailPhrase)
-{
-    Border = Rectangle.TOP_BORDER | Rectangle.RIGHT_BORDER | Rectangle.BOTTOM_BORDER,
-    HorizontalAlignment = Element.ALIGN_RIGHT,
-    Padding = 5,
-    BackgroundColor = new BaseColor(159, 226, 191)
-};
+            PdfPCell emailCell = new PdfPCell(emailPhrase)
+            {
+                Border = Rectangle.TOP_BORDER | Rectangle.RIGHT_BORDER | Rectangle.BOTTOM_BORDER,
+                HorizontalAlignment = Element.ALIGN_RIGHT,
+                Padding = 5,
+                BackgroundColor = new BaseColor(159, 226, 191)
+            };
 
             contactTable.AddCell(addressCell);
             // contactTable.AddCell(phoneCell);
             contactTable.AddCell(emailCell);
             contactTable.WriteSelectedRows(0, -1, document.LeftMargin, footerY - 30, cb);
+              }
+              else
+              {
+                 float footerY = 85; 
+                 ColumnText.ShowTextAligned(
+                     cb,
+                     Element.ALIGN_LEFT,
+                     new Phrase("Clinic details not found", footerFont),
+                     document.LeftMargin + 5,
+                     footerY,
+                     0
+                 );
+              }
+           }
         }
-        else
-        {
-            float footerY = 85; 
-            ColumnText.ShowTextAligned(
-                cb,
-                Element.ALIGN_LEFT,
-                new Phrase("Clinic details not found", footerFont),
-                document.LeftMargin + 5,
-                footerY,
-                0
-            );
-        }
-    }
-}
 
         [HttpGet("PIDVerify/{id}")]
         public IActionResult GeneratePIDPdf(int id)

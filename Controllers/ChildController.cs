@@ -697,7 +697,6 @@ namespace VaccineAPI.Controllers
                 // };
                 // title.Font = greenFont;
                 title.Alignment = Element.ALIGN_CENTER;
-                // title.Color = new BaseColor(144, 238, 144);
                 document.Add(title);
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
                 patientTable.SetWidths(new float[] { 2, 2, 2, 2 });
@@ -738,7 +737,6 @@ namespace VaccineAPI.Controllers
                 BaseColor lightGreen = new BaseColor(144, 238, 144);
                 table.AddCell(CreateCell("Age", "LightGreen", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Vaccine", "LightGreen", 1, "center", "scheduleRecords"))                                                                           ;
-                // table.AddCell(CreateCell("Dose Order", "LightGreen", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
                 table.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
@@ -801,13 +799,13 @@ namespace VaccineAPI.Controllers
                     );
                 foreach (var group in groupedSchedules)
                 {
-                   bool isFirstRow = true;
-                  int rowSpanCount = group.Count();
+                bool isFirstRow = true;
+                int rowSpanCount = group.Count();
                 foreach (var dbSchedule in group)
                 {
                     if (dbSchedule.IsSkip != true)
-                    {                         
-                            int order=dbSchedule.Dose.DoseOrder ?? 0;
+                    {
+                        int order = dbSchedule.Dose.DoseOrder ?? 0;
                         int doseCount = 0;
                         Paragraph p = new Paragraph();
                         count++;
@@ -826,10 +824,11 @@ namespace VaccineAPI.Controllers
                           
                              if (isFirstRow)
                               {
-                                  // Add age cell with rowspan
                                   PdfPCell ageCell = new PdfPCell(new Phrase(group.Key, font));
                                   ageCell.Rowspan = rowSpanCount;
                                   ageCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                  ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                  ageCell.BorderColor = GrayColor.LightGray;
                                   table.AddCell(ageCell);
                                   isFirstRow = false;
                               }
@@ -2958,8 +2957,6 @@ namespace VaccineAPI.Controllers
         public class PDFFooter : PdfPageEventHelper
         {
              private readonly Child child;
-
-             // Fonts for the footer
              BaseColor lightGreen = new BaseColor(159, 226, 191);
              private readonly Font footerFont = FontFactory.GetFont("Helvetica", 8f, BaseColor.Black);
              private readonly Font footerFontBold = FontFactory.GetFont("Helvetica-Bold", 8f, BaseColor.Black);
@@ -2980,12 +2977,10 @@ namespace VaccineAPI.Controllers
              var regNo = clinic.RegNo ?? "";
              var address = clinic.Address ?? "";
              var phoneNumber = clinic.PhoneNumber ?? "";
-             var email = "vaccinationcentre.com";
-             float footerY = 85; // Adjust as needed for vertical position
-             float footerHeight = 110; // Height of the footer area
+             var email = "https://vaccinationcentre.com";
+             float footerY = 85; 
+             float footerHeight = 110;
 
-
-        // General footer text
              string footer =
                  "Vaccines may cause fever, localized redness, and pain. This schedule is valid for all airports, airlines, embassies, and schools of world. We " +
                  "always use the best available vaccine brand/manufacturer. With time and ongoing research, vaccine brands may differ for future doses." +
@@ -3017,7 +3012,7 @@ namespace VaccineAPI.Controllers
              // Clinic details (if available)
      
 
-                 Phrase phrase = new Phrase();
+             Phrase phrase = new Phrase();
                  // phrase.Add(new Chunk($"", footerFontBold));
                  // if (!string.IsNullOrEmpty(regNo))
                  //     phrase.Add(new Chunk($"({regNo})", footerFont));

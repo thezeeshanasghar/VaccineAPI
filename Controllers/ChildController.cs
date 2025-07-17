@@ -548,7 +548,7 @@ namespace VaccineAPI.Controllers
                                 .ThenInclude(d => d.DoctorSchedules)
                                 .FirstOrDefault(c => c.Id == childId);                    
             var dbSchedules = child.Schedules
-            .OrderBy(s => s.Dose.MinAge)
+            // .OrderBy(s => s.Dose.MinAge)
             // .GroupBy(s => s.Dose.MinAge)
             .ToList();
 
@@ -789,14 +789,18 @@ namespace VaccineAPI.Controllers
                 bool type = false;
                 HashSet<string> addedAges = new HashSet<string>();
                 string previousAgeLabel = null;
-                var groupedSchedules = dbSchedules
-                    .Where(s => s.IsSkip != true)
-                    .GroupBy(s =>
-                        GetYearOrMonthFromDaysSchedule(
-                            child1?.Clinic?.Doctor?.DoctorSchedules
-                                ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
-                        )
-                    );
+                var orderedDbSchedules = dbSchedules
+                                            .Where(s => s.IsSkip != true)
+                                            .OrderBy(s =>child1?.Clinic?.Doctor?.DoctorSchedules
+                                                    ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
+                                            )
+                                            .ToList(); 
+                                        var groupedSchedules = orderedDbSchedules.GroupBy(s =>
+                                            GetYearOrMonthFromDaysSchedule(
+                                                child1?.Clinic?.Doctor?.DoctorSchedules
+                                                    ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
+                                            )
+                                        );
                 foreach (var group in groupedSchedules)
                 {
                 bool isFirstRow = true;
@@ -805,23 +809,17 @@ namespace VaccineAPI.Controllers
                 {
                     if (dbSchedule.IsSkip != true)
                     {
-                        int order = dbSchedule.Dose.DoseOrder ?? 0;
-                        int doseCount = 0;
                         Paragraph p = new Paragraph();
                         count++;
-                        doseCount++;
                         Font font = FontFactory.GetFont(FontFactory.HELVETICA, 10);
                         Font rangevaluefont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
                         Font boldfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
                         Font rangevaluefont1 = FontFactory.GetFont(FontFactory.HELVETICA, 8);
-
                         Font rangefont = FontFactory.GetFont(FontFactory.HELVETICA, 6);
-
                         Font boldfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD, new BaseColor(0, 128, 0));
                         Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
                         Font italicfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC, new BaseColor(255, 0, 0));
                         {
-                          
                              if (isFirstRow)
                               {
                                   PdfPCell ageCell = new PdfPCell(new Phrase(group.Key, font));

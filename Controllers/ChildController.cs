@@ -2464,6 +2464,12 @@ namespace VaccineAPI.Controllers
                                 _db.Fee.Add(fee);
                             }
                         }
+                        if (existingFee != null)
+                        {
+                            existingFee.Amount = consultaionFee;
+                            _db.Entry(existingFee).State = EntityState.Modified;
+                            _db.SaveChanges();
+                        }
 
                         bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
 

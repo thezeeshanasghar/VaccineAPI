@@ -1414,6 +1414,395 @@ namespace VaccineAPI.Controllers
             };
         }
 
+        [HttpGet("{id}/CustomVerify")]
+        public IActionResult DownloadCustomPDF(int id)
+        {
+            Child dbScheduleChild;
+            { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
+            var stream = CreateCustomPdf(id);
+            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
+                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+            return File(stream, "application/pdf", FileName);
+        }
+
+        [HttpGet("{id}/verification-Custom-PDF")]
+        public IActionResult ViewCustomPDF(int id)
+        {
+            Child dbScheduleChild;
+            { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
+            var stream = CreateCustomPdf(id);
+            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
+                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+            Response.Headers.Add("X-Frame-Options", "ALLOWALL");
+            Response.Headers.Add("Content-Disposition", $"inline; filename={FileName}");
+            return File(stream, "application/pdf");
+        }
+
+        private Stream CreateCustomPdf(int childId)
+        {
+            var dbChild = _db.Childs
+                                  .Include(x => x.User)
+                                  .Include(x => x.Clinic)
+                                  .ThenInclude(x => x.Doctor)
+                                  .ThenInclude(x => x.User)
+                                  .Where(x => x.Id == childId)
+                                  .FirstOrDefault();
+            if (dbChild == null) 
+            {
+                return null;
+            }
+            var dbDoctor = dbChild.Clinic?.Doctor;
+            var child = _db.Childs
+                                .Include(x => x.Schedules)
+                                .ThenInclude(x => x.Dose)
+                                .Include(x => x.Schedules)
+                                .ThenInclude(x => x.Brand)
+                                .FirstOrDefault(c => c.Id == childId);
+            var dbSchedules = child.Schedules.ToList();
+            var Gender = 1;
+            if (dbChild.Gender == "Girl") Gender = 2;
+            foreach (var sch in dbSchedules)
+            {
+                if (sch.IsDone == true) sch.Date = sch.GivenDate ?? DateTime.Now;
+            }
+            dbSchedules = dbSchedules.OrderBy(x => x.Date).ToList();
+            int count = 0;
+            var document = new Document(PageSize.A4, 45, 45, 30, 30);
+            {
+                var output = new MemoryStream();
+                var writer = PdfWriter.GetInstance(document, output);
+                writer.CloseStream = false;
+                writer.PageEvent = new PDFFooter(child);
+                document.Open();
+                // QR Code URL
+                var baseUrl = "https://myapi.vaccinationcentre.com/api";
+                var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Custom-PDF";
+                try
+                {
+                    using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+                    using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
+                    {
+                        var qrCode = new BitmapByteQRCode(qrCodeData);
+                        byte[] qrCodeImage = qrCode.GetGraphic(18);
+                        if (qrCodeImage != null && qrCodeImage.Length > 0)
+                        {
+                            using (MemoryStream ms = new MemoryStream(qrCodeImage))
+                            {
+                                var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
+                                pdfQrCode.ScaleAbsolute(60f, 60f);
+                                float marginLeft = document.PageSize.Width / 2 - pdfQrCode.ScaledWidth / 2;
+                                float qrCodeXPosition = marginLeft;
+                                float marginTop = 0f - 4f;
+                                float qrCodeYPosition = document.PageSize.Height - 100f - marginTop;
+                                pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
+                                writer.DirectContent.AddImage(pdfQrCode);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: QR code image for child ID {childId} was null or empty.");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error generating QR code: {ex.Message}");
+                }
+                PdfPTable upperTable = new PdfPTable(3);
+                float[] upperTableWidths = new float[] { 230f, 75f, 230f };
+                upperTable.HorizontalAlignment = 0;
+                upperTable.TotalWidth = 510f;
+                upperTable.LockedWidth = true;
+                upperTable.SetWidths(upperTableWidths);
+                upperTable.AddCell(CreateCell(dbDoctor?.DisplayName ?? "", "bold", 2, "left", "description"));
+                var imgPath = dbChild.Clinic?.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
+                // Handle clinic logo
+                var logoPath = dbChild.Clinic?.MonogramImage != null ?
+                    Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
+                PdfPCell imageCell = new PdfPCell(new Phrase(""))
+                {
+                    Colspan = 1,
+                    Rowspan = 2,
+                    Border = 0,
+                    FixedHeight = 50f,
+                    HorizontalAlignment = Element.ALIGN_RIGHT
+                };
+                if (logoPath != null && System.IO.File.Exists(logoPath))
+                {
+                    var img = Image.GetInstance(logoPath);
+                    img.ScaleAbsolute(160f, 50f);
+                    imageCell = new PdfPCell(img, false)
+                    {
+                        Colspan = 1,
+                        Rowspan = 2,
+                        Border = 0,
+                        FixedHeight = 50f,
+                        HorizontalAlignment = Element.ALIGN_RIGHT
+                    };
+                }
+                upperTable.AddCell(imageCell);
+                upperTable.AddCell(CreateCell(dbDoctor?.AdditionalInfo ?? "", "unbold", 2, "left", "description"));
+                upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
+                upperTable.AddCell(CreateCell("", "unbold", 2, "left", "description"));
+                upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
+                upperTable.AddCell(CreateCell("", "unbold", 2, "left", "description"));
+                upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
+                string patientName = child.Name;
+                string relation = child.FatherName;
+                DateTime dob = child.DOB;
+                string passport = child.CNIC;
+                string city = child.City;
+                string Nationality = child.Nationality;
+                string mrNumber = child.City;
+                string clinicName = child.Clinic.Name;
+                string doctorDetails = child.Clinic.Doctor.DisplayName;
+                string additionalInfo = child.Clinic.Doctor.AdditionalInfo;
+                string clinicAddress = child.Clinic.Address;
+                string clinicPhoneNumber = child.Clinic.PhoneNumber;
+                string userPhoneNumber = "+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber;
+                document.Add(upperTable);
+                Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(0, 100, 0));
+                Paragraph title = new Paragraph("Immunization Record", greenFont);
+                title.Alignment = Element.ALIGN_CENTER;
+                document.Add(title);
+                var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
+                patientTable.SetWidths(new float[] { 2, 2, 2, 2 });
+                patientTable.DefaultCell.BorderColor = new BaseColor(159, 226, 191);
+                patientTable.DefaultCell.BorderWidth = 0.5f;
+                var cellFontBold = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+                var cellFontNormal = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+                patientTable.AddCell(CreateCell1("Name:", cellFontBold, new BaseColor(159, 226, 191)));
+                patientTable.AddCell(CreateCell1(patientName, cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell1("S/D/W/o:", cellFontBold, new BaseColor(159, 226, 191)));
+                patientTable.AddCell(CreateCell1(relation, cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell1("Date of Birth:", cellFontBold, new BaseColor(159, 226, 191)));
+                patientTable.AddCell(CreateCell1(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell1("Phone No:", cellFontBold, new BaseColor(159, 226, 191)));
+                patientTable.AddCell(CreateCell1(userPhoneNumber, cellFontNormal, BaseColor.White));
+                document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
+                document.Add(patientTable);
+                PdfPCell CreateCell1(string text, Font font, BaseColor backgroundColor)
+                {
+                    var cell = new PdfPCell(new Phrase(text, font))
+                    {
+                        BackgroundColor = backgroundColor,
+                        BorderColor = BaseColor.Gray,
+                        BorderWidth = 1f
+                    };
+                    return cell;
+                }
+                float[] widths = new float[] { 20f, 145f, 50f, 70, 70f, 60f, 60f, 60f };
+                PdfPTable table = new PdfPTable(8);
+                table.HorizontalAlignment = 0;
+                table.TotalWidth = 510f;
+                table.LockedWidth = true;
+                table.SpacingBefore = 5;
+                table.SetWidths(widths);
+                BaseColor lightGreen = new BaseColor(144, 238, 144);
+                table.AddCell(CreateCell("Sr", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Vaccine", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Weight", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("Height", "LightGreen", 1, "center", "scheduleRecords"));
+                table.AddCell(CreateCell("OFC/BMI", "LightGreen", 1, "center", "scheduleRecords"));
+                foreach (var dbSchedule in dbSchedules)
+                {
+                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") &&
+                        !dbSchedule.Dose.Name.StartsWith("Typhoid"))
+                    {
+                        int doseCount = 0;
+                        Paragraph p = new Paragraph();
+                        count++;
+                        doseCount++;
+                        Font font = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+                        Font rangevaluefont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
+                        Font rangefont = FontFactory.GetFont(FontFactory.HELVETICA, 6);
+                        Font boldfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+                        Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
+                        {
+                            PdfPCell ageCell = new PdfPCell(new Phrase(count.ToString(), font));
+                            ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                            ageCell.FixedHeight = 15f;
+                            ageCell.BorderColor = GrayColor.LightGray;
+                            table.AddCell(ageCell);
+                            PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, font));
+                            dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                            dosenameCell.BorderColor = GrayColor.LightGray;
+                            table.AddCell(dosenameCell);
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Given", boldfont));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase("By EPI", font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
+                                        !checkForMissed(dbSchedule.Date))
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Due", font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
+                                        checkForMissed(dbSchedule.Date))
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase(" Missed", italicfont));
+                                statusCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            else
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Diseased", font));
+                                statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+                            }
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy"), font));
+                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(dateCell);
+                            }
+                            else if (dbSchedule.IsDisease == true)
+                            {
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("yyyy") + " Y", font));
+                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(dateCell);
+                            }
+                            else
+                            {
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font));
+                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(dateCell);
+                            }
+                            string brandName = " ";
+                            if (dbSchedule.BrandId != null && dbSchedule.IsDone != false)
+                            {
+                                brandName = dbSchedule.Brand.Name.ToString();
+                            }
+                            else if (dbSchedule.BrandId == null && dbSchedule.IsDone != false && dbSchedule.IsDisease != true)
+                            {
+                                brandName = "OHF*";
+                            }
+                            PdfPCell brandCell = new PdfPCell(new Phrase(brandName, font));
+                            brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                            brandCell.BorderColor = GrayColor.LightGray;
+                            table.AddCell(brandCell);
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                DateTime currentDate = DateTime.UtcNow.AddHours(5);
+                                var ageInMonths = Convert.ToInt32((dbSchedule.GivenDate?.Date.Year - dbChild.DOB.Date.Year) * 12 +
+                                                                    dbSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month +
+                                                                    (dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0
+                                                                    : -1));
+                                NormalRange normalrange =
+                                    _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
+                                Paragraph pw = new Paragraph("", rangevaluefont);
+                                if (dbSchedule.Weight > 0 && normalrange != null)
+                                {
+                                    pw.Add(new Chunk(dbSchedule.Weight.ToString(), rangevaluefont));
+                                    pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
+                                }
+                                PdfPCell weightCell = new PdfPCell(pw);
+                                weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                weightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(weightCell);
+                                Paragraph ph = new Paragraph("", rangevaluefont);
+                                if (dbSchedule.Height > 0 && normalrange != null)
+                                {
+                                    ph.Add(new Chunk(dbSchedule.Height.ToString(), rangevaluefont));
+                                    ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
+                                }
+                                PdfPCell heightCell = new PdfPCell(ph);
+                                heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                heightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(heightCell);
+                                Paragraph pc = new Paragraph("", rangevaluefont);
+                                if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
+                                {
+                                    pc.Add(new Chunk(dbSchedule.Circle.ToString(), rangevaluefont));
+                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                }
+                                // FOR BMI
+                                if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
+                                {
+                                    double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
+                                    BMI = Math.Round(BMI, 1);
+                                    pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
+                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                }
+                                PdfPCell circleCell = new PdfPCell(pc);
+                                circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                circleCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(circleCell);
+                            }
+                            else
+                            {
+                                PdfPCell weightCell = new PdfPCell(new Phrase("", font));
+                                weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                weightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(weightCell);
+                                PdfPCell heightCell = new PdfPCell(new Phrase("", font));
+                                heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                heightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(heightCell);
+                                PdfPCell circleCell = new PdfPCell(new Phrase("", font));
+                                circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                circleCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(circleCell);
+                            }
+                        }
+                    }
+                }
+                document.Add(table);
+                document.Close();
+                output.Seek(0, SeekOrigin.Begin);
+                return output;
+            }
+        }
+
+        [HttpGet("{Id}/Download-Custom-PDF")]
+        public IActionResult GenerateVerifyCustomPdf(int Id)
+        {
+            var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/{Id}/verification-Custom-PDF";
+
+            string htmlContent = $@"
+                                    <!DOCTYPE html>
+                                    <html lang='en'>
+                                    <head>
+                                        <meta charset='UTF-8'>
+                                        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                                        <title>QR Code Viewer</title>
+                                    </head>
+                                    <body style='font-family: Arial, sans-serif; text-align: center; padding: 20px;'>
+                                        <h1>Immunization Record</h1>
+                                        <p><a href='{fileUrl}' target='_blank'>click here</a> to view the details.</p>
+                                        <iframe src='{fileUrl}' width='600' height='700' style='border: 1px solid #ccc;'></iframe>
+                                    </body>
+                                    </html>";
+
+            return new ContentResult
+            {
+                Content = htmlContent,
+                ContentType = "text/html",
+                StatusCode = 200
+            };
+        }
+
         [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)
         {

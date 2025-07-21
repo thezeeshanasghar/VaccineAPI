@@ -512,29 +512,19 @@ namespace VaccineAPI.Controllers
 
         private Stream CreateSchedulePdf(int childId)
         {
-            // Access db data
             var dbChild = _db.Childs
                                   .Include(x => x.User)
                                   .Include(x => x.Clinic)
                                   .ThenInclude(x => x.Doctor)
                                   .Where(x => x.Id == childId)
                                   .FirstOrDefault();
-                //                     var child = _db.Childs
-                // .Include(x => x.Schedules)
-                //     .ThenInclude(x => x.Dose)
-                // .Include(x => x.Schedules)
-                //     .ThenInclude(x => x.Brand)
-                // .Include(x => x.Clinic)
-                //     .ThenInclude(x => x.Doctor)
-                //         .ThenInclude(d => d.DoctorSchedules) 
-                // .FirstOrDefault(c => c.Id == childId);
 
             if (dbChild == null) 
             {
                 return null;
             }
 
-            var dbDoctor = dbChild.Clinic?.Doctor; // Use ?. for null-conditional access
+            var dbDoctor = dbChild.Clinic?.Doctor;
             var child = _db.Childs
                                 .Include(x => x.Schedules)
                                 .ThenInclude(x => x.Dose)
@@ -548,29 +538,19 @@ namespace VaccineAPI.Controllers
                                 .ThenInclude(d => d.DoctorSchedules)
                                 .FirstOrDefault(c => c.Id == childId);                    
             var dbSchedules = child.Schedules
-            // .OrderBy(s => s.Dose.MinAge)
-            // .GroupBy(s => s.Dose.MinAge)
             .ToList();
 
             var Gender = 1;
             if (dbChild.Gender == "Girl") Gender = 2;
-
-           
-            // var scheduleDoses = from schedule in dbSchedules
-            //                     group schedule.Dose by schedule.Date into scheduleDose
-            //                     select new { Date = scheduleDose.Key, Doses = scheduleDose.ToList() };
             int count = 0;
-
 
             var document = new Document(PageSize.A4, 45, 45, 30, 30);
             {
                 var output = new MemoryStream();
                 var writer = PdfWriter.GetInstance(document, output);
-                //  writer.PageEvent = new FooterPageEvent(_db, childId);
                 writer.CloseStream = false;
                 writer.PageEvent = new PDFFooter(child);
                 document.Open();
-                // QR Code URL
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
                 var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Schedule-PDF";
 
@@ -581,8 +561,6 @@ namespace VaccineAPI.Controllers
                     {
                         var qrCode = new BitmapByteQRCode(qrCodeData);
                         byte[] qrCodeImage = qrCode.GetGraphic(18);
-
-                        // Check if qrCodeImage is null or empty before proceeding
                         if (qrCodeImage != null && qrCodeImage.Length > 0)
                         {
                             using (MemoryStream ms = new MemoryStream(qrCodeImage))
@@ -599,7 +577,6 @@ namespace VaccineAPI.Controllers
                         }
                         else
                         {
-                            // Optional: Log a warning or handle the case where QR code image is not generated
                             Console.WriteLine($"Warning: QR code image for child ID {childId} was null or empty.");
                         }
                     }
@@ -608,21 +585,15 @@ namespace VaccineAPI.Controllers
                 {
                     Console.WriteLine($"Error generating QR code: {ex.Message}");
                 }
-
-                // Table 1 for description above Schedule table
                 PdfPTable upperTable = new PdfPTable(3);
                 float[] upperTableWidths = new float[] { 230f, 75f, 230f };
                 upperTable.HorizontalAlignment = 0;
                 upperTable.TotalWidth = 510f;
                 upperTable.LockedWidth = true;
                 upperTable.SetWidths(upperTableWidths);
-
-                // Add doctor display name, or a placeholder if null
                 upperTable.AddCell(CreateCell(dbDoctor?.DisplayName ?? "", "bold", 2, "left", "description"));
 
                 var imgPath = dbChild.Clinic?.MonogramImage != null ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
-
-                // Handle clinic logo
                 var logoPath = dbChild.Clinic?.MonogramImage != null ?
                     Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
                 PdfPCell imageCell = new PdfPCell(new Phrase(""))
@@ -650,28 +621,10 @@ namespace VaccineAPI.Controllers
 
                 upperTable.AddCell(CreateCell(dbDoctor?.AdditionalInfo ?? "", "unbold", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
-                // upperTable.AddCell(CreateCell(dbChild.Clinic?.Name ?? "", "bold", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("", "unbold", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
                 upperTable.AddCell(CreateCell("", "unbold", 2, "left", "description"));
                 upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
-                // upperTable.AddCell(CreateCell(dbChild.Name ?? "", "bold", 1, "right", "description"));
-
-                // upperTable.AddCell(CreateCell(dbChild.Clinic?.Address ?? "", "unbold", 2, "left", "description"));
-                // upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
-                // upperTable.AddCell(CreateCell("S/D/W/o " + (dbChild.FatherName ?? ""), "", 1, "right", "description"));
-                // upperTable.AddCell(CreateCell("Phone: " + (dbChild.Clinic?.PhoneNumber ?? ""), "", 2, "left", "description"));
-                // upperTable.AddCell(CreateCell("+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber, "", 1, "right",
-                //                                 "description"));
-                // upperTable.AddCell(CreateCell("", "", 2, "right", "description"));
-
-                // if (!String.IsNullOrEmpty(dbChild.CNIC))
-                    // upperTable.AddCell(CreateCell("CNIC/Passport: " + dbChild.CNIC, "", 1, "right", "description"));
-                // else
-                    // upperTable.AddCell(CreateCell("" + dbChild.CNIC, "", 1, "right", "description"));
-
-                // upperTable.AddCell(CreateCell("", "", 2, "left", "description"));
-                // upperTable.AddCell(CreateCell("DOB: " + dbChild.DOB.ToString("dd MMMM, yyyy"), "", 1, "right", "description"));
 
                 string patientName = child.Name;
                 string relation = child.FatherName;
@@ -686,21 +639,14 @@ namespace VaccineAPI.Controllers
                 string clinicAddress = child.Clinic.Address;
                 string clinicPhoneNumber = child.Clinic.PhoneNumber;
                 string userPhoneNumber = "+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber;
-                // upperTable.AddCell (CreateCell ("Address: " + dbChild.Clinic.Address, "", 1, "left", "description"));
-                //  upperTable.AddCell (CreateCell ("", "", 1, "right", "description"));
                 document.Add(upperTable);
-                Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(159, 226, 191));
+                Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(0, 100, 0));
                 Paragraph title = new Paragraph("Immunization Record", greenFont);
-                // {
-                //     SpacingBefore = 10f,
-                //     SpacingAfter = 10f
-                // };
-                // title.Font = greenFont;
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
                 patientTable.SetWidths(new float[] { 2, 2, 2, 2 });
-                patientTable.DefaultCell.BorderColor = BaseColor.LightGray;
+                patientTable.DefaultCell.BorderColor = new BaseColor(159, 226, 191);
                 patientTable.DefaultCell.BorderWidth = 0.5f;
                 var cellFontBold = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
                 var cellFontNormal = FontFactory.GetFont(FontFactory.HELVETICA, 10);
@@ -789,26 +735,70 @@ namespace VaccineAPI.Controllers
                 bool type = false;
                 HashSet<string> addedAges = new HashSet<string>();
                 string previousAgeLabel = null;
-                var orderedDbSchedules = dbSchedules
-                                            .Where(s => s.IsSkip != true)
-                                            .OrderBy(s =>child1?.Clinic?.Doctor?.DoctorSchedules
-                                                    ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
-                                            )
-                                            .ToList(); 
-                                        var groupedSchedules = orderedDbSchedules.GroupBy(s =>
-                                            GetYearOrMonthFromDaysSchedule(
-                                                child1?.Clinic?.Doctor?.DoctorSchedules
-                                                    ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
-                                            )
-                                        );
+                var infiniteVaccineNames = new[] { "Typhoid", "Flu", "VITAMIN A (Jr)" };
+
+                var firstGivenInfiniteDoses = dbSchedules
+                    .Where(s => s.IsSkip != true && infiniteVaccineNames.Any(name =>
+                        s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
+                    .GroupBy(s => infiniteVaccineNames.First(name =>
+                        s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
+                    .Select(g => g.OrderBy(s => s.GivenDate ?? s.Date).First())
+                    .ToList();
+              
+                var orderedDbSchedules = dbSchedules                
+                    .Where(s =>
+                    {
+                        if (s.IsSkip == true)
+                            return false;
+                
+                        bool isInfinite = infiniteVaccineNames.Any(name =>
+                            s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
+                
+                        if (isInfinite)
+                        {
+                            return firstGivenInfiniteDoses.Any(x => x.Id == s.Id);
+                        }
+
+                        return true;
+                    })
+                    .OrderBy(s => child1?.Clinic?.Doctor?.DoctorSchedules
+                        ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge)
+                    .ToList();
+
+                var lastGivenInfiniteDoses = dbSchedules
+                    .Where(s => s.IsSkip != true && s.IsDone == true && infiniteVaccineNames.Any(name =>
+                        s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
+                    .GroupBy(s => infiniteVaccineNames.First(name =>
+                        s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
+                    .Select(g => g.OrderByDescending(s => s.GivenDate ?? s.Date).First())
+                    .ToList();
+
+                var dueInfiniteDoses = dbSchedules
+                    .Where(s => s.IsSkip != true && s.IsDone == false && infiniteVaccineNames.Any(name =>
+                        s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
+                    .GroupBy(s => infiniteVaccineNames.First(name =>
+                        s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
+                    .Select(g => g.OrderBy(s => s.Date).First())
+                    .ToList();
+                
+                var otherInfiniteDoses = lastGivenInfiniteDoses
+                    .Concat(dueInfiniteDoses)
+                    .OrderBy(s => s.Dose.Name)
+                    .ThenBy(s => s.GivenDate ?? s.Date)
+                    .ToList();
+
+                var groupedSchedules = orderedDbSchedules.GroupBy(s =>
+                    GetYearOrMonthFromDaysSchedule(
+                        child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
+                    )
+                );
                 foreach (var group in groupedSchedules)
                 {
                 bool isFirstRow = true;
                 int rowSpanCount = group.Count();
                 foreach (var dbSchedule in group)
-                {
-                    if (dbSchedule.IsSkip != true)
-                    {
+                {            
                         Paragraph p = new Paragraph();
                         count++;
                         Font font = FontFactory.GetFont(FontFactory.HELVETICA, 10);
@@ -851,7 +841,6 @@ namespace VaccineAPI.Controllers
                             brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             brandCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(brandCell);
-
 
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
@@ -923,7 +912,6 @@ namespace VaccineAPI.Controllers
                                                                     : -1));
                                 NormalRange normalrange =
                                     _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
-                                // Console.WriteLine (normalrange);
 
                                 Paragraph pw = new Paragraph("", rangevaluefont);
                                 if (dbSchedule.Weight > 0 && normalrange != null)
@@ -985,14 +973,13 @@ namespace VaccineAPI.Controllers
                                 circleCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(circleCell);
                             }
-                        }
                     }
-                    
-                               
+                }
+                    foreach (var dbSchedule in otherInfiniteDoses)
+                    {
                     if (dbSchedule.Dose.Name.StartsWith("Flu"))
                     {
                         hasFluDone = true;
-                        type = dbSchedule.IsDone;
                         if (dbSchedule.IsDone == true)
                         {
                             if (String.IsNullOrEmpty(flu1GivenDate))
@@ -1014,7 +1001,7 @@ namespace VaccineAPI.Controllers
                                 flustatus1 = "Diseased";
                             }
 
-                            if (dbSchedule.IsDone == true )
+                            if (dbSchedule.IsDone == true)
                             {
                                 flu1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                             }
@@ -1024,79 +1011,12 @@ namespace VaccineAPI.Controllers
                             }
                             flu1Brand = dbSchedule.Brand?.Name.ToString();
                             }
-
-                            else if (String.IsNullOrEmpty(flu2GivenDate))
-                            { 
-                                if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                                {
-                                    flustatus2 = "Given";
-                                }
-                                else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-                                {
-                                    flustatus2 = "Due";
-                                }
-                                else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-                                {
-                                   flustatus2 = "Missed";
-                                }
-                                else
-                                {
-                                    flustatus2 = "Diseased";
-                                }
-                                if (dbSchedule.IsDone == true)
-                                {
-                                    flu2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                                }
-                                else
-                                {
-                                    flu2GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                                }
-                                flu2Brand = dbSchedule.Brand?.Name.ToString();
-                            }
-
-                            else if (String.IsNullOrEmpty(flu3GivenDate))
-                            {
-
-                                flu3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                                flu3Brand = dbSchedule.Brand?.Name.ToString();
-                            }
-                            else
-                            {
-                                flu1GivenDate = flu2GivenDate;
-                                flu1Brand = flu2Brand;
-
-                                flu2GivenDate = flu3GivenDate;
-                                flu2Brand = flu3Brand;
-
-                            }
-
-                        }
-                        else
-                        {
-                            // flustop = true;
-                            if (String.IsNullOrEmpty(flu1GivenDate))
-                            {
-                                flu1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else if (String.IsNullOrEmpty(flu2GivenDate))
-                            {
-                                flu1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else if (String.IsNullOrEmpty(flu3GivenDate))
-                            {
-                                flu2Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else
-                            {
-                                flu3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
                         }
                     }
 
                     if (dbSchedule.Dose.Name.StartsWith("Typhoid"))
                     {
                         hasTyphoidDone = true;
-                        type= dbSchedule.IsDone;
                         if (dbSchedule.IsDone == true)
                         {
                             if (String.IsNullOrEmpty(type1GivenDate))
@@ -1125,82 +1045,14 @@ namespace VaccineAPI.Controllers
                             {
                                 type1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
                             }
-                                // type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                                 type1Brand = dbSchedule.Brand?.Name.ToString();
                             }
-                            else if (String.IsNullOrEmpty(type2GivenDate))
-                            {
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                            {
-                                typestatus2 = "Given";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-                            {
-                                typestatus2 = "Due";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-                            {
-                               typestatus2 = "Missed";
-                            }
-                            else
-                            {
-                                typestatus2 = "Diseased";
-                            }
-                            if (dbSchedule.IsDone == true )
-                            {
-                                type2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                            }
-                            else
-                            {
-                                type2GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                            }
-                                // type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                                // type1Brand = dbSchedule.Brand?.Name.ToString();
-                                // type2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                                type2Brand = dbSchedule.Brand?.Name.ToString();
-                            }
-                            // else if (String.IsNullOrEmpty(type3GivenDate))
-                            // {
-                            //     type3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                            //     type3Brand = dbSchedule.Brand?.Name.ToString();
-                            // }
-                            else
-                            {
-                                type1GivenDate = type2GivenDate;
-                                type1Brand = type2Brand;
-                                type2GivenDate = type3GivenDate;
-                                type2Brand = type3Brand;
-                                // type3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                                // type3Brand = dbSchedule.Brand?.Name.ToString();
-                                // type3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                        }
-                        else
-                        {
-                            if (String.IsNullOrEmpty(type1GivenDate))
-                            {
-                                type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else if (String.IsNullOrEmpty(type2GivenDate))
-                            {
-                                type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else if (String.IsNullOrEmpty(type3GivenDate))
-                            {
-                                type2Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else
-                            {
-                                type3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            // type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
                         }
                     }
 
                     if (dbSchedule.Dose.Name.StartsWith("VITAMIN A (Jr)"))
                     {
                         hasvitDone = true;
-                        type= dbSchedule.IsDone;
                         if (dbSchedule.IsDone == true)
                         {
                             if (String.IsNullOrEmpty(vit1GivenDate))
@@ -1229,11 +1081,83 @@ namespace VaccineAPI.Controllers
                             {
                                 vit1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
                             }
-                                // vit1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                                 vit1Brand = dbSchedule.Brand?.Name.ToString();
                             }
+                        }
+                    }
+                }
+                foreach (var dbSchedule in dueInfiniteDoses)
+                {
+                    if (dbSchedule.Dose.Name.StartsWith("Flu"))
+                    {
+                        hasFluDone = true;
+                            if (String.IsNullOrEmpty(flu2GivenDate))
+                            { 
+                                if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                                {
+                                    flustatus2 = "Given";
+                                }
+                                else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                                {
+                                    flustatus2 = "Due";
+                                }
+                                else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                                {
+                                   flustatus2 = "Missed";
+                                }
+                                else
+                                {
+                                    flustatus2 = "Diseased";
+                                }
+                                if (dbSchedule.IsDone == true)
+                                {
+                                    flu2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                                }
+                                else
+                                {
+                                    flu2GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                                }
+                                flu2Brand = dbSchedule.Brand?.Name.ToString();
+                            }
+                    }
 
-                            else if (String.IsNullOrEmpty(vit2GivenDate))
+                    if (dbSchedule.Dose.Name.StartsWith("Typhoid"))
+                    {
+                        hasTyphoidDone = true;
+                            if (String.IsNullOrEmpty(type2GivenDate))
+                            {
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                typestatus2 = "Given";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                            {
+                                typestatus2 = "Due";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                            {
+                               typestatus2 = "Missed";
+                            }
+                            else
+                            {
+                                typestatus2 = "Diseased";
+                            }
+                            if (dbSchedule.IsDone == true )
+                            {
+                                type2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                            }
+                            else
+                            {
+                                type2GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                            }
+                                type2Brand = dbSchedule.Brand?.Name.ToString();
+                            }
+                    }
+
+                    if (dbSchedule.Dose.Name.StartsWith("VITAMIN A (Jr)"))
+                    {
+                        hasvitDone = true;
+                            if (String.IsNullOrEmpty(vit2GivenDate))
                             {
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
@@ -1259,49 +1183,11 @@ namespace VaccineAPI.Controllers
                             {
                                 vit2GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
                             }
-                                // vit2GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
                                 vit2Brand = dbSchedule.Brand?.Name.ToString();
                             }
-                            // else if (String.IsNullOrEmpty(vit3GivenDate))
-                            // {
-                            //     vit3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                            //     vit3Brand = dbSchedule.Brand?.Name.ToString();
-                            // }
-                            else
-                            {
-                                vit1GivenDate = vit2GivenDate;
-                                vit1Brand = vit2Brand;
-                                vit2GivenDate = vit3GivenDate;
-                                vit2Brand = vit3Brand;
-                                vit3GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                                vit3Brand = dbSchedule.Brand?.Name.ToString();
-                                // type3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                        }
-                        else
-                        {
-                            if (String.IsNullOrEmpty(vit1GivenDate))
-                            {
-                                vit1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else if (String.IsNullOrEmpty(vit2GivenDate))
-                            {
-                                vit1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else if (String.IsNullOrEmpty(vit3GivenDate))
-                            {
-                                vit2Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            else
-                            {
-                                vit3Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                            }
-                            // type1Date = dbSchedule.Date.ToString("dd/MM/yyyy");
-                        }
                     }
                 }
                 }
-
                 document.Add(table);
                 if ( !string.IsNullOrEmpty(type1GivenDate) ||
                      !string.IsNullOrEmpty(type2GivenDate) ||
@@ -1313,16 +1199,6 @@ namespace VaccineAPI.Controllers
                      !string.IsNullOrEmpty(vit2GivenDate) ||
                      !string.IsNullOrEmpty(vit3GivenDate))
                 {
-                // float[] lowerwidths = new float[] { 255f, 255f };
-                // PdfPTable lowertable = new PdfPTable(2);
-                // lowertable.HorizontalAlignment = 0;
-                // lowertable.TotalWidth = 510f;
-                // lowertable.LockedWidth = true;
-                // lowertable.SetWidths(lowerwidths);
-                // lowertable.AddCell(CreateCell("Typhoid (Every 2-3 years)", "bold", 1, "center", "scheduleRecords"));
-                // lowertable.AddCell(CreateCell("Flu (Yearly)", "bold", 1, "center", "scheduleRecords"));
-                // document.Add(lowertable);
-
                 float[] lowerwidths2 = new float[] { 85f,85f, 85f, 85f, 85f, 85f, 85f };
                 PdfPTable lowertable2 = new PdfPTable(7);
                 lowertable2.HorizontalAlignment = 0;
@@ -1331,63 +1207,44 @@ namespace VaccineAPI.Controllers
                 lowertable2.SpacingBefore = 10;
                 lowertable2.SetWidths(lowerwidths2);
 
-                // header
                 lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
-
-                // lowertable2.AddCell (CreateCell ("Signature", "backgroudLightGray", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
 
-                // lowertable2.AddCell (CreateCell ("Signature", "backgroudLightGray", 1, "center", "scheduleRecords"));
-                // boxes
                 lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
                 lowertable2.AddCell(CreateCell(typestatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
-
-                // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(typestatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type2Brand, "", 1, "center", "scheduleRecords"));
 
-                // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
                 lowertable2.AddCell(CreateCell(flustatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1Brand, "", 1, "center", "scheduleRecords"));
-
-                // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flustatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu2Brand, "", 1, "center", "scheduleRecords"));
 
-                // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("VITAMIN A (Jr)", "", 1, "center", "scheduleRecords")); 
                 lowertable2.AddCell(CreateCell(vitstatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));
-
-                // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vitstatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit2Brand, "", 1, "center", "scheduleRecords"));
-
-                // lowertable2.AddCell (CreateCell ("", "", 1, "center", "scheduleRecords"));
                 document.Add(lowertable2);
                 }
-                // special vaccines table end
                 document.Close();
-
                 output.Seek(0, SeekOrigin.Begin);
-
                 return output;
             }
         }
-
 
         [HttpGet("{id}/Download-Schedule-PDF")]
         public IActionResult GenerateVerifySchedule(int id)

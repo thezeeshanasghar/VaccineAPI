@@ -641,7 +641,7 @@ namespace VaccineAPI.Controllers
                 string userPhoneNumber = "+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber;
                 document.Add(upperTable);
                 Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(0, 100, 0));
-                Paragraph title = new Paragraph("Immunization Record", greenFont);
+                Paragraph title = new Paragraph("IMMUNIZATION RECORD", greenFont);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
@@ -1562,7 +1562,7 @@ namespace VaccineAPI.Controllers
                 string userPhoneNumber = "+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber;
                 document.Add(upperTable);
                 Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(0, 100, 0));
-                Paragraph title = new Paragraph("Immunization Record", greenFont);
+                Paragraph title = new Paragraph("IMMUNIZATION RECORD", greenFont);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };

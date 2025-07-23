@@ -96,6 +96,16 @@ namespace VaccineAPI.Controllers
             {
                 return NotFound(new { message = "Personal Assistant not found." });
             }
+            var paAccessEntries = _db.PaAccess.Where(pa => pa.PersonalAssistantId == id).ToList();
+            if (paAccessEntries.Any())
+            {
+            _db.PaAccess.RemoveRange(paAccessEntries);
+            }
+            var user = _db.Users.FirstOrDefault(u => u.Id == personalAssistant.UserId);
+            if (user != null)
+            {
+            _db.Users.Remove(user);
+            }
             _db.PersonalAssistant.Remove(personalAssistant);
             _db.SaveChanges();
             return Ok(new { message = "Personal Assistant deleted successfully." });

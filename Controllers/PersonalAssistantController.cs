@@ -100,7 +100,7 @@ namespace VaccineAPI.Controllers
             if (paAccessEntries.Any())
             {
             _db.PaAccess.RemoveRange(paAccessEntries);
-            }y
+            }
             var user = _db.Users.FirstOrDefault(u => u.Id == personalAssistant.UserId);
             if (user != null)
             {

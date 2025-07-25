@@ -735,10 +735,10 @@ namespace VaccineAPI.Controllers
                 bool type = false;
                 HashSet<string> addedAges = new HashSet<string>();
                 string previousAgeLabel = null;
-                var infiniteVaccineNames = new[] { "Typhoid", "Flu", "VITAMIN A (Jr)" };
+                var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A (Jr)" };
 
                 var firstGivenInfiniteDoses = dbSchedules
-                    .Where(s => s.IsSkip != true && infiniteVaccineNames.Any(name =>
+                    .Where(s => s.IsSkip != true && s.IsDone == true && infiniteVaccineNames.Any(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
                     .GroupBy(s => infiniteVaccineNames.First(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
@@ -793,6 +793,7 @@ namespace VaccineAPI.Controllers
                             ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
                     )
                 );
+                var upperTableDates = new HashSet<string>();
                 foreach (var group in groupedSchedules)
                 {
                 bool isFirstRow = true;
@@ -837,7 +838,6 @@ namespace VaccineAPI.Controllers
                             }
 
                             PdfPCell brandCell = new PdfPCell(new Phrase(brandName, font));
-
                             brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             brandCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(brandCell);
@@ -886,8 +886,10 @@ namespace VaccineAPI.Controllers
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
+                                string dateStr = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                                if (!string.IsNullOrEmpty(dateStr))
+                                    upperTableDates.Add(dateStr);
                             }
-
                             else if (dbSchedule.IsDisease == true)
                             {
                                 PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("yyyy") + " Y", font));
@@ -895,7 +897,6 @@ namespace VaccineAPI.Controllers
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
                             }
-
                             else
                             {
                                 PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font));
@@ -1216,25 +1217,48 @@ namespace VaccineAPI.Controllers
                 lowertable2.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
 
                 lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
+                if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(type1GivenDate)){
                 lowertable2.AddCell(CreateCell(typestatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
+                }
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
                 lowertable2.AddCell(CreateCell(typestatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type2Brand, "", 1, "center", "scheduleRecords"));
 
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
+                if (!string.IsNullOrEmpty(flu1GivenDate) && !upperTableDates.Contains(flu1GivenDate)){
                 lowertable2.AddCell(CreateCell(flustatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1Brand, "", 1, "center", "scheduleRecords"));
+                }
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
                 lowertable2.AddCell(CreateCell(flustatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu2Brand, "", 1, "center", "scheduleRecords"));
 
-                lowertable2.AddCell(CreateCell("VITAMIN A (Jr)", "", 1, "center", "scheduleRecords")); 
+                lowertable2.AddCell(CreateCell("Vitamin A (Jr)", "", 1, "center", "scheduleRecords"));
+                if (!string.IsNullOrEmpty(vit1GivenDate) && !upperTableDates.Contains(vit1GivenDate)){ 
                 lowertable2.AddCell(CreateCell(vitstatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit1GivenDate, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));}
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
                 lowertable2.AddCell(CreateCell(vitstatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit2Brand, "", 1, "center", "scheduleRecords"));

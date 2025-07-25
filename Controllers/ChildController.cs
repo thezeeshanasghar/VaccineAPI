@@ -738,7 +738,7 @@ namespace VaccineAPI.Controllers
                 var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A (Jr)" };
 
                 var firstGivenInfiniteDoses = dbSchedules
-                    .Where(s => s.IsSkip != true && s.IsDone == true && infiniteVaccineNames.Any(name =>
+                    .Where(s => s.IsSkip != true && infiniteVaccineNames.Any(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
                     .GroupBy(s => infiniteVaccineNames.First(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))

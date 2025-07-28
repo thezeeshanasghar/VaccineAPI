@@ -35,6 +35,7 @@ namespace VaccineAPI.Models
         public DbSet<PersonalAssistant> PersonalAssistant { get; set; }
         public DbSet<PaAccess> PaAccess { get; set; }
         public DbSet<Fee> Fee { get; set; }
+        public DbSet<VbTable> VbTables { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

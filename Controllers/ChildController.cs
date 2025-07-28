@@ -867,7 +867,7 @@ namespace VaccineAPI.Controllers
                             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
                                         checkForMissed(dbSchedule.Date))
                             {
-                                PdfPCell statusCell = new PdfPCell(new Phrase(" Missed", italicfont1));
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Missed", italicfont1));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(statusCell);
@@ -894,6 +894,9 @@ namespace VaccineAPI.Controllers
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
+                                 string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                                if (!string.IsNullOrEmpty(dateStr))
+                                    upperTableDates.Add(dateStr);
                             }
 
                             else
@@ -902,6 +905,9 @@ namespace VaccineAPI.Controllers
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
+                                 string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                                if (!string.IsNullOrEmpty(dateStr))
+                                    upperTableDates.Add(dateStr);
                             }
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
@@ -1219,25 +1225,69 @@ namespace VaccineAPI.Controllers
                 lowertable2.AddCell(CreateCell(typestatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
+                }
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
+                if (hasTyphoidDone && !string.IsNullOrEmpty(type2GivenDate) && !upperTableDates.Contains(type2GivenDate)){
                 lowertable2.AddCell(CreateCell(typestatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type2Brand, "", 1, "center", "scheduleRecords"));
-
+                }
+                else
+                {       
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
                 lowertable2.AddCell(CreateCell(flustatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1Brand, "", 1, "center", "scheduleRecords"));
+                }
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
+                if (hasFluDone && !string.IsNullOrEmpty(flu2GivenDate) && !upperTableDates.Contains(flu2GivenDate)){
                 lowertable2.AddCell(CreateCell(flustatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu2Brand, "", 1, "center", "scheduleRecords"));
-
-                lowertable2.AddCell(CreateCell("VITAMIN A (Jr)", "", 1, "center", "scheduleRecords")); 
+                }
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
+                lowertable2.AddCell(CreateCell("Vitamin A (Jr)", "", 1, "center", "scheduleRecords"));
+                if (!string.IsNullOrEmpty(vit1GivenDate) && !upperTableDates.Contains(vit1GivenDate)){ 
                 lowertable2.AddCell(CreateCell(vitstatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));
+                }
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
+                if (!string.IsNullOrEmpty(vit2GivenDate) && !upperTableDates.Contains(vit2GivenDate)){ 
                 lowertable2.AddCell(CreateCell(vitstatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit2GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit2Brand, "", 1, "center", "scheduleRecords"));
+                }
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
                 document.Add(lowertable2);
                 }
                 document.Close();
@@ -1620,7 +1670,9 @@ namespace VaccineAPI.Controllers
                         Font rangevaluefont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
                         Font rangefont = FontFactory.GetFont(FontFactory.HELVETICA, 6);
                         Font boldfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD);
+                        Font boldfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD, new BaseColor(0, 128, 0));
                         Font italicfont = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC);
+                        Font italicfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC, new BaseColor(255, 0, 0));
                         {
                             PdfPCell ageCell = new PdfPCell(new Phrase(count.ToString(), font));
                             ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
@@ -1633,7 +1685,7 @@ namespace VaccineAPI.Controllers
                             table.AddCell(dosenameCell);
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
-                                PdfPCell statusCell = new PdfPCell(new Phrase("Given", boldfont));
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Given", boldfont1));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(statusCell);
@@ -1656,7 +1708,7 @@ namespace VaccineAPI.Controllers
                             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
                                         checkForMissed(dbSchedule.Date))
                             {
-                                PdfPCell statusCell = new PdfPCell(new Phrase(" Missed", italicfont));
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Missed", italicfont1));
                                 statusCell.HorizontalAlignment = Element.ALIGN_RIGHT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(statusCell);

@@ -1,6 +1,6 @@
 namespace VaccineAPI.Models
 {
-public class VbTable
+public class VaccineBrand
 {
     public long Id { get; set; }
     public long BrandId { get; set; }

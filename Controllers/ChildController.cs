@@ -71,6 +71,25 @@ namespace VaccineAPI.Controllers
             }
         }
 
+       [HttpGet("invoice-id")]
+       public ActionResult<string> GetInvoiceId(long doseId, long childId)
+       {
+           var invoice = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == childId);
+           if (invoice != null)
+           {
+               var invoiceDto = new InvoiceDTO
+               {
+                   InvoiceId = invoice.InvoiceId,
+               };
+               return Ok(new Response<InvoiceDTO>(true, $"Invoice found against given Child Id & Dose Id: {doseId} & {childId}", invoiceDto));
+           }
+           else
+           {
+               return NotFound(new Response<InvoiceDTO>(false, "Invoice not found for the given DoseId and ChildId.", null));
+           }
+       }
+       
+
         [HttpGet("/forgetemail/{email}")]
         public ActionResult ForgetChildDetailsByEmail(string email)
         {

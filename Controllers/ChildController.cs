@@ -80,6 +80,7 @@ namespace VaccineAPI.Controllers
                var invoiceDto = new InvoiceDTO
                {
                    InvoiceId = invoice.InvoiceId,
+                   Amount = invoice.Amount,
                };
                return Ok(new Response<InvoiceDTO>(true, $"Invoice found against given Child Id & Dose Id: {doseId} & {childId}", invoiceDto));
            }
@@ -89,6 +90,24 @@ namespace VaccineAPI.Controllers
            }
        }
        
+       [HttpGet("consultation-fee/{invoiceId}")]
+public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
+{
+    var fee = _db.Fee.FirstOrDefault(f => f.InvoiceId == invoiceId);
+    if (fee != null)
+    {
+         var FeeDto = new FeeDTO
+               {
+                   InvoiceId = fee.InvoiceId,
+                   Amount = fee.Amount,
+               };
+        return Ok(new Response<FeeDTO>(true, $"Fee found for invoice id: {invoiceId}", FeeDto));
+    }
+    else
+    {
+        return NotFound("Consultation fee not found for the given invoice id.");
+    }
+}
 
         [HttpGet("/forgetemail/{email}")]
         public ActionResult ForgetChildDetailsByEmail(string email)

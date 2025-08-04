@@ -307,6 +307,29 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [HttpPatch("after-injection")]
+        public Response<ScheduleDTO> AfterInjection(ScheduleDTO scheduleDTO)
+        {
+            var dbSchedule = _db.Schedules
+                .Include(x => x.Dose)
+                .Include(x => x.Child)
+                .Where(x => x.Id == scheduleDTO.Id)
+                .FirstOrDefault();
+
+            if (dbSchedule == null)
+            {
+                return new Response<ScheduleDTO>(false, "Schedule not found", null);
+            }
+
+            dbSchedule.Weight = scheduleDTO.Weight;
+            dbSchedule.Height = scheduleDTO.Height;
+            dbSchedule.Circle = scheduleDTO.Circle;
+
+            _db.SaveChanges();
+
+            return new Response<ScheduleDTO>(true, "Schedule updated successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
+        }
+
         private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Schedule dbSchedule)
         {
             var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);

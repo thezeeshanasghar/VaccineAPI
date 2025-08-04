@@ -1253,10 +1253,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 lowertable2.SetWidths(lowerwidths2);
                 lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Last Dose", "LightGreen", 3, "center", "scheduleRecords"));
-                // lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
-                // lowertable2.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Next Dose", "LightGreen", 2, "center", "scheduleRecords"));
-                // lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
 
                 lowertable2.AddCell(CreateCell("Vaccine", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
@@ -1264,7 +1261,6 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 lowertable2.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
-                // lowertable2.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
 
                 lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
                 if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(type1GivenDate)){
@@ -1279,16 +1275,14 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
 
-                if (hasTyphoidDone && !string.IsNullOrEmpty(type2GivenDate) && !upperTableDates.Contains(type2GivenDate)){
+                if (hasTyphoidDone && !string.IsNullOrEmpty(type2GivenDate)){
                 lowertable2.AddCell(CreateCell(typestatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type2GivenDate, "", 1, "center", "scheduleRecords"));
-                // lowertable2.AddCell(CreateCell(type2Brand, "", 1, "center", "scheduleRecords"));
                 }
                 else
                 {       
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    // lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
                 if (!string.IsNullOrEmpty(flu1GivenDate) && !upperTableDates.Contains(flu1GivenDate)){
@@ -1303,16 +1297,14 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
                 
-                if (hasFluDone && !string.IsNullOrEmpty(flu2GivenDate) && !upperTableDates.Contains(flu2GivenDate)){
+                if (hasFluDone && !string.IsNullOrEmpty(flu2GivenDate)){
                 lowertable2.AddCell(CreateCell(flustatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu2GivenDate, "", 1, "center", "scheduleRecords"));
-                // lowertable2.AddCell(CreateCell(flu2Brand, "", 1, "center", "scheduleRecords"));
                 }
                 else
                 {
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    // lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
 
                 lowertable2.AddCell(CreateCell("Vitamin A (Jr)", "", 1, "center", "scheduleRecords"));
@@ -1328,16 +1320,14 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
 
-                if (!string.IsNullOrEmpty(vit2GivenDate) && !upperTableDates.Contains(vit2GivenDate)){ 
+                if (!string.IsNullOrEmpty(vit2GivenDate)){ 
                 lowertable2.AddCell(CreateCell(vitstatus2, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit2GivenDate, "", 1, "center", "scheduleRecords"));
-                // lowertable2.AddCell(CreateCell(vit2Brand, "", 1, "center", "scheduleRecords"));
                 }
                 else
                 {
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    // lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
                 document.Add(lowertable2);
                 }

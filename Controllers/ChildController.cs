@@ -1700,9 +1700,9 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 table.AddCell(CreateCell("OFC/BMI", "LightGreen", 1, "center", "scheduleRecords"));
                 foreach (var dbSchedule in dbSchedules)
                 {
-                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") &&
-                        !dbSchedule.Dose.Name.StartsWith("Typhoid"))
-                    {
+                    // if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") &&
+                    //     !dbSchedule.Dose.Name.StartsWith("Typhoid"))
+                    // {
                         int doseCount = 0;
                         Paragraph p = new Paragraph();
                         count++;
@@ -1859,7 +1859,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                                 table.AddCell(circleCell);
                             }
                         }
-                    }
+                    // }
                 }
                 document.Add(table);
                 document.Close();

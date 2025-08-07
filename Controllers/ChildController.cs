@@ -787,16 +787,13 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                     .Where(s =>
                     {
                         if (s.IsSkip == true)
-                            return false;
-                
+                            return false;              
                         bool isInfinite = infiniteVaccineNames.Any(name =>
                             s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
-                
                         if (isInfinite)
                         {
                             return firstGivenInfiniteDoses.Any(x => x.Id == s.Id);
                         }
-
                         return true;
                     })
                     .OrderBy(s => child1?.Clinic?.Doctor?.DoctorSchedules
@@ -831,6 +828,19 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                             ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
                     )
                 );
+                
+                string GetStatus(Schedule dbSchedule)
+                {
+                    if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                        return "Given";
+                    else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                        return "Due";
+                    else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                        return "Missed";
+                    else
+                        return "Diseased";
+                }
+
                 var upperTableDates = new HashSet<string>();
                 foreach (var group in groupedSchedules)
                 {
@@ -924,7 +934,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
-                                string dateStr = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                                string dateStr = dbSchedule.GivenDate?.Date.ToString("yyyy");
                                 if (!string.IsNullOrEmpty(dateStr))
                                     upperTableDates.Add(dateStr);
                             }
@@ -1020,15 +1030,52 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                             }
                     }
                 }
-                    foreach (var dbSchedule in otherInfiniteDoses)
+
+                foreach (var dbSchedule in otherInfiniteDoses)
+                {
+                    if (dbSchedule.Dose.Name.StartsWith("Typhoid"))
                     {
+                        hasTyphoidDone = true;
+                        if (dbSchedule.IsDone == true)
+                        {
+                            // if (String.IsNullOrEmpty(type1GivenDate))
+                            // {
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            {
+                                typestatus1 = "Given";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                            {
+                                typestatus1 = "Due";
+                            }
+                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                            {
+                               typestatus1 = "Missed";
+                            }
+                            else
+                            {
+                                typestatus1 = "Diseased";
+                            }
+                            if (dbSchedule.IsDone == true )
+                            {
+                                type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                            }
+                            else
+                            {
+                                type1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                            }
+                                type1Brand = dbSchedule.Brand?.Name.ToString()?? "OHF";
+                            }
+                        // }
+                    }
+
                     if (dbSchedule.Dose.Name.StartsWith("Flu"))
                     {
                         hasFluDone = true;
                         if (dbSchedule.IsDone == true)
                         {
-                            if (String.IsNullOrEmpty(flu1GivenDate))
-                            {
+                            // if (String.IsNullOrEmpty(flu1GivenDate))
+                            // {
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
                                 flustatus1 = "Given";
@@ -1054,44 +1101,8 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                             {
                                 flu1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
                             }
-                            flu1Brand = dbSchedule.Brand?.Name.ToString();
-                            }
-                        }
-                    }
-
-                    if (dbSchedule.Dose.Name.StartsWith("Typhoid"))
-                    {
-                        hasTyphoidDone = true;
-                        if (dbSchedule.IsDone == true)
-                        {
-                            if (String.IsNullOrEmpty(type1GivenDate))
-                            {
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                            {
-                                typestatus1 = "Given";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-                            {
-                                typestatus1 = "Due";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-                            {
-                               typestatus1 = "Missed";
-                            }
-                            else
-                            {
-                                typestatus1 = "Diseased";
-                            }
-                            if (dbSchedule.IsDone == true )
-                            {
-                                type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                            }
-                            else
-                            {
-                                type1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                            }
-                                type1Brand = dbSchedule.Brand?.Name.ToString();
-                            }
+                            flu1Brand = dbSchedule.Brand?.Name.ToString()?? "OHF";
+                            // }
                         }
                     }
 
@@ -1100,9 +1111,9 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                         hasvitDone = true;
                         if (dbSchedule.IsDone == true)
                         {
-                            if (String.IsNullOrEmpty(vit1GivenDate))
-                            {
-                                                        if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                            // if (String.IsNullOrEmpty(vit1GivenDate))
+                            // {
+                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
                                 vitstatus1 = "Given";
                             }
@@ -1126,11 +1137,12 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                             {
                                 vit1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
                             }
-                                vit1Brand = dbSchedule.Brand?.Name.ToString();
-                            }
+                                vit1Brand = dbSchedule.Brand?.Name.ToString()??"OHF";
+                            // }
                         }
                     }
                 }
+
                 foreach (var dbSchedule in dueInfiniteDoses)
                 {
                     if (dbSchedule.Dose.Name.StartsWith("Flu"))
@@ -1234,16 +1246,16 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 }
                 }
                 document.Add(table);
-                if ( !string.IsNullOrEmpty(type1GivenDate) ||
-                     !string.IsNullOrEmpty(type2GivenDate) ||
-                     !string.IsNullOrEmpty(type3GivenDate) ||
-                     !string.IsNullOrEmpty(flu1GivenDate) ||
-                     !string.IsNullOrEmpty(flu2GivenDate) ||
-                     !string.IsNullOrEmpty(flu3GivenDate)||
-                     !string.IsNullOrEmpty(vit1GivenDate) ||
-                     !string.IsNullOrEmpty(vit2GivenDate) ||
-                     !string.IsNullOrEmpty(vit3GivenDate))
-                {
+                // if ( !string.IsNullOrEmpty(type1GivenDate) ||
+                //      !string.IsNullOrEmpty(type2GivenDate) ||
+                //      !string.IsNullOrEmpty(type3GivenDate) ||
+                //      !string.IsNullOrEmpty(flu1GivenDate) ||
+                //      !string.IsNullOrEmpty(flu2GivenDate) ||
+                //      !string.IsNullOrEmpty(flu3GivenDate)||
+                //      !string.IsNullOrEmpty(vit1GivenDate) ||
+                //      !string.IsNullOrEmpty(vit2GivenDate) ||
+                //      !string.IsNullOrEmpty(vit3GivenDate))
+                // {
                 float[] lowerwidths2 = new float[] { 85f,85f, 85f, 85f, 85f, 85f };
                 PdfPTable lowertable2 = new PdfPTable(6);
                 lowertable2.HorizontalAlignment = 0;
@@ -1262,30 +1274,8 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 lowertable2.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
 
-                lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
-                if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(type1GivenDate)){
-                lowertable2.AddCell(CreateCell(typestatus1, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
-                }
-                else
-                {
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                }
-
-                if (hasTyphoidDone && !string.IsNullOrEmpty(type2GivenDate)){
-                lowertable2.AddCell(CreateCell(typestatus2, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell(type2GivenDate, "", 1, "center", "scheduleRecords"));
-                }
-                else
-                {       
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                }
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
-                if (!string.IsNullOrEmpty(flu1GivenDate) && !upperTableDates.Contains(flu1GivenDate)){
+                if (!string.IsNullOrEmpty(flu1GivenDate) && !upperTableDates.Contains(DateTime.ParseExact(flu1GivenDate, "dd/MM/yyyy", null).Year.ToString())){
                 lowertable2.AddCell(CreateCell(flustatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1Brand, "", 1, "center", "scheduleRecords"));
@@ -1303,6 +1293,29 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 }
                 else
                 {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
+
+                lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
+               if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(DateTime.ParseExact(type1GivenDate, "dd/MM/yyyy", null).Year.ToString())){
+                lowertable2.AddCell(CreateCell(typestatus1, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
+                }
+                else
+                {
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                }
+
+                if (hasTyphoidDone && !string.IsNullOrEmpty(type2GivenDate)){
+                lowertable2.AddCell(CreateCell(typestatus2, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(CreateCell(type2GivenDate, "", 1, "center", "scheduleRecords"));
+                }
+                else
+                {       
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
@@ -1330,7 +1343,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
                 document.Add(lowertable2);
-                }
+                // }
                 document.Close();
                 output.Seek(0, SeekOrigin.Begin);
                 return output;

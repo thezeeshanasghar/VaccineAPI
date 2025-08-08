@@ -236,9 +236,9 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                    .AsNoTracking()
                    .Include(c => c.User)
                    .Include(c => c.Schedules)
-                       .ThenInclude(s => s.Dose)   // if Dose is a navigation property
+                       .ThenInclude(s => s.Dose)  
                    .Include(c => c.Schedules)
-                       .ThenInclude(s => s.Brand)  // if Brand is a navigation property
+                       .ThenInclude(s => s.Brand)
                    .FirstOrDefaultAsync(c => c.Id == id);
        
            if (child == null)
@@ -246,13 +246,12 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
            }
            var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(child.Schedules.OrderBy(x => x.Date).ToList());
-
            return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
-       }
-       catch (Exception ex)
-       {
+           }
+           catch (Exception ex)
+           {
            return new Response<IEnumerable<ScheduleDTO>>( false, $"An error occurred: {ex.Message}", null);
-       }
+           }
        }
 
         [HttpGet("{id}/downloadcsv")]

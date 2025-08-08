@@ -321,6 +321,9 @@ namespace VaccineAPI.Controllers
                 return new Response<ScheduleDTO>(false, "Schedule not found", null);
             }
 
+            dbSchedule.Lot = scheduleDTO.Lot;
+            dbSchedule.Expiry = scheduleDTO.Expiry;
+            dbSchedule.Manufacturer = scheduleDTO.Manufacturer;
             dbSchedule.Weight = scheduleDTO.Weight;
             dbSchedule.Height = scheduleDTO.Height;
             dbSchedule.Circle = scheduleDTO.Circle;

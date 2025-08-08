@@ -227,43 +227,32 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
             return new Response<ChildDTO>(true, null, childDTO);
         }
 
-        [HttpGet("{id}/schedule")]
-        public Response<IEnumerable<ScheduleDTO>> GetChildSchedule(int id)
-        {
-            try
-            {
-                var child = _db
-                    .Childs.AsNoTracking().Include(x => x.Schedules).Include(x => x.User).FirstOrDefault(c => c.Id == id);
-
-                if (child == null)
-                {
-                    return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
-                }
-
-                var dbSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
-
-                foreach (var dbSchedule in dbSchedules)
-                {
-                    dbSchedule.Dose = _db.Schedules.Include(x => x.Dose)
-                        .AsNoTracking().FirstOrDefault(x => x.Id == dbSchedule.Id)?.Dose;
-
-                    dbSchedule.Brand = _db.Brands.AsNoTracking().FirstOrDefault(x => x.Id == dbSchedule.BrandId);
-                }
-
-                var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(dbSchedules);
-
-                return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in GetChildSchedule: {ex.Message}");
-                return new Response<IEnumerable<ScheduleDTO>>(
-                    false,
-                    $"An error occurred: {ex.Message}",
-                    null
-                );
-            }
-        }
+       [HttpGet("{id}/schedule")]
+       public async Task<Response<IEnumerable<ScheduleDTO>>> GetChildSchedule(int id)
+       {
+           try
+           {
+               var child = await _db.Childs
+                   .AsNoTracking()
+                   .Include(c => c.User)
+                   .Include(c => c.Schedules)
+                       .ThenInclude(s => s.Dose)  
+                   .Include(c => c.Schedules)
+                       .ThenInclude(s => s.Brand)
+                   .FirstOrDefaultAsync(c => c.Id == id);
+       
+           if (child == null)
+           {
+               return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
+           }
+           var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(child.Schedules.OrderBy(x => x.Date).ToList());
+           return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
+           }
+           catch (Exception ex)
+           {
+           return new Response<IEnumerable<ScheduleDTO>>( false, $"An error occurred: {ex.Message}", null);
+           }
+       }
 
         [HttpGet("{id}/downloadcsv")]
         public IActionResult MyExportAction(int id)
@@ -1713,9 +1702,9 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 table.AddCell(CreateCell("OFC/BMI", "LightGreen", 1, "center", "scheduleRecords"));
                 foreach (var dbSchedule in dbSchedules)
                 {
-                    if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") &&
-                        !dbSchedule.Dose.Name.StartsWith("Typhoid"))
-                    {
+                    // if (dbSchedule.IsSkip != true && !dbSchedule.Dose.Name.StartsWith("Flu") &&
+                    //     !dbSchedule.Dose.Name.StartsWith("Typhoid"))
+                    // {
                         int doseCount = 0;
                         Paragraph p = new Paragraph();
                         count++;
@@ -1872,7 +1861,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                                 table.AddCell(circleCell);
                             }
                         }
-                    }
+                    // }
                 }
                 document.Add(table);
                 document.Close();

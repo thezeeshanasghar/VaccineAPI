@@ -1538,6 +1538,7 @@ namespace VaccineAPI.Controllers
             var child = _db.Childs
                 .Include(c => c.Clinic)
                 .ThenInclude(clinic => clinic.Doctor) // Include the doctor associated with the clinic
+                .Include(c => c.User) // Include the user associated with the child
                 .FirstOrDefault(c => c.Id == childId);
 
             if (child == null)
@@ -1564,6 +1565,8 @@ namespace VaccineAPI.Controllers
                 {
                     Id = s.Dose.Id,
                     Name = s.Dose.Name,
+                    CountryCode = s.Child.User.CountryCode ?? "+92",    // Use child's user info
+                    PhoneNumber = s.Child.User.MobileNumber ?? "Unknown",
                     Vaccine = _mapper.Map<VaccineDTO>(s.Dose.Vaccine),
                     Clinic = new ClinicDTO // Include clinic details in the response
                     {

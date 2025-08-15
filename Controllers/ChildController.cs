@@ -666,6 +666,8 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 string clinicAddress = child.Clinic.Address;
                 string clinicPhoneNumber = child.Clinic.PhoneNumber;
                 string userPhoneNumber = "+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber;
+                string userEmail = child.Email;
+                string cnic= child.CNIC;
                 document.Add(upperTable);
                 Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(0, 100, 0));
                 Paragraph title = new Paragraph("IMMUNIZATION RECORD", greenFont);
@@ -685,6 +687,16 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 patientTable.AddCell(CreateCell1(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell1("Phone No:", cellFontBold, new BaseColor(159, 226, 191)));
                 patientTable.AddCell(CreateCell1(userPhoneNumber, cellFontNormal, BaseColor.White));
+                if(userEmail != null&& userEmail != "")
+                {
+                patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
+                patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));}
+                else{}
+                if(cnic!=null&&cnic != "")
+                {
+                patientTable.AddCell(CreateCell1("CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
+                patientTable.AddCell(CreateCell1(cnic, cellFontNormal, BaseColor.White));}
+                else{}
 
                 document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
                 document.Add(patientTable);
@@ -794,7 +806,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
                     .GroupBy(s => infiniteVaccineNames.First(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
-                    .Select(g => g.OrderByDescending(s => s.GivenDate ?? s.Date).First())
+                    .Select(g => g.OrderByDescending(s => s.Date.Date).First())
                     .ToList();
 
                 var dueInfiniteDoses = dbSchedules
@@ -811,12 +823,44 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                     .ThenBy(s => s.GivenDate ?? s.Date)
                     .ToList();
 
+                    // For Typhoid
+var lastTyphoid = lastGivenInfiniteDoses
+    .FirstOrDefault(s => s.Dose.Name.StartsWith("Typhoid", StringComparison.OrdinalIgnoreCase));
+if (lastTyphoid != null)
+{
+    typestatus1 = GetStatus(lastTyphoid);
+    type1GivenDate = lastTyphoid.Date.Date.ToString("dd/MM/yyyy");
+    type1Brand = lastTyphoid.Brand?.Name ?? "OHF";
+}
+
+// For Flu
+var lastFlu = lastGivenInfiniteDoses
+    .FirstOrDefault(s => s.Dose.Name.StartsWith("Flu", StringComparison.OrdinalIgnoreCase));
+if (lastFlu != null)
+{
+    flustatus1 = GetStatus(lastFlu);
+    flu1GivenDate = lastFlu.Date.Date.ToString("dd/MM/yyyy");
+    flu1Brand = lastFlu.Brand?.Name ?? "OHF";
+}
+
+// For Vitamin A
+var lastVitA = lastGivenInfiniteDoses
+    .FirstOrDefault(s => s.Dose.Name.StartsWith("VITAMIN A (Jr)", StringComparison.OrdinalIgnoreCase));
+if (lastVitA != null)
+{
+    vitstatus1 = GetStatus(lastVitA);
+    vit1GivenDate = lastVitA.Date.Date.ToString("dd/MM/yyyy");
+    vit1Brand = lastVitA.Brand?.Name ?? "OHF";
+}
+
+
                 var groupedSchedules = orderedDbSchedules.GroupBy(s =>
                     GetYearOrMonthFromDaysSchedule(
                         child1?.Clinic?.Doctor?.DoctorSchedules
                             ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
                     )
                 );
+                 Console.WriteLine($"Dose Name: {groupedSchedules.Select(g => g.Key).FirstOrDefault()}");
                 
                 string GetStatus(Schedule dbSchedule)
                 {
@@ -919,11 +963,11 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
 
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy"), font));
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font));
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
-                                string dateStr = dbSchedule.GivenDate?.Date.ToString("yyyy");
+                                string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
                                 if (!string.IsNullOrEmpty(dateStr))
                                     upperTableDates.Add(dateStr);
                             }
@@ -1020,117 +1064,117 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                     }
                 }
 
-                foreach (var dbSchedule in otherInfiniteDoses)
-                {
-                    if (dbSchedule.Dose.Name.StartsWith("Typhoid"))
-                    {
-                        hasTyphoidDone = true;
-                        if (dbSchedule.IsDone == true)
-                        {
-                            // if (String.IsNullOrEmpty(type1GivenDate))
-                            // {
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                            {
-                                typestatus1 = "Given";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-                            {
-                                typestatus1 = "Due";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-                            {
-                               typestatus1 = "Missed";
-                            }
-                            else
-                            {
-                                typestatus1 = "Diseased";
-                            }
-                            if (dbSchedule.IsDone == true )
-                            {
-                                type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                            }
-                            else
-                            {
-                                type1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                            }
-                                type1Brand = dbSchedule.Brand?.Name.ToString()?? "OHF";
-                            }
-                        // }
-                    }
+                // foreach (var dbSchedule in otherInfiniteDoses)
+                // {
+                //     if (dbSchedule.Dose.Name.StartsWith("Typhoid"))
+                //     {
+                //         hasTyphoidDone = true;
+                //         if (dbSchedule.IsDone == true)
+                //         {
+                //             // if (String.IsNullOrEmpty(type1GivenDate))
+                //             // {
+                //             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                //             {
+                //                 typestatus1 = "Given";
+                //             }
+                //             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                //             {
+                //                 typestatus1 = "Due";
+                //             }
+                //             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                //             {
+                //                typestatus1 = "Missed";
+                //             }
+                //             else
+                //             {
+                //                 typestatus1 = "Diseased";
+                //             }
+                //             if (dbSchedule.IsDone == true )
+                //             {
+                //                 type1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                //             }
+                //             else
+                //             {
+                //                 type1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                //             }
+                //                 type1Brand = dbSchedule.Brand?.Name.ToString()?? "OHF";
+                //             }
+                //         // }
+                //     }
 
-                    if (dbSchedule.Dose.Name.StartsWith("Flu"))
-                    {
-                        hasFluDone = true;
-                        if (dbSchedule.IsDone == true)
-                        {
-                            // if (String.IsNullOrEmpty(flu1GivenDate))
-                            // {
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                            {
-                                flustatus1 = "Given";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-                            {
-                                flustatus1 = "Due";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-                            {
-                               flustatus1 = "Missed";
-                            }
-                            else
-                            {
-                                flustatus1 = "Diseased";
-                            }
+                //     if (dbSchedule.Dose.Name.StartsWith("Flu"))
+                //     {
+                //         hasFluDone = true;
+                //         if (dbSchedule.IsDone == true)
+                //         {
+                //             // if (String.IsNullOrEmpty(flu1GivenDate))
+                //             // {
+                //             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                //             {
+                //                 flustatus1 = "Given";
+                //             }
+                //             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                //             {
+                //                 flustatus1 = "Due";
+                //             }
+                //             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                //             {
+                //                flustatus1 = "Missed";
+                //             }
+                //             else
+                //             {
+                //                 flustatus1 = "Diseased";
+                //             }
 
-                            if (dbSchedule.IsDone == true)
-                            {
-                                flu1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                            }
-                            else
-                            {
-                                flu1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                            }
-                            flu1Brand = dbSchedule.Brand?.Name.ToString()?? "OHF";
-                            // }
-                        }
-                    }
+                //             if (dbSchedule.IsDone == true)
+                //             {
+                //                 flu1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                //             }
+                //             else
+                //             {
+                //                 flu1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                //             }
+                //             flu1Brand = dbSchedule.Brand?.Name.ToString()?? "OHF";
+                //             // }
+                //         }
+                //     }
 
-                    if (dbSchedule.Dose.Name.StartsWith("VITAMIN A (Jr)"))
-                    {
-                        hasvitDone = true;
-                        if (dbSchedule.IsDone == true)
-                        {
-                            // if (String.IsNullOrEmpty(vit1GivenDate))
-                            // {
-                            if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                            {
-                                vitstatus1 = "Given";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-                            {
-                                vitstatus1 = "Due";
-                            }
-                            else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-                            {
-                               vitstatus1 = "Missed";
-                            }
-                            else
-                            {
-                                vitstatus1 = "Diseased";
-                            }
-                            if (dbSchedule.IsDone == true )
-                            {
-                                vit1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
-                            }
-                            else
-                            {
-                                vit1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                            }
-                                vit1Brand = dbSchedule.Brand?.Name.ToString()??"OHF";
-                            // }
-                        }
-                    }
-                }
+                //     if (dbSchedule.Dose.Name.StartsWith("VITAMIN A (Jr)"))
+                //     {
+                //         hasvitDone = true;
+                //         if (dbSchedule.IsDone == true)
+                //         {
+                //             // if (String.IsNullOrEmpty(vit1GivenDate))
+                //             // {
+                //             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                //             {
+                //                 vitstatus1 = "Given";
+                //             }
+                //             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                //             {
+                //                 vitstatus1 = "Due";
+                //             }
+                //             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                //             {
+                //                vitstatus1 = "Missed";
+                //             }
+                //             else
+                //             {
+                //                 vitstatus1 = "Diseased";
+                //             }
+                //             if (dbSchedule.IsDone == true )
+                //             {
+                //                 vit1GivenDate = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy");
+                //             }
+                //             else
+                //             {
+                //                 vit1GivenDate = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                //             }
+                //                 vit1Brand = dbSchedule.Brand?.Name.ToString()??"OHF";
+                //             // }
+                //         }
+                //     }
+                // }
 
                 foreach (var dbSchedule in dueInfiniteDoses)
                 {
@@ -1264,7 +1308,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
 
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
-                if (!string.IsNullOrEmpty(flu1GivenDate) && !upperTableDates.Contains(DateTime.ParseExact(flu1GivenDate, "dd/MM/yyyy", null).Year.ToString())){
+                if (!string.IsNullOrEmpty(flu1GivenDate) && !upperTableDates.Contains(flu1GivenDate)){
                 lowertable2.AddCell(CreateCell(flustatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1Brand, "", 1, "center", "scheduleRecords"));
@@ -1287,7 +1331,8 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 }
 
                 lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
-               if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(DateTime.ParseExact(type1GivenDate, "dd/MM/yyyy", null).Year.ToString())){
+               
+                if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(type1GivenDate)){
                 lowertable2.AddCell(CreateCell(typestatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
@@ -3942,7 +3987,7 @@ int rowCount = 0;
                     {
                         var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
                         pdfQrCode.ScaleAbsolute(75f, 75f);
-                        float qrCodeXPosition = (document.PageSize.Width - pdfQrCode.ScaledWidth) / 2;
+                        float qrCodeXPosition = ((document.PageSize.Width - pdfQrCode.ScaledWidth) / 2)-65f;
                         float qrCodeYPosition = document.PageSize.Height - pdfQrCode.ScaledHeight - 60f;
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
@@ -4050,7 +4095,7 @@ int rowCount = 0;
         cb,
         Element.ALIGN_CENTER,
         new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
-        document.PageSize.Width / 2, footerY - -305f, 0
+        (document.PageSize.Width / 2) - 65, footerY - -305f, 0
     );
 
     // Add footer text

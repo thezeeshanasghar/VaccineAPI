@@ -14,6 +14,8 @@ namespace VaccineAPI.ModelDTO
         public int? MinGap { get; set; }
         public int? DoseOrder { get; set; }
         public long VaccineId { get; set; }
+        public string CountryCode { get; set; }
+        public string PhoneNumber { get; set; }
         public ClinicDTO Clinic { get; set; }
         public VaccineDTO Vaccine { get; set; }
     }

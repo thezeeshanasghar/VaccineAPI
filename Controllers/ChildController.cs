@@ -1264,7 +1264,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
 
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
-                if (!string.IsNullOrEmpty(flu1GivenDate) && !upperTableDates.Contains(DateTime.ParseExact(flu1GivenDate, "dd/MM/yyyy", null).Year.ToString())){
+                if (!string.IsNullOrEmpty(flu1GivenDate) ){
                 lowertable2.AddCell(CreateCell(flustatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1Brand, "", 1, "center", "scheduleRecords"));
@@ -1287,7 +1287,8 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 }
 
                 lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
-               if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(DateTime.ParseExact(type1GivenDate, "dd/MM/yyyy", null).Year.ToString())){
+               
+                if (!string.IsNullOrEmpty(type1GivenDate)){
                 lowertable2.AddCell(CreateCell(typestatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
@@ -1310,7 +1311,7 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
                 }
 
                 lowertable2.AddCell(CreateCell("Vitamin A (Jr)", "", 1, "center", "scheduleRecords"));
-                if (!string.IsNullOrEmpty(vit1GivenDate) && !upperTableDates.Contains(vit1GivenDate)){ 
+                if (!string.IsNullOrEmpty(vit1GivenDate)) { 
                 lowertable2.AddCell(CreateCell(vitstatus1, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));

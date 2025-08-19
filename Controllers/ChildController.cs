@@ -963,11 +963,11 @@ if (lastVitA != null)
 
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font));
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.GivenDate?.ToString("dd/MM/yyyy") ?? "", font));
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
-                                string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                                string dateStr = dbSchedule.GivenDate?.ToString("dd/MM/yyyy") ?? "";
                                 if (!string.IsNullOrEmpty(dateStr))
                                     upperTableDates.Add(dateStr);
                             }

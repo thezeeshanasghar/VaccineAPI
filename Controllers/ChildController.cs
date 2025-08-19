@@ -250,6 +250,10 @@ public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
            }
            catch (Exception ex)
            {
+            if (ex.InnerException != null)
+                {
+                    errorMessage += $" | Inner Exception: {ex.InnerException.Message}";
+                }
            return new Response<IEnumerable<ScheduleDTO>>( false, $"An error occurred: {ex.Message}", null);
            }
        }

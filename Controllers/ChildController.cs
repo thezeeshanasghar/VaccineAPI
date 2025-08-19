@@ -829,7 +829,7 @@ var lastTyphoid = lastGivenInfiniteDoses
 if (lastTyphoid != null)
 {
     typestatus1 = GetStatus(lastTyphoid);
-    type1GivenDate = lastTyphoid.Date.Date.ToString("dd/MM/yyyy");
+    type1GivenDate = lastTyphoid.GivenDate?.ToString("dd/MM/yyyy");
     type1Brand = lastTyphoid.Brand?.Name ?? "OHF";
 }
 
@@ -839,7 +839,7 @@ var lastFlu = lastGivenInfiniteDoses
 if (lastFlu != null)
 {
     flustatus1 = GetStatus(lastFlu);
-    flu1GivenDate = lastFlu.Date.Date.ToString("dd/MM/yyyy");
+    flu1GivenDate = lastFlu.GivenDate?.ToString("dd/MM/yyyy");
     flu1Brand = lastFlu.Brand?.Name ?? "OHF";
 }
 
@@ -849,7 +849,7 @@ var lastVitA = lastGivenInfiniteDoses
 if (lastVitA != null)
 {
     vitstatus1 = GetStatus(lastVitA);
-    vit1GivenDate = lastVitA.Date.Date.ToString("dd/MM/yyyy");
+    vit1GivenDate = lastVitA.GivenDate?.ToString("dd/MM/yyyy");
     vit1Brand = lastVitA.Brand?.Name ?? "OHF";
 }
 
@@ -963,11 +963,11 @@ if (lastVitA != null)
 
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("dd/MM/yyyy"), font));
+                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.GivenDate?.ToString("dd/MM/yyyy") ?? "", font));
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
-                                string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                                string dateStr = dbSchedule.GivenDate?.ToString("dd/MM/yyyy") ?? "";
                                 if (!string.IsNullOrEmpty(dateStr))
                                     upperTableDates.Add(dateStr);
                             }

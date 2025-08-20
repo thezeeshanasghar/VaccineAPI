@@ -869,6 +869,18 @@ if (lastVitA != null)
     vit1Brand = lastVitA.Brand?.Name ?? "OHF";
 }
 
+string GetStatusColor(string status)
+{
+    switch (status)
+    {
+        case "Given": return "#008000"; // Green
+        case "Missed": return "#FF0000"; // Red
+        case "Due": return "#000000"; // Black
+        case "Diseased": return "#808080"; // Gray
+        default: return "#000000";
+    }
+}
+
 
                 var groupedSchedules = orderedDbSchedules.GroupBy(s =>
                     GetYearOrMonthFromDaysSchedule(
@@ -888,6 +900,17 @@ if (lastVitA != null)
                         return "Missed";
                     else
                         return "Diseased";
+                }
+
+               Font GetStatusFont(string status)
+                {
+                    string colorHex = GetStatusColor(status);
+                    // Remove '#' and parse RGB
+                    int r = int.Parse(colorHex.Substring(1, 2), System.Globalization.NumberStyles.HexNumber);
+                    int g = int.Parse(colorHex.Substring(3, 2), System.Globalization.NumberStyles.HexNumber);
+                    int b = int.Parse(colorHex.Substring(5, 2), System.Globalization.NumberStyles.HexNumber);
+                    BaseColor color = new BaseColor(r, g, b);
+                    return FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11, color);
                 }
 
                 var upperTableDates = new HashSet<string>();
@@ -1326,7 +1349,10 @@ if (lastVitA != null)
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
 
                 if (!string.IsNullOrEmpty(flu1GivenDate) ){
-                lowertable2.AddCell(CreateCell(flustatus1, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(new PdfPCell(new Phrase(flustatus1, GetStatusFont(flustatus1))) {
+                    HorizontalAlignment = Element.ALIGN_CENTER,
+                    FixedHeight = 15f
+                });
                 lowertable2.AddCell(CreateCell(flu1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(flu1Brand, "", 1, "center", "scheduleRecords"));
                 }
@@ -1338,7 +1364,10 @@ if (lastVitA != null)
                 }
                 
                 if (hasFluDone && !string.IsNullOrEmpty(flu2GivenDate)){
-                lowertable2.AddCell(CreateCell(flustatus2, "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(new PdfPCell(new Phrase(flustatus2, GetStatusFont(flustatus2))) {
+                    HorizontalAlignment = Element.ALIGN_CENTER,
+                    FixedHeight = 15f
+                });
                 lowertable2.AddCell(CreateCell(flu2GivenDate, "", 1, "center", "scheduleRecords"));
                 }
                 else
@@ -1349,7 +1378,10 @@ if (lastVitA != null)
 
                 lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
                 if (!string.IsNullOrEmpty(type1GivenDate)){
-                lowertable2.AddCell(CreateCell(typestatus1, "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(new PdfPCell(new Phrase(typestatus1, GetStatusFont(typestatus1))) {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        FixedHeight = 15f
+                    });
                 lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
                 }
@@ -1361,7 +1393,10 @@ if (lastVitA != null)
                 }
 
                 if (hasTyphoidDone && !string.IsNullOrEmpty(type2GivenDate)){
-                lowertable2.AddCell(CreateCell(typestatus2, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(new PdfPCell(new Phrase(typestatus2, GetStatusFont(typestatus2))) {
+                    HorizontalAlignment = Element.ALIGN_CENTER,
+                    FixedHeight = 15f
+                });
                 lowertable2.AddCell(CreateCell(type2GivenDate, "", 1, "center", "scheduleRecords"));
                 }
                 else
@@ -1372,7 +1407,10 @@ if (lastVitA != null)
 
                 lowertable2.AddCell(CreateCell("Vitamin A (Jr)", "", 1, "center", "scheduleRecords"));
                 if (!string.IsNullOrEmpty(vit1GivenDate)) { 
-                lowertable2.AddCell(CreateCell(vitstatus1, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(new PdfPCell(new Phrase(vitstatus1, GetStatusFont(vitstatus1))) {
+                    HorizontalAlignment = Element.ALIGN_CENTER,
+                    FixedHeight = 15f
+                });
                 lowertable2.AddCell(CreateCell(vit1GivenDate, "", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));
                 }
@@ -1384,7 +1422,10 @@ if (lastVitA != null)
                 }
 
                 if (!string.IsNullOrEmpty(vit2GivenDate)){ 
-                lowertable2.AddCell(CreateCell(vitstatus2, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(new PdfPCell(new Phrase(vitstatus2, GetStatusFont(vitstatus2))) {
+                    HorizontalAlignment = Element.ALIGN_CENTER,
+                    FixedHeight = 15f
+                });
                 lowertable2.AddCell(CreateCell(vit2GivenDate, "", 1, "center", "scheduleRecords"));
                 }
                 else

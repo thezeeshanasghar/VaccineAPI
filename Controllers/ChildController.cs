@@ -89,25 +89,41 @@ namespace VaccineAPI.Controllers
                return NotFound(new Response<InvoiceDTO>(false, "Invoice not found for the given DoseId and ChildId.", null));
            }
        }
+
+       [HttpGet("schedule-amount")]
+        public ActionResult<Response<decimal>> GetScheduleAmount(long Id, long doseId, long childId)
+        {
+            var schedule = _db.Schedules
+                .FirstOrDefault(s => s.DoseId == doseId && s.ChildId == childId && s.Id == Id);
+
+            if (schedule != null && schedule.Amount != null)
+            {
+                return Ok(new Response<decimal>(true, "Amount found.", schedule.Amount.Value));
+            }
+            else
+            {
+                return NotFound(new Response<decimal>(false, "Amount not found for the given DoseId and ChildId.", 0));
+            }
+        }
        
        [HttpGet("consultation-fee/{invoiceId}")]
-public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
-{
-    var fee = _db.Fee.FirstOrDefault(f => f.InvoiceId == invoiceId);
-    if (fee != null)
-    {
-         var FeeDto = new FeeDTO
-               {
-                   InvoiceId = fee.InvoiceId,
-                   Amount = fee.Amount,
-               };
-        return Ok(new Response<FeeDTO>(true, $"Fee found for invoice id: {invoiceId}", FeeDto));
-    }
-    else
-    {
-        return NotFound("Consultation fee not found for the given invoice id.");
-    }
-}
+        public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
+        {
+            var fee = _db.Fee.FirstOrDefault(f => f.InvoiceId == invoiceId);
+            if (fee != null)
+            {
+                var FeeDto = new FeeDTO
+                    {
+                        InvoiceId = fee.InvoiceId,
+                        Amount = fee.Amount,
+                    };
+                return Ok(new Response<FeeDTO>(true, $"Fee found for invoice id: {invoiceId}", FeeDto));
+            }
+            else
+            {
+                return NotFound("Consultation fee not found for the given invoice id.");
+            }
+        }
 
         [HttpGet("/forgetemail/{email}")]
         public ActionResult ForgetChildDetailsByEmail(string email)

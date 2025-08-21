@@ -839,48 +839,44 @@ namespace VaccineAPI.Controllers
                     .ThenBy(s => s.GivenDate ?? s.Date)
                     .ToList();
 
-                    // For Typhoid
-var lastTyphoid = lastGivenInfiniteDoses
-    .FirstOrDefault(s => s.Dose.Name.StartsWith("Typhoid", StringComparison.OrdinalIgnoreCase));
-if (lastTyphoid != null)
-{
-    typestatus1 = GetStatus(lastTyphoid);
-    type1GivenDate = lastTyphoid.GivenDate?.ToString("dd/MM/yyyy");
-    type1Brand = lastTyphoid.Brand?.Name ?? "OHF";
-}
+                var lastTyphoid = lastGivenInfiniteDoses
+                    .FirstOrDefault(s => s.Dose.Name.StartsWith("Typhoid", StringComparison.OrdinalIgnoreCase));
+                if (lastTyphoid != null)
+                {
+                    typestatus1 = GetStatus(lastTyphoid);
+                    type1GivenDate = lastTyphoid.GivenDate?.ToString("dd/MM/yyyy");
+                    type1Brand = lastTyphoid.Brand?.Name ?? "OHF";
+                }
 
-// For Flu
-var lastFlu = lastGivenInfiniteDoses
-    .FirstOrDefault(s => s.Dose.Name.StartsWith("Flu", StringComparison.OrdinalIgnoreCase));
-if (lastFlu != null)
-{
-    flustatus1 = GetStatus(lastFlu);
-    flu1GivenDate = lastFlu.GivenDate?.ToString("dd/MM/yyyy");
-    flu1Brand = lastFlu.Brand?.Name ?? "OHF";
-}
+                var lastFlu = lastGivenInfiniteDoses
+                    .FirstOrDefault(s => s.Dose.Name.StartsWith("Flu", StringComparison.OrdinalIgnoreCase));
+                if (lastFlu != null)
+                {
+                    flustatus1 = GetStatus(lastFlu);
+                    flu1GivenDate = lastFlu.Date.Date.ToString("dd/MM/yyyy");
+                    flu1Brand = lastFlu.Brand?.Name ?? "OHF";
+                }
 
-// For Vitamin A
-var lastVitA = lastGivenInfiniteDoses
-    .FirstOrDefault(s => s.Dose.Name.StartsWith("VITAMIN A (Jr)", StringComparison.OrdinalIgnoreCase));
-if (lastVitA != null)
-{
-    vitstatus1 = GetStatus(lastVitA);
-    vit1GivenDate = lastVitA.GivenDate?.ToString("dd/MM/yyyy");
-    vit1Brand = lastVitA.Brand?.Name ?? "OHF";
-}
+                var lastVitA = lastGivenInfiniteDoses
+                    .FirstOrDefault(s => s.Dose.Name.StartsWith("VITAMIN A (Jr)", StringComparison.OrdinalIgnoreCase));
+                if (lastVitA != null)
+                {
+                    vitstatus1 = GetStatus(lastVitA);
+                    vit1GivenDate = lastVitA.Date.Date.ToString("dd/MM/yyyy");
+                    vit1Brand = lastVitA.Brand?.Name ?? "OHF";
+                }
 
-string GetStatusColor(string status)
-{
-    switch (status)
-    {
-        case "Given": return "#008000"; // Green
-        case "Missed": return "#FF0000"; // Red
-        case "Due": return "#000000"; // Black
-        case "Diseased": return "#808080"; // Gray
-        default: return "#000000";
-    }
-}
-
+                string GetStatusColor(string status)
+                {
+                    switch (status)
+                    {
+                        case "Given": return "#008000"; 
+                        case "Missed": return "#FF0000"; 
+                        case "Due": return "#000000"; 
+                        case "Diseased": return "#808080"; 
+                        default: return "#000000";
+                    }
+                }
 
                 var groupedSchedules = orderedDbSchedules.GroupBy(s =>
                     GetYearOrMonthFromDaysSchedule(
@@ -910,7 +906,7 @@ string GetStatusColor(string status)
                     int g = int.Parse(colorHex.Substring(3, 2), System.Globalization.NumberStyles.HexNumber);
                     int b = int.Parse(colorHex.Substring(5, 2), System.Globalization.NumberStyles.HexNumber);
                     BaseColor color = new BaseColor(r, g, b);
-                    return FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11, color);
+                    return FontFactory.GetFont(FontFactory.HELVETICA, 11, color);
                 }
 
                 var upperTableDates = new HashSet<string>();

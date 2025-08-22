@@ -727,7 +727,7 @@ namespace VaccineAPI.Controllers
                     return cell;
                 }
                
-                float[] widths = new float[] { 60f, 135f, 80f, 50f, 70f,60f,60f,60f };
+                float[] widths = new float[] { 60f, 135f, 80f, 60f, 70f,60f,60f,60f };
 
                 PdfPTable table = new PdfPTable(8);
                 table.HorizontalAlignment = 0;
@@ -793,18 +793,22 @@ namespace VaccineAPI.Controllers
                 var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A (Jr)" };
 
                 var firstGivenInfiniteDoses = dbSchedules
-                    .Where(s => s.IsSkip != true && infiniteVaccineNames.Any(name =>
+                .Where(s => s.IsSkip != true
+                    && s.IsDone == true // Only include schedules that are done
+                    && infiniteVaccineNames.Any(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
-                    .GroupBy(s => infiniteVaccineNames.First(name =>
-                        s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
-                    .Select(g => g.OrderBy(s => s.GivenDate ?? s.Date).First())
-                    .ToList();
+                .GroupBy(s => infiniteVaccineNames.First(name =>
+                    s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
+                .Select(g => g.OrderBy(s => s.GivenDate ?? s.Date).First())
+                .ToList();
               
                 var orderedDbSchedules = dbSchedules                
                     .Where(s =>
                     {
                         if (s.IsSkip == true)
-                            return false;              
+                        {
+                            return false;
+                        }
                         bool isInfinite = infiniteVaccineNames.Any(name =>
                             s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
                         if (isInfinite)
@@ -822,7 +826,7 @@ namespace VaccineAPI.Controllers
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
                     .GroupBy(s => infiniteVaccineNames.First(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
-                    .Select(g => g.OrderByDescending(s => s.Date.Date).First())
+                    .Select(g => g.OrderByDescending(s => s.GivenDate ?? s.Date).First())
                     .ToList();
 
                 var dueInfiniteDoses = dbSchedules
@@ -901,6 +905,7 @@ namespace VaccineAPI.Controllers
                Font GetStatusFont(string status)
                 {
                     string colorHex = GetStatusColor(status);
+                    // Remove '#' and parse RGB
                     int r = int.Parse(colorHex.Substring(1, 2), System.Globalization.NumberStyles.HexNumber);
                     int g = int.Parse(colorHex.Substring(3, 2), System.Globalization.NumberStyles.HexNumber);
                     int b = int.Parse(colorHex.Substring(5, 2), System.Globalization.NumberStyles.HexNumber);
@@ -1330,7 +1335,7 @@ namespace VaccineAPI.Controllers
                 lowertable2.LockedWidth = true;
                 lowertable2.SpacingBefore = 10;
                 lowertable2.SetWidths(lowerwidths2);
-                lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(CreateCell("", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Last Dose", "LightGreen", 3, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Next Dose", "LightGreen", 2, "center", "scheduleRecords"));
 
@@ -1504,106 +1509,106 @@ namespace VaccineAPI.Controllers
             }
 
             string htmlContent = $@"
-    <!DOCTYPE html>
-    <html lang='en'>
-    <head>
-        <meta charset='UTF-8'>
-        <title>Vaccination Record</title>
-        <style>
-            body {{
-                font-family: Arial, sans-serif;
-                background-color: #f4f4f4;
-                padding: 20px;
-                margin: 0;
-            }}
-            .container {{
-                max-width: 800px;
-                margin: auto;
-                background-color: #fff;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 20px;
-            }}
-            th, td {{
-                padding: 6px;
-                border: 1px solid #ddd;
-                text-align: left;
-            }}
-            .success-box {{
-                background-color: #d4edda;
-                padding: 10px 15px;
-                border-left: 5px solid #28a745;
-                border-radius: 5px;
-                margin-bottom: 20px;
-            }}
-            .pdf-section {{
-                max-width: 800px;
-                margin: 40px auto 0 auto;
-                background-color: #fff;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            }}
-            /* REMOVING .fetch-btn style as it's no longer used */
-        </style>
-    </head>
-    <body>
-        <div class='container'>
-            <!-- Fetch Record Link (styled with radio button appearance) -->
-            <div style='padding: 15px; border-bottom: 1px solid #ddd;'>
-                <input type='radio' checked style='margin-right: 10px;'> <a href='{fileUrl}' target='_blank' style='text-decoration: none; color: inherit;'>Click here to fetch record</a>
-            </div>
+            <!DOCTYPE html>
+            <html lang='en'>
+            <head>
+                <meta charset='UTF-8'>
+                <title>Vaccination Record</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        background-color: #f4f4f4;
+                        padding: 20px;
+                        margin: 0;
+                    }}
+                    .container {{
+                        max-width: 800px;
+                        margin: auto;
+                        background-color: #fff;
+                        padding: 20px;
+                        border-radius: 10px;
+                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                    }}
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 20px;
+                    }}
+                    th, td {{
+                        padding: 6px;
+                        border: 1px solid #ddd;
+                        text-align: left;
+                    }}
+                    .success-box {{
+                        background-color: #d4edda;
+                        padding: 10px 15px;
+                        border-left: 5px solid #28a745;
+                        border-radius: 5px;
+                        margin-bottom: 20px;
+                    }}
+                    .pdf-section {{
+                        max-width: 800px;
+                        margin: 40px auto 0 auto;
+                        background-color: #fff;
+                        padding: 20px;
+                        border-radius: 10px;
+                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                    }}
+                    /* REMOVING .fetch-btn style as it's no longer used */
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <!-- Fetch Record Link (styled with radio button appearance) -->
+                    <div style='padding: 15px; border-bottom: 1px solid #ddd;'>
+                        <input type='radio' checked style='margin-right: 10px;'> <a href='{fileUrl}' target='_blank' style='text-decoration: none; color: inherit;'>Click here to fetch record</a>
+                    </div>
 
-            <!-- Status -->
-            <div class='success-box'>
-                <strong>Status:</strong> {(child.IsInactive == true ? "Inactive" : "Vaccinated")}
-            </div>
+                    <!-- Status -->
+                    <div class='success-box'>
+                        <strong>Status:</strong> {(child.IsInactive == true ? "Inactive" : "Vaccinated")}
+                    </div>
 
-            <!-- Patient Info -->
-            <table>
-                <tr><td><strong>MR No.</strong></td><td>{DateTime.Now.Year.ToString().Substring(2)}{child.Id}</td></tr>
-                <tr><td><strong>Name</strong></td><td>{child.Name}</td></tr>
-                <tr><td><strong>S/D/W/o</strong></td><td>{child.FatherName}</td></tr>
-                <tr><td><strong>Passport/CNIC</strong></td><td>{child.CNIC}</td></tr>
-                <tr><td><strong>City</strong></td><td>{child.City}</td></tr>
-            </table>
+                    <!-- Patient Info -->
+                    <table>
+                        <tr><td><strong>MR No.</strong></td><td>{DateTime.Now.Year.ToString().Substring(2)}{child.Id}</td></tr>
+                        <tr><td><strong>Name</strong></td><td>{child.Name}</td></tr>
+                        <tr><td><strong>S/D/W/o</strong></td><td>{child.FatherName}</td></tr>
+                        <tr><td><strong>Passport/CNIC</strong></td><td>{child.CNIC}</td></tr>
+                        <tr><td><strong>City</strong></td><td>{child.City}</td></tr>
+                    </table>
 
-            <!-- Vaccine Table -->
-            <h3>Vaccines</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Vaccine</th>
-                        <th>Status</th>
-                        <th>Brand</th>
-                        <th>Manufacturer</th>
-                        <th>Batch/Lot</th>
-                        <th>Date</th>
-                        <th>Validity</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {vaccineRows}
-                </tbody>
-            </table>
+                    <!-- Vaccine Table -->
+                    <h3>Vaccines</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Vaccine</th>
+                                <th>Status</th>
+                                <th>Brand</th>
+                                <th>Manufacturer</th>
+                                <th>Batch/Lot</th>
+                                <th>Date</th>
+                                <th>Validity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {vaccineRows}
+                        </tbody>
+                    </table>
 
-            <!-- Doctor Info -->
-            <p><strong>Physician/Doctor:</strong> {child.Clinic?.Doctor?.DisplayName} - {child.Clinic?.Doctor?.AdditionalInfo}</p>
-            <p><strong>Center:</strong> {child.Clinic?.Name} ({child.Clinic?.RegNo})</p>
-        </div>
+                    <!-- Doctor Info -->
+                    <p><strong>Physician/Doctor:</strong> {child.Clinic?.Doctor?.DisplayName} - {child.Clinic?.Doctor?.AdditionalInfo}</p>
+                    <p><strong>Center:</strong> {child.Clinic?.Name} ({child.Clinic?.RegNo})</p>
+                </div>
 
-        <!-- PDF Embed Section -->
-        <div class='pdf-section'>
-            <h3>Vaccination PDF:</h3>
-            <iframe src='{fileUrl}' width='100%' height='600px' style='border: 1px solid #ccc;'></iframe>
-        </div>
-    </body>
-    </html>";
+                <!-- PDF Embed Section -->
+                <div class='pdf-section'>
+                    <h3>Vaccination PDF:</h3>
+                    <iframe src='{fileUrl}' width='100%' height='600px' style='border: 1px solid #ccc;'></iframe>
+                </div>
+            </body>
+            </html>";
 
             return new ContentResult
             {
@@ -1759,6 +1764,8 @@ namespace VaccineAPI.Controllers
                 string clinicAddress = child.Clinic.Address;
                 string clinicPhoneNumber = child.Clinic.PhoneNumber;
                 string userPhoneNumber = "+" + dbChild.User.CountryCode + "-" + dbChild.User.MobileNumber;
+                string userEmail = child.Email;
+                string cnic= child.CNIC;
                 document.Add(upperTable);
                 Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(0, 100, 0));
                 Paragraph title = new Paragraph("IMMUNIZATION RECORD", greenFont);
@@ -1778,6 +1785,18 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell1(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell1("Phone No:", cellFontBold, new BaseColor(159, 226, 191)));
                 patientTable.AddCell(CreateCell1(userPhoneNumber, cellFontNormal, BaseColor.White));
+                if(userEmail != null&& userEmail != "")
+                {
+                patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
+                patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                }
+                else{}
+                if(cnic!=null&&cnic != "")
+                {
+                patientTable.AddCell(CreateCell1("CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
+                patientTable.AddCell(CreateCell1(cnic, cellFontNormal, BaseColor.White));
+                }
+                else{}
                 document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
                 document.Add(patientTable);
                 PdfPCell CreateCell1(string text, Font font, BaseColor backgroundColor)

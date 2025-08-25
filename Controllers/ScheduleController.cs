@@ -1008,29 +1008,67 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpDelete("{ChildId}/{DoseId}/{Date}")]
-        public async Task<Response<List<Schedule>>> Delete(long ChildId, long DoseId, String date)
+        public async Task<Response<List<Schedule>>> Delete(long ChildId, long DoseId, string date)
         {
             DateTime dateOfInjection = DateTime.ParseExact(date, "dd-MM-yyyy", null);
 
-            var objList = await _db.Schedules
-                .Where(x => x.ChildId == ChildId)
-                .Where(x => x.DoseId == DoseId)
-                .Where(x => x.IsDone == false)
-                .ToListAsync();
-            var futureDoses = objList.Where(x => x.Date > dateOfInjection).ToList();
-            List<Schedule> listDTO = _mapper.Map<List<Schedule>>(futureDoses);
-            if (listDTO == null)
-            {
-                return new Response<List<Schedule>>(false, "Error: failed to delete ", listDTO);
-            }
+            // Get the dose and check if it's infinite
+            var dose = await _db.Doses.FirstOrDefaultAsync(d => d.Id == DoseId);
+            if (dose == null)
+                return new Response<List<Schedule>>(false, "Dose not found.", null);
 
-            foreach (Schedule obj in listDTO)
-            {
-                _db.Schedules.Remove(obj);
-            }
-            await _db.SaveChangesAsync();
+            // List of infinite vaccine names
+            var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A (Jr)" };
+            bool isInfinite = infiniteVaccineNames.Any(name => dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
 
-            return new Response<List<Schedule>>(true, null, listDTO);
+            if (isInfinite)
+            {
+                // Get all undone schedules for this vaccine for the child
+                var undoneSchedules = await _db.Schedules
+                    .Where(x => x.ChildId == ChildId
+                        && x.Dose.VaccineId == dose.VaccineId
+                        && x.IsDone == false
+                        && x.IsSkip != true)
+                    .ToListAsync();
+
+                if (undoneSchedules.Count == 0)
+                {
+                    // Only one undone dose: mark as undone (do not delete)
+                    var schedule = undoneSchedules.First();
+                    schedule.IsDone = false;
+                    schedule.GivenDate = null;
+                    schedule.BrandId = null;
+                    await _db.SaveChangesAsync();
+                    return new Response<List<Schedule>>(true, "Infinite dose undone successfully.", new List<Schedule> { schedule });
+                }
+                else
+                {
+                    // More than one undone dose: error
+                    return new Response<List<Schedule>>(false, "Cannot undo: More than one undone infinite dose exists for this vaccine.", null);
+                }
+            }
+            else
+            {
+                // Non-infinite: keep your original logic
+                var objList = await _db.Schedules
+                    .Where(x => x.ChildId == ChildId)
+                    .Where(x => x.DoseId == DoseId)
+                    .Where(x => x.IsDone == false)
+                    .ToListAsync();
+                var futureDoses = objList.Where(x => x.Date > dateOfInjection).ToList();
+                if (!futureDoses.Any())
+                {
+                    return new Response<List<Schedule>>(false, "No future doses found to delete.", null);
+                }
+
+                foreach (Schedule obj in futureDoses)
+                {
+                    _db.Schedules.Remove(obj);
+                }
+                await _db.SaveChangesAsync();
+
+                return new Response<List<Schedule>>(true, null, futureDoses);
+            }
         }
 
         [HttpGet("alert/{GapDays}/{OnlineClinicId}")]

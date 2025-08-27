@@ -1021,6 +1021,7 @@ namespace VaccineAPI.Controllers
             if (isInfinite)
             {
                 var undoneSchedules = await _db.Schedules
+                    .Include(x => x.Dose)
                     .Where(x => x.ChildId == ChildId
                         && x.Dose.VaccineId == dose.VaccineId
                         && x.IsDone == false
@@ -1039,36 +1040,28 @@ namespace VaccineAPI.Controllers
                 {
                     _db.Schedules.RemoveRange(schedulesToDelete);
                 }
-
                 await _db.SaveChangesAsync();
-
-                return new Response<List<Schedule>>(true, "Only one infinite dose left as undone.", new List<Schedule> { scheduleToKeep });
+                return new Response<List<Schedule>>(true, "Only one infinite dose left as undone.",null);
             }
             else
             {
                 var objList = await _db.Schedules
+                    .Include(x => x.Dose)
                     .Where(x => x.ChildId == ChildId)
                     .Where(x => x.DoseId == DoseId)
                     .Where(x => x.IsDone == false)
                     .ToListAsync();
 
                 var futureDoses = objList.Where(x => x.Date > dateOfInjection).ToList();
-                List<Schedule> listDTO = _mapper.Map<List<Schedule>>(futureDoses);
+        
                 if (!futureDoses.Any())
                 {
                     return new Response<List<Schedule>>(false, "No future doses found to delete.", null);
                 }
                 _db.Schedules.RemoveRange(futureDoses);
                 await _db.SaveChangesAsync();
-                foreach (Schedule obj in futureDoses)
-                {
-                    _db.Schedules.Remove(obj);
-                }
-                await _db.SaveChangesAsync();
-
                 return new Response<List<Schedule>>(true, null, futureDoses);
             }
-        }
         }
 
         [HttpGet("alert/{GapDays}/{OnlineClinicId}")]

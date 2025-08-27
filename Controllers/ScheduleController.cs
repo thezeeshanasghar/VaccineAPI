@@ -1008,14 +1008,12 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpDelete("{ChildId}/{DoseId}/{Date}")]
-        public async Task<Response<List<Schedule>>> Delete(long ChildId, long DoseId, String date)
+        public async Task<Response<List<Schedule>>> Delete(long ChildId, long DoseId, string date)
         {
             DateTime dateOfInjection = DateTime.ParseExact(date, "dd-MM-yyyy", null);
-
             var dose = await _db.Doses.FirstOrDefaultAsync(d => d.Id == DoseId);
             if (dose == null)
                 return new Response<List<Schedule>>(false, "Dose not found.", null);
-
             var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A (Jr)" };
             bool isInfinite = infiniteVaccineNames.Any(name =>
                 dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
@@ -1035,7 +1033,6 @@ namespace VaccineAPI.Controllers
                 {
                     return new Response<List<Schedule>>(false, "No undone infinite doses found.", null);
                 }
-                
                 var scheduleToKeep = undoneSchedules.First();
                 var schedulesToDelete = undoneSchedules.Skip(1).ToList();
 

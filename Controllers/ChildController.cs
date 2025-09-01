@@ -727,7 +727,7 @@ namespace VaccineAPI.Controllers
                     return cell;
                 }
                
-                float[] widths = new float[] { 60f, 135f, 80f, 60f, 70f,60f,60f,60f };
+                float[] widths = new float[] { 60f, 135f, 80f, 60f, 70f,70f,60f,60f };
 
                 PdfPTable table = new PdfPTable(8);
                 table.HorizontalAlignment = 0;
@@ -794,7 +794,6 @@ namespace VaccineAPI.Controllers
 
                 var firstGivenInfiniteDoses = dbSchedules
                 .Where(s => s.IsSkip != true
-                    && s.IsDone == true // Only include schedules that are done
                     && infiniteVaccineNames.Any(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
                 .GroupBy(s => infiniteVaccineNames.First(name =>

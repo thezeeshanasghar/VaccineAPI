@@ -1136,66 +1136,85 @@ namespace VaccineAPI.Controllers
         }
 
         ///////////////
-        [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
+       [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
         {
             List<Schedule> schedules = GetAlertData2(GapDays, OnlineClinicId, _db);
-            IEnumerable<ChildDTO> childInfoDTOs = schedules.Select(s => new ChildDTO
+
+            // Fetch all child IDs from schedules
+            var childIds = schedules.Select(s => s.Child.Id).Distinct().ToList();
+
+            // Fetch all children with User info in one query
+            var children = _db.Childs
+                .Include(c => c.User)
+                .Where(c => childIds.Contains(c.Id))
+                .ToList();
+
+            // Map to DTOs and include mobile/password
+            var childInfoDTOs = children.Select(c => new ChildDTO
             {
-                Id = s.Child.Id,
-                Name = s.Child.Name,
-                Email = s.Child.Email,
-                ClinicId = s.Child.ClinicId,
-            });
+                Id = c.Id,
+                Name = c.Name,
+                Email = c.Email,
+                ClinicId = c.ClinicId,
+                MobileNumber = c.User?.MobileNumber,
+                Password = c.User?.Password
+            }).ToList();
+
             foreach (var child in childInfoDTOs)
             {
-                if (child.Email == "")
-                {
+                if (string.IsNullOrEmpty(child.Email))
                     continue;
+
+                var ClinicId = child.ClinicId;
+                var doctor = _db.Clinics
+                    .Where(x => x.Id == ClinicId)
+                    .Include(x => x.Doctor)
+                    .FirstOrDefault()
+                    ?.Doctor;
+                var clinics = _db.Clinics.FirstOrDefault(x => x.Id == ClinicId);
+
+                var dbSchedules = _db.Schedules
+                    .Where(x => x.ChildId == child.Id && x.Date == DateTime.Today)
+                    .Include(x => x.Dose)
+                    .ToList();
+
+                string body;
+                if (dbSchedules.Any())
+                {
+                    var doseNames = string.Join(", ", dbSchedules.Select(s => s.Dose.Name));
+                    body = $"Reminder: Vaccination {doseNames} for Child: {child.Name} is due today.\n" +
+                        $"Kindly book an appointment at Clinic: {clinics?.Name}, with Doctor: {doctor?.FirstName}, at Phone: {clinics?.PhoneNumber}\n" +
+                         $"Login and check your record at https://client.vaccinationcentre.com\n" +
+                        $"Mobile Number: {child.MobileNumber ?? "N/A"}\n" +
+                        $"Password: {child.Password ?? "N/A"}";
                 }
                 else
                 {
-                    var ChildId = child.Id;
-                    var ClinicId = child.ClinicId;
-                    var doctor = _db.Clinics
-                        .Where(x => x.Id == ClinicId)
-                        .Include(x => x.Doctor)
-                        .FirstOrDefault()
-                        ?.Doctor;
-                    var clinics = _db.Clinics.Where(x => x.Id == ClinicId).FirstOrDefault();
-                    var dbSchedules = _db.Schedules.Where(x => x.ChildId == ChildId).ToList();
-                    var specificDate = DateTime.Today;
-                    var specificSchedule = dbSchedules
-                        .FirstOrDefault(schedule => schedule.Date == specificDate);
-                    string body;
-                    if (specificSchedule != null)
-                    {
-                        var doseId = specificSchedule.DoseId;
-                        var dose = _db.Doses.Where(x => x.Id == doseId).FirstOrDefault();
-                        body = $"Reminder: Vaccination  {dose.Name}, For Child: {child.Name},  is due today. Kindly Book an appointment at Clinic: {clinics.Name}, with Doctor: {doctor.FirstName}, at Phone: {clinics.PhoneNumber} ";
-                    }
-                    else
-                    {
-                        body = "No schedule found for the specified date.";
-                    }
-                    // Use the 'body' variable as needed (e.g., send an email)
-                    try
-                    {
-                        UserEmail.SendEmail(child.Email, body);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("Error sending email: " + ex.Message);
-                    }
+                    body = "No schedule found for the specified date.";
+                }
+
+                try
+                {
+                    UserEmail.SendEmail(child.Email, body);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error sending email: " + ex.Message);
                 }
             }
+
             return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);
         }
 
         [HttpGet("alertone/{ChildId}")]
         public Response<object> SendAlertEmail(long ChildId)
         {
-            var child = _db.Childs.Include(c => c.Clinic).FirstOrDefault(c => c.Id == ChildId);
+            var child = _db.Childs
+                .Include(c => c.Clinic)
+                .Include(c => c.User) 
+                .FirstOrDefault(c => c.Id == ChildId);
+
             if (child == null || string.IsNullOrEmpty(child.Email))
             {
                 return new Response<object>(false, "Child not found or email is missing.", null);
@@ -1204,30 +1223,37 @@ namespace VaccineAPI.Controllers
             var specificDate = DateTime.Today;
             var todaySchedules = _db.Schedules
                 .Where(s => s.ChildId == ChildId && s.Date == specificDate)
-                .Include(s => s.Dose)  // Include dose details
+                .Include(s => s.Dose)
                 .ToList();
 
             string body;
             if (todaySchedules.Any())
             {
                 var clinic = _db.Clinics.Include(x => x.Doctor).FirstOrDefault(x => x.Id == child.ClinicId);
-
                 var doseDetails = todaySchedules.Select(s => $" {s.Dose.Name},").ToList();
 
-                body = $"Reminder: Vaccination {string.Join(" ", doseDetails)} of {child.Name} is due.\n " +
-                       $"Please confirm your appointment. Thanks! Dr {clinic?.Doctor?.FirstName} {clinic?.Name} \n" +
-                       $"Phone Number: {clinic?.PhoneNumber} Login and check your record at https://vaccinationcentre.com";
+                body = $"Reminder: Vaccination {string.Join(" ", doseDetails)} of {child.Name} is due.\n" +
+                    $"Please confirm your appointment. Thanks! Dr {clinic?.Doctor?.FirstName} {clinic?.Name}\n" +
+                    $"Phone Number: {clinic?.PhoneNumber}\n" +
+                    $"Login and check your record at https://client.vaccinationcentre.com\n" +
+                    $"Mobile Number: {child.User?.MobileNumber ?? "N/A"}\n" +
+                    $"Password: {child.User?.Password ?? "N/A"}";
             }
             else
             {
                 body = "No schedule found for today.";
             }
 
-            // Send the email
             try
             {
                 UserEmail.SendEmail(child.Email, body);
-                return new Response<object>(true, "Email sent successfully.", new { child.Id, child.Email });
+                return new Response<object>(true, "Email sent successfully.", new
+                {
+                    child.Id,
+                    child.Email,
+                    MobileNumber = child.User?.MobileNumber,
+                    Password = child.User?.Password
+                });
             }
             catch (Exception ex)
             {

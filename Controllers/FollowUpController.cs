@@ -118,10 +118,11 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                // Get child with clinic information
+                // Get child with clinic and user information
                 var child = _db.Childs
                     .Include(c => c.Clinic)
                         .ThenInclude(c => c.Doctor)
+                    .Include(c => c.User)
                     .FirstOrDefault(c => c.Id == ChildId);
 
                 if (child == null || string.IsNullOrEmpty(child.Email))
@@ -129,7 +130,6 @@ namespace VaccineAPI.Controllers
                     return new Response<object>(false, "Child not found or email is missing.", null);
                 }
 
-                // Get today's schedules - removed Include(s => s.Disease) since Disease is not a navigation property
                 var specificDate = DateTime.Today;
                 var nextSchedule = _db.FollowUps
                     .Where(s => s.ChildId == ChildId && s.NextVisitDate >= specificDate)
@@ -141,25 +141,31 @@ namespace VaccineAPI.Controllers
                     return new Response<object>(false, "No FOLLOW UP found.", null);
                 }
 
+                // Prepare user info
+                string mobile = child.User?.MobileNumber ?? "N/A";
+                string password = child.User?.Password ?? "N/A";
+                string siteUrl = "https://client.vaccinationcentre.com";
+
                 // Create a more professional HTML email template
                 string emailBody = $@"Dear Parent/Guardian of {child.Name},
 
-                 Your follow-up visit is scheduled as follows:
+                Your follow-up visit is scheduled as follows:
 
-                 Appointment Date: {nextSchedule.NextVisitDate:dd-MM-yyyy}
-                 Reason: {nextSchedule.Disease}
-                 Clinic: {child.Clinic.Name}
-                 Doctor: {child.Clinic.Doctor.DisplayName}
+                Appointment Date: {nextSchedule.NextVisitDate:dd-MM-yyyy}
+                Reason: {nextSchedule.Disease}
+                Clinic: {child.Clinic.Name}
+                Doctor: {child.Clinic.Doctor.DisplayName}
 
-                 Please confirm your appointment by contacting us at {child.Clinic.PhoneNumber}.
+                Please confirm your appointment by contacting us at {child.Clinic.PhoneNumber}.
 
-                 You can view your complete vaccination record at: https://vaccinationcentre.com
+                You can view your complete vaccination record at: {siteUrl}
+                Mobile Number: {mobile}
+                Password: {password}
 
-                 Thanks,
-                 {child.Clinic.Name}
+                Thanks,
+                {child.Clinic.Name}
 
-                 Note: This is an automated reminder. Please do not reply to this email.";
-
+                Note: This is an automated reminder. Please do not reply to this email.";
 
                 UserEmail.SendEmail(child.Email, emailBody, "Follow-up Reminder");
 
@@ -167,15 +173,19 @@ namespace VaccineAPI.Controllers
                 {
                     ChildId = child.Id,
                     Email = child.Email,
+                    MobileNumber = mobile,
+                    Password = password,
                     ScheduleDate = nextSchedule.NextVisitDate,
                     Disease = nextSchedule.Disease,
-                    ClinicName = child.Clinic.Name
+                    ClinicName = child.Clinic.Name,
+                    SiteUrl = siteUrl
                 });
             }
             catch (Exception ex)
             {
                 // Log the error details here
                 return new Response<object>(false, $"Error sending email: {ex.Message}", null);
+
             }
         }
 
@@ -192,16 +202,22 @@ namespace VaccineAPI.Controllers
                     return new Response<IEnumerable<ChildDTO>>(false, "No follow-ups found.", null);
                 }
 
-                // Map follow-ups to ChildDTO
-                IEnumerable<ChildDTO> childInfoDTOs = followUps
-                    .Where(f => f.Child != null) // Ensure Child is not null
-                    .Select(f => new ChildDTO
-                    {
-                        Id = f.Child.Id,
-                        Name = f.Child.Name,
-                        Email = f.Child.Email,
-                        ClinicId = f.Child.ClinicId,
-                    });
+                // Map follow-ups to ChildDTO and include mobile/password
+                var childIds = followUps.Where(f => f.Child != null).Select(f => f.Child.Id).Distinct().ToList();
+                var children = _db.Childs
+                    .Include(c => c.User)
+                    .Where(c => childIds.Contains(c.Id))
+                    .ToList();
+
+                IEnumerable<ChildDTO> childInfoDTOs = children.Select(c => new ChildDTO
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Email = c.Email,
+                    ClinicId = c.ClinicId,
+                    MobileNumber = c.User?.MobileNumber,
+                    Password = c.User?.Password
+                });
 
                 foreach (var child in childInfoDTOs)
                 {
@@ -230,32 +246,33 @@ namespace VaccineAPI.Controllers
                         .OrderBy(f => f.NextVisitDate)
                         .ToList();
 
+                    string mobile = child.MobileNumber ?? "N/A";
+                    string password = child.Password ?? "N/A";
+                    string siteUrl = "https://vaccinationcentre.com";
+
                     string body;
                     if (dbFollowUps.Any())
                     {
-                        // Generate email content for follow-up alerts
-                        var followUpDetails = dbFollowUps
-                            .Select(f => $" {f.Disease} on {f.NextVisitDate:dd-MM-yyyy}")
-                            .ToList();
-
                         body =
-                            $@"Dear Parent/Guardian of {child.Name},
+                                $@"Dear Parent/Guardian of {child.Name},
 
-Your follow-up visit is scheduled as follows:
+                                Your follow-up visit is scheduled as follows:
 
-Appointment Date: {dbFollowUps.First().NextVisitDate:dd-MM-yyyy}
-Reason: {dbFollowUps.First().Disease}
-Clinic: {clinic.Name}
-Doctor: {clinic.Doctor.DisplayName}
+                                Appointment Date: {dbFollowUps.First().NextVisitDate:dd-MM-yyyy}
+                                Reason: {dbFollowUps.First().Disease}
+                                Clinic: {clinic.Name}
+                                Doctor: {clinic.Doctor.DisplayName}
 
-Please confirm your appointment by contacting us at {clinic.PhoneNumber}.
+                                Please confirm your appointment by contacting us at {clinic.PhoneNumber}.
 
-You can view your complete vaccination record at: https://vaccinationcentre.com
+                                You can view your complete vaccination record at: {siteUrl}
+                                Mobile Number: {mobile}
+                                Password: {password}
 
-Thanks,
-{clinic.Name}
+                                Thanks,
+                                {clinic.Name}
 
-Note: This is an automated reminder. Please do not reply to this email.";
+                                Note: This is an automated reminder. Please do not reply to this email.";
                     }
                     else
                     {

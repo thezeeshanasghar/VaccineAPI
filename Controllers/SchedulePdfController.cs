@@ -30,6 +30,27 @@ namespace VaccineAPI.Controllers
             _mapper = mapper;
         }
 
+         [HttpGet("test")]
+        public IActionResult TestApi()
+        {
+            return Ok(new { 
+                message = "Schedule API is working!", 
+                timestamp = DateTime.UtcNow,
+                status = "success",
+                data = new {
+                    controller = "ScheduleController",
+                    version = "1.0",
+                    endpoints = new[] {
+                        "GET /api/Schedule",
+                        "GET /api/Schedule/{id}",
+                        "POST /api/Schedule/add-schedule",
+                        "PUT /api/Schedule/child-schedule",
+                        "GET /api/Schedule/test"
+                    }
+                }
+            });
+        }
+
         [HttpGet("doctor-sales-pdf/{doctorId}")]
         public IActionResult GetDoctorSalesPdf(long doctorId)
         {
@@ -553,4 +574,5 @@ namespace VaccineAPI.Controllers
             }
         }
     }
+    
 }

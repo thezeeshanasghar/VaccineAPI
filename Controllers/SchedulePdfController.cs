@@ -30,11 +30,11 @@ namespace VaccineAPI.Controllers
             _mapper = mapper;
         }
 
-         [HttpGet("test")]
+         [HttpGet("testABbbb")]
         public IActionResult TestApi()
         {
             return Ok(new { 
-                message = "Schedule API is working!", 
+                message = "Schedule API is working Perfect !", 
                 timestamp = DateTime.UtcNow,
                 status = "success",
                 data = new {
@@ -50,6 +50,7 @@ namespace VaccineAPI.Controllers
                 }
             });
         }
+
 
         [HttpGet("doctor-sales-pdf/{doctorId}")]
         public IActionResult GetDoctorSalesPdf(long doctorId)

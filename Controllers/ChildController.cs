@@ -866,7 +866,7 @@ namespace VaccineAPI.Controllers
                 if (lastFlu != null)
                 {
                     flustatus1 = GetStatus(lastFlu);
-                    flu1GivenDate = lastFlu.Date.Date.ToString("dd/MM/yyyy");
+                    flu1GivenDate = lastFlu.GivenDate?.ToString("dd/MM/yyyy");
                     flu1Brand = lastFlu.Brand?.Name ?? "OHF";
                 }
 
@@ -875,7 +875,7 @@ namespace VaccineAPI.Controllers
                 if (lastVitA != null)
                 {
                     vitstatus1 = GetStatus(lastVitA);
-                    vit1GivenDate = lastVitA.Date.Date.ToString("dd/MM/yyyy");
+                    vit1GivenDate = lastVitA.GivenDate?.ToString("dd/MM/yyyy");
                     vit1Brand = lastVitA.Brand?.Name ?? "OHF";
                 }
 

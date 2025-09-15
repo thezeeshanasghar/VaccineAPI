@@ -1357,7 +1357,7 @@ namespace VaccineAPI.Controllers
 
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
 
-                if (!string.IsNullOrEmpty(flu1GivenDate) ){
+                if (!string.IsNullOrEmpty(flu1GivenDate)&& !upperTableDates.Contains(flu1GivenDate) ){
                 lowertable2.AddCell(new PdfPCell(new Phrase(flustatus1, GetStatusFont(flustatus1))) {
                     HorizontalAlignment = Element.ALIGN_CENTER,
                     FixedHeight = 15f,
@@ -1390,7 +1390,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
-                if (!string.IsNullOrEmpty(type1GivenDate)){
+                if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(type1GivenDate)){
                    lowertable2.AddCell(new PdfPCell(new Phrase(typestatus1, GetStatusFont(typestatus1)))
                     {
                         HorizontalAlignment = Element.ALIGN_CENTER,
@@ -1423,7 +1423,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 lowertable2.AddCell(CreateCell("Vitamin A (Jr)", "", 1, "center", "scheduleRecords"));
-                if (!string.IsNullOrEmpty(vit1GivenDate)) { 
+                if (!string.IsNullOrEmpty(vit1GivenDate) && !upperTableDates.Contains(vit2GivenDate)) { 
                 lowertable2.AddCell(new PdfPCell(new Phrase(vitstatus1, GetStatusFont(vitstatus1))) {
                     HorizontalAlignment = Element.ALIGN_CENTER,
                     FixedHeight = 15f,

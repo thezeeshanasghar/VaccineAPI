@@ -791,28 +791,38 @@ namespace VaccineAPI.Controllers
                 HashSet<string> addedAges = new HashSet<string>();
                 string previousAgeLabel = null;
                 var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A (Jr)" };
+                var selectedInfiniteDoses = infiniteVaccineNames
+                    .Select(name =>
+                    {
+                        var given = dbSchedules
+                            .Where(s => s.IsSkip != true && s.IsDone == true 
+                            && s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+                            .OrderBy(s => s.GivenDate ?? s.Date)
+                            .FirstOrDefault();
+                        if (given != null) return given;
 
-                var firstGivenInfiniteDoses = dbSchedules
-                .Where(s => s.IsSkip != true
-                    && infiniteVaccineNames.Any(name =>
-                        s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
-                .GroupBy(s => infiniteVaccineNames.First(name =>
-                    s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
-                .Select(g => g.OrderBy(s => s.GivenDate ?? s.Date).First())
-                .ToList();
-              
-                var orderedDbSchedules = dbSchedules                
+                        var due = dbSchedules
+                            .Where(s => s.IsSkip != true && s.IsDone == false 
+                            && s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+                            .OrderBy(s => s.Date)
+                            .FirstOrDefault();
+                        return due;
+                    })
+                    .Where(s => s != null)
+                    .ToList();
+
+                var orderedDbSchedules = dbSchedules
                     .Where(s =>
                     {
                         if (s.IsSkip == true)
-                        {
                             return false;
-                        }
+
                         bool isInfinite = infiniteVaccineNames.Any(name =>
                             s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
+
                         if (isInfinite)
                         {
-                            return firstGivenInfiniteDoses.Any(x => x.Id == s.Id);
+                            return selectedInfiniteDoses.Any(x => x.Id == s.Id);
                         }
                         return true;
                     })

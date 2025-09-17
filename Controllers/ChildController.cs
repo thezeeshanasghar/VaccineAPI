@@ -1025,9 +1025,9 @@ namespace VaccineAPI.Controllers
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
-                                 string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                                if (!string.IsNullOrEmpty(dateStr))
-                                    upperTableDates.Add(dateStr);
+                                //  string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                                // if (!string.IsNullOrEmpty(dateStr))
+                                //     upperTableDates.Add(dateStr);
                             }
                             else
                             {
@@ -1035,9 +1035,9 @@ namespace VaccineAPI.Controllers
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
-                                 string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-                                if (!string.IsNullOrEmpty(dateStr))
-                                    upperTableDates.Add(dateStr);
+                                //  string dateStr = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+                                // if (!string.IsNullOrEmpty(dateStr))
+                                //     upperTableDates.Add(dateStr);
                             }
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
@@ -1347,17 +1347,15 @@ namespace VaccineAPI.Controllers
                 lowertable2.AddCell(CreateCell("", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Last Dose", "LightGreen", 3, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Next Dose", "LightGreen", 2, "center", "scheduleRecords"));
-
                 lowertable2.AddCell(CreateCell("Vaccine", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Brand", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Status", "LightGreen", 1, "center", "scheduleRecords"));
                 lowertable2.AddCell(CreateCell("Date", "LightGreen", 1, "center", "scheduleRecords"));
-
                 lowertable2.AddCell(CreateCell("Flu", "", 1, "center", "scheduleRecords")); 
 
-                if (!string.IsNullOrEmpty(flu1GivenDate)&& !upperTableDates.Contains(flu1GivenDate) ){
+                if (!string.IsNullOrEmpty(flu1GivenDate)){
                 lowertable2.AddCell(new PdfPCell(new Phrase(flustatus1, GetStatusFont(flustatus1))) {
                     HorizontalAlignment = Element.ALIGN_CENTER,
                     FixedHeight = 15f,
@@ -1390,7 +1388,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 lowertable2.AddCell(CreateCell("Typhoid", "", 1, "center", "scheduleRecords")); 
-                if (!string.IsNullOrEmpty(type1GivenDate) && !upperTableDates.Contains(type1GivenDate)){
+                if (!string.IsNullOrEmpty(type1GivenDate)){
                    lowertable2.AddCell(new PdfPCell(new Phrase(typestatus1, GetStatusFont(typestatus1)))
                     {
                         HorizontalAlignment = Element.ALIGN_CENTER,

@@ -16,18 +16,18 @@ services:
       - ASPNETCORE_HTTPS_PORT=443
       - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/certs/myapi.pfx
       - ASPNETCORE_Kestrel__Certificates__Default__Password=Ae!8bfb666
-      - DefaultConnection=server=db;userid=test;password=test;database=vaccineapi;port=3306
+      - DefaultConnection=server=db;userid=${DB_USER};password=${DB_PASSWORD};database=${DB_NAME};port=3306
 
   db:
     image: mysql:8.0
     platform: linux/amd64
     restart: unless-stopped
-    command: --default-authentication-plugin=mysql_native_password --loose-validate_password.policy=LOW
+    command: --default-authentication-plugin=mysql_native_password --loose-validate_password.policy=MEDIUM
     environment:
-      MYSQL_ROOT_PASSWORD: test
-      MYSQL_DATABASE: vaccineapi
-      MYSQL_USER: test
-      MYSQL_PASSWORD: test
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
@@ -46,7 +46,7 @@ services:
       - db
     environment:
       DATABASE_HOST: db
-      MYSQL_ROOT_PASSWORD: test
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     ports:
       - "8081:8080"
 

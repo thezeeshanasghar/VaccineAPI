@@ -40,3 +40,12 @@ msbuild.wrn
 Resources/Images/
 !Resources/Images/Vaccine.pdflogo.png
 !Resources/Images/avatar.png
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Keep example file
+!.env.example
+cert_renewal.log

@@ -590,7 +590,9 @@ namespace VaccineAPI.Controllers
             var dbChildSchedules = _db.Schedules
                 .Include(x => x.Dose)
                 .ThenInclude(x => x.Vaccine)
-                .Where(x => x.ChildId == dbSchedule.ChildId && x.Date == dbSchedule.Date && x.IsSkip != true)
+                .Where(x => x.ChildId == dbSchedule.ChildId 
+                         && x.Date.Date == dbSchedule.Date.Date  // Compare only date part, ignore time
+                         && x.IsSkip != true)
                 .ToList();
 
             foreach (var schedule in dbChildSchedules)

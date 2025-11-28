@@ -583,11 +583,15 @@ namespace VaccineAPI.Controllers
                 var dbSchedule = _db.Schedules
                     .Where(x => x.Id == scheduleDTO.Id)
                     .Include(x => x.Child)
-                    .ThenInclude(x => x.Schedules)
+                    .Include(x => x.Dose)
+                    .ThenInclude(x => x.Vaccine)
                     .FirstOrDefault();
 
-                var dbChildSchedules = dbSchedule.Child.Schedules
-                    .Where(x => x.Date == dbSchedule.Date && x.IsSkip != true)
+                // Fetch all schedules for the child on the same date with proper includes
+                var dbChildSchedules = _db.Schedules
+                    .Include(x => x.Dose)
+                    .ThenInclude(x => x.Vaccine)
+                    .Where(x => x.ChildId == dbSchedule.ChildId && x.Date == dbSchedule.Date && x.IsSkip != true)
                     .ToList();
 
                 foreach (var schedule in dbChildSchedules)
@@ -621,7 +625,12 @@ namespace VaccineAPI.Controllers
                             }
                         }
                     }
-                    ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
+                    
+                    // Only reschedule future doses for non-infinite vaccines
+                    if (schedule.Dose != null && schedule.Dose.Vaccine != null && !schedule.Dose.Vaccine.isInfinite)
+                    {
+                        ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
+                    }
                 }
                 _db.SaveChanges();
                 return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);

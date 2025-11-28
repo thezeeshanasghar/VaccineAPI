@@ -1609,7 +1609,7 @@ namespace VaccineAPI.Controllers
                 .ThenInclude(dose => dose.Vaccine) // Include vaccine details
                 .Include(s => s.Child.Clinic.Doctor) // Include clinic and doctor details
                 .Where(s => s.ChildId == childId &&
-                            s.Child.ClinicId == onlineClinicId && // Filter by the current online clinic
+                            //s.Child.ClinicId == onlineClinicId && // Filter by the current online clinic
                             (s.IsDone == false || s.IsDone == null) &&
                             (s.IsSkip == false || s.IsSkip == null) &&
                             s.Date.Date == selectedDate)

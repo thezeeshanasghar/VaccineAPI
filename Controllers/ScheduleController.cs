@@ -579,62 +579,53 @@ namespace VaccineAPI.Controllers
         [HttpPut("update-bulk-injection")]
         public Response<ScheduleDTO> UpdateBulkInjection(ScheduleDTO scheduleDTO)
         {
+            // Fetch all schedules for the child on the same date with proper includes
+            var dbChildSchedules = _db.Schedules
+                .Include(x => x.Dose)
+                .ThenInclude(x => x.Vaccine)
+                .Where(x => x.ChildId == scheduleDTO.ChildId && x.Date == scheduleDTO.Date && x.IsSkip != true)
+                .ToList();
+
+            foreach (var schedule in dbChildSchedules)
             {
-                var dbSchedule = _db.Schedules
-                    .Where(x => x.Id == scheduleDTO.Id)
-                    .Include(x => x.Child)
-                    .Include(x => x.Dose)
-                    .ThenInclude(x => x.Vaccine)
-                    .FirstOrDefault();
+                schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
+                schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
+                schedule.Circle =(scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
+                schedule.IsDone = scheduleDTO.IsDone;
+                schedule.GivenDate = scheduleDTO.GivenDate.Date;
+                schedule.IsPAApprove= scheduleDTO.IsPAApprove;
 
-                // Fetch all schedules for the child on the same date with proper includes
-                var dbChildSchedules = _db.Schedules
-                    .Include(x => x.Dose)
-                    .ThenInclude(x => x.Vaccine)
-                    .Where(x => x.ChildId == dbSchedule.ChildId && x.Date == dbSchedule.Date && x.IsSkip != true)
-                    .ToList();
-
-                foreach (var schedule in dbChildSchedules)
+                if (scheduleDTO.ScheduleBrands.Count > 0)
                 {
-                    schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
-                    schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
-                    schedule.Circle =(scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
-                    schedule.IsDone = scheduleDTO.IsDone;
-                    schedule.GivenDate = scheduleDTO.GivenDate.Date;
-                    schedule.IsPAApprove= scheduleDTO.IsPAApprove;
-
-                    if (scheduleDTO.ScheduleBrands.Count > 0)
+                    var scheduleBrand = scheduleDTO.ScheduleBrands.Find(
+                        x => x.ScheduleId == schedule.Id
+                    );
+                    if (scheduleBrand != null)
                     {
-                        var scheduleBrand = scheduleDTO.ScheduleBrands.Find(
-                            x => x.ScheduleId == schedule.Id
-                        );
-                        if (scheduleBrand != null)
+                        schedule.BrandId = scheduleBrand.BrandId;
+                        if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                         {
-                            schedule.BrandId = scheduleBrand.BrandId;
-                            if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
-                            {
-                                var brandInventory = _db.BrandAmounts
-                                    .Where(
-                                        b =>
-                                            b.BrandId == scheduleBrand.BrandId
-                                            && b.DoctorId == scheduleDTO.DoctorId
-                                    )
-                                    .FirstOrDefault();
-                                if (brandInventory != null)
-                                    brandInventory.Count--;
-                            }
+                            var brandInventory = _db.BrandAmounts
+                                .Where(
+                                    b =>
+                                        b.BrandId == scheduleBrand.BrandId
+                                        && b.DoctorId == scheduleDTO.DoctorId
+                                )
+                                .FirstOrDefault();
+                            if (brandInventory != null)
+                                brandInventory.Count--;
                         }
                     }
-                    
-                    // Only reschedule future doses for non-infinite vaccines
-                    if (schedule.Dose != null && schedule.Dose.Vaccine != null && !schedule.Dose.Vaccine.isInfinite)
-                    {
-                        ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
-                    }
                 }
-                _db.SaveChanges();
-                return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
+                
+                // Only reschedule future doses for non-infinite vaccines
+                if (schedule.Dose != null && schedule.Dose.Vaccine != null && !schedule.Dose.Vaccine.isInfinite)
+                {
+                    ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
+                }
             }
+            _db.SaveChanges();
+            return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
         }
 
         [HttpPut("update-bulk-invoice")]

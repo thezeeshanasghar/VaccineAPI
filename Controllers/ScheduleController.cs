@@ -579,11 +579,18 @@ namespace VaccineAPI.Controllers
         [HttpPut("update-bulk-injection")]
         public Response<ScheduleDTO> UpdateBulkInjection(ScheduleDTO scheduleDTO)
         {
+            var dbSchedule = _db.Schedules
+                .Where(x => x.Id == scheduleDTO.Id)
+                .Include(x => x.Child)
+                .Include(x => x.Dose)
+                .ThenInclude(x => x.Vaccine)
+                .FirstOrDefault();
+
             // Fetch all schedules for the child on the same date with proper includes
             var dbChildSchedules = _db.Schedules
                 .Include(x => x.Dose)
                 .ThenInclude(x => x.Vaccine)
-                .Where(x => x.ChildId == scheduleDTO.ChildId && x.Date == scheduleDTO.Date && x.IsSkip != true)
+                .Where(x => x.ChildId == dbSchedule.ChildId && x.Date == dbSchedule.Date && x.IsSkip != true)
                 .ToList();
 
             foreach (var schedule in dbChildSchedules)

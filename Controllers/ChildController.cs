@@ -1073,19 +1073,23 @@ namespace VaccineAPI.Controllers
                                 heightCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(heightCell);
 
-                                Paragraph pc = new Paragraph("", rangevaluefont);
+                                // Use smaller fonts for OFC/BMI to fit in one line
+                                Font ofcValueFont = FontFactory.GetFont(FontFactory.HELVETICA, 7);
+                                Font ofcRangeFont = FontFactory.GetFont(FontFactory.HELVETICA, 5);
+                                
+                                Paragraph pc = new Paragraph("", ofcValueFont);
                                 if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
                                 {
-                                    pc.Add(new Chunk(dbSchedule.Circle.ToString(), rangevaluefont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                    pc.Add(new Chunk(dbSchedule.Circle.ToString(), ofcValueFont));
+                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", ofcRangeFont));
                                 }
 
                                 if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
                                 {
                                     double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
                                     BMI = Math.Round(BMI, 1);
-                                    pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                    pc.Add(new Chunk(BMI.ToString(), ofcValueFont));
+                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", ofcRangeFont));
                                 }
                                 PdfPCell circleCell = new PdfPCell(pc);
                                 circleCell.HorizontalAlignment = Element.ALIGN_CENTER;

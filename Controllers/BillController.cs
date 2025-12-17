@@ -297,7 +297,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("brand-stock-report-pdf")]
         public IActionResult GenerateBrandStockReportPdf(
             [FromQuery] long clinicId,
-            [FromQuery] long brandId,
+            [FromQuery] long? brandId,
             [FromQuery] string fromDate,
             [FromQuery] string toDate
         )
@@ -315,10 +315,17 @@ namespace VaccineAPI.Controllers
                     return NotFound("Clinic not found.");
                 }
 
-                var brand = _db.Brands.FirstOrDefault(b => b.Id == brandId);
-                if (brand == null)
+                // Check if we're generating report for all brands or a specific brand
+                bool isAllBrands = !brandId.HasValue || brandId.Value == 0;
+                
+                Brand brand = null;
+                if (!isAllBrands)
                 {
-                    return NotFound("Brand not found.");
+                    brand = _db.Brands.FirstOrDefault(b => b.Id == brandId);
+                    if (brand == null)
+                    {
+                        return NotFound("Brand not found.");
+                    }
                 }
 
                 var doctorName = clinic.Doctor?.DisplayName ?? "Unknown Doctor";
@@ -328,6 +335,11 @@ namespace VaccineAPI.Controllers
                 var address = clinic.Address ?? "Unknown Address";
                 var phoneNumber = clinic.PhoneNumber ?? "Unknown Phone Number";
                 var today = DateTime.Today;
+
+                if (isAllBrands)
+                {
+                    return GenerateAllBrandsStockReportPdf(clinicId, parsedFromDate, parsedToDate, clinic, doctorName, additionalInfo, clinicName, monogramImage, address, phoneNumber, today);
+                }
 
                 var brandAmount = _db.BrandAmounts.FirstOrDefault(b =>
                     b.BrandId == brandId && b.ClinicId == clinicId);
@@ -340,10 +352,8 @@ namespace VaccineAPI.Controllers
                     .Schedules.Where(s =>
                         s.BrandId == brandId
                         && s.GivenDate >= parsedFromDate
-
                         && s.GivenDate <= today 
                         && s.Child.ClinicId == clinicId)
-
                     .ToList();
 
                 var stockPurchases = _db
@@ -679,6 +689,437 @@ namespace VaccineAPI.Controllers
             catch (Exception ex)
             {
                 return BadRequest($"Error generating PDF: {ex.Message}\n{ex.StackTrace}");
+            }
+        }
+
+        private IActionResult GenerateAllBrandsStockReportPdf(
+            long clinicId,
+            DateTime parsedFromDate,
+            DateTime parsedToDate,
+            Clinic clinic,
+            string doctorName,
+            string additionalInfo,
+            string clinicName,
+            string monogramImage,
+            string address,
+            string phoneNumber,
+            DateTime today
+        )
+        {
+            try
+            {
+                // Get all brands for this clinic
+                var brandAmounts = _db.BrandAmounts
+                    .Include(ba => ba.Brand)
+                    .Where(ba => ba.ClinicId == clinicId && ba.Count > 0)
+                    .ToList();
+
+                if (!brandAmounts.Any())
+                {
+                    return NotFound("No brands found for this clinic.");
+                }
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    Document document = new Document(PageSize.A4.Rotate(), 25, 25, 30, 30); // Landscape for more columns
+                    PdfWriter writer = PdfWriter.GetInstance(document, ms);
+                    writer.PageEvent = new PdfFooter();
+                    document.Open();
+
+                    // Header
+                    PdfPTable upperTable = new PdfPTable(2);
+                    float[] upperTableWidths = new float[] { 500f, 200f };
+                    upperTable.HorizontalAlignment = 0;
+                    upperTable.TotalWidth = 750f;
+                    upperTable.LockedWidth = true;
+                    upperTable.SetWidths(upperTableWidths);
+
+                    Font boldFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+                    Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+
+                    Phrase phrase = new Phrase();
+                    phrase.Add(new Chunk(doctorName + "\n", boldFont));
+                    phrase.Add(new Chunk(additionalInfo + "\n", regularFont));
+                    phrase.Add(new Chunk(clinicName + "\n", boldFont));
+                    phrase.Add(new Chunk(address + "\n", regularFont));
+                    phrase.Add(new Chunk(phoneNumber, regularFont));
+
+                    PdfPCell leftCell = new PdfPCell(phrase)
+                    {
+                        Border = 0,
+                        HorizontalAlignment = Element.ALIGN_LEFT,
+                        Padding = 5,
+                    };
+                    upperTable.AddCell(leftCell);
+
+                    var imageCell = new PdfPCell(new Phrase(""))
+                    {
+                        Border = 0,
+                        FixedHeight = 50f,
+                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                    };
+
+                    if (!string.IsNullOrEmpty(monogramImage))
+                    {
+                        var logoPath = Path.Combine(_host.ContentRootPath, monogramImage);
+                        if (System.IO.File.Exists(logoPath))
+                        {
+                            var img = Image.GetInstance(logoPath);
+                            img.ScaleAbsolute(160f, 50f);
+                            imageCell = new PdfPCell(img, false)
+                            {
+                                Border = 0,
+                                FixedHeight = 50f,
+                                HorizontalAlignment = Element.ALIGN_RIGHT,
+                            };
+                        }
+                    }
+
+                    upperTable.AddCell(imageCell);
+                    document.Add(upperTable);
+
+                    Font headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
+                    Font normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 9);
+
+                    document.Add(
+                        new Paragraph("ALL BRANDS STOCK REPORT", headerFont)
+                        {
+                            Alignment = Element.ALIGN_CENTER,
+                        }
+                    );
+
+                    document.Add(
+                        new Paragraph(
+                            $"FROM {parsedFromDate:dd-MM-yyyy} TO {parsedToDate:dd-MM-yyyy}",
+                            normalFont
+                        )
+                        {
+                            Alignment = Element.ALIGN_CENTER,
+                            SpacingAfter = 10f,
+                        }
+                    );
+
+                    // Create table with 7 columns (Brand Name + 6 existing columns)
+                    PdfPTable table = new PdfPTable(7) { WidthPercentage = 100 };
+                    table.SetWidths(new float[] { 3f, 2f, 2f, 2f, 2f, 2f, 2f });
+
+                    string[] headers =
+                    {
+                        "Brand Name",
+                        "Date",
+                        "Opening Stock",
+                        "Sold",
+                        "Purchased",
+                        "Adjusted",
+                        "Stock In Hand",
+                    };
+                    foreach (var header in headers)
+                    {
+                        table.AddCell(
+                            new PdfPCell(new Phrase(header, headerFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                                BackgroundColor = BaseColor.LightGray,
+                                Padding = 5,
+                            }
+                        );
+                    }
+
+                    int grandTotalSold = 0;
+                    int grandTotalPurchased = 0;
+                    int grandTotalAdjusted = 0;
+                    int grandTotalOpeningStock = 0;
+                    int grandTotalClosingStock = 0;
+                    bool hasAnyData = false;
+
+                    // Process each brand
+                    foreach (var brandAmount in brandAmounts.OrderBy(ba => ba.Brand.Name))
+                    {
+                        var brandId = brandAmount.BrandId;
+                        var brandName = brandAmount.Brand?.Name ?? "Unknown";
+                        int todaysInventory = brandAmount.Count;
+
+                        var schedules = _db
+                            .Schedules.Where(s =>
+                                s.BrandId == brandId
+                                && s.GivenDate >= parsedFromDate
+                                && s.GivenDate <= today
+                                && s.Child.ClinicId == clinicId)
+                            .ToList();
+
+                        var stockPurchases = _db
+                            .Stocks.Join(
+                                _db.Bills,
+                                stock => stock.BillId,
+                                bill => bill.Id,
+                                (stock, bill) => new { stock, bill }
+                            )
+                            .Where(sb =>
+                                sb.stock.BrandId == brandId
+                                && sb.bill.BillDate >= parsedFromDate
+                                && sb.bill.BillDate <= parsedToDate
+                                && sb.bill.ClinicId == clinicId
+                            )
+                            .GroupBy(sb => sb.bill.BillDate.Date)
+                            .ToDictionary(g => g.Key, g => g.Sum(sb => sb.stock.Quantity));
+
+                        var vaccineGroups = schedules
+                            .GroupBy(s => s.GivenDate)
+                            .ToDictionary(g => g.Key, g => g.Count());
+
+                        var stockAdjustments = _db
+                            .AdjustStocks
+                            .Where(a =>
+                                a.BrandId == brandId
+                                && a.Date >= parsedFromDate
+                                && a.Date <= parsedToDate
+                                && a.ClinicId == clinicId
+                            )
+                            .AsEnumerable()
+                            .GroupBy(a => a.Date.Date)
+                            .ToDictionary(g => g.Key, g => g.Sum(a => a.Adjustment));
+
+                        var allDates = Enumerable
+                            .Range(0, (parsedToDate - parsedFromDate).Days + 1)
+                            .Select(offset => parsedFromDate.AddDays(offset))
+                            .ToList();
+
+                        // Calculate opening stock
+                        int totalVaccinesFromFirstDate = schedules
+                            .Where(s => s.GivenDate >= parsedFromDate && s.GivenDate <= today)
+                            .Count();
+
+                        int totalPurchasesFromFirstDate = stockPurchases
+                            .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
+                            .Sum(kvp => kvp.Value);
+
+                        int totalAdjustmentsFromFirstDate = stockAdjustments
+                            .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
+                            .Sum(kvp => kvp.Value);
+
+                        int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate 
+                            - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
+
+                        var reportData = new List<(
+                            DateTime Date,
+                            int OpeningStock,
+                            int VaccinesDone,
+                            int StockPurchased,
+                            int StockAdjusted,
+                            int StockInHand
+                        )>();
+
+                        int currentStock = initialOpeningStock;
+
+                        foreach (var date in allDates)
+                        {
+                            int vaccinesDoneToday = vaccineGroups.ContainsKey(date)
+                                ? vaccineGroups[date]
+                                : 0;
+                            int stockPurchasedToday = stockPurchases.ContainsKey(date)
+                                ? stockPurchases[date]
+                                : 0;
+                            int stockAdjustedToday = stockAdjustments.ContainsKey(date.Date)
+                                ? stockAdjustments[date.Date]
+                                : 0;
+
+                            int openingStock = currentStock;
+                            int stockInHand = openingStock - vaccinesDoneToday + stockPurchasedToday + stockAdjustedToday;
+
+                            reportData.Add(
+                                (
+                                    date,
+                                    openingStock,
+                                    vaccinesDoneToday,
+                                    stockPurchasedToday,
+                                    stockAdjustedToday,
+                                    stockInHand
+                                )
+                            );
+
+                            currentStock = stockInHand;
+                        }
+
+                        // Filter to only rows with activity
+                        var displayedRows = reportData
+                            .Where(r => r.VaccinesDone != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
+                            .ToList();
+
+                        if (displayedRows.Any())
+                        {
+                            hasAnyData = true;
+                            bool firstRowForBrand = true;
+
+                            foreach (var row in displayedRows)
+                            {
+                                // Brand name (only on first row for this brand)
+                                if (firstRowForBrand)
+                                {
+                                    table.AddCell(
+                                        new PdfPCell(new Phrase(brandName, normalFont))
+                                        {
+                                            HorizontalAlignment = Element.ALIGN_LEFT,
+                                            Rowspan = displayedRows.Count,
+                                            VerticalAlignment = Element.ALIGN_MIDDLE,
+                                        }
+                                    );
+                                    firstRowForBrand = false;
+                                }
+
+                                table.AddCell(
+                                    new PdfPCell(new Phrase(row.Date.ToString("dd-MM-yyyy"), normalFont))
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_CENTER,
+                                    }
+                                );
+                                table.AddCell(
+                                    new PdfPCell(new Phrase(row.OpeningStock.ToString(), normalFont))
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_CENTER,
+                                    }
+                                );
+                                table.AddCell(
+                                    new PdfPCell(new Phrase(row.VaccinesDone.ToString(), normalFont))
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_CENTER,
+                                    }
+                                );
+                                table.AddCell(
+                                    new PdfPCell(new Phrase(row.StockPurchased.ToString(), normalFont))
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_CENTER,
+                                    }
+                                );
+                                table.AddCell(
+                                    new PdfPCell(new Phrase(row.StockAdjusted.ToString(), normalFont))
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_CENTER,
+                                    }
+                                );
+                                table.AddCell(
+                                    new PdfPCell(new Phrase(row.StockInHand.ToString(), normalFont))
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_CENTER,
+                                    }
+                                );
+                            }
+
+                            // Add brand totals
+                            int brandTotalSold = displayedRows.Sum(r => r.VaccinesDone);
+                            int brandTotalPurchased = displayedRows.Sum(r => r.StockPurchased);
+                            int brandTotalAdjusted = displayedRows.Sum(r => r.StockAdjusted);
+                            int brandOpeningStock = displayedRows.First().OpeningStock;
+                            int brandClosingStock = displayedRows.Last().StockInHand;
+
+                            grandTotalSold += brandTotalSold;
+                            grandTotalPurchased += brandTotalPurchased;
+                            grandTotalAdjusted += brandTotalAdjusted;
+
+                            if (grandTotalOpeningStock == 0) grandTotalOpeningStock = brandOpeningStock;
+                            grandTotalClosingStock += brandClosingStock;
+
+                            // Brand subtotal row
+                            PdfPCell subtotalCell = new PdfPCell(new Phrase($"Subtotal: {brandName}", boldFont))
+                            {
+                                Colspan = 2,
+                                HorizontalAlignment = Element.ALIGN_RIGHT,
+                                BackgroundColor = new BaseColor(240, 240, 240),
+                                Padding = 5
+                            };
+                            table.AddCell(subtotalCell);
+
+                            table.AddCell(new PdfPCell(new Phrase(brandOpeningStock.ToString(), boldFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                                BackgroundColor = new BaseColor(240, 240, 240),
+                                Padding = 5
+                            });
+                            table.AddCell(new PdfPCell(new Phrase(brandTotalSold.ToString(), boldFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                                BackgroundColor = new BaseColor(240, 240, 240),
+                                Padding = 5
+                            });
+                            table.AddCell(new PdfPCell(new Phrase(brandTotalPurchased.ToString(), boldFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                                BackgroundColor = new BaseColor(240, 240, 240),
+                                Padding = 5
+                            });
+                            table.AddCell(new PdfPCell(new Phrase(brandTotalAdjusted.ToString(), boldFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                                BackgroundColor = new BaseColor(240, 240, 240),
+                                Padding = 5
+                            });
+                            table.AddCell(new PdfPCell(new Phrase(brandClosingStock.ToString(), boldFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                                BackgroundColor = new BaseColor(240, 240, 240),
+                                Padding = 5
+                            });
+                        }
+                    }
+
+                    if (!hasAnyData)
+                    {
+                        return NotFound("No stock activity found for any brand in the specified period.");
+                    }
+
+                    // Grand totals row
+                    PdfPCell grandTotalLabelCell = new PdfPCell(new Phrase("GRAND TOTAL", boldFont))
+                    {
+                        Colspan = 2,
+                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                        BackgroundColor = BaseColor.LightGray,
+                        Padding = 5
+                    };
+                    table.AddCell(grandTotalLabelCell);
+
+                    table.AddCell(new PdfPCell(new Phrase("-", boldFont))
+                    {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        BackgroundColor = BaseColor.LightGray,
+                        Padding = 5
+                    });
+                    table.AddCell(new PdfPCell(new Phrase(grandTotalSold.ToString(), boldFont))
+                    {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        BackgroundColor = BaseColor.LightGray,
+                        Padding = 5
+                    });
+                    table.AddCell(new PdfPCell(new Phrase(grandTotalPurchased.ToString(), boldFont))
+                    {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        BackgroundColor = BaseColor.LightGray,
+                        Padding = 5
+                    });
+                    table.AddCell(new PdfPCell(new Phrase(grandTotalAdjusted.ToString(), boldFont))
+                    {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        BackgroundColor = BaseColor.LightGray,
+                        Padding = 5
+                    });
+                    table.AddCell(new PdfPCell(new Phrase(grandTotalClosingStock.ToString(), boldFont))
+                    {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        BackgroundColor = BaseColor.LightGray,
+                        Padding = 5
+                    });
+
+                    document.Add(table);
+                    document.Close();
+
+                    return File(
+                        ms.ToArray(),
+                        "application/pdf",
+                        $"AllBrandsStockReport_Clinic_{clinicId}_{parsedFromDate:yyyyMMdd}_{parsedToDate:yyyyMMdd}.pdf"
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error generating all brands PDF: {ex.Message}\n{ex.StackTrace}");
             }
         }
 

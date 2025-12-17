@@ -383,15 +383,34 @@ namespace VaccineAPI.Controllers
                     .Select(offset => parsedFromDate.AddDays(offset))
                     .ToList();
 
+                // Calculate opening stock (stock at the beginning of the date range)
+                // Opening Stock = Today's Inventory + Sold(from firstDate to today) - Purchased(from firstDate to today) - Adjusted(from firstDate to today)
+                int totalVaccinesFromFirstDate = schedules
+                    .Where(s => s.GivenDate >= parsedFromDate && s.GivenDate <= today)
+                    .Count();
+                
+                int totalPurchasesFromFirstDate = stockPurchases
+                    .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
+                    .Sum(kvp => kvp.Value);
+                
+                int totalAdjustmentsFromFirstDate = stockAdjustments
+                    .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
+                    .Sum(kvp => kvp.Value);
+                
+                // Calculate initial opening stock for the first date in range
+                int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
+
                 var reportData =
                     new List<(
                         DateTime Date,
-                        int Inventory,
+                        int OpeningStock,
                         int VaccinesDone,
                         int StockPurchased,
                         int StockAdjusted,
                         int StockInHand
                     )>();
+
+                int currentStock = initialOpeningStock;
 
                 foreach (var date in allDates)
                 {
@@ -405,48 +424,22 @@ namespace VaccineAPI.Controllers
                         ? stockAdjustments[date.Date]
                         : 0;
 
-                    int totalFutureVaccines = schedules
-                        .Where(s => s.GivenDate >= date && s.GivenDate <= today)
-                        .Count();
-
-                    int cumulativeStockPurchased = stockPurchases
-                        .Where(kvp => kvp.Key >= date && kvp.Key <= today)
-                        .Sum(kvp => kvp.Value);
-
-                    int cumulativeStockAdjusted = stockAdjustments
-                        .Where(kvp => kvp.Key >= date && kvp.Key <= today)
-                        .Sum(kvp => kvp.Value);
-
-                    int inventory =
-                        todaysInventory
-                        - totalFutureVaccines
-                        - cumulativeStockPurchased
-                        - cumulativeStockAdjusted;
-                    int stockInHand =
-                        todaysInventory
-                        + totalFutureVaccines
-                        + cumulativeStockPurchased
-                        + cumulativeStockAdjusted;
-                    int cumulativeVaccinesDone = schedules.Where(s => s.GivenDate <= date).Count();
-
-                    int cumulativePurchased = stockPurchases
-                        .Where(kvp => kvp.Key <= date)
-                        .Sum(kvp => kvp.Value);
-
-                    int cumulativeAdjusted = stockAdjustments
-                        .Where(kvp => kvp.Key <= date)
-                        .Sum(kvp => kvp.Value);
+                    int openingStock = currentStock;
+                    int stockInHand = openingStock - vaccinesDoneToday + stockPurchasedToday + stockAdjustedToday;
 
                     reportData.Add(
                         (
                             date,
-                            inventory,
+                            openingStock,
                             vaccinesDoneToday,
                             stockPurchasedToday,
                             stockAdjustedToday,
                             stockInHand
                         )
                     );
+
+                    // Update current stock for next iteration
+                    currentStock = stockInHand;
                 }
 
                 using (MemoryStream ms = new MemoryStream())
@@ -574,7 +567,7 @@ namespace VaccineAPI.Controllers
                             }
                         );
                         table.AddCell(
-                            new PdfPCell(new Phrase((row.Inventory+row.VaccinesDone).ToString(), normalFont))
+                            new PdfPCell(new Phrase(row.OpeningStock.ToString(), normalFont))
                             {
                                 HorizontalAlignment = Element.ALIGN_CENTER,
                             }
@@ -598,75 +591,80 @@ namespace VaccineAPI.Controllers
                             }
                         );
                         table.AddCell(
-                            new PdfPCell(
-                                new Phrase(
-                                    (
-                                        row.Inventory
-                                        + row.StockPurchased
-                                        + row.StockAdjusted
-                                    ).ToString(),
-                                    normalFont
-                                )
-                            )
+                            new PdfPCell(new Phrase(row.StockInHand.ToString(), normalFont))
                             {
                                 HorizontalAlignment = Element.ALIGN_CENTER,
                             }
                         );
                     }
                     
-                 int totalSold = reportData.Sum(r => r.VaccinesDone);
-int totalPurchased = reportData.Sum(r => r.StockPurchased);
-int totalAdjusted = reportData.Sum(r => r.StockAdjusted);
-int totalInventory = reportData.FirstOrDefault().Inventory;
-int totalStockInHand = reportData.LastOrDefault().StockInHand;
+                    // Filter to only rows that were displayed (have activity)
+                    var displayedRows = reportData
+                        .Where(r => r.VaccinesDone != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
+                        .ToList();
 
-PdfPCell totalDateCell = new PdfPCell(new Phrase("Totals", boldFont))
-{
-    HorizontalAlignment = Element.ALIGN_CENTER,
-    BackgroundColor = BaseColor.LightGray,
-    Padding = 5
-};
-table.AddCell(totalDateCell);
+                    // Check if there's any data to display
+                    if (!displayedRows.Any())
+                    {
+                        return NotFound("No stock activity found for the specified period.");
+                    }
 
-PdfPCell totalInventoryCell = new PdfPCell(new Phrase(totalInventory.ToString(), boldFont))
-{
-    HorizontalAlignment = Element.ALIGN_CENTER,
-    BackgroundColor = BaseColor.LightGray,
-    Padding = 5
-};
-table.AddCell(totalInventoryCell);
+                    if (displayedRows.Any())
+                    {
+                        int totalSold = displayedRows.Sum(r => r.VaccinesDone);
+                        int totalPurchased = displayedRows.Sum(r => r.StockPurchased);
+                        int totalAdjusted = displayedRows.Sum(r => r.StockAdjusted);
+                        int totalOpeningStock = displayedRows.First().OpeningStock;
+                        int totalStockInHand = displayedRows.Last().StockInHand;
 
-PdfPCell totalSoldCell = new PdfPCell(new Phrase(totalSold.ToString(), boldFont))
-{
-    HorizontalAlignment = Element.ALIGN_CENTER,
-    BackgroundColor = BaseColor.LightGray,
-    Padding = 5
-};
-table.AddCell(totalSoldCell);
+                        PdfPCell totalDateCell = new PdfPCell(new Phrase("Totals", boldFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            BackgroundColor = BaseColor.LightGray,
+                            Padding = 5
+                        };
+                        table.AddCell(totalDateCell);
 
-PdfPCell totalPurchasedCell = new PdfPCell(new Phrase(totalPurchased.ToString(), boldFont))
-{
-    HorizontalAlignment = Element.ALIGN_CENTER,
-    BackgroundColor = BaseColor.LightGray,
-    Padding = 5
-};
-table.AddCell(totalPurchasedCell);
+                        PdfPCell totalOpeningStockCell = new PdfPCell(new Phrase(totalOpeningStock.ToString(), boldFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            BackgroundColor = BaseColor.LightGray,
+                            Padding = 5
+                        };
+                        table.AddCell(totalOpeningStockCell);
 
-PdfPCell totalAdjustedCell = new PdfPCell(new Phrase(totalAdjusted.ToString(), boldFont))
-{
-    HorizontalAlignment = Element.ALIGN_CENTER,
-    BackgroundColor = BaseColor.LightGray,
-    Padding = 5
-};
-table.AddCell(totalAdjustedCell);
+                        PdfPCell totalSoldCell = new PdfPCell(new Phrase(totalSold.ToString(), boldFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            BackgroundColor = BaseColor.LightGray,
+                            Padding = 5
+                        };
+                        table.AddCell(totalSoldCell);
 
-PdfPCell totalStockInHandCell = new PdfPCell(new Phrase(totalStockInHand.ToString(), boldFont))
-{
-    HorizontalAlignment = Element.ALIGN_CENTER,
-    BackgroundColor = BaseColor.LightGray,
-    Padding = 5
-};
-table.AddCell(totalStockInHandCell);
+                        PdfPCell totalPurchasedCell = new PdfPCell(new Phrase(totalPurchased.ToString(), boldFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            BackgroundColor = BaseColor.LightGray,
+                            Padding = 5
+                        };
+                        table.AddCell(totalPurchasedCell);
+
+                        PdfPCell totalAdjustedCell = new PdfPCell(new Phrase(totalAdjusted.ToString(), boldFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            BackgroundColor = BaseColor.LightGray,
+                            Padding = 5
+                        };
+                        table.AddCell(totalAdjustedCell);
+
+                        PdfPCell totalStockInHandCell = new PdfPCell(new Phrase(totalStockInHand.ToString(), boldFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            BackgroundColor = BaseColor.LightGray,
+                            Padding = 5
+                        };
+                        table.AddCell(totalStockInHandCell);
+                    }
                   
                     document.Add(table);
                     document.Close();

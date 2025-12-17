@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -61,6 +61,22 @@ namespace VaccineAPI.Controllers
         [HttpPost("add-schedule")]
         public Response<ScheduleDTO> Insert([FromBody] ScheduleDTO scheduleDTO)
         {
+            // Check if DoseId is 131 and child is 5 years or older
+            if (scheduleDTO.DoseId == 131)
+            {
+                var child = _db.Childs.FirstOrDefault(x => x.Id == scheduleDTO.ChildId);
+                if (child != null)
+                {
+                    var childAgeInDays = (DateTime.UtcNow.AddHours(5).Date - child.DOB.Date).TotalDays;
+                    var childAgeInYears = childAgeInDays / 365.25;
+                    
+                    if (childAgeInYears >= 5)
+                    {
+                        return new Response<ScheduleDTO>(false, "Cannot add vaccine for children 5 years or older (DoseId: 131)", null);
+                    }
+                }
+            }
+            
             Schedule scheduleDb = _mapper.Map<Schedule>(scheduleDTO);
             scheduleDb.BrandId = null;
             _db.Schedules.Add(scheduleDb);
@@ -1023,7 +1039,7 @@ namespace VaccineAPI.Controllers
             var dose = await _db.Doses.FirstOrDefaultAsync(d => d.Id == DoseId);
             if (dose == null)
                 return new Response<List<Schedule>>(false, "Dose not found.", null);
-            var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A (Jr)" };
+            var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A" };
             bool isInfinite = infiniteVaccineNames.Any(name =>
                 dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
 

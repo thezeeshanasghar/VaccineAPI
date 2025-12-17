@@ -173,8 +173,7 @@ namespace VaccineAPI.Controllers
                             AvgSalePrice = g.Sum(x => x.Count) != 0 
                                 ? g.Sum(x => x.Amount * x.Count) / g.Sum(x => x.Count) 
                                 : 0,
-                            TotalSaleValue = g.Sum(x => x.Amount * x.Count),
-                            VaccineNames = string.Join(", ", g.Select(x => x.Brand?.Vaccine?.Name).Distinct().Where(n => !string.IsNullOrEmpty(n)))
+                            TotalSaleValue = g.Sum(x => x.Amount * x.Count)
                         })
                         .OrderBy(x => x.BrandName)
                         .ToList();
@@ -185,11 +184,8 @@ namespace VaccineAPI.Controllers
                     {
                         table.AddCell(new Phrase(i.ToString(), normalFont));
                         
-                        // Display brand name with vaccine names if available
-                        string displayName = !string.IsNullOrEmpty(item.VaccineNames) 
-                            ? $"{item.BrandName} ({item.VaccineNames})" 
-                            : item.BrandName;
-                        table.AddCell(new Phrase(displayName, normalFont));
+                        // Display only brand name without vaccine names
+                        table.AddCell(new Phrase(item.BrandName ?? "Unknown", normalFont));
                         
                         table.AddCell(new Phrase(item.TotalQuantity.ToString(), normalFont));
                         table.AddCell(new Phrase($"₹{item.AvgPurchasePrice:N2}", normalFont));

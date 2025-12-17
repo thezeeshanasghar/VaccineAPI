@@ -157,17 +157,45 @@ namespace VaccineAPI.Controllers
                     table.AddCell(new PdfPCell(new Phrase("Sale Price", headerFont)));
                     table.AddCell(new PdfPCell(new Phrase("Sale Value", headerFont)));
 
+                    // Group by brand name and aggregate data
+                    var groupedBrands = brandAmounts
+                        .GroupBy(x => x.Brand?.Name)
+                        .Select(g => new
+                        {
+                            BrandName = g.Key,
+                            TotalQuantity = g.Sum(x => x.Count),
+                            // Weighted average purchase price
+                            AvgPurchasePrice = g.Sum(x => x.Count) != 0 
+                                ? g.Sum(x => x.PurchasedAmt * x.Count) / g.Sum(x => x.Count) 
+                                : 0,
+                            TotalPurchaseValue = g.Sum(x => x.PurchasedAmt * x.Count),
+                            // Weighted average sale price
+                            AvgSalePrice = g.Sum(x => x.Count) != 0 
+                                ? g.Sum(x => x.Amount * x.Count) / g.Sum(x => x.Count) 
+                                : 0,
+                            TotalSaleValue = g.Sum(x => x.Amount * x.Count),
+                            VaccineNames = string.Join(", ", g.Select(x => x.Brand?.Vaccine?.Name).Distinct().Where(n => !string.IsNullOrEmpty(n)))
+                        })
+                        .OrderBy(x => x.BrandName)
+                        .ToList();
+
                     // Add data
                     int i = 1;
-                    foreach (var item in brandAmounts)
+                    foreach (var item in groupedBrands)
                     {
                         table.AddCell(new Phrase(i.ToString(), normalFont));
-                        table.AddCell(new Phrase(item.Brand?.Name + " (" + item.Brand?.Vaccine?.Name + ")", normalFont));
-                        table.AddCell(new Phrase(item.Count.ToString(), normalFont));
-                        table.AddCell(new Phrase($"₹{item.PurchasedAmt:N2}", normalFont));
-                        table.AddCell(new Phrase($"₹{(item.PurchasedAmt * item.Count):N2}", normalFont));
-                        table.AddCell(new Phrase($"₹{item.Amount:N2}", normalFont));
-                        table.AddCell(new Phrase($"₹{(item.Amount * item.Count):N2}", normalFont));
+                        
+                        // Display brand name with vaccine names if available
+                        string displayName = !string.IsNullOrEmpty(item.VaccineNames) 
+                            ? $"{item.BrandName} ({item.VaccineNames})" 
+                            : item.BrandName;
+                        table.AddCell(new Phrase(displayName, normalFont));
+                        
+                        table.AddCell(new Phrase(item.TotalQuantity.ToString(), normalFont));
+                        table.AddCell(new Phrase($"₹{item.AvgPurchasePrice:N2}", normalFont));
+                        table.AddCell(new Phrase($"₹{item.TotalPurchaseValue:N2}", normalFont));
+                        table.AddCell(new Phrase($"₹{item.AvgSalePrice:N2}", normalFont));
+                        table.AddCell(new Phrase($"₹{item.TotalSaleValue:N2}", normalFont));
                         i++;
                     }
 

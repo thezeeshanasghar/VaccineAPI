@@ -39,16 +39,16 @@ services:
       retries: 5
 
   phpmyadmin:
-    image: bitnami/phpmyadmin:latest
+    image: phpmyadmin:latest
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
       - db
     environment:
-      DATABASE_HOST: db
+      PMA_HOST: db
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     ports:
-      - "8081:8080"
+      - "8081:80"
 
 volumes:
   db_data:

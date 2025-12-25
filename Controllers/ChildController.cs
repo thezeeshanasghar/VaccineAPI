@@ -733,16 +733,33 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell1(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell1("Phone No:", cellFontBold, new BaseColor(159, 226, 191)));
                 patientTable.AddCell(CreateCell1(userPhoneNumber, cellFontNormal, BaseColor.White));
-                if(userEmail != null&& userEmail != "")
+                
+                // Third row: CNIC (if available) and Email (if available)
+                if(cnic!=null && cnic != "")
                 {
-                patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
-                patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));}
-                else{}
-                if(cnic!=null&&cnic != "")
+                    patientTable.AddCell(CreateCell1("CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
+                    patientTable.AddCell(CreateCell1(cnic, cellFontNormal, BaseColor.White));
+                    
+                    // Add email on same row if available, otherwise add empty cells
+                    if(userEmail != null && userEmail != "")
+                    {
+                        patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
+                        patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                    }
+                    else
+                    {
+                        patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
+                        patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
+                    }
+                }
+                else if(userEmail != null && userEmail != "")
                 {
-                patientTable.AddCell(CreateCell1("CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
-                patientTable.AddCell(CreateCell1(cnic, cellFontNormal, BaseColor.White));}
-                else{}
+                    // If no CNIC but email exists, show email on third row
+                    patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
+                    patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                    patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
+                    patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
+                }
 
                 document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
                 document.Add(patientTable);
@@ -915,9 +932,9 @@ namespace VaccineAPI.Controllers
                     {
                         case "Given": return "#008000"; 
                         case "Missed": return "#FF0000"; 
-                        case "Due": return "#000000"; 
+                        case "Due": return "#808080"; 
                         case "Diseased": return "#808080"; 
-                        default: return "#000000";
+                        default: return "#808080";
                     }
                 }
 
@@ -1714,16 +1731,32 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell1(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell1("Phone No:", cellFontBold, new BaseColor(159, 226, 191)));
                 patientTable.AddCell(CreateCell1(userPhoneNumber, cellFontNormal, BaseColor.White));
-                if(userEmail != null&& userEmail != "")
+                
+                // Third row: CNIC (if available) and Email (if available)
+                if(cnic!=null && cnic != "")
                 {
-                patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
-                patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                    patientTable.AddCell(CreateCell1("CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
+                    patientTable.AddCell(CreateCell1(cnic, cellFontNormal, BaseColor.White));
+                    
+                    // Add email on same row if available, otherwise add empty cells
+                    if(userEmail != null && userEmail != "")
+                    {
+                        patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
+                        patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                    }
+                    else
+                    {
+                        patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
+                        patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
+                    }
                 }
-                else{}
-                if(cnic!=null&&cnic != "")
+                else if(userEmail != null && userEmail != "")
                 {
-                patientTable.AddCell(CreateCell1("CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
-                patientTable.AddCell(CreateCell1(cnic, cellFontNormal, BaseColor.White));
+                    // If no CNIC but email exists, show email on third row
+                    patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
+                    patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                    patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
+                    patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
                 }
                 else{}
                 document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });

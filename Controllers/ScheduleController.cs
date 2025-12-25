@@ -698,6 +698,16 @@ namespace VaccineAPI.Controllers
                 || GapInDays == 4745
                 || GapInDays == 5110
                 || GapInDays == 5475
+                || GapInDays == 5840
+                || GapInDays == 6205
+                || GapInDays == 6570
+                || GapInDays == 6935
+                || GapInDays == 7300
+                || GapInDays == 7665
+                || GapInDays == 8030
+                || GapInDays == 8395
+                || GapInDays == 8760
+                || GapInDays == 9125
             )
                 return date.AddYears((int)(GapInDays / 365)); // From 6 months to 11 months
             else if (GapInDays >= 168 && GapInDays <= 334)

@@ -3766,11 +3766,44 @@ namespace VaccineAPI.Controllers
 
         private string GetYearOrMonthFromDays(int days)
         {
-            if (days == 30000)
-                return "Life Time";
-            else if (days == 365)
-                return "1 Year";
-            else if (days % 365 == 0)
+            // Use same age map as GetYearOrMonthFromDaysSchedule for consistency
+            var ageMap = new Dictionary<int, string>
+            {
+                { 0, "At Birth" },
+                { 365, "1 Year" },
+                { 730, "2 Years" },
+                { 1095, "3 Years" },
+                { 1460, "4 Years" },
+                { 1825, "5 Years" },
+                { 2190, "6 Years" },
+                { 2555, "7 Years" },
+                { 2920, "8 Years" },
+                { 3285, "9 Years" },
+                { 3650, "10 Years" },
+                { 4015, "11 Years" },
+                { 4380, "12 Years" },
+                { 4745, "13 Years" },
+                { 5110, "14 Years" },
+                { 5475, "15 Years" },
+                { 5840, "16 Years" },
+                { 6205, "17 Years" },
+                { 6570, "18 Years" },
+                { 6935, "19 Years" },
+                { 7300, "20 Years" },
+                { 7665, "21 Years" },
+                { 8030, "22 Years" },
+                { 8395, "23 Years" },
+                { 8760, "24 Years" },
+                { 9125, "25 Years" },
+                { 30000, "Life Time" }
+            };
+            
+            // Check if exact match exists
+            if (ageMap.ContainsKey(days))
+                return ageMap[days];
+            
+            // Fallback to calculation for other values
+            if (days % 365 == 0)
                 return $"{days / 365} Years";
             else if (days % 30 == 0)
                 return $"{days / 30} Months";

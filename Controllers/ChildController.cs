@@ -599,9 +599,9 @@ namespace VaccineAPI.Controllers
 
             var dbDoctor = dbChild.Clinic?.Doctor;
             var child = _db.Childs
-                                .Include(x => x.Schedules)
+                                .Include(x => x.Schedules.Where(s => s.IsSkip != true)) // Exclude skipped schedules
                                 .ThenInclude(x => x.Dose)
-                                .Include(x => x.Schedules)
+                                .Include(x => x.Schedules.Where(s => s.IsSkip != true))
                                 .ThenInclude(x => x.Brand) 
                                 .FirstOrDefault(c => c.Id == childId);
 
@@ -1400,9 +1400,9 @@ namespace VaccineAPI.Controllers
         public IActionResult GenerateVerifySchedule(int id)
         {
             var child = _db.Childs
-                .Include(c => c.Schedules)
+                .Include(c => c.Schedules.Where(s => s.IsSkip != true)) // Exclude skipped schedules
                     .ThenInclude(s => s.Dose)
-                .Include(c => c.Schedules)
+                .Include(c => c.Schedules.Where(s => s.IsSkip != true))
                     .ThenInclude(s => s.Brand)
                 .Include(c => c.Clinic)
                     .ThenInclude(cl => cl.Doctor)
@@ -1603,9 +1603,9 @@ namespace VaccineAPI.Controllers
             }
             var dbDoctor = dbChild.Clinic?.Doctor;
             var child = _db.Childs
-                                .Include(x => x.Schedules)
+                                .Include(x => x.Schedules.Where(s => s.IsSkip != true)) // Exclude skipped schedules
                                 .ThenInclude(x => x.Dose)
-                                .Include(x => x.Schedules)
+                                .Include(x => x.Schedules.Where(s => s.IsSkip != true))
                                 .ThenInclude(x => x.Brand)
                                 .FirstOrDefault(c => c.Id == childId);
             var dbSchedules = child.Schedules.ToList();

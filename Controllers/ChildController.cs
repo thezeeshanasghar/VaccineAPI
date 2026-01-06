@@ -834,6 +834,7 @@ namespace VaccineAPI.Controllers
                 bool hasvitDone = false;
                 bool hasFluDone = false;
                 bool hasTyphoidDone = false;
+                bool hasVitaminA = false; // Track if any non-skipped Vitamin A exists
                 bool type = false;
                 HashSet<string> addedAges = new HashSet<string>();
                 string previousAgeLabel = null;
@@ -924,6 +925,7 @@ namespace VaccineAPI.Controllers
                     vitstatus1 = GetStatus(lastVitA);
                     vit1GivenDate = lastVitA.GivenDate?.ToString("dd/MM/yyyy");
                     vit1Brand = lastVitA.Brand?.Name ?? "OHF";
+                    hasVitaminA = true; // Mark that we have Vitamin A data
                 }
 
                 string GetStatusColor(string status)
@@ -1234,6 +1236,7 @@ namespace VaccineAPI.Controllers
                     if (dbSchedule.Dose.Name.StartsWith("Vitamin A"))
                     {
                         hasvitDone = true;
+                        hasVitaminA = true; // Mark that we have Vitamin A data
                             if (String.IsNullOrEmpty(vit2GivenDate))
                             {
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
@@ -1359,34 +1362,38 @@ namespace VaccineAPI.Controllers
                     lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
                 }
 
-                lowertable2.AddCell(CreateCell("Vitamin A", "", 1, "center", "scheduleRecords"));
-                if (!string.IsNullOrEmpty(vit1GivenDate) && !upperTableDates.Contains(vit2GivenDate)) { 
-                lowertable2.AddCell(new PdfPCell(new Phrase(vitstatus1, GetStatusFont(vitstatus1))) {
-                    HorizontalAlignment = Element.ALIGN_CENTER,
-                    FixedHeight = 15f,
-                    BorderColor = GrayColor.LightGray, 
-                });
-                lowertable2.AddCell(CreateCell(vit1GivenDate, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));
-                }
-                else
+                // Only show Vitamin A row if there are non-skipped Vitamin A doses
+                if (hasVitaminA)
                 {
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                }
+                    lowertable2.AddCell(CreateCell("Vitamin A", "", 1, "center", "scheduleRecords"));
+                    if (!string.IsNullOrEmpty(vit1GivenDate) && !upperTableDates.Contains(vit2GivenDate)) { 
+                    lowertable2.AddCell(new PdfPCell(new Phrase(vitstatus1, GetStatusFont(vitstatus1))) {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        FixedHeight = 15f,
+                        BorderColor = GrayColor.LightGray, 
+                    });
+                    lowertable2.AddCell(CreateCell(vit1GivenDate, "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));
+                    }
+                    else
+                    {
+                        lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                        lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                        lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    }
 
-                if (!string.IsNullOrEmpty(vit2GivenDate)){ 
-                lowertable2.AddCell(new PdfPCell(new Phrase(vitstatus2, GetStatusFont(vitstatus2))) {
-                    HorizontalAlignment = Element.ALIGN_CENTER,
-                    FixedHeight = 15f
-                });
-                lowertable2.AddCell(CreateCell(vit2GivenDate, "", 1, "center", "scheduleRecords"));
-                }
-                else
-                {
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
-                    lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    if (!string.IsNullOrEmpty(vit2GivenDate)){ 
+                    lowertable2.AddCell(new PdfPCell(new Phrase(vitstatus2, GetStatusFont(vitstatus2))) {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        FixedHeight = 15f
+                    });
+                    lowertable2.AddCell(CreateCell(vit2GivenDate, "", 1, "center", "scheduleRecords"));
+                    }
+                    else
+                    {
+                        lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                        lowertable2.AddCell(CreateCell("", "", 1, "center", "scheduleRecords"));
+                    }
                 }
                 document.Add(lowertable2);
                 // }

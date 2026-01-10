@@ -734,17 +734,17 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell1("Phone No:", cellFontBold, new BaseColor(159, 226, 191)));
                 patientTable.AddCell(CreateCell1(userPhoneNumber, cellFontNormal, BaseColor.White));
                 
-                // Third row: CNIC (if available) and Email (if available)
+                // Third row: Passport or CNIC (if available) and City (if available)
                 if(cnic!=null && cnic != "")
                 {
-                    patientTable.AddCell(CreateCell1("CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
+                    patientTable.AddCell(CreateCell1("Passport or CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
                     patientTable.AddCell(CreateCell1(cnic, cellFontNormal, BaseColor.White));
                     
-                    // Add email on same row if available, otherwise add empty cells
-                    if(userEmail != null && userEmail != "")
+                    // Add city on same row if available, otherwise add empty cells
+                    if(city != null && city != "")
                     {
-                        patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
-                        patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                        patientTable.AddCell(CreateCell1("City:", cellFontBold, new BaseColor(159, 226, 191)));
+                        patientTable.AddCell(CreateCell1(city, cellFontNormal, BaseColor.White));
                     }
                     else
                     {
@@ -752,11 +752,11 @@ namespace VaccineAPI.Controllers
                         patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
                     }
                 }
-                else if(userEmail != null && userEmail != "")
+                else if(city != null && city != "")
                 {
-                    // If no CNIC but email exists, show email on third row
-                    patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
-                    patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                    // If no CNIC/Passport but city exists, show city on third row
+                    patientTable.AddCell(CreateCell1("City:", cellFontBold, new BaseColor(159, 226, 191)));
+                    patientTable.AddCell(CreateCell1(city, cellFontNormal, BaseColor.White));
                     patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
                     patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
                 }
@@ -1739,17 +1739,17 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell1("Phone No:", cellFontBold, new BaseColor(159, 226, 191)));
                 patientTable.AddCell(CreateCell1(userPhoneNumber, cellFontNormal, BaseColor.White));
                 
-                // Third row: CNIC (if available) and Email (if available)
+                // Third row: Passport or CNIC (if available) and City (if available)
                 if(cnic!=null && cnic != "")
                 {
-                    patientTable.AddCell(CreateCell1("CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
+                    patientTable.AddCell(CreateCell1("Passport / CNIC:", cellFontBold, new BaseColor(159, 226, 191)));
                     patientTable.AddCell(CreateCell1(cnic, cellFontNormal, BaseColor.White));
                     
-                    // Add email on same row if available, otherwise add empty cells
-                    if(userEmail != null && userEmail != "")
+                    // Add city on same row if available, otherwise add empty cells
+                    if(city != null && city != "")
                     {
-                        patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
-                        patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                        patientTable.AddCell(CreateCell1("City:", cellFontBold, new BaseColor(159, 226, 191)));
+                        patientTable.AddCell(CreateCell1(city, cellFontNormal, BaseColor.White));
                     }
                     else
                     {
@@ -1757,11 +1757,11 @@ namespace VaccineAPI.Controllers
                         patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
                     }
                 }
-                else if(userEmail != null && userEmail != "")
+                else if(city != null && city != "")
                 {
-                    // If no CNIC but email exists, show email on third row
-                    patientTable.AddCell(CreateCell1("Email:", cellFontBold, new BaseColor(159, 226, 191)));
-                    patientTable.AddCell(CreateCell1(userEmail, cellFontNormal, BaseColor.White));
+                    // If no CNIC/Passport but city exists, show city on third row
+                    patientTable.AddCell(CreateCell1("City:", cellFontBold, new BaseColor(159, 226, 191)));
+                    patientTable.AddCell(CreateCell1(city, cellFontNormal, BaseColor.White));
                     patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
                     patientTable.AddCell(CreateCell1("", cellFontNormal, BaseColor.White));
                 }

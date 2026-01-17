@@ -112,21 +112,40 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("clinics/{paId:long}")]
-        public async Task<ActionResult<IEnumerable<Clinic>>> GetClinicsByPaId(long paId)
+        public async Task<ActionResult<IEnumerable<object>>> GetClinicsByPaId(long paId)
         {
             try
             {
-                var clinics = await _db
+                var paAccessList = await _db
                     .PaAccess.Include(pa => pa.Clinic)
+                        .ThenInclude(c => c.ClinicTimings)
                     .Where(pa => pa.PersonalAssistantId == paId)
-                    .Select(pa => pa.Clinic)
                     .ToListAsync();
-                if (!clinics.Any())
+                    
+                if (!paAccessList.Any())
                 {
                     return NotFound(new { message = "No clinics found for the provided PA ID." });
                 }
-                // return Ok(clinics);
-                return Ok(new Response<object>(true, "Clinics for given id fetched successfully.", clinics));
+                
+                // Return clinics with PA-specific IsOnline status
+                var clinicsWithPaStatus = paAccessList.Select(pa => new
+                {
+                    Id = pa.Clinic.Id,
+                    Name = pa.Clinic.Name,
+                    PhoneNumber = pa.Clinic.PhoneNumber,
+                    Address = pa.Clinic.Address,
+                    MonogramImage = pa.Clinic.MonogramImage,
+                    ConsultationFee = pa.Clinic.ConsultationFee,
+                    Lat = pa.Clinic.Lat,
+                    Long = pa.Clinic.Long,
+                    DoctorId = pa.Clinic.DoctorId,
+                    RegNo = pa.Clinic.RegNo,
+                    IsOnline = pa.IsOnline, // Use PA's IsOnline instead of Clinic's IsOnline
+                    ClinicTimings = pa.Clinic.ClinicTimings,
+                    PaAccessId = pa.Id
+                }).ToList();
+                
+                return Ok(new Response<object>(true, "Clinics for given id fetched successfully.", clinicsWithPaStatus));
             }
             catch (Exception ex)
             {

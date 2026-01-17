@@ -82,6 +82,13 @@ namespace VaccineAPI.Controllers
             {
                 return BadRequest(new { message = "Invalid data." });
             }
+            
+            // Check if this is the first clinic for this PA - if so, set it as online
+            var clinicList = await _db.PaAccess
+                .Where(pa => pa.PersonalAssistantId == paAccess.PersonalAssistantId)
+                .ToListAsync();
+            paAccess.IsOnline = clinicList.Count == 0;
+            
             _db.PaAccess.Add(paAccess);
             await _db.SaveChangesAsync();
             return CreatedAtAction(nameof(GetById), new { id = paAccess.Id }, paAccess);
@@ -101,9 +108,48 @@ namespace VaccineAPI.Controllers
             }
             existingPaAccess.PersonalAssistantId = paAccess.PersonalAssistantId;
             existingPaAccess.ClinicId = paAccess.ClinicId;
+            existingPaAccess.IsOnline = paAccess.IsOnline;
             _db.Entry(existingPaAccess).State = EntityState.Modified;
             await _db.SaveChangesAsync();
             return NoContent();
+        }
+
+        [HttpPut("{id:long}/isonline")]
+        public async Task<IActionResult> UpdateIsOnline(long id, [FromBody] bool isOnline)
+        {
+            var existingPaAccess = await _db.PaAccess.FindAsync(id);
+            if (existingPaAccess == null)
+            {
+                return NotFound(new { message = "PA Access not found." });
+            }
+            
+            // Get all PA accesses for this PA
+            var paAccessList = await _db.PaAccess
+                .Where(pa => pa.PersonalAssistantId == existingPaAccess.PersonalAssistantId)
+                .ToListAsync();
+
+            // If setting this one to online, set others to offline (similar to clinic logic)
+            if (isOnline && paAccessList.Count > 1)
+            {
+                foreach (var paAccess in paAccessList.Where(x => x.Id != id))
+                {
+                    paAccess.IsOnline = false;
+                    _db.Entry(paAccess).State = EntityState.Modified;
+                }
+            }
+            // If this is the only clinic for the PA, set it as online
+            else if (paAccessList.Count == 1)
+            {
+                existingPaAccess.IsOnline = true;
+            }
+            else
+            {
+                existingPaAccess.IsOnline = isOnline;
+            }
+
+            _db.Entry(existingPaAccess).State = EntityState.Modified;
+            await _db.SaveChangesAsync();
+            return Ok(new { message = "IsOnline status updated successfully.", isOnline = existingPaAccess.IsOnline });
         }
 
         [HttpDelete("{id:long}")]

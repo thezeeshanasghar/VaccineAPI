@@ -4202,18 +4202,302 @@ int rowCount = 0;
         {
             var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/Travel-PDF-Download-Verification/{id}";
 
+            var child = _db.Childs
+                .Include(c => c.Clinic)
+                .Include(c => c.Schedules)
+                    .ThenInclude(s => s.Dose)
+                .Include(c => c.Schedules)
+                    .ThenInclude(s => s.Brand)
+                .FirstOrDefault(c => c.Id == id);
+
+            string HtmlEncode(string value)
+            {
+                return System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
+            }
+
+            string FormatDate(DateTime? value)
+            {
+                return value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "-";
+            }
+
+            var currentYear = DateTime.UtcNow.AddHours(5).Year;
+            var mrNo = $"{currentYear}-{id}";
+            var guardian = !string.IsNullOrWhiteSpace(child?.Guardian) ? child.Guardian : child?.FatherName;
+            var childName = child?.Name ?? "-";
+            var city = child?.City ?? "-";
+            var nationality = string.IsNullOrWhiteSpace(child?.Nationality) ? "-" : child?.Nationality;
+            var passport = string.IsNullOrWhiteSpace(child?.CNIC) ? "-" : child?.CNIC;
+            var dob = child?.DOB.ToString("dd/MM/yyyy") ?? "-";
+
+            var completedSchedules = child?.Schedules
+                .Where(s => s.IsDone || s.GivenDate.HasValue)
+                .OrderBy(s => s.GivenDate ?? s.Date)
+                .ToList() ?? new List<Schedule>();
+
+            var statusText = completedSchedules.Count > 0 ? "Vaccinated" : "Not Vaccinated";
+            var statusClass = completedSchedules.Count > 0 ? "status-ok" : "status-warn";
+
+            var rows = new StringBuilder();
+            if (completedSchedules.Count == 0)
+            {
+                rows.AppendLine("<tr><td colspan='7' class='empty'>No vaccination records found.</td></tr>");
+            }
+            else
+            {
+                foreach (var item in completedSchedules)
+                {
+                    rows.AppendLine($@"
+                        <tr>
+                            <td>{HtmlEncode(item.Dose?.Name ?? "-")}</td>
+                            <td>{HtmlEncode(item.Brand?.Name ?? "-")}</td>
+                            <td>{HtmlEncode(item.Manufacturer ?? "-")}</td>
+                            <td>{HtmlEncode(item.Lot ?? "-")}</td>
+                            <td>{HtmlEncode(FormatDate(item.GivenDate))}</td>
+                            <td>{HtmlEncode(FormatDate(item.Expiry))}</td>
+                            <td>{HtmlEncode(item.Validity?.ToString() ?? "-")}</td>
+                        </tr>");
+                }
+            }
+
             string htmlContent = $@"
                                     <!DOCTYPE html>
                                     <html lang='en'>
                                     <head>
                                         <meta charset='UTF-8'>
                                         <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-                                        <title>QR Code Viewer</title>
+                                        <title>Immunization Record</title>
+                                        <style>
+                                            :root {{
+                                                --ink: #1f2933;
+                                                --muted: #6b7280;
+                                                --line: #e5e7eb;
+                                                --brand: #0b4f6c;
+                                                --brand-2: #0f7aa5;
+                                                --accent: #2f9e44;
+                                                --warn: #e67700;
+                                                --card: #ffffff;
+                                                --soft: #f3f6f9;
+                                            }}
+                                            * {{ box-sizing: border-box; }}
+                                            body {{
+                                                margin: 0;
+                                                font-family: 'Trebuchet MS', Arial, sans-serif;
+                                                color: var(--ink);
+                                                background: radial-gradient(circle at top right, #e9f4fb 0%, #f7fbff 45%, #ffffff 100%);
+                                            }}
+                                            header {{
+                                                background: linear-gradient(120deg, var(--brand) 0%, var(--brand-2) 100%);
+                                                color: #fff;
+                                                padding: 18px 16px;
+                                                border-bottom: 4px solid #0a3d52;
+                                            }}
+                                            .brand {{
+                                                display: flex;
+                                                align-items: center;
+                                                gap: 12px;
+                                                font-size: 20px;
+                                                font-weight: 700;
+                                                letter-spacing: 0.5px;
+                                            }}
+                                            .brand-mark {{
+                                                width: 38px;
+                                                height: 38px;
+                                                border-radius: 50%;
+                                                background: #0a3d52;
+                                                display: grid;
+                                                place-items: center;
+                                                font-weight: 800;
+                                                font-size: 18px;
+                                            }}
+                                            .container {{
+                                                max-width: 980px;
+                                                margin: 0 auto;
+                                                padding: 18px 16px 32px;
+                                            }}
+                                            .title {{
+                                                font-size: 28px;
+                                                font-weight: 800;
+                                                margin: 18px 0 4px;
+                                            }}
+                                            .subtitle {{
+                                                color: var(--muted);
+                                                margin: 0 0 18px;
+                                            }}
+                                            .card {{
+                                                background: var(--card);
+                                                border: 1px solid var(--line);
+                                                border-radius: 14px;
+                                                box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+                                                padding: 16px;
+                                                margin-bottom: 18px;
+                                            }}
+                                            .status-bar {{
+                                                display: grid;
+                                                grid-template-columns: 1.2fr 1fr;
+                                                gap: 12px;
+                                            }}
+                                            .status {{
+                                                display: inline-flex;
+                                                align-items: center;
+                                                gap: 8px;
+                                                padding: 8px 12px;
+                                                border-radius: 999px;
+                                                font-weight: 700;
+                                                font-size: 14px;
+                                            }}
+                                            .status-ok {{ background: #e6fcf5; color: #0c6b58; border: 1px solid #96f2d7; }}
+                                            .status-warn {{ background: #fff4e6; color: #a64900; border: 1px solid #ffd8a8; }}
+                                            .info-grid {{
+                                                display: grid;
+                                                grid-template-columns: repeat(2, minmax(0, 1fr));
+                                                gap: 8px 14px;
+                                                margin-top: 10px;
+                                            }}
+                                            .info-item {{
+                                                padding: 8px 10px;
+                                                border-radius: 10px;
+                                                background: var(--soft);
+                                                border: 1px solid #e6edf3;
+                                            }}
+                                            .info-item span {{
+                                                display: block;
+                                                font-size: 12px;
+                                                color: var(--muted);
+                                            }}
+                                            .info-item strong {{
+                                                font-size: 14px;
+                                                display: block;
+                                                margin-top: 4px;
+                                            }}
+                                            .actions {{
+                                                display: flex;
+                                                gap: 12px;
+                                                align-items: center;
+                                                flex-wrap: wrap;
+                                            }}
+                                            .btn {{
+                                                background: var(--brand);
+                                                color: #fff;
+                                                padding: 10px 16px;
+                                                border-radius: 10px;
+                                                text-decoration: none;
+                                                font-weight: 700;
+                                                box-shadow: 0 6px 12px rgba(11, 79, 108, 0.2);
+                                            }}
+                                            .table {{
+                                                width: 100%;
+                                                border-collapse: collapse;
+                                                font-size: 13px;
+                                            }}
+                                            .table th,
+                                            .table td {{
+                                                padding: 10px 8px;
+                                                border-bottom: 1px solid var(--line);
+                                                text-align: left;
+                                            }}
+                                            .table th {{
+                                                background: #f0f6fb;
+                                                color: #0b4f6c;
+                                                font-size: 12px;
+                                                text-transform: uppercase;
+                                                letter-spacing: 0.6px;
+                                            }}
+                                            .table .empty {{
+                                                text-align: center;
+                                                color: var(--muted);
+                                                padding: 16px 8px;
+                                            }}
+                                            .iframe-wrap {{
+                                                width: 100%;
+                                                border: 1px solid var(--line);
+                                                border-radius: 12px;
+                                                overflow: hidden;
+                                                background: #fff;
+                                            }}
+                                            iframe {{
+                                                width: 100%;
+                                                height: 720px;
+                                                border: 0;
+                                            }}
+                                            @media (max-width: 768px) {{
+                                                .status-bar {{ grid-template-columns: 1fr; }}
+                                                .info-grid {{ grid-template-columns: 1fr; }}
+                                                .title {{ font-size: 22px; }}
+                                                iframe {{ height: 540px; }}
+                                            }}
+                                        </style>
                                     </head>
-                                    <body style='font-family: Arial, sans-serif; text-align: center; padding: 20px;'>
-                                        <h1>Immunization Record</h1>
-                                        <p><a href='{fileUrl}' target='_blank'>click here</a> to view the details.</p>
-                                        <iframe src='{fileUrl}' width='600' height='700' style='border: 1px solid #ccc;'></iframe>
+                                    <body>
+                                        <header>
+                                            <div class='brand'>
+                                                <div class='brand-mark'>V</div>
+                                                Vaccine.pk Verification
+                                            </div>
+                                        </header>
+                                        <div class='container'>
+                                            <div class='title'>Immunization Record</div>
+                                            <p class='subtitle'>Verified vaccination summary for travel and official use.</p>
+
+                                            <div class='card status-bar'>
+                                                <div>
+                                                    <div class='status {statusClass}'>Status: {HtmlEncode(statusText)}</div>
+                                                    <div class='info-grid'>
+                                                        <div class='info-item'>
+                                                            <span>MR No.</span>
+                                                            <strong>{HtmlEncode(mrNo)}</strong>
+                                                        </div>
+                                                        <div class='info-item'>
+                                                            <span>Name</span>
+                                                            <strong>{HtmlEncode(childName)}</strong>
+                                                        </div>
+                                                        <div class='info-item'>
+                                                            <span>S/D/W/O</span>
+                                                            <strong>{HtmlEncode(guardian ?? "-")}</strong>
+                                                        </div>
+                                                        <div class='info-item'>
+                                                            <span>Passport / CNIC</span>
+                                                            <strong>{HtmlEncode(passport)}</strong>
+                                                        </div>
+                                                        <div class='info-item'>
+                                                            <span>Date of Birth</span>
+                                                            <strong>{HtmlEncode(dob)}</strong>
+                                                        </div>
+                                                        <div class='info-item'>
+                                                            <span>City / Nationality</span>
+                                                            <strong>{HtmlEncode(city)} / {HtmlEncode(nationality)}</strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class='actions'>
+                                                    <a class='btn' href='{fileUrl}' target='_blank'>Open PDF</a>
+                                                    <div class='subtitle'>Use the PDF for printing or offline sharing.</div>
+                                                </div>
+                                            </div>
+
+                                            <div class='card'>
+                                                <h3>Vaccines</h3>
+                                                <table class='table'>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Vaccine</th>
+                                                            <th>Brand</th>
+                                                            <th>Manufacturer</th>
+                                                            <th>Batch/Lot</th>
+                                                            <th>Date Given</th>
+                                                            <th>Expiry</th>
+                                                            <th>Validity</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {rows}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            <div class='card iframe-wrap'>
+                                                <iframe src='{fileUrl}' title='Immunization Record PDF'></iframe>
+                                            </div>
+                                        </div>
                                     </body>
                                     </html>";
 

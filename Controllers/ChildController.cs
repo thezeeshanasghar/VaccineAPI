@@ -3918,22 +3918,23 @@ namespace VaccineAPI.Controllers
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
-                patientTable.SetWidths(new float[] { 2, 2, 2, 2 });
+                var patientTableWidths = new float[] { 1.2f, 2.8f, 1.2f, 2.8f };
+                patientTable.SetWidths(patientTableWidths);
                 patientTable.DefaultCell.BorderColor = BaseColor.LightGray;
                 patientTable.DefaultCell.BorderWidth = 0.5f;
                 var cellFontBold = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10);
                 var cellFontNormal = FontFactory.GetFont(FontFactory.HELVETICA, 10);
-                patientTable.AddCell(CreateCell("Name:", cellFontBold, BaseColor.LightGray));
+                patientTable.AddCell(CreateCell("Name:", cellFontBold, new BaseColor(235, 235, 235)));
                 patientTable.AddCell(CreateCell(patientName, cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("S/D/W/o:", cellFontBold, BaseColor.LightGray));
+                patientTable.AddCell(CreateCell("S/D/W/o:", cellFontBold, new BaseColor(235, 235, 235)));
                 patientTable.AddCell(CreateCell(relation, cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("Date of Birth:", cellFontBold, BaseColor.LightGray));
+                patientTable.AddCell(CreateCell("Date of Birth:", cellFontBold, new BaseColor(235, 235, 235)));
                 patientTable.AddCell(CreateCell(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("Passport No:", cellFontBold, BaseColor.LightGray));
+                patientTable.AddCell(CreateCell("Passport No:", cellFontBold, new BaseColor(235, 235, 235)));
                 patientTable.AddCell(CreateCell(passport, cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("City:", cellFontBold, BaseColor.LightGray));
+                patientTable.AddCell(CreateCell("City:", cellFontBold, new BaseColor(235, 235, 235)));
                 patientTable.AddCell(CreateCell(city, cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("Nationality:", cellFontBold, BaseColor.LightGray));
+                patientTable.AddCell(CreateCell("Nationality:", cellFontBold, new BaseColor(235, 235, 235)));
                 patientTable.AddCell(CreateCell(Nationality, cellFontNormal, BaseColor.White));
                 document.Add(new Paragraph(" ", FontFactory.GetFont(FontFactory.HELVETICA, 10)) { SpacingBefore = -10f });
                 document.Add(patientTable);
@@ -3943,8 +3944,8 @@ namespace VaccineAPI.Controllers
                     var cell = new PdfPCell(new Phrase(text, font))
                     {
                         BackgroundColor = backgroundColor,
-                        BorderColor = BaseColor.Gray,
-                        BorderWidth = 1f
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f
                     };
                     return cell;
                 }
@@ -3976,7 +3977,8 @@ namespace VaccineAPI.Controllers
     {
         table.AddCell(new PdfPCell(new Phrase(header, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)))
         {
-            BorderColor = BaseColor.Gray,
+            BorderColor = BaseColor.LightGray,
+            BorderWidth = 0.5f,
             HorizontalAlignment = PdfPCell.ALIGN_CENTER,
             PaddingTop = 5,
             Border = Rectangle.TOP_BORDER | (header == "Vaccine" ? Rectangle.LEFT_BORDER : 0) | (header == "Validity" ? Rectangle.RIGHT_BORDER : 0)
@@ -4003,7 +4005,8 @@ int rowCount = 0;
                     {
                         Border = Rectangle.LEFT_BORDER | borderStyle,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
                         PaddingBottom = 5
                     });
 
@@ -4011,7 +4014,8 @@ int rowCount = 0;
                     {
                         Border = borderStyle,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
                         PaddingBottom = 5
                     });
 
@@ -4019,7 +4023,8 @@ int rowCount = 0;
                     {
                         Border = borderStyle,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
                         PaddingBottom = 5
                     });
 
@@ -4027,7 +4032,8 @@ int rowCount = 0;
                     {
                         Border = borderStyle,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
                         PaddingBottom = 5
                     });
 
@@ -4035,7 +4041,8 @@ int rowCount = 0;
                     {
                         Border = borderStyle,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
                         PaddingBottom = 5
                     });
 
@@ -4043,7 +4050,8 @@ int rowCount = 0;
                     {
                         Border = borderStyle,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
                         PaddingBottom = 5
                     });
 
@@ -4051,7 +4059,8 @@ int rowCount = 0;
                     {
                         Border = Rectangle.RIGHT_BORDER | borderStyle,
                         HorizontalAlignment = PdfPCell.ALIGN_CENTER,
-                        BorderColor = BaseColor.Gray,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
                         PaddingBottom = 5
                     });
                 }
@@ -4071,7 +4080,11 @@ int rowCount = 0;
                     {
                         var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
                         pdfQrCode.ScaleAbsolute(75f, 75f);
-                        float qrCodeXPosition = ((document.PageSize.Width - pdfQrCode.ScaledWidth) / 2)-65f;
+                        float tableWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+                        float widthsSum = patientTableWidths[0] + patientTableWidths[1] + patientTableWidths[2] + patientTableWidths[3];
+                        float col3Start = document.LeftMargin + (tableWidth * (patientTableWidths[0] + patientTableWidths[1]) / widthsSum);
+                        float col3Width = tableWidth * patientTableWidths[2] / widthsSum;
+                        float qrCodeXPosition = col3Start + (col3Width - pdfQrCode.ScaledWidth) / 2f;
                         float qrCodeYPosition = document.PageSize.Height - pdfQrCode.ScaledHeight - 60f;
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
@@ -4140,21 +4153,21 @@ int rowCount = 0;
             Border = Rectangle.NO_BORDER,
             HorizontalAlignment = Element.ALIGN_LEFT,
             Padding = 5,
-            BackgroundColor = BaseColor.LightGray
+            BackgroundColor = new BaseColor(235, 235, 235)
         };
         PdfPCell phoneCell = new PdfPCell(new Phrase($"Phone: {phoneNumber}", footerFont))
         {
             Border = Rectangle.NO_BORDER,
             HorizontalAlignment = Element.ALIGN_CENTER,
             Padding = 5,
-            BackgroundColor = BaseColor.LightGray
+            BackgroundColor = new BaseColor(235, 235, 235)
         };
         PdfPCell emailCell = new PdfPCell(new Phrase(email, footerFont))
         {
             Border = Rectangle.NO_BORDER,
             HorizontalAlignment = Element.ALIGN_RIGHT,
             Padding = 5,
-            BackgroundColor = BaseColor.LightGray
+            BackgroundColor = new BaseColor(235, 235, 235)
         };
 
         contactTable.AddCell(addressCell);
@@ -4175,11 +4188,18 @@ int rowCount = 0;
         );
     }
 
+    float tableWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+    float[] patientTableWidths = { 1.2f, 2.8f, 1.2f, 2.8f };
+    float widthsSum = patientTableWidths[0] + patientTableWidths[1] + patientTableWidths[2] + patientTableWidths[3];
+    float col3Start = document.LeftMargin + (tableWidth * (patientTableWidths[0] + patientTableWidths[1]) / widthsSum);
+    float col3Width = tableWidth * patientTableWidths[2] / widthsSum;
+    float mrX = col3Start + (col3Width / 2f);
+
     ColumnText.ShowTextAligned(
         cb,
         Element.ALIGN_CENTER,
         new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
-        (document.PageSize.Width / 2) - 65, footerY - -305f, 0
+        mrX, document.PageSize.Height - 150f, 0
     );
 
     // Add footer text

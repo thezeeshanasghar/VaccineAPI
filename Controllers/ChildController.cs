@@ -3875,10 +3875,7 @@ namespace VaccineAPI.Controllers
             string clinicAddress = childDetails.Clinic.Address;
             string clinicPhoneNumber = childDetails.Clinic.PhoneNumber;
             var output = new MemoryStream();
-            var customHeight = 550f;
-            var customWidth = 800f;
-            var customSize = new Rectangle(customWidth, customHeight);
-            using (var document = new Document(customSize))
+            using (var document = new Document(PageSize.A5.Rotate()))
             {
                 PdfWriter writer = PdfWriter.GetInstance(document, output);
                 writer.PageEvent = new FooterPageEvent(_db, childId);
@@ -3899,12 +3896,13 @@ namespace VaccineAPI.Controllers
                 if (System.IO.File.Exists(logoPath))
                 {
                     var logo = Image.GetInstance(logoPath);
-                    logo.ScaleToFit(150f, 150f);
+                    logo.ScaleToFit(170f, 170f);
                     PdfPCell logoCell = new PdfPCell(logo)
                     {
                         Border = PdfPCell.NO_BORDER,
                         HorizontalAlignment = Element.ALIGN_RIGHT,
                         PaddingLeft = -15f,
+                        PaddingTop = 8f,
                     };
                     headerTable.AddCell(logoCell);
                 }

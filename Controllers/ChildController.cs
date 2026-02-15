@@ -3910,6 +3910,11 @@ namespace VaccineAPI.Controllers
                 }
                 document.Add(headerTable);
 
+                // Keep some vertical breathing room below the header so the content
+                // doesn't collide with the absolute-positioned QR/MR elements.
+                document.Add(new Paragraph(" "));
+                document.Add(new Paragraph(" "));
+
                 var title = new Paragraph("IMMUNIZATION RECORD", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10));
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);

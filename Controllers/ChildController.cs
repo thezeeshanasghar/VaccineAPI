@@ -3889,8 +3889,6 @@ namespace VaccineAPI.Controllers
                 headerCell.AddElement(new Paragraph(doctorDetails, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
                 headerCell.AddElement(new Paragraph(additionalInfo, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
                 headerCell.AddElement(new Paragraph(clinicName, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));
-                headerCell.AddElement(new Paragraph(clinicAddress, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
-                headerCell.AddElement(new Paragraph("Phone: " + clinicPhoneNumber, FontFactory.GetFont(FontFactory.HELVETICA, 10)));
                 headerTable.AddCell(headerCell);
                 string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "logo-vaccinepk-new.png");
                 if (System.IO.File.Exists(logoPath))
@@ -4083,7 +4081,7 @@ int rowCount = 0;
                         float col3Start = document.LeftMargin + (tableWidth * (patientTableWidths[0] + patientTableWidths[1]) / widthsSum);
                         float col3Width = tableWidth * patientTableWidths[2] / widthsSum;
                         float qrCodeXPosition = col3Start + (col3Width - pdfQrCode.ScaledWidth) / 2f;
-                        float qrCodeYPosition = document.PageSize.Height - pdfQrCode.ScaledHeight - 60f;
+                        float qrCodeYPosition = document.PageSize.Height - pdfQrCode.ScaledHeight - 45f;
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
                     }
@@ -4197,7 +4195,7 @@ int rowCount = 0;
         cb,
         Element.ALIGN_CENTER,
         new Phrase($"MR No: {currentYear}-{_childId}", blueFont),
-        mrX, document.PageSize.Height - 150f, 0
+        mrX, document.PageSize.Height - 135f, 0
     );
 
     // Add footer text

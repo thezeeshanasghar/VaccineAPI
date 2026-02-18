@@ -3698,9 +3698,15 @@ namespace VaccineAPI.Controllers
                 using (MemoryStream ms = new MemoryStream(qrCodeImage))
                 {
                     var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
-                    pdfQrCode.ScaleAbsolute(60f, 60f);
-                    float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - 35f;
-                    float qrCodeYPosition = 25f;
+                    const float qrBaseSize = 60f;
+                    const float qrScale = 1.10f;
+                    const float qrRightPadding = 35f;
+                    const float qrBottomPadding = 25f;
+                    const float qrMoveUp = 10f;
+
+                    pdfQrCode.ScaleAbsolute(qrBaseSize * qrScale, qrBaseSize * qrScale);
+                    float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - qrRightPadding;
+                    float qrCodeYPosition = qrBottomPadding + qrMoveUp;
                     pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                     writer.DirectContent.AddImage(pdfQrCode);
                 }

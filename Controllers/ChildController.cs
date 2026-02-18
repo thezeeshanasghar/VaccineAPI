@@ -4150,8 +4150,8 @@ int rowCount = 0;
         Phrase phrase = new Phrase();
         phrase.Add(new Chunk($"{clinicName} ", footerFont1));
         phrase.Add(new Chunk($"({regNo})", footerFont));
-        float clinicLineY = footerY + -13;
-        ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, clinicLineY, 0);
+        float clinicHeaderY = document.BottomMargin + 34f;
+        ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, clinicHeaderY, 0);
 
         // 3-column table for address, phone, email
         PdfPTable contactTable = new PdfPTable(3);

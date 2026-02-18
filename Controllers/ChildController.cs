@@ -3901,6 +3901,7 @@ namespace VaccineAPI.Controllers
                         Border = PdfPCell.NO_BORDER,
                         HorizontalAlignment = Element.ALIGN_RIGHT,
                         PaddingLeft = -15f,
+                        PaddingRight = 10f,
                         PaddingTop = 8f,
                     };
                     headerTable.AddCell(logoCell);
@@ -4088,13 +4089,13 @@ int rowCount = 0;
                     using (MemoryStream ms = new MemoryStream(qrCodeImage))
                     {
                         var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
-                        pdfQrCode.ScaleAbsolute(75f, 75f);
+                        pdfQrCode.ScaleAbsolute(67.5f, 67.5f);
                         float tableWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
                         float widthsSum = patientTableWidths[0] + patientTableWidths[1] + patientTableWidths[2] + patientTableWidths[3];
                         float col3Start = document.LeftMargin + (tableWidth * (patientTableWidths[0] + patientTableWidths[1]) / widthsSum);
                         float col3Width = tableWidth * patientTableWidths[2] / widthsSum;
                         float qrCodeXPosition = col3Start + (col3Width - pdfQrCode.ScaledWidth) / 2f;
-                        float qrCodeYPosition = document.PageSize.Height - pdfQrCode.ScaledHeight - 52f;
+                        float qrCodeYPosition = document.PageSize.Height - document.TopMargin - pdfQrCode.ScaledHeight;
                         pdfQrCode.SetAbsolutePosition(qrCodeXPosition, qrCodeYPosition);
                         writer.DirectContent.AddImage(pdfQrCode);
                     }
@@ -4150,7 +4151,8 @@ int rowCount = 0;
         Phrase phrase = new Phrase();
         phrase.Add(new Chunk($"{clinicName} ", footerFont1));
         phrase.Add(new Chunk($"({regNo})", footerFont));
-        ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerY + -13, 0);
+        float clinicLineY = footerY + -13;
+        ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, clinicLineY, 0);
 
         // 3-column table for address, phone, email
         PdfPTable contactTable = new PdfPTable(3);
@@ -4183,7 +4185,17 @@ int rowCount = 0;
         contactTable.AddCell(phoneCell);
         contactTable.AddCell(emailCell);
 
-        contactTable.WriteSelectedRows(0, -1, document.LeftMargin, footerY - 30, cb);
+        float contactTableTopY = document.BottomMargin + contactTable.TotalHeight;
+        contactTable.WriteSelectedRows(0, -1, document.LeftMargin, contactTableTopY, cb);
+
+        ColumnText.ShowTextAligned(
+            cb,
+            Element.ALIGN_RIGHT,
+            new Phrase($"MR No: {currentYear}-{_childId}", mrFont),
+            document.PageSize.Width - document.RightMargin,
+            clinicLineY,
+            0
+        );
     }
     else
     {
@@ -4196,20 +4208,6 @@ int rowCount = 0;
             0
         );
     }
-
-    float tableWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
-    float[] patientTableWidths = { 1.2f, 2.8f, 1.2f, 2.8f };
-    float widthsSum = patientTableWidths[0] + patientTableWidths[1] + patientTableWidths[2] + patientTableWidths[3];
-    float col3Start = document.LeftMargin + (tableWidth * (patientTableWidths[0] + patientTableWidths[1]) / widthsSum);
-    float col3Width = tableWidth * patientTableWidths[2] / widthsSum;
-    float mrX = col3Start + (col3Width / 2f);
-
-    ColumnText.ShowTextAligned(
-        cb,
-        Element.ALIGN_CENTER,
-        new Phrase($"MR No: {currentYear}-{_childId}", mrFont),
-        mrX, document.PageSize.Height - 140f, 0
-    );
 
     // Add footer text
     ColumnText.ShowTextAligned(

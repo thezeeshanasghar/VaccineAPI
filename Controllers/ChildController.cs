@@ -3702,7 +3702,7 @@ namespace VaccineAPI.Controllers
                     const float qrScale = 1.10f;
                     const float qrRightPadding = 35f;
                     const float qrBottomPadding = 25f;
-                    const float qrMoveUp = 10f;
+                    const float qrMoveUp = 30f;
 
                     pdfQrCode.ScaleAbsolute(qrBaseSize * qrScale, qrBaseSize * qrScale);
                     float qrCodeXPosition = document.PageSize.Width - pdfQrCode.ScaledWidth - qrRightPadding;

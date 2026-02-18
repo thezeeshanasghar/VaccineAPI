@@ -24,6 +24,10 @@ namespace VaccineAPI.Models
         [Required]
         public int BillId { get; set; }
 
+        public string? BatchLot { get; set; }
+
+        public DateTime? Expiry { get; set; }
+
         [ForeignKey("BrandId")]
         public virtual Brand Brand { get; set; }
 

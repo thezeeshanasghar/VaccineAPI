@@ -146,7 +146,9 @@ namespace VaccineAPI.Controllers
                         BrandId = stockDTO.BrandId,
                         BillId = bill.Id,
                         Quantity = stockDTO.Quantity,
-                        StockAmount = stockDTO.StockAmount
+                        StockAmount = stockDTO.StockAmount,
+                        BatchLot = stockDTO.BatchLot?.Trim(),
+                        Expiry = stockDTO.Expiry
                     };
 
                     _db.Stocks.Add(stock);
@@ -397,6 +399,10 @@ namespace VaccineAPI.Controllers
                     stock.BrandId = stockDTO.BrandId;
                     stock.Quantity = stockDTO.Quantity;
                     stock.StockAmount = stockDTO.StockAmount;
+                    stock.BatchLot = string.IsNullOrWhiteSpace(stockDTO.BatchLot)
+                        ? stock.BatchLot
+                        : stockDTO.BatchLot.Trim();
+                    stock.Expiry = stockDTO.Expiry ?? stock.Expiry;
 
                     _db.Entry(stock).State = EntityState.Modified;
 

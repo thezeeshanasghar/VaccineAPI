@@ -3889,7 +3889,7 @@ namespace VaccineAPI.Controllers
                 headerCell.Border = PdfPCell.NO_BORDER;
                 headerCell.Padding = 0f;
                 headerCell.AddElement(new Paragraph(doctorDetails, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)) { SpacingAfter = 1f });
-                headerCell.AddElement(new Paragraph(additionalInfo, FontFactory.GetFont(FontFactory.HELVETICA, 8)) { SpacingAfter = 0f });
+                headerCell.AddElement(new Paragraph(additionalInfo, FontFactory.GetFont(FontFactory.HELVETICA, 6)) { SpacingAfter = 0f });
                 headerTable.AddCell(headerCell);
                 string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "logo-vaccinepk-new.png");
                 if (System.IO.File.Exists(logoPath))
@@ -3900,8 +3900,8 @@ namespace VaccineAPI.Controllers
                     {
                         Border = PdfPCell.NO_BORDER,
                         HorizontalAlignment = Element.ALIGN_RIGHT,
-                        PaddingLeft = -15f,
-                        PaddingRight = 10f,
+                        PaddingLeft = 0f,
+                        PaddingRight = 18f,
                         PaddingTop = 8f,
                     };
                     headerTable.AddCell(logoCell);
@@ -3981,7 +3981,7 @@ namespace VaccineAPI.Controllers
         {
             BorderColor = BaseColor.LightGray,
             BorderWidth = 0.5f,
-            HorizontalAlignment = PdfPCell.ALIGN_CENTER,
+            HorizontalAlignment = header == "Vaccine" ? PdfPCell.ALIGN_LEFT : PdfPCell.ALIGN_CENTER,
             PaddingTop = 3,
             PaddingBottom = 3,
             Border = Rectangle.TOP_BORDER | (header == "Vaccine" ? Rectangle.LEFT_BORDER : 0) | (header == "Validity" ? Rectangle.RIGHT_BORDER : 0)
@@ -4120,7 +4120,6 @@ int rowCount = 0;
             public override void OnEndPage(PdfWriter writer, Document document)
 {
     PdfContentByte cb = writer.DirectContent;
-    float footerY = 100f;
     int currentYear = DateTime.Now.Year;
     Font regularFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
     Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 10);
@@ -4188,12 +4187,27 @@ int rowCount = 0;
         float contactTableTopY = document.BottomMargin + contactTable.TotalHeight;
         contactTable.WriteSelectedRows(0, -1, document.LeftMargin, contactTableTopY, cb);
 
+        float footerTextY = contactTableTopY + 10f;
+        float clinicLineY = footerTextY + 20f;
+
         ColumnText.ShowTextAligned(
             cb,
             Element.ALIGN_RIGHT,
             new Phrase($"MR No: {currentYear}-{_childId}", mrFont),
             document.PageSize.Width - document.RightMargin,
             clinicLineY,
+            0
+        );
+
+        ColumnText.ShowTextAligned(
+            cb,
+            Element.ALIGN_LEFT,
+            new Phrase(
+                "This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.",
+                regularFont
+            ),
+            document.LeftMargin + 5,
+            footerTextY,
             0
         );
     }
@@ -4204,23 +4218,22 @@ int rowCount = 0;
             Element.ALIGN_LEFT,
             new Phrase("Clinic details not found", footerFont),
             document.LeftMargin + 5,
-            footerY + 0,
+            document.BottomMargin + 32f,
+            0
+        );
+
+        ColumnText.ShowTextAligned(
+            cb,
+            Element.ALIGN_LEFT,
+            new Phrase(
+                "This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.",
+                regularFont
+            ),
+            document.LeftMargin + 5,
+            document.BottomMargin + 18f,
             0
         );
     }
-
-    // Add footer text
-    ColumnText.ShowTextAligned(
-        cb,
-        Element.ALIGN_LEFT,
-        new Phrase(
-            "This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.",
-            regularFont
-        ),
-        document.LeftMargin + 5,
-        footerY - 25,
-        0
-    );
 }
         }
 

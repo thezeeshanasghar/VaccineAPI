@@ -9,6 +9,8 @@ namespace VaccineAPI.ModelDTO
         public string BrandName { get; set; }
         public int Quantity { get; set; }
         public decimal StockAmount { get; set; }
+        public string? BatchLot { get; set; }
+        public DateTime? Expiry { get; set; }
         public int BillId { get; set; }
         public string BillNo { get; set; }
         public string Supplier { get; set; }

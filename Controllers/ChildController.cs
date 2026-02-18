@@ -3895,7 +3895,11 @@ namespace VaccineAPI.Controllers
                 if (System.IO.File.Exists(logoPath))
                 {
                     var logo = Image.GetInstance(logoPath);
-                    logo.ScaleToFit(170f, 170f);
+                    // Fit logo within the right column (1/4 of usable page width)
+                    float usableWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+                    float rightColumnWidth = usableWidth / 4f;
+                    float maxLogoWidth = Math.Max(40f, rightColumnWidth - 4f);
+                    logo.ScaleToFit(maxLogoWidth, 60f);
                     PdfPCell logoCell = new PdfPCell(logo)
                     {
                         Border = PdfPCell.NO_BORDER,

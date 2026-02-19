@@ -4270,6 +4270,16 @@ int rowCount = 0;
                 return value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "-";
             }
 
+            string FormatValidity(int? value)
+            {
+                if (!value.HasValue)
+                {
+                    return "-";
+                }
+
+                return value.Value == 30000 ? "Life Time" : value.Value.ToString();
+            }
+
             var currentYear = DateTime.UtcNow.AddHours(5).Year;
             var mrNo = $"{currentYear}-{id}";
             var guardian = !string.IsNullOrWhiteSpace(child?.Guardian) ? child.Guardian : child?.FatherName;
@@ -4304,7 +4314,7 @@ int rowCount = 0;
                             <td>{HtmlEncode(item.Lot ?? "-")}</td>
                             <td>{HtmlEncode(FormatDate(item.GivenDate))}</td>
                             <td>{HtmlEncode(FormatDate(item.Expiry))}</td>
-                            <td>{HtmlEncode(item.Validity?.ToString() ?? "-")}</td>
+                            <td>{HtmlEncode(FormatValidity(item.Validity))}</td>
                         </tr>");
                 }
             }

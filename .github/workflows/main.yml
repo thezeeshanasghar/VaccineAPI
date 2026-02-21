@@ -76,7 +76,8 @@ jobs:
         run: |
           ssh -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
           "cd VaccineAPI && \
-          git pull && \
+          git fetch origin staging && \
+          git reset --hard origin/staging && \
           docker-compose down && \
           docker-compose build --no-cache && \
           docker-compose up -d"

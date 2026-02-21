@@ -77,6 +77,30 @@ namespace VaccineAPI.Controllers
             return new Response<List<StockDTO>>(true, null, stockDTOs);
         }
 
+        [HttpGet("latest")]
+        public Response<StockDTO> GetLatestByBrand([FromQuery] long brandId, [FromQuery] long clinicId)
+        {
+            if (brandId <= 0 || clinicId <= 0)
+            {
+                return new Response<StockDTO>(false, "Invalid brandId or clinicId", null);
+            }
+
+            var stock = _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId)
+                .OrderByDescending(s => s.Bill.BillDate)
+                .ThenByDescending(s => s.Id)
+                .FirstOrDefault();
+
+            if (stock == null)
+            {
+                return new Response<StockDTO>(false, "Stock not found", null);
+            }
+
+            var stockDTO = _mapper.Map<StockDTO>(stock);
+            return new Response<StockDTO>(true, null, stockDTO);
+        }
+
         [HttpPost]
         public async Task<Response<List<StockDTO>>> Post([FromBody] List<StockDTO> stockDTOs)
         {

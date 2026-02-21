@@ -3608,12 +3608,6 @@ namespace VaccineAPI.Controllers
             writer.CloseStream = false;
             document.Open();
 
-            PdfContentByte canvas = writer.DirectContent;
-            canvas.SetLineWidth(1f);
-            canvas.SetColorStroke(BaseColor.Gray);
-            canvas.Rectangle(10f, 10f, document.PageSize.Width - 25f, document.PageSize.Height - 25f);
-            canvas.Stroke();
-
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
             headerTable.SetWidths(new float[] { 3, 1 });
@@ -3633,7 +3627,7 @@ namespace VaccineAPI.Controllers
             if (System.IO.File.Exists(logoPath))
             {
                 var logo = iTextSharp.text.Image.GetInstance(logoPath);
-                logo.ScaleToFit(50f, 50f);
+                logo.ScaleToFit(55f, 55f);
                 PdfPCell logoCell = new PdfPCell(logo)
                 {
                     Border = PdfPCell.NO_BORDER,

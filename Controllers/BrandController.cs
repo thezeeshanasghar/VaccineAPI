@@ -35,7 +35,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}")]
         public async Task<Response<BrandDTO>> GetSingle(long id)
         {
-            var dbbrand = await _db.Brands.Include(x => x.Vaccine).FirstOrDefaultAsync();
+            var dbbrand = await _db.Brands.Include(x => x.Vaccine).FirstOrDefaultAsync(x => x.Id == id);
 
             BrandDTO brandDTO = _mapper.Map<BrandDTO>(dbbrand);
 
@@ -106,6 +106,7 @@ namespace VaccineAPI.Controllers
         {
             var dbVaccineBrand = _db.Brands.Where(c => c.Id == Id).FirstOrDefault();
             dbVaccineBrand.Name = vaccineBrandDTO.Name;
+            dbVaccineBrand.Manufacturer = vaccineBrandDTO.Manufacturer;
             _db.SaveChanges();
             return new Response<BrandDTO>(true, null, vaccineBrandDTO);
         }

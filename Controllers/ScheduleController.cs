@@ -51,7 +51,7 @@ namespace VaccineAPI.Controllers
                 .Where(c => c.Id == Id)
                 .FirstOrDefault();
             ScheduleDTO scheduleDTOs = _mapper.Map<ScheduleDTO>(dbSchedule);
-            var dbBrands = _db.Brands.ToList();
+            var dbBrands = _db.Brands.OrderBy(x => x.Name).ToList();
             List<BrandDTO> brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
             scheduleDTOs.Brands = brandDTOs;
             return new Response<ScheduleDTO>(true, null, scheduleDTOs);
@@ -482,7 +482,7 @@ namespace VaccineAPI.Controllers
                     .ToList();
                 var dbDose = _db.Doses.Include(x => x.Vaccine).ToList();
                 var dbVacc = _db.Vaccines.Include(x => x.Doses).ToList();
-                var allBrands = _db.Brands.ToList();
+                var allBrands = _db.Brands.OrderBy(x => x.Name).ToList();
 
                 List<ScheduleDTO> scheduleDTOs = new List<ScheduleDTO>();
                 foreach (var schedule in dbSchedule)

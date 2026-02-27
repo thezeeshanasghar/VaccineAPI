@@ -40,21 +40,12 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public async Task<Response<List<VaccineDTO>>> GetAll()
         {
-            var list = await _db.Vaccines.Include(x => x.Brands).Include(x => x.Doses).OrderBy(x => x.MinAge).ToListAsync();
+            var list = await _db.Vaccines.Include(x => x.Doses).OrderBy(x => x.MinAge).ToListAsync();
             List<VaccineDTO> listDTO = _mapper.Map<List<VaccineDTO>>(list);
             foreach (var dto in listDTO)
             {
-                var vaccine = _db.Vaccines.Where(x => x.Id == dto.Id).First();
-                if (vaccine.Brands != null)
-                    dto.NumOfBrands = vaccine.Brands.Count();
-                else
-                    dto.NumOfBrands = 0;
-
-                if (vaccine.Doses != null)
-                    dto.NumOfDoses = vaccine.Doses.Count();
-                else
-                    dto.NumOfDoses = 0;
-                // dto.NumOfDoses = _db.Vaccines.Where(x => x.Id == dto.Id).First().Doses.Count();
+                dto.NumOfBrands = _db.Brands.Count();
+                dto.NumOfDoses = _db.Doses.Count(x => x.VaccineId == dto.Id);
             }
             return new Response<List<VaccineDTO>>(true, null, listDTO);
         }
@@ -62,12 +53,13 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}")]
         public async Task<Response<VaccineDTO>> GetSingle(long id)
         {
-            var dbvaccine = await _db.Vaccines.Include(X => X.Doses).Include(x => x.Brands).Where(x => x.Id == id).FirstOrDefaultAsync();
-            VaccineDTO vaccineDTO = _mapper.Map<VaccineDTO>(dbvaccine);
-            vaccineDTO.NumOfBrands = dbvaccine.Brands.Count();
-            vaccineDTO.NumOfDoses = dbvaccine.Doses.Count();
+            var dbvaccine = await _db.Vaccines.Include(X => X.Doses).Where(x => x.Id == id).FirstOrDefaultAsync();
             if (dbvaccine == null)
                 return new Response<VaccineDTO>(false, "Not Found", null);
+
+            VaccineDTO vaccineDTO = _mapper.Map<VaccineDTO>(dbvaccine);
+            vaccineDTO.NumOfBrands = _db.Brands.Count();
+            vaccineDTO.NumOfDoses = dbvaccine.Doses.Count();
 
             return new Response<VaccineDTO>(true, null, vaccineDTO);
         }
@@ -75,37 +67,26 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/dosses")]
         public async Task<Response<List<DoseDTO>>> GetDosses(long id)
         {
-
-
-            var dbvaccine = await _db.Vaccines.Include(x => x.Doses).FirstOrDefaultAsync(x => x.Id == id);
-
+            var dbvaccine = await _db.Vaccines.FirstOrDefaultAsync(x => x.Id == id);
             if (dbvaccine == null)
                 return new Response<List<DoseDTO>>(false, "Vaccine Not Found", null);
 
-            else
-            {
-                var dbDosses = dbvaccine.Doses;
-                var dossesDTOs = _mapper.Map<List<DoseDTO>>(dbDosses);
-                return new Response<List<DoseDTO>>(true, null, dossesDTOs);
-            }
+            var dbDosses = await _db.Doses.Where(x => x.VaccineId == id).ToListAsync();
+            var dossesDTOs = _mapper.Map<List<DoseDTO>>(dbDosses);
+            return new Response<List<DoseDTO>>(true, null, dossesDTOs);
         }
 
         [HttpGet("{id}/brands")]
         public async Task<Response<List<BrandDTO>>> GetBrands(long id)
         {
-
-
-            var dbvaccine = await _db.Vaccines.Include(x => x.Brands).FirstOrDefaultAsync(x => x.Id == id);
+            var dbvaccine = await _db.Vaccines.FirstOrDefaultAsync(x => x.Id == id);
 
             if (dbvaccine == null)
                 return new Response<List<BrandDTO>>(false, "Vaccine Not Found", null);
 
-            else
-            {
-                var dbBrands = dbvaccine.Brands;
-                var brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
-                return new Response<List<BrandDTO>>(true, null, brandDTOs);
-            }
+            var dbBrands = await _db.Brands.OrderBy(x => x.Name).ToListAsync();
+            var brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
+            return new Response<List<BrandDTO>>(true, null, brandDTOs);
         }
 
         [HttpPost]
@@ -115,32 +96,6 @@ namespace VaccineAPI.Controllers
             _db.Vaccines.Add(vaccinedb);
             await _db.SaveChangesAsync();
             vaccineDTO.Id = vaccinedb.Id;
-            Brand dbBrand = new Brand { VaccineId = vaccinedb.Id, Name = "Local" };
-            _db.Brands.Add(dbBrand);
-            await _db.SaveChangesAsync();
-            var doctors = await _db.Doctors.ToListAsync();
-            List<BrandAmount> brandAmounts = new List<BrandAmount>();
-            foreach (var doctor in doctors)
-            {
-                if (doctor == null)
-                {
-                    continue;
-                }
-                foreach (var clinic in doctor.Clinics)
-                {
-                    BrandAmount newBrandAmount = new BrandAmount
-                    {
-                        DoctorId = doctor.Id,
-                        BrandId = dbBrand.Id,
-                        ClinicId = clinic.Id,
-                        Amount = 0,
-                        Count = 0,
-                    };
-                    brandAmounts.Add(newBrandAmount);
-                }
-            }
-            _db.BrandAmounts.AddRange(brandAmounts);
-            await _db.SaveChangesAsync();
             return new Response<VaccineDTO>(true, null, vaccineDTO);
         }
 
@@ -166,10 +121,10 @@ namespace VaccineAPI.Controllers
 
         {
             //try {
-            var dbVaccine = _db.Vaccines.Include(X => X.Doses).Include(x => x.Brands).Where(x => x.Id == id).FirstOrDefault();
-            if (dbVaccine.Brands.Count > 0)
-                return new Response<string>(false, "Cannot delete vaccine because it's brands exists. Delete the brands first", null);
-            else if (dbVaccine.Doses.Count > 0)
+            var dbVaccine = _db.Vaccines.Include(X => X.Doses).Where(x => x.Id == id).FirstOrDefault();
+            if (dbVaccine == null)
+                return new Response<string>(false, "Vaccine not found", null);
+            if (dbVaccine.Doses.Count > 0)
                 return new Response<string>(false, "Cannot delete vaccine because it's Doses exists. Delete the Doses first", null);
             _db.Vaccines.Remove(dbVaccine);
             _db.SaveChanges();

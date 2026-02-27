@@ -105,8 +105,11 @@ namespace VaccineAPI.Controllers
                 _db.SaveChanges();
                 DoctorSchedueDTO.Id = doctorSchduleDB.Id;
                 var dose = _db.Doses.SingleOrDefault(a => a.Id == DoctorSchedueDTO.DoseId);
-                var vac = _db.Vaccines.Where(a => a.Id == dose.VaccineId).FirstOrDefault();
-                var brand = _db.Brands.Where(a => a.VaccineId == vac.Id).FirstOrDefault();
+                var brand = _db.Brands.OrderBy(a => a.Id).FirstOrDefault();
+                if (brand == null)
+                {
+                    continue;
+                }
                 var count = 0;
                 var amount = 0;
                 var brandAmount = new BrandAmount

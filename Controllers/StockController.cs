@@ -55,7 +55,6 @@ namespace VaccineAPI.Controllers
             var stocks = _db.Stocks
                 .Include(s => s.Bill)
                 .Include(s => s.Brand)
-                    .ThenInclude(b => b.Vaccine)
                 .Where(s => s.BillId == billId)
                 .ToList();
 
@@ -216,7 +215,6 @@ namespace VaccineAPI.Controllers
                     var resultStock = await _db.Stocks
                         .Include(s => s.Bill)
                         .Include(s => s.Brand)
-                            .ThenInclude(b => b.Vaccine)
                         .FirstOrDefaultAsync(s => s.Id == stock.Id);
 
                     var resultDto = _mapper.Map<StockDTO>(resultStock);
@@ -474,7 +472,6 @@ namespace VaccineAPI.Controllers
                     var updatedStock = await _db
                         .Stocks.Include(s => s.Bill)
                         .Include(s => s.Brand)
-                        .ThenInclude(b => b.Vaccine)
                         .FirstOrDefaultAsync(s => s.Id == stock.Id);
 
                     var resultDto = _mapper.Map<StockDTO>(updatedStock);

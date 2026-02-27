@@ -275,30 +275,25 @@ namespace VaccineAPI.Controllers
             var dbDoctor = _db.Doctors.Where(x => x.Id == Id).FirstOrDefault();
             dbDoctor.ValidUpto = doctorDTO.ValidUpto;
             _db.SaveChanges();
-            var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
+            var brands = _db.Brands.ToList();
             bool brandamount = _db.BrandAmounts.Any(x => x.DoctorId == Id);
             if (brandamount == false)
             {
-                foreach (var vaccine in vaccines)
+                foreach (var brand in brands)
                 {
-                    // add default brands amount and inventory count of doctor
-                    var brands = vaccine.Brands;
-                    foreach (var brand in brands)
-                    {
-                        BrandAmount ba = new BrandAmount();
-                        ba.Amount = 0;
-                        ba.DoctorId = dbDoctor.Id;
-                        ba.Count = 0;
-                        ba.BrandId = brand.Id;
-                        _db.BrandAmounts.Add(ba);
+                    BrandAmount ba = new BrandAmount();
+                    ba.Amount = 0;
+                    ba.DoctorId = dbDoctor.Id;
+                    ba.Count = 0;
+                    ba.BrandId = brand.Id;
+                    _db.BrandAmounts.Add(ba);
 
-                        // BrandInventory bi = new BrandInventory();
-                        // bi.Count = 0;
-                        // bi.DoctorId = dbDoctor.Id;
-                        // bi.BrandId = brand.Id;
-                        // _db.BrandInventorys.Add(bi);
-                        _db.SaveChanges();
-                    }
+                    // BrandInventory bi = new BrandInventory();
+                    // bi.Count = 0;
+                    // bi.DoctorId = dbDoctor.Id;
+                    // bi.BrandId = brand.Id;
+                    // _db.BrandInventorys.Add(bi);
+                    _db.SaveChanges();
                 }
             }
 

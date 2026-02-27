@@ -26,7 +26,7 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public async Task<Response<List<BrandDTO>>> GetAll()
         {
-            var list = await _db.Brands.Include(x => x.Vaccine).OrderBy(x => x.Id).ToListAsync();
+            var list = await _db.Brands.OrderBy(x => x.Id).ToListAsync();
             List<BrandDTO> listDTO = _mapper.Map<List<BrandDTO>>(list);
 
             return new Response<List<BrandDTO>>(true, null, listDTO);
@@ -35,7 +35,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}")]
         public async Task<Response<BrandDTO>> GetSingle(long id)
         {
-            var dbbrand = await _db.Brands.Include(x => x.Vaccine).FirstOrDefaultAsync(x => x.Id == id);
+            var dbbrand = await _db.Brands.FirstOrDefaultAsync(x => x.Id == id);
 
             BrandDTO brandDTO = _mapper.Map<BrandDTO>(dbbrand);
 
@@ -56,8 +56,9 @@ namespace VaccineAPI.Controllers
         //             vaccineBrandDTO.Id = dbVaccineBrand.Id;
         //             return new Response<BrandDTO>(true, null, vaccineBrandDTO);
         // }
+        [HttpPost]
         [HttpPost("{vaccineId}")]
-        public async Task<Response<BrandDTO>> Post(BrandDTO vaccineBrandDTO)
+        public async Task<Response<BrandDTO>> Post(BrandDTO vaccineBrandDTO, long? vaccineId = null)
         {
             // Map the DTO to the Brand entity
             Brand dbVaccineBrand = _mapper.Map<Brand>(vaccineBrandDTO);

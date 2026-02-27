@@ -27,7 +27,6 @@ namespace VaccineAPI.Controllers
         {
             var adjustments = await _db.AdjustStocks
                 .Include(a => a.Brand)
-                    .ThenInclude(b => b.Vaccine)
                 .OrderByDescending(a => a.Id)
                 .ToListAsync();
 
@@ -45,7 +44,6 @@ namespace VaccineAPI.Controllers
         {
             var adjustment = await _db.AdjustStocks
                 .Include(a => a.Brand)
-                    .ThenInclude(b => b.Vaccine)
                 .FirstOrDefaultAsync(a => a.Id == id);
 
             if (adjustment == null)
@@ -66,7 +64,6 @@ namespace VaccineAPI.Controllers
                 // Validate brand exists and include related data
                 var brandAmount = await _db.BrandAmounts
                     .Include(b => b.Brand)
-                        .ThenInclude(b => b.Vaccine)
                     .FirstOrDefaultAsync(b => b.BrandId == dto.BrandId && b.DoctorId == dto.DoctorId && b.ClinicId == dto.ClinicId);
 
                 if (brandAmount == null)
@@ -121,7 +118,7 @@ namespace VaccineAPI.Controllers
                 // Map result with included data
                 var resultDto = _mapper.Map<AdjustStockDTO>(adjustment);
                 resultDto.BrandName = brandAmount.Brand?.Name;
-                resultDto.VaccineName = brandAmount.Brand?.Vaccine?.Name;
+                resultDto.VaccineName = "";
 
                 return new Response<AdjustStockDTO>(true,
                     $"Stock adjusted successfully for Doctor ID {dto.DoctorId}. New count: {newCount}",
@@ -140,7 +137,6 @@ namespace VaccineAPI.Controllers
         {
             var adjustments = await _db.AdjustStocks
                 .Include(a => a.Brand)
-                    .ThenInclude(b => b.Vaccine)
                 .Where(a => a.BrandId == brandId)
                 .OrderByDescending(a => a.Id)
                 .ToListAsync();

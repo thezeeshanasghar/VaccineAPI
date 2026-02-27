@@ -32,14 +32,14 @@ namespace VaccineAPI.Controllers
                 return new Response<List<BrandAmountDTO>>(false, "Brand not found", null);
             List<BrandAmountDTO> brandAmountDTOs = _mapper.Map<List<BrandAmountDTO>>(brandAmountDBs);
             foreach (BrandAmountDTO baDTO in brandAmountDTOs)
-                baDTO.VaccineName = _db.Brands.Include(x => x.Vaccine).Where(x => x.Id == baDTO.BrandId).First().Vaccine.Name;
+                baDTO.VaccineName = "";
             return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
         }
 
         [HttpGet("clinic/{Id}")]
         public Response<List<BrandAmountDTO>> Getonclinic(int Id)
         {
-            var brandAmountDBs = _db.BrandAmounts.Include(x => x.Brand).ThenInclude(b => b.Vaccine).Include(x => x.Clinic).Where(x => x.ClinicId == Id).ToList();
+            var brandAmountDBs = _db.BrandAmounts.Include(x => x.Brand).Include(x => x.Clinic).Where(x => x.ClinicId == Id).ToList();
 
             if (brandAmountDBs == null || !brandAmountDBs.Any())
             {
@@ -50,12 +50,7 @@ namespace VaccineAPI.Controllers
 
             foreach (var baDTO in brandAmountDTOs)
             {
-                var brand = _db.Brands.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == baDTO.BrandId);
-
-                if (brand?.Vaccine != null)
-                {
-                    baDTO.VaccineName = brand.Vaccine.Name;
-                }
+                baDTO.VaccineName = "";
             }
 
             return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
@@ -108,7 +103,6 @@ namespace VaccineAPI.Controllers
             {
                 var brandAmounts = _db.BrandAmounts
                     .Include(x => x.Brand)
-                        .ThenInclude(b => b.Vaccine)
                     .Include(x => x.Clinic)
                     .Where(x => x.ClinicId == clinicId)
                     .OrderBy(x => x.Brand.Name)

@@ -51,8 +51,7 @@ namespace VaccineAPI.Controllers
                 .Where(c => c.Id == Id)
                 .FirstOrDefault();
             ScheduleDTO scheduleDTOs = _mapper.Map<ScheduleDTO>(dbSchedule);
-            long vaccineId = dbSchedule.Dose.VaccineId;
-            var dbBrands = _db.Brands.Where(b => b.VaccineId == vaccineId).ToList();
+            var dbBrands = _db.Brands.ToList();
             List<BrandDTO> brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
             scheduleDTOs.Brands = brandDTOs;
             return new Response<ScheduleDTO>(true, null, scheduleDTOs);
@@ -482,14 +481,14 @@ namespace VaccineAPI.Controllers
                     .Where(x =>x.Date.Date == scheduleDto.Date.Date && x.ChildId == scheduleDto.ChildId)
                     .ToList();
                 var dbDose = _db.Doses.Include(x => x.Vaccine).ToList();
-                var dbVacc = _db.Vaccines.Include(x => x.Doses).Include(x => x.Brands).ToList();
+                var dbVacc = _db.Vaccines.Include(x => x.Doses).ToList();
+                var allBrands = _db.Brands.ToList();
 
                 List<ScheduleDTO> scheduleDTOs = new List<ScheduleDTO>();
                 foreach (var schedule in dbSchedule)
                 {
                     ScheduleDTO scheduleDTO = new ScheduleDTO();
-                    var dbBrands = schedule.Dose.Vaccine.Brands.ToList();
-                    List<BrandDTO> brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
+                    List<BrandDTO> brandDTOs = _mapper.Map<List<BrandDTO>>(allBrands);
                     scheduleDTO.Dose = _mapper.Map<DoseDTO>(schedule.Dose);
                     scheduleDTO.Id = schedule.Id;
                     scheduleDTO.Brands = brandDTOs;

@@ -17,8 +17,6 @@ namespace VaccineAPI.Models
         public long Id { get; set; }
         public string Name { get; set; }
         public string Manufacturer { get; set; }
-        public long VaccineId { get; set; }
-        public virtual Vaccine Vaccine { get; set; }
         public virtual ICollection<BrandAmount> BrandAmounts { get; set; }
         // public virtual ICollection<BrandInventory> BrandInventories { get; set; }
         public virtual ICollection<Schedule> Schedules { get; set; }

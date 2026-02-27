@@ -55,22 +55,19 @@ namespace VaccineAPI.Controllers
             _db.SaveChanges();
             clinicDTO.Id = dbClinic.Id;
             clinicDTO.IsOnline = dbClinic.IsOnline;
-            var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
+            var brands = _db.Brands.ToList();
 
-            foreach (var vaccine in vaccines)
+            foreach (var brand in brands)
             {
-                foreach (var brand in vaccine.Brands)
+                BrandAmount ba = new BrandAmount
                 {
-                    BrandAmount ba = new BrandAmount
-                    {
-                        Amount = 0,
-                        DoctorId = clinicDTO.DoctorId, 
-                        Count = 0,
-                        BrandId = brand.Id,
-                        ClinicId = dbClinic.Id, 
-                    };
-                    _db.BrandAmounts.Add(ba);
-                }
+                    Amount = 0,
+                    DoctorId = clinicDTO.DoctorId,
+                    Count = 0,
+                    BrandId = brand.Id,
+                    ClinicId = dbClinic.Id,
+                };
+                _db.BrandAmounts.Add(ba);
             }
             _db.SaveChanges();
 

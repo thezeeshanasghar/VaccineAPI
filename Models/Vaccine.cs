@@ -8,7 +8,6 @@ namespace VaccineAPI.Models
     {
         public Vaccine()
         {
-            this.Brands = new HashSet<Brand>();
             this.Doses = new HashSet<Dose>();
         }
         public long Id { get; set; }
@@ -19,7 +18,6 @@ namespace VaccineAPI.Models
         public bool isInfinite { get; set; }
         public int Validity { get; set; }
 
-        public virtual ICollection<Brand> Brands { get; set; }
         public virtual ICollection<Dose> Doses { get; set; }
     }
 

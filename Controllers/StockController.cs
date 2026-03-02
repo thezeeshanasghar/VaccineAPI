@@ -87,7 +87,8 @@ namespace VaccineAPI.Controllers
             var stock = _db.Stocks
                 .Include(s => s.Bill)
                 .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId)
-                .OrderByDescending(s => s.Bill.BillDate)
+                .OrderByDescending(s => !string.IsNullOrWhiteSpace(s.BatchLot) || s.Expiry != null)
+                .ThenByDescending(s => s.Bill.BillDate)
                 .ThenByDescending(s => s.Id)
                 .FirstOrDefault();
 

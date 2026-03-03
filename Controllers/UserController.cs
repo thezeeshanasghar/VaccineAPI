@@ -54,7 +54,10 @@ namespace VaccineAPI.Controllers
             {
                 Console.WriteLine(dob);
                 var c = await _db.Childs.Where(x => x.UserId == user.Id).FirstOrDefaultAsync();
-                Console.WriteLine(c.DOB.Date);
+                if (c != null)
+                {
+                    Console.WriteLine(c.DOB.Date);
+                }
                 var child = await _db.Childs
                     .Where(x => (x.UserId == user.Id && x.DOB.Date == dob))
                     .FirstOrDefaultAsync();
@@ -284,7 +287,7 @@ namespace VaccineAPI.Controllers
         public Response<UserDTO> ChangePassword(ChangePasswordRequestDTO user)
         {
             {
-                User userDB = _db.Users.Where(x => x.Id == user.UserId).FirstOrDefault();
+                User? userDB = _db.Users.Where(x => x.Id == user.UserId).FirstOrDefault();
                 if (userDB == null)
                     return new Response<UserDTO>(false, "User not found.", null);
                 if (!userDB.Password.Equals(user.OldPassword))

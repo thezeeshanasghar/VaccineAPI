@@ -40,7 +40,13 @@ namespace VaccineAPI.Models
         {
             base.OnModelCreating(modelBuilder);
             foreach (var entity in modelBuilder.Model.GetEntityTypes())
-                entity.SetTableName(entity.GetTableName().ToLower());
+            {
+                var tableName = entity.GetTableName();
+                if (!string.IsNullOrEmpty(tableName))
+                {
+                    entity.SetTableName(tableName.ToLower());
+                }
+            }
             modelBuilder.Entity<User>().HasData(new User() { Id = 1, MobileNumber = "3331231231", Password = "1234", UserType = "SUPERADMIN", CountryCode = "92" });
         }
     }

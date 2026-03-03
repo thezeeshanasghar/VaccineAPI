@@ -15,13 +15,18 @@ namespace VaccineAPI.Controllers
         {
             try
             {
+                if (Request.Form?.Files == null || Request.Form.Files.Count == 0)
+                {
+                    return BadRequest("No file uploaded.");
+                }
+
                 var file = Request.Form.Files[0];
                 var folderName = Path.Combine("Resources", "Images");
                 var pathToSave = Path.Combine(Directory.GetCurrentDirectory(), folderName);
 
                 if (file.Length > 0)
                 {
-                    var fileName = ContentDispositionHeaderValue.Parse(file.ContentDisposition).FileName.Trim('"');
+                    var fileName = ContentDispositionHeaderValue.Parse(file.ContentDisposition).FileName?.Trim('"') ?? file.FileName;
                     var fullPath = Path.Combine(pathToSave, fileName);
                     var dbPath = Path.Combine(folderName, fileName);
 

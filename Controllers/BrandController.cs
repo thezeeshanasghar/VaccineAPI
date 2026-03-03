@@ -106,6 +106,10 @@ namespace VaccineAPI.Controllers
         public Response<BrandDTO> Put(int Id, BrandDTO vaccineBrandDTO)
         {
             var dbVaccineBrand = _db.Brands.Where(c => c.Id == Id).FirstOrDefault();
+            if (dbVaccineBrand == null)
+            {
+                return new Response<BrandDTO>(false, "Brand not found", null);
+            }
             dbVaccineBrand.Name = vaccineBrandDTO.Name;
             dbVaccineBrand.Manufacturer = vaccineBrandDTO.Manufacturer;
             _db.SaveChanges();

@@ -377,7 +377,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/GetChildAgainstMobile")]
         public Response<IEnumerable<ChildDTO>> GetChildAgainstMobile(string id)
         {
-            User user = _db.Users.Where(x => x.MobileNumber == id).FirstOrDefault();
+            User? user = _db.Users.Where(x => x.MobileNumber == id).FirstOrDefault();
             if (user != null)
             {
                 var children = _db.Childs.Where(c => c.UserId == user.Id).ToList();
@@ -394,6 +394,10 @@ namespace VaccineAPI.Controllers
         public Response<DoctorScheduleDTO> GetCustomScheduleAgainsClinic(int id)
         {
             var clinic = _db.Clinics.Where(c => c.Id == id).FirstOrDefault();
+            if (clinic?.Doctor == null)
+            {
+                return new Response<DoctorScheduleDTO>(false, "Clinic or doctor not found", null);
+            }
             var doctorSchedule = clinic.Doctor.DoctorSchedules.FirstOrDefault();
             if (doctorSchedule != null)
             {
@@ -409,8 +413,12 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/ScheduleVerify")]
         public IActionResult DownloadSchedulePDF(int id)
         {
-            Child dbScheduleChild;
+            Child? dbScheduleChild;
             { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
+            if (dbScheduleChild == null)
+            {
+                return NotFound("Child not found");
+            }
             var stream = CreateSchedulePdf(id);
             var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
                            DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
@@ -420,8 +428,12 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/verification-Schedule-PDF")]
         public IActionResult ViewSchedulePDF(int id)
         {
-            Child dbScheduleChild;
+            Child? dbScheduleChild;
             { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
+            if (dbScheduleChild == null)
+            {
+                return NotFound("Child not found");
+            }
             var stream = CreateSchedulePdf(id);
             var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
                            DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
@@ -594,7 +606,7 @@ namespace VaccineAPI.Controllers
 
             if (dbChild == null) 
             {
-                return null;
+                return Stream.Null;
             }
 
             var dbDoctor = dbChild.Clinic?.Doctor;
@@ -610,6 +622,11 @@ namespace VaccineAPI.Controllers
                                 .ThenInclude(x => x.Doctor)
                                 .ThenInclude(d => d.DoctorSchedules)
                                 .FirstOrDefault(c => c.Id == childId);                    
+            if (child == null)
+            {
+                return Stream.Null;
+            }
+
             var dbSchedules = child.Schedules
             .ToList();
 

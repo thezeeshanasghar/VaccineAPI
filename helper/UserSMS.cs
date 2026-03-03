@@ -145,7 +145,11 @@ namespace VaccineAPI
         {
             // using (VDEntities entities = new VDEntities())
             {
-                Doctor dbDoctor = _db.Doctors.Where(x => x.Id == doctor.Id).FirstOrDefault();
+                Doctor? dbDoctor = _db.Doctors.Where(x => x.Id == doctor.Id).FirstOrDefault();
+                if (dbDoctor == null)
+                {
+                    return;
+                }
                 dbDoctor.SMSLimit--;
                 _db.SaveChanges();
             }

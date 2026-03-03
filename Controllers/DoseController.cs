@@ -113,7 +113,7 @@ namespace VaccineAPI.Controllers
         // }
         public class NewDoseResponse
         {
-            public DoseDTO Dose { get; set; }
+            public DoseDTO Dose { get; set; } = null!;
             public bool IsActive { get; set; }
         }
         [HttpGet("newchild2/{id}")]
@@ -130,7 +130,7 @@ namespace VaccineAPI.Controllers
 
             // Step 2: Retrieve the doctor ID associated with the clinic
             var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == clinicId);
-            if (clinic == null || clinic.DoctorId == null)
+            if (clinic == null || clinic.DoctorId <= 0)
             {
                 return new Response<List<NewDoseResponse>>(false, "Clinic or doctor not found.", null);
             }
@@ -208,6 +208,10 @@ namespace VaccineAPI.Controllers
         public Response<DoseDTO> Put(int Id, DoseDTO doseDTO)
         {
             var dbDose = _db.Doses.Where(c => c.Id == Id).FirstOrDefault();
+            if (dbDose == null)
+            {
+                return new Response<DoseDTO>(false, "Dose not found", null);
+            }
             dbDose.Name = doseDTO.Name;
             dbDose.MinAge = doseDTO.MinAge;
             dbDose.MaxAge = doseDTO.MaxAge;
@@ -221,6 +225,10 @@ namespace VaccineAPI.Controllers
         public Response<string> Delete(int Id)
         {
             var dbDose = _db.Doses.Where(c => c.Id == Id).FirstOrDefault();
+            if (dbDose == null)
+            {
+                return new Response<string>(false, "Dose not found", null);
+            }
             _db.Doses.Remove(dbDose);
             _db.SaveChanges();
             return new Response<string>(true, null, "record deleted");

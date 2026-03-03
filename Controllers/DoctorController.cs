@@ -95,6 +95,10 @@ namespace VaccineAPI.Controllers
         {
 
             var doctor = _db.Doctors.FirstOrDefault(d => d.Email == email);
+            if (doctor == null)
+            {
+                return NotFound();
+            }
             var userDetails = _db.Users.FirstOrDefault(u => u.Id == doctor.UserId);
             if (userDetails != null)
             {
@@ -204,6 +208,10 @@ namespace VaccineAPI.Controllers
         public Response<DoctorDTO> UpdateUploadedImages(int id)
         {
             var dbDoctor = _db.Doctors.Where(d => d.Id == id).FirstOrDefault();
+            if (dbDoctor == null)
+            {
+                return new Response<DoctorDTO>(false, "Doctor not found", null);
+            }
 
             if (HttpContext.Request.Form.Files.Any())
             {
@@ -236,6 +244,10 @@ namespace VaccineAPI.Controllers
         {
 
             var dbDoctor = _db.Doctors.Where(c => c.Id == Id).FirstOrDefault();
+            if (dbDoctor == null)
+            {
+                return new Response<DoctorDTO>(false, "Doctor not found", null);
+            }
             dbDoctor.FirstName = doctorDTO.FirstName;
             dbDoctor.DisplayName = doctorDTO.DisplayName;
             dbDoctor.Email = doctorDTO.Email;
@@ -259,6 +271,10 @@ namespace VaccineAPI.Controllers
         public Response<DoctorDTO> UpdatePermissions(int Id, DoctorDTO doctorDTO)
         {
             var dbDoctor = _db.Doctors.Where(c => c.Id == Id).FirstOrDefault();
+            if (dbDoctor == null)
+            {
+                return new Response<DoctorDTO>(false, "Doctor not found", null);
+            }
 
             dbDoctor.AllowInvoice = doctorDTO.AllowInvoice;
             dbDoctor.AllowFollowUp = doctorDTO.AllowFollowUp;
@@ -273,6 +289,10 @@ namespace VaccineAPI.Controllers
         public Response<DoctorDTO> ChangeValidity(int Id, DoctorDTO doctorDTO)
         {
             var dbDoctor = _db.Doctors.Where(x => x.Id == Id).FirstOrDefault();
+            if (dbDoctor == null)
+            {
+                return new Response<DoctorDTO>(false, "Doctor not found", null);
+            }
             dbDoctor.ValidUpto = doctorDTO.ValidUpto;
             _db.SaveChanges();
             var brands = _db.Brands.ToList();
@@ -356,7 +376,10 @@ namespace VaccineAPI.Controllers
                     foreach (var item in childDTOs)
                     {
                         var dbChild = _db.Childs.Where(x => x.Id == item.Id).Include(x => x.User).FirstOrDefault();
-                        item.MobileNumber = dbChild.User.CountryCode + dbChild.User.MobileNumber;
+                        if (dbChild?.User != null)
+                        {
+                            item.MobileNumber = dbChild.User.CountryCode + dbChild.User.MobileNumber;
+                        }
                     }
                     return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs.OrderByDescending(x => x.Id).ToList().Skip(15 * currentPage).Take(15));
                 }
@@ -385,14 +408,22 @@ namespace VaccineAPI.Controllers
             {
                 var dbDoctor = _db.Doctors.Include(x => x.User).Include(x => x.DoctorSchedules).Include(x => x.FollowUps)
                     .Include(x => x.Clinics).ThenInclude(x => x.ClinicTimings).Include(x => x.Clinics).ThenInclude(x => x.Childs).Where(c => c.Id == Id).FirstOrDefault();
+                if (dbDoctor == null)
+                {
+                    return new Response<string>(false, "Doctor not found", null);
+                }
                 foreach (var clinic in dbDoctor.Clinics)
                 {
                     foreach (var child in clinic.Childs)
                     {
                         var dbChild = _db.Childs.Where(x => x.Id == child.Id).Include(x => x.Schedules).Include(x => x.User).ThenInclude(x => x.Childs).Include(x => x.FollowUps).FirstOrDefault();
+                        if (dbChild == null)
+                        {
+                            continue;
+                        }
                         _db.Schedules.RemoveRange(dbChild.Schedules);
                         _db.FollowUps.RemoveRange(dbChild.FollowUps);
-                        if (dbChild.User.Childs.Count == 1)
+                        if (dbChild.User != null && dbChild.User.Childs.Count == 1)
                             _db.Users.Remove(dbChild.User);
                         _db.Childs.Remove(dbChild);
                     }
@@ -400,7 +431,10 @@ namespace VaccineAPI.Controllers
                 }
                 _db.DoctorSchedules.RemoveRange(dbDoctor.DoctorSchedules);
                 _db.Clinics.RemoveRange(dbDoctor.Clinics);
-                _db.Users.Remove(dbDoctor.User);
+                if (dbDoctor.User != null)
+                {
+                    _db.Users.Remove(dbDoctor.User);
+                }
                 _db.Doctors.Remove(dbDoctor);
                 _db.SaveChanges();
                 return new Response<string>(true, "Doctor is deleted successfully", null);

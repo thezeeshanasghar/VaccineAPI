@@ -117,7 +117,7 @@ namespace VaccineAPI.Controllers
 
                 // Map result with included data
                 var resultDto = _mapper.Map<AdjustStockDTO>(adjustment);
-                resultDto.BrandName = brandAmount.Brand?.Name;
+                resultDto.BrandName = brandAmount.Brand?.Name ?? "";
                 resultDto.VaccineName = "";
 
                 return new Response<AdjustStockDTO>(true,

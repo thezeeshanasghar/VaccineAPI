@@ -215,8 +215,8 @@ namespace VaccineAPI.Controllers
                     Name = c.Name,
                     Email = c.Email,
                     ClinicId = c.ClinicId,
-                    MobileNumber = c.User?.MobileNumber,
-                    Password = c.User?.Password
+                    MobileNumber = c.User?.MobileNumber ?? "",
+                    Password = c.User?.Password ?? ""
                 });
 
                 foreach (var child in childInfoDTOs)
@@ -433,6 +433,10 @@ namespace VaccineAPI.Controllers
         {
             {
                 var dbChildFollowup = _db.FollowUps.Where(x => x.ChildId == childId).OrderByDescending(x => x.Id).FirstOrDefault();
+                if (dbChildFollowup == null)
+                {
+                    return new Response<FollowUpDTO>(false, "No follow-up found for child.", null);
+                }
                 UserSMS u = new UserSMS(_db);
                 u.ParentFollowUpSMSAlert(dbChildFollowup);
                 FollowUpDTO followupDTO = _mapper.Map<FollowUpDTO>(dbChildFollowup);

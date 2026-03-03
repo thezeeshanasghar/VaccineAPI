@@ -128,6 +128,10 @@ namespace VaccineAPI.Controllers
                       .ThenInclude(x => x.Clinic)
                   .Where(c => c.Id == scheduleDTO.Id)
                   .FirstOrDefault();
+                if (dbSchedule2 == null)
+                {
+                    return new Response<ScheduleDTO>(false, "Schedule not found", null);
+                }
                 var dbBrandInventory2 = _db.BrandAmounts
                     .Where(
                         b => b.BrandId == dbSchedule2.BrandId && b.DoctorId == dbSchedule2.Child.Clinic.DoctorId
@@ -303,6 +307,10 @@ namespace VaccineAPI.Controllers
                                 && x.DoseOrder == (dbSchedule.Dose.DoseOrder - 1)
                         )
                         .FirstOrDefault();
+                    if (prevdose == null)
+                    {
+                        return new Response<ScheduleDTO>(false, "previous dose not found", null);
+                    }
                     var previousSchedule = _db.Schedules
                         .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == prevdose.Id)
                         .FirstOrDefault();
@@ -359,7 +367,7 @@ namespace VaccineAPI.Controllers
             return new Response<ScheduleDTO>(true, "Schedule updated successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
         }
 
-        private Stock GetLatestStockByBrandAndClinic(long? brandId, long clinicId)
+        private Stock? GetLatestStockByBrandAndClinic(long? brandId, long clinicId)
         {
             if (!brandId.HasValue || brandId.Value <= 0 || clinicId <= 0)
             {

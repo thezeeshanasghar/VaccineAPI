@@ -34,9 +34,9 @@ namespace VaccineBrandApi.Controllers
             {
                 Id = (int)bv.Id,
                 BrandId = (int)bv.BrandId,
-                BrandName = _db.Brands.FirstOrDefault(b => b.Id == bv.BrandId)?.Name,
+                BrandName = _db.Brands.FirstOrDefault(b => b.Id == bv.BrandId)?.Name ?? "",
                 VaccineId = (int)bv.VaccineId,
-                VaccineName = _db.Vaccines.FirstOrDefault(v => v.Id == bv.VaccineId)?.Name,
+                VaccineName = _db.Vaccines.FirstOrDefault(v => v.Id == bv.VaccineId)?.Name ?? "",
             }));
         }
 

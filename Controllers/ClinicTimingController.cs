@@ -116,7 +116,7 @@ namespace VaccineAPI.Controllers
 
         public class ClinicIdsRequestModel
         {
-            public List<long> ClinicIds { get; set; }
+            public List<long> ClinicIds { get; set; } = new List<long>();
         }
 
         [HttpPatch("children/schedules")]
@@ -184,6 +184,10 @@ namespace VaccineAPI.Controllers
             try
             {
                 var dbClinic = await _db.Clinics.FindAsync(clinicId);
+                if (dbClinic == null)
+                {
+                    return NotFound($"Clinic not found for id {clinicId}.");
+                }
                 dbClinic.Name = request.Name;
                 dbClinic.ConsultationFee = request.ConsultationFee;
                 dbClinic.PhoneNumber = request.PhoneNumber;

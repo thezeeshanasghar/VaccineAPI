@@ -8,7 +8,6 @@ using VaccineAPI.Models;
 using System;
 using System.Data;
 using System.Threading.Tasks;
-using AutoMapper;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using System.IO;
@@ -318,7 +317,7 @@ namespace VaccineAPI.Controllers
                 // Check if we're generating report for all brands or a specific brand
                 bool isAllBrands = !brandId.HasValue || brandId.Value == 0;
                 
-                Brand brand = null;
+                Brand? brand = null;
                 if (!isAllBrands)
                 {
                     brand = _db.Brands.FirstOrDefault(b => b.Id == brandId);
@@ -373,7 +372,8 @@ namespace VaccineAPI.Controllers
                     .ToDictionary(g => g.Key, g => g.Sum(sb => sb.stock.Quantity));
 
                 var vaccineGroups = schedules
-                    .GroupBy(s => s.GivenDate)
+                    .Where(s => s.GivenDate.HasValue)
+                    .GroupBy(s => s.GivenDate!.Value.Date)
                     .ToDictionary(g => g.Key, g => g.Count());
 
                var stockAdjustments = _db
@@ -864,7 +864,8 @@ namespace VaccineAPI.Controllers
                             .ToDictionary(g => g.Key, g => g.Sum(sb => sb.stock.Quantity));
 
                         var vaccineGroups = schedules
-                            .GroupBy(s => s.GivenDate)
+                            .Where(s => s.GivenDate.HasValue)
+                            .GroupBy(s => s.GivenDate!.Value.Date)
                             .ToDictionary(g => g.Key, g => g.Count());
 
                         var stockAdjustments = _db

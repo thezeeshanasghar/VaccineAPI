@@ -65,8 +65,8 @@ namespace VaccineAPI.Controllers
             foreach (var dto in stockDTOs)
             {
                 var stock = stocks.First(s => s.Id == dto.Id);
-                dto.BillNo = stock.Bill?.BillNo;
-                dto.Supplier = stock.Bill?.Supplier;
+                dto.BillNo = stock.Bill?.BillNo ?? "";
+                dto.Supplier = stock.Bill?.Supplier ?? "";
                 dto.BillDate = stock.Bill?.BillDate ?? DateTime.MinValue;
                 dto.IsPaid = stock.Bill?.IsPaid ?? false;
                 dto.PaidDate = stock.Bill?.PaidDate ?? DateTime.MinValue;
@@ -182,7 +182,7 @@ namespace VaccineAPI.Controllers
                         ba.BrandId == stockDTO.BrandId && ba.ClinicId == stockDTO.ClinicId
                     );
                     decimal unitPrice = 0;
-                    if (brandAmount.PurchasedAmt == 0)
+                    if (brandAmount == null || brandAmount.PurchasedAmt == 0)
                     {
                         unitPrice = stockDTO.StockAmount;
                     }
@@ -474,6 +474,11 @@ namespace VaccineAPI.Controllers
                         .Stocks.Include(s => s.Bill)
                         .Include(s => s.Brand)
                         .FirstOrDefaultAsync(s => s.Id == stock.Id);
+
+                    if (updatedStock == null)
+                    {
+                        continue;
+                    }
 
                     var resultDto = _mapper.Map<StockDTO>(updatedStock);
                     resultDto.IsPaid = updatedStock.Bill?.IsPaid ?? false;

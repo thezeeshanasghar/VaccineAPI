@@ -72,6 +72,8 @@ namespace VaccineAPI.Controllers
             foreach (var brandAmountDTO in brandAmountDTOs)
             {
                 var brandAmoundDB = _db.BrandAmounts.Where(b => b.Id == brandAmountDTO.Id).FirstOrDefault();
+                if (brandAmoundDB == null)
+                    continue;
                 brandAmoundDB.Count = brandAmountDTO.Count;
                 _db.SaveChanges();
             }
@@ -86,6 +88,8 @@ namespace VaccineAPI.Controllers
             foreach (var brandAmountDTO in brandAmountDTOs)
             {
                 var brandAmoundDB = _db.BrandAmounts.Where(b => b.Id == brandAmountDTO.Id).FirstOrDefault();
+                if (brandAmoundDB == null)
+                    continue;
                 brandAmoundDB.Amount = brandAmountDTO.Amount;
                 // brandAmoundDB.Count = brandAmountDTO.Count;
                 // brandAmoundDB.SupName = brandAmountDTO.SupName;

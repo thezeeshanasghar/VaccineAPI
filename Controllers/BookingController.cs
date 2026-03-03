@@ -22,7 +22,7 @@ namespace VaccineAPI.Controllers
         static readonly string[] Scopes = { SheetsService.Scope.Spreadsheets }; //SheetsService.Scope.SpreadsheetsReadonly
         static readonly string ApplicationName = "VaccineAPI"; //"quickstart-1599807090946";
         static readonly string SpreadsheetId = "1VxF4JqAPwfZZomaf3GctMkWAq3nEg0N4yTjkCYJr_PY";
-        static SheetsService service;
+        static SheetsService? service;
 
         public BookingController(Context context, IMapper mapper)
         {
@@ -69,6 +69,11 @@ namespace VaccineAPI.Controllers
                                                                                                                                                                                                   // Console.WriteLine(oblist);
             valueRange.Values = new List<IList<object>> { oblist };
             // Append the above record...
+            if (service == null)
+            {
+                return;
+            }
+
             var appendRequest = service.Spreadsheets.Values.Append(valueRange, SpreadsheetId, range);
             appendRequest.ValueInputOption = SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
             var appendReponse = appendRequest.Execute();

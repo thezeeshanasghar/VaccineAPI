@@ -81,6 +81,10 @@ namespace VaccineAPI.Controllers
             clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
             {
                 var dbClinic = _db.Clinics.Where(c => c.Id == Id).FirstOrDefault();
+                if (dbClinic == null)
+                {
+                    return new Response<ClinicDTO>(false, "Clinic not found", null);
+                }
                 clinicDTO.IsOnline = false;
                 dbClinic.Name = clinicDTO.Name;
                 dbClinic.ConsultationFee = clinicDTO.ConsultationFee;
@@ -93,7 +97,7 @@ namespace VaccineAPI.Controllers
                 _db.SaveChanges();
                 foreach (var clinicTiming in clinicDTO.ClinicTimings)
                 {
-                    ClinicTiming dbClinicTiming = _db.ClinicTimings.Where(x => x.Id == clinicTiming.Id).FirstOrDefault();
+                    ClinicTiming? dbClinicTiming = _db.ClinicTimings.Where(x => x.Id == clinicTiming.Id).FirstOrDefault();
                     if (dbClinicTiming != null)
                     {
                         dbClinicTiming.ClinicId = Id;
@@ -125,6 +129,10 @@ namespace VaccineAPI.Controllers
         {
             {
                 var dbClinic = _db.Clinics.Where(c => c.Id == clinicDTO.Id).FirstOrDefault();
+                if (dbClinic == null)
+                {
+                    return new Response<ClinicDTO>(false, "Clinic not found", null);
+                }
                 if (clinicDTO.IsOnline)
                 {
                     dbClinic.IsOnline = true;
@@ -171,6 +179,10 @@ namespace VaccineAPI.Controllers
             _db.BrandAmounts.RemoveRange(relatedBrandAmounts);
 
             var dbClinic = _db.Clinics.Where(c => c.Id == Id).FirstOrDefault();
+            if (dbClinic == null)
+            {
+                return new Response<string>(false, "Clinic not found", null);
+            }
             _db.Clinics.Remove(dbClinic);
             _db.SaveChanges();
             return new Response<string>(true, null, "record deleted");

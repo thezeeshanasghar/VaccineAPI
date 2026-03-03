@@ -3972,6 +3972,22 @@ namespace VaccineAPI.Controllers
                     return null;
                 }
                 var dbSchedules = child.Schedules.ToList();
+                var brandIds = dbSchedules
+                    .Where(s => s.BrandId.HasValue)
+                    .Select(s => s.BrandId.Value)
+                    .Distinct()
+                    .ToList();
+
+                var latestStockByBrand = _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => brandIds.Contains(s.BrandId) && s.Bill.ClinicId == childDetails.ClinicId)
+                    .OrderByDescending(s => !string.IsNullOrWhiteSpace(s.BatchLot) || s.Expiry != null)
+                    .ThenByDescending(s => s.Bill.BillDate)
+                    .ThenByDescending(s => s.Id)
+                    .AsEnumerable()
+                    .GroupBy(s => s.BrandId)
+                    .ToDictionary(g => g.Key, g => g.First());
+
                 var vaccineTable1 = new PdfPTable(7) { WidthPercentage = 100 };
                 vaccineTable.SetWidths(new float[] { 1.2f, 1, 1.5f, 1, 1, 1, 1 });
                 vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
@@ -3998,10 +4014,11 @@ int rowCount = 0;
                 {
                     string vaccineName = schedule.Dose?.Name ?? "N/A";
                     string brand = schedule.Brand?.Name ?? "";
-                    string manufacturer = schedule.Manufacturer ?? "N/A";
-                    string batchLot = schedule.Lot ?? "N/A";
+                    string manufacturer = schedule.Brand?.Manufacturer ?? "N/A";
+                    latestStockByBrand.TryGetValue(schedule.BrandId ?? 0, out var latestStock);
+                    string batchLot = latestStock?.BatchLot ?? "";
                     string dateGiven = (schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue) ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
-                    string expiry = schedule.Expiry?.ToString("dd/MM/yyyy") ?? "";
+                    string expiry = latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? "";
                     string validity = schedule.Validity != null ? GetYearOrMonthFromDays((int)schedule.Validity) : "N/A";
 
                     // Check if this is the last row

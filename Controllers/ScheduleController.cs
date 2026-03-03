@@ -48,12 +48,23 @@ namespace VaccineAPI.Controllers
                 .Include(x => x.Dose)
                 .ThenInclude(x => x.Vaccine)
                 .Include(x => x.Brand)
+                .Include(x => x.Child)
                 .Where(c => c.Id == Id)
                 .FirstOrDefault();
             ScheduleDTO scheduleDTOs = _mapper.Map<ScheduleDTO>(dbSchedule);
             var dbBrands = _db.Brands.OrderBy(x => x.Name).ToList();
             List<BrandDTO> brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
             scheduleDTOs.Brands = brandDTOs;
+
+            if (dbSchedule != null)
+            {
+                scheduleDTOs.Manufacturer = dbSchedule.Brand?.Manufacturer ?? "";
+                var clinicId = dbSchedule.Child?.ClinicId ?? 0;
+                var stock = GetLatestStockByBrandAndClinic(dbSchedule.BrandId, clinicId);
+                scheduleDTOs.Lot = stock?.BatchLot ?? "";
+                scheduleDTOs.Expiry = stock?.Expiry;
+            }
+
             return new Response<ScheduleDTO>(true, null, scheduleDTOs);
         }
 
@@ -210,9 +221,7 @@ namespace VaccineAPI.Controllers
                         dbSchedule.GivenDate = scheduleDTO.GivenDate;
                         dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                         dbSchedule.IsDisease = scheduleDTO.IsDisease;
-                        dbSchedule.Manufacturer = scheduleDTO.Manufacturer;
-                        dbSchedule.Lot = scheduleDTO.Lot;
-                        dbSchedule.Expiry = scheduleDTO.Expiry;
+                        ApplyStockSourceFields(dbSchedule, scheduleDTO.BrandId, dbSchedule.Child?.ClinicId ?? 0);
                         dbSchedule.Validity = scheduleDTO.Validity;
 
                         ScheduleDTO newData1 = _mapper.Map<ScheduleDTO>(dbSchedule);
@@ -310,9 +319,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                 dbSchedule.IsDisease = scheduleDTO.IsDisease;
-                dbSchedule.Manufacturer = scheduleDTO.Manufacturer;
-                dbSchedule.Lot = scheduleDTO.Lot;
-                dbSchedule.Expiry = scheduleDTO.Expiry;
+                ApplyStockSourceFields(dbSchedule, scheduleDTO.BrandId, dbSchedule.Child?.ClinicId ?? 0);
                 dbSchedule.Validity = scheduleDTO.Validity;
                 dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
@@ -336,9 +343,6 @@ namespace VaccineAPI.Controllers
                 return new Response<ScheduleDTO>(false, "Schedule not found", null);
             }
 
-            dbSchedule.Lot = scheduleDTO.Lot;
-            dbSchedule.Expiry = scheduleDTO.Expiry;
-            dbSchedule.Manufacturer = scheduleDTO.Manufacturer;
             dbSchedule.Weight = scheduleDTO.Weight;
             dbSchedule.Height = scheduleDTO.Height;
             dbSchedule.Circle = scheduleDTO.Circle;
@@ -346,6 +350,36 @@ namespace VaccineAPI.Controllers
             _db.SaveChanges();
 
             return new Response<ScheduleDTO>(true, "Schedule updated successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
+        }
+
+        private Stock GetLatestStockByBrandAndClinic(long? brandId, long clinicId)
+        {
+            if (!brandId.HasValue || brandId.Value <= 0 || clinicId <= 0)
+            {
+                return null;
+            }
+
+            return _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId.Value && s.Bill.ClinicId == clinicId)
+                .OrderByDescending(s => !string.IsNullOrWhiteSpace(s.BatchLot) || s.Expiry != null)
+                .ThenByDescending(s => s.Bill.BillDate)
+                .ThenByDescending(s => s.Id)
+                .FirstOrDefault();
+        }
+
+        private void ApplyStockSourceFields(Schedule dbSchedule, long? brandId, long clinicId)
+        {
+            dbSchedule.Manufacturer = dbSchedule.Brand?.Manufacturer ?? "";
+            dbSchedule.Lot = "";
+            dbSchedule.Expiry = null;
+
+            var stock = GetLatestStockByBrandAndClinic(brandId, clinicId);
+            if (stock != null)
+            {
+                dbSchedule.Lot = stock.BatchLot ?? "";
+                dbSchedule.Expiry = stock.Expiry;
+            }
         }
 
         private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Schedule dbSchedule)

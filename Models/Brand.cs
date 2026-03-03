@@ -15,11 +15,11 @@ namespace VaccineAPI.Models
             this.Schedules = new HashSet<Schedule>();
         }
         public long Id { get; set; }
-        public string Name { get; set; }
-        public string Manufacturer { get; set; }
-        public virtual ICollection<BrandAmount> BrandAmounts { get; set; }
+        public string Name { get; set; } = "";
+        public string Manufacturer { get; set; } = "";
+        public virtual ICollection<BrandAmount> BrandAmounts { get; set; } = new HashSet<BrandAmount>();
         // public virtual ICollection<BrandInventory> BrandInventories { get; set; }
-        public virtual ICollection<Schedule> Schedules { get; set; }
+        public virtual ICollection<Schedule> Schedules { get; set; } = new HashSet<Schedule>();
     }
 
 }

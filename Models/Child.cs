@@ -15,12 +15,12 @@ namespace VaccineAPI.Models
             this.Schedules = new HashSet<Schedule>();
         }
         public long Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = "";
         public string Guardian { get; set; } = "";
-        public string FatherName { get; set; }
-        public string Email { get; set; }
+        public string FatherName { get; set; } = "";
+        public string Email { get; set; } = "";
         public System.DateTime DOB { get; set; }
-        public string Gender { get; set; }
+        public string Gender { get; set; } = "";
         public string City { get; set; } = "";
         public string Agent { get; set; } = "";
         public string CNIC { get; set; } = "";
@@ -28,14 +28,14 @@ namespace VaccineAPI.Models
         public bool? IsVerified { get; set; }
         public bool? IsInactive { get; set; }
         public bool IsPAApprove { get; set; }
-        public string Type { get; set; }
+        public string Type { get; set; } = "";
         public string Nationality { get; set; } = "";
         public long ClinicId { get; set; }
-        public virtual Clinic Clinic { get; set; }
+        public virtual Clinic Clinic { get; set; } = null!;
 
         public long UserId { get; set; }
         [JsonIgnore]
-        public User User { get; set; }
+        public User User { get; set; } = null!;
 
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]

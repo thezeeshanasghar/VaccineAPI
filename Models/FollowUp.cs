@@ -9,7 +9,7 @@ namespace VaccineAPI.Models
     public class FollowUp
     {
         public long Id { get; set; }
-        public string Disease { get; set; }
+        public string Disease { get; set; } = "";
         // public DateTime? CurrentVisitDate { get; set; }
         // public DateTime NextVisitDate { get; set; }
         public Nullable<System.DateTime> NextVisitDate { get; set; }
@@ -20,9 +20,9 @@ namespace VaccineAPI.Models
         public float? BloodPressure { get; set; }
         public float? BloodSugar { get; set; }
         public long ChildId { get; set; }
-        public virtual Child Child { get; set; }
+        public virtual Child Child { get; set; } = null!;
         public long DoctorId { get; set; }
-        public virtual Doctor Doctor { get; set; }
+        public virtual Doctor Doctor { get; set; } = null!;
     }
 
 }

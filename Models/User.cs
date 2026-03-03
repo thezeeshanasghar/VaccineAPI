@@ -14,13 +14,13 @@ namespace VaccineAPI.Models
             this.Messages = new HashSet<Message>();
         }
         public long Id { get; set; }
-        public string MobileNumber { get; set; }
-        public string Password { get; set; }
-        public string UserType { get; set; }
-        public string CountryCode { get; set; }
-        public virtual ICollection<Child> Childs { get; set; }
-        public virtual ICollection<Doctor> Doctors { get; set; }
-        public virtual ICollection<Message> Messages { get; set; }
+        public string MobileNumber { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string UserType { get; set; } = "";
+        public string CountryCode { get; set; } = "";
+        public virtual ICollection<Child> Childs { get; set; } = new HashSet<Child>();
+        public virtual ICollection<Doctor> Doctors { get; set; } = new HashSet<Doctor>();
+        public virtual ICollection<Message> Messages { get; set; } = new HashSet<Message>();
 
     }
 

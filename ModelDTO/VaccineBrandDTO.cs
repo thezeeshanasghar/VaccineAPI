@@ -9,9 +9,9 @@ public class VaccineBrandDto
     public int Id { get; set; }
     public int BrandId { get; set; }
     public int VaccineId { get; set; }
-    public string BrandName { get; set; }
-    public string VaccineName { get; set; }
-    public BrandDTO Brand { get; set; }
-    public VaccineDTO Vaccine { get; set; }
+    public string BrandName { get; set; } = "";
+    public string VaccineName { get; set; } = "";
+    public BrandDTO Brand { get; set; } = null!;
+    public VaccineDTO Vaccine { get; set; } = null!;
 }
 }

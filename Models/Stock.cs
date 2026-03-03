@@ -29,9 +29,9 @@ namespace VaccineAPI.Models
         public DateTime? Expiry { get; set; }
 
         [ForeignKey("BrandId")]
-        public virtual Brand Brand { get; set; }
+        public virtual Brand Brand { get; set; } = null!;
 
         [ForeignKey("BillId")]
-        public virtual Bill Bill { get; set; }
+        public virtual Bill Bill { get; set; } = null!;
     }
 }

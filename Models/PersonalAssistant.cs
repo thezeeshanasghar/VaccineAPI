@@ -3,7 +3,7 @@ namespace VaccineAPI.Models
     public class PersonalAssistant
     {
         public long Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = "";
         public string Email { get; set; } = "";
         public bool AllowStock { get; set; }
         public bool AllowAlert { get; set; }
@@ -15,7 +15,7 @@ namespace VaccineAPI.Models
         public bool IsVerified { get; set; }
         public long DoctorId { get; set; } 
         public long UserId { get; set; }
-        public User User { get; set; }
-        public Doctor Doctor { get; set; }
+        public User User { get; set; } = null!;
+        public Doctor Doctor { get; set; } = null!;
     }
 }

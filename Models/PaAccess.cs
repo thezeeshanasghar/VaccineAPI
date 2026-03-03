@@ -6,7 +6,7 @@ namespace VaccineAPI.Models
         public long PersonalAssistantId { get; set; }
         public long ClinicId { get; set; }
         public bool IsOnline { get; set; }
-        public PersonalAssistant PersonalAssistant { get; set; }
-        public Clinic Clinic { get; set; }
+        public PersonalAssistant PersonalAssistant { get; set; } = null!;
+        public Clinic Clinic { get; set; } = null!;
     }
 }

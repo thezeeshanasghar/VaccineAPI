@@ -6,13 +6,13 @@ namespace VaccineAPI.ModelDTO
 {
 public class BirthdayCsvDTO
 {
-    public string ChildName { get; set; }
-    public string FatherName { get; set; }
-    public string DOB { get; set; }
-    public string ClinicName { get; set; }
-    public string DoctorName { get; set; }
+    public string ChildName { get; set; } = "";
+    public string FatherName { get; set; } = "";
+    public string DOB { get; set; } = "";
+    public string ClinicName { get; set; } = "";
+    public string DoctorName { get; set; } = "";
     public int Age { get; set; }
-    public string Phone { get; set; }
-    public string Email { get; set; }
+    public string Phone { get; set; } = "";
+    public string Email { get; set; } = "";
 }
 }

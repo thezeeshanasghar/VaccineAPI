@@ -10,13 +10,13 @@ namespace VaccineAPI.ModelDTO
     {
 
         public int Id { get; set; }
-        public string MobileNumber { get; set; }
-        public string SMS { get; set; }
-        public string ApiResponse { get; set; }
+        public string MobileNumber { get; set; } = "";
+        public string SMS { get; set; } = "";
+        public string ApiResponse { get; set; } = "";
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime Created { get; set; }
         public int UserId { get; set; }
-        public UserDTO User { get; set; }
+        public UserDTO User { get; set; } = null!;
     }
 
 }

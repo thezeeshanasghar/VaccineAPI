@@ -16,13 +16,13 @@ namespace VaccineAPI.Models
 
         public long BrandId { get; set; }
         [JsonIgnore]
-        public virtual Brand Brand { get; set; }
+        public virtual Brand Brand { get; set; } = null!;
 
         public long DoctorId { get; set; }
         [JsonIgnore]
-        public virtual Doctor Doctor { get; set; }
+        public virtual Doctor Doctor { get; set; } = null!;
         public long ClinicId { get; set; }
         [JsonIgnore]
-        public virtual Clinic Clinic { get; set; }
+        public virtual Clinic Clinic { get; set; } = null!;
     } 
 }

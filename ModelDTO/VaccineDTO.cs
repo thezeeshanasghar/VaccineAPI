@@ -4,7 +4,7 @@ namespace VaccineAPI.ModelDTO
     public class VaccineDTO
     {
         public long Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = "";
         public int MinAge { get; set; }
         public int? MaxAge { get; set; }
 

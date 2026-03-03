@@ -59,11 +59,12 @@ namespace VaccineAPI.Controllers
             if (dbSchedule != null)
             {
                 scheduleDTOs.Manufacturer = dbSchedule.Brand?.Manufacturer ?? "";
+                var childClinicId = dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0;
                 var doctorId = _db.Clinics
-                    .Where(c => c.Id == (dbSchedule.Child?.ClinicId ?? 0))
+                    .Where(c => c.Id == childClinicId)
                     .Select(c => c.DoctorId)
                     .FirstOrDefault();
-                var clinicId = ResolveClinicIdForStock(doctorId, dbSchedule.Child?.ClinicId ?? 0);
+                var clinicId = ResolveClinicIdForStock(doctorId, childClinicId);
                 var stock = GetLatestStockByBrandAndClinic(dbSchedule.BrandId, clinicId);
                 scheduleDTOs.Lot = stock?.BatchLot ?? "";
                 scheduleDTOs.Expiry = stock?.Expiry;

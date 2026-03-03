@@ -5,7 +5,7 @@ namespace VaccineAPI.ModelDTO
 {
     public class FeeDTO
     {
-        public string InvoiceId { get; set; }
+        public string InvoiceId { get; set; } = "";
         public decimal Amount { get; set; }
     }
 }

@@ -15,15 +15,15 @@ namespace VaccineAPI.ModelDTO
         // public bool IsPaid { get; set; } // Payment Status
         public long BrandId { get; set; }
         [JsonIgnore]
-        public BrandDTO Brand { get; set; }
+        public BrandDTO Brand { get; set; } = null!;
 
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }
-        public ClinicDTO Clinic { get; set; }
+        public ClinicDTO Clinic { get; set; } = null!;
         [JsonIgnore]
-        public DoctorDTO Doctor { get; set; }
-        public string VaccineName { get; set; }
-        public string BrandName { get; set; }
+        public DoctorDTO Doctor { get; set; } = null!;
+        public string VaccineName { get; set; } = "";
+        public string BrandName { get; set; } = "";
     }
 
 }

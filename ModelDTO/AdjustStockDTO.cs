@@ -5,13 +5,13 @@ namespace VaccineAPI.ModelDTO
         public long Id { get; set; }
         public long BrandId { get; set; }
         public int Adjustment { get; set; }
-        public string Reason { get; set; }
+        public string Reason { get; set; } = "";
         public decimal Price { get; set; }
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }
         public DateTime Date { get; set; }
-        public string BrandName { get; set; }  // For display purposes
-        public string VaccineName { get; set; } // For display purposes
+        public string BrandName { get; set; } = "";  // For display purposes
+        public string VaccineName { get; set; } = ""; // For display purposes
 
     }
 }

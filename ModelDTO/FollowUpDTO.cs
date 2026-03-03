@@ -20,9 +20,9 @@ namespace VaccineAPI.ModelDTO
         public float? BloodPressure { get; set; }
         public float? BloodSugar { get; set; }
         public long ChildId { get; set; }
-        public ChildDTO Child { get; set; }
+        public ChildDTO Child { get; set; } = null!;
         public long DoctorId { get; set; }
-        public DoctorDTO Doctor { get; set; }
+        public DoctorDTO Doctor { get; set; } = null!;
     }
 
 }

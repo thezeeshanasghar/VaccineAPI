@@ -20,16 +20,16 @@ namespace VaccineAPI.Models
         public string DiseaseYear { get; set; } = "";
         public DateTime? GivenDate { get; set; }
         public long? BrandId { get; set; }
-        public virtual Brand Brand { get; set; }
+        public virtual Brand Brand { get; set; } = null!;
         public decimal? Amount { get; set; }
         public string Manufacturer { get; set; } = "";
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }
         public int? Validity { get; set; }
         public long ChildId { get; set; }
-        public virtual Child Child { get; set; }
+        public virtual Child Child { get; set; } = null!;
         public long DoseId { get; set; }
-        public virtual Dose Dose { get; set; }
+        public virtual Dose Dose { get; set; } = null!;
         // public virtual DateTime FromDate { get; set; }
         // public virtual DateTime ToDate { get; set; }
     }

@@ -5,7 +5,7 @@ namespace VaccineAPI.ModelDTO
 {
     public class InvoiceDTO
     {
-        public string InvoiceId { get; set; }
+        public string InvoiceId { get; set; } = "";
         public decimal Amount { get; set; }
         public long ChildId { get; set; }
         public long DoctorId { get; set; }

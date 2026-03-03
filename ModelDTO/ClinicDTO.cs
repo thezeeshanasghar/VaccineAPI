@@ -7,25 +7,25 @@ namespace VaccineAPI.ModelDTO
 
     public class ClinicDTO
     {
-        internal string DoctorName;
+        internal string DoctorName = "";
 
         public long Id { get; set; }
-        public string Name { get; set; }
-        public string PhoneNumber { get; set; }
-        public string Address { get; set; }
-        public string MonogramImage { get; set; }
+        public string Name { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string MonogramImage { get; set; } = "";
         public decimal ConsultationFee { get; set; }
         public double Lat { get; set; }
         public double Long { get; set; }
         public long DoctorId { get; set; }
-        public string RegNo { get; set; }
+        public string RegNo { get; set; } = "";
         public bool IsOnline { get; set; }
         [JsonIgnore]
-        public DoctorDTO Doctor { get; set; }
+        public DoctorDTO Doctor { get; set; } = null!;
 
         //  [JsonIgnore]
         public int childrenCount { get; set; }
-        public List<ClinicTimingDTO> ClinicTimings { get; set; }
+        public List<ClinicTimingDTO> ClinicTimings { get; set; } = new List<ClinicTimingDTO>();
 
     }
 

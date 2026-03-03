@@ -6,7 +6,7 @@ public class VaccineBrand
     public long BrandId { get; set; }
     public long VaccineId { get; set; }
 
-    public virtual Brand Brand { get; set; }
-    public virtual Vaccine Vaccine { get; set; }
+    public virtual Brand Brand { get; set; } = null!;
+    public virtual Vaccine Vaccine { get; set; } = null!;
 }
 }

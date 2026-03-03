@@ -20,12 +20,12 @@ namespace VaccineAPI.Models
 
         // [Required]
         // [StringLength(200)]
-        public string Reason { get; set; }
+        public string Reason { get; set; } = "";
 
         public DateTime Date { get; set; }
 
         // Navigation property
         // [ForeignKey("BrandId")]
-        public virtual Brand Brand { get; set; }
+        public virtual Brand Brand { get; set; } = null!;
     }
 }

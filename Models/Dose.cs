@@ -14,7 +14,7 @@ namespace VaccineAPI.Models
             this.Schedules = new HashSet<Schedule>();
         }
         public long Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = "";
         public int MinAge { get; set; }
         public int? MaxAge { get; set; }
         public int? MinGap { get; set; }
@@ -23,10 +23,10 @@ namespace VaccineAPI.Models
         [JsonIgnore]
         //  public Vaccine Vaccine { get; set; }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
-        public virtual ICollection<DoctorSchedule> DoctorSchedules { get; set; }
-        public virtual Vaccine Vaccine { get; set; }
+        public virtual ICollection<DoctorSchedule> DoctorSchedules { get; set; } = new HashSet<DoctorSchedule>();
+        public virtual Vaccine Vaccine { get; set; } = null!;
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
-        public virtual ICollection<Schedule> Schedules { get; set; }
+        public virtual ICollection<Schedule> Schedules { get; set; } = new HashSet<Schedule>();
     }
 
 }

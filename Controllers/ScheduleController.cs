@@ -59,7 +59,11 @@ namespace VaccineAPI.Controllers
             if (dbSchedule != null)
             {
                 scheduleDTOs.Manufacturer = dbSchedule.Brand?.Manufacturer ?? "";
-                var clinicId = dbSchedule.Child?.ClinicId ?? 0;
+                var doctorId = _db.Clinics
+                    .Where(c => c.Id == (dbSchedule.Child?.ClinicId ?? 0))
+                    .Select(c => c.DoctorId)
+                    .FirstOrDefault();
+                var clinicId = ResolveClinicIdForStock(doctorId, dbSchedule.Child?.ClinicId ?? 0);
                 var stock = GetLatestStockByBrandAndClinic(dbSchedule.BrandId, clinicId);
                 scheduleDTOs.Lot = stock?.BatchLot ?? "";
                 scheduleDTOs.Expiry = stock?.Expiry;
@@ -221,7 +225,8 @@ namespace VaccineAPI.Controllers
                         dbSchedule.GivenDate = scheduleDTO.GivenDate;
                         dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                         dbSchedule.IsDisease = scheduleDTO.IsDisease;
-                        ApplyStockSourceFields(dbSchedule, scheduleDTO.BrandId, dbSchedule.Child?.ClinicId ?? 0);
+                        var stockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
+                        ApplyStockSourceFields(dbSchedule, scheduleDTO.BrandId, stockClinicId);
                         dbSchedule.Validity = scheduleDTO.Validity;
 
                         ScheduleDTO newData1 = _mapper.Map<ScheduleDTO>(dbSchedule);
@@ -319,7 +324,8 @@ namespace VaccineAPI.Controllers
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                 dbSchedule.IsDisease = scheduleDTO.IsDisease;
-                ApplyStockSourceFields(dbSchedule, scheduleDTO.BrandId, dbSchedule.Child?.ClinicId ?? 0);
+                var onlineStockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
+                ApplyStockSourceFields(dbSchedule, scheduleDTO.BrandId, onlineStockClinicId);
                 dbSchedule.Validity = scheduleDTO.Validity;
                 dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
@@ -370,7 +376,10 @@ namespace VaccineAPI.Controllers
 
         private void ApplyStockSourceFields(Schedule dbSchedule, long? brandId, long clinicId)
         {
-            dbSchedule.Manufacturer = dbSchedule.Brand?.Manufacturer ?? "";
+            dbSchedule.Manufacturer = _db.Brands
+                .Where(b => b.Id == (brandId ?? 0))
+                .Select(b => b.Manufacturer)
+                .FirstOrDefault() ?? "";
             dbSchedule.Lot = "";
             dbSchedule.Expiry = null;
 
@@ -380,6 +389,34 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Lot = stock.BatchLot ?? "";
                 dbSchedule.Expiry = stock.Expiry;
             }
+        }
+
+        private long ResolveClinicIdForStock(long actorId, long fallbackClinicId)
+        {
+            if (actorId > 0)
+            {
+                var doctorOnlineClinicId = _db.Clinics
+                    .Where(c => c.DoctorId == actorId && c.IsOnline)
+                    .Select(c => c.Id)
+                    .FirstOrDefault();
+
+                if (doctorOnlineClinicId > 0)
+                {
+                    return doctorOnlineClinicId;
+                }
+
+                var paOnlineClinicId = _db.PaAccess
+                    .Where(p => p.PersonalAssistantId == actorId && p.IsOnline)
+                    .Select(p => p.ClinicId)
+                    .FirstOrDefault();
+
+                if (paOnlineClinicId > 0)
+                {
+                    return paOnlineClinicId;
+                }
+            }
+
+            return fallbackClinicId;
         }
 
         private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Schedule dbSchedule)

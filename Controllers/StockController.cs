@@ -270,6 +270,9 @@ namespace VaccineAPI.Controllers
                 {
                     errorMessage += $" | Inner Exception: {ex.InnerException.Message}";
                 }
+                var clinicIds = stockDTOs.Select(s => s.ClinicId).Distinct().ToList();
+                errorMessage += $" | ClinicIds in payload: [{string.Join(",", clinicIds)}]";
+                await transaction.RollbackAsync();
                 return new Response<List<StockDTO>>(false, errorMessage, null);
             }
         }

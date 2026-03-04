@@ -121,11 +121,25 @@ namespace VaccineAPI.Controllers
             try
             {
                 var firstStock = stockDTOs.First();
+                var resolvedClinicId = firstStock.ClinicId;
+
                 // Validate doctor exists
                 var doctor = await _db.Doctors.FindAsync(firstStock.DoctorId);
                 if (doctor == null)
                 {
                     return new Response<List<StockDTO>>(false, "Doctor not found", null);
+                }
+
+                if (resolvedClinicId <= 0)
+                {
+                    return new Response<List<StockDTO>>(false, "ClinicId is required", null);
+                }
+
+                // Validate clinic exists
+                var clinicExists = await _db.Clinics.AnyAsync(c => c.Id == resolvedClinicId);
+                if (!clinicExists)
+                {
+                    return new Response<List<StockDTO>>(false, $"Clinic not found for ClinicId {resolvedClinicId}", null);
                 }
 
                 // Create Bill
@@ -137,7 +151,7 @@ namespace VaccineAPI.Controllers
                     IsPaid = firstStock.IsPaid,
                     DoctorId = firstStock.DoctorId,
                     PaidDate = firstStock.PaidDate,
-                    ClinicId = firstStock.ClinicId,
+                    ClinicId = resolvedClinicId,
                     IsPAApprove = firstStock.IsPAApprove,
                 };
 
@@ -177,9 +191,24 @@ namespace VaccineAPI.Controllers
 
                     _db.Stocks.Add(stock);
 
+                    var effectiveClinicId = stockDTO.ClinicId > 0 ? stockDTO.ClinicId : resolvedClinicId;
+                    if (effectiveClinicId <= 0)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<StockDTO>>(false,
+                            "ClinicId is required to save stock.", null);
+                    }
+
+                    if (effectiveClinicId != resolvedClinicId)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<StockDTO>>(false,
+                            "All stocks in the same bill must have the same ClinicId.", null);
+                    }
+
                     // Update or Create BrandAmount
                     var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
-                        ba.BrandId == stockDTO.BrandId && ba.ClinicId == stockDTO.ClinicId
+                        ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId
                     );
                     decimal unitPrice = 0;
                     if (brandAmount == null || brandAmount.PurchasedAmt == 0)
@@ -196,6 +225,7 @@ namespace VaccineAPI.Controllers
                         brandAmount.Count += stock.Quantity;
                         brandAmount.PurchasedAmt = unitPrice;
                         brandAmount.DoctorId = stockDTO.DoctorId;
+                        brandAmount.ClinicId = effectiveClinicId;
                         _db.Entry(brandAmount).State = EntityState.Modified;
                     }
                     else
@@ -205,6 +235,7 @@ namespace VaccineAPI.Controllers
                             BrandId = stock.BrandId,
                             Count = stock.Quantity,
                             DoctorId = stockDTO.DoctorId,
+                            ClinicId = effectiveClinicId,
                             PurchasedAmt = (int)unitPrice
                         };
                         _db.BrandAmounts.Add(brandAmount);
@@ -438,13 +469,24 @@ namespace VaccineAPI.Controllers
                         stock.Bill.IsPaid = stockDTO.IsPaid;
                         stock.Bill.PaidDate = stockDTO.PaidDate != default ? stockDTO.PaidDate : stock.Bill.PaidDate;
                         stock.Bill.DoctorId = stockDTO.DoctorId != default ? stockDTO.DoctorId : stock.Bill.DoctorId;
+                        stock.Bill.ClinicId = stockDTO.ClinicId != default ? stockDTO.ClinicId : stock.Bill.ClinicId;
 
                         _db.Entry(stock.Bill).State = EntityState.Modified;
                     }
 
+                    var effectiveClinicId = stockDTO.ClinicId > 0
+                        ? stockDTO.ClinicId
+                        : (stock.Bill != null ? stock.Bill.ClinicId : 0);
+                    if (effectiveClinicId <= 0)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<StockDTO>>(false,
+                            "ClinicId is required to update stock.", null);
+                    }
+
                     // Update or create BrandAmount
                     var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
-                        ba.BrandId == stockDTO.BrandId && ba.ClinicId == stockDTO.ClinicId
+                        ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId
                     );
 
                     decimal unitPrice = Math.Round(stockDTO.StockAmount, 2);
@@ -453,6 +495,7 @@ namespace VaccineAPI.Controllers
                     {
                         brandAmount.Count = stockDTO.Quantity;
                         brandAmount.PurchasedAmt = (int)unitPrice;
+                        brandAmount.ClinicId = effectiveClinicId;
                         _db.Entry(brandAmount).State = EntityState.Modified;
                     }
                     else
@@ -462,6 +505,7 @@ namespace VaccineAPI.Controllers
                             BrandId = stock.BrandId,
                             Count = stock.Quantity,
                             DoctorId = stockDTO.DoctorId,
+                            ClinicId = effectiveClinicId,
                             PurchasedAmt = (int)unitPrice,
                         };
                         _db.BrandAmounts.Add(brandAmount);

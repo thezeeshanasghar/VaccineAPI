@@ -131,11 +131,25 @@ namespace VaccineAPI.Controllers
                     );
                 }
 
+                var inventoryDoctorId = _db.Clinics
+                    .Where(c => c.Id == onlineClinicId)
+                    .Select(c => c.DoctorId)
+                    .FirstOrDefault();
+
+                if (inventoryDoctorId <= 0)
+                {
+                    return new Response<ScheduleDTO>(
+                        false,
+                        $"Unable to resolve inventory owner doctor for clinic {onlineClinicId}.",
+                        null
+                    );
+                }
+
                 var dbBrandInventory = _db.BrandAmounts
                     .Where(
                         b =>
                             b.BrandId == scheduleDTO.BrandId
-                            && b.DoctorId == scheduleDTO.DoctorId
+                            && b.DoctorId == inventoryDoctorId
                             && b.ClinicId == onlineClinicId
                     )
                     .FirstOrDefault();
@@ -155,7 +169,7 @@ namespace VaccineAPI.Controllers
                     .Where(
                         b =>
                             b.BrandId == previousBrandId
-                            && b.DoctorId == scheduleDTO.DoctorId
+                            && b.DoctorId == inventoryDoctorId
                             && b.ClinicId == onlineClinicId
                     )
                     .FirstOrDefault();
@@ -785,11 +799,25 @@ namespace VaccineAPI.Controllers
                                 );
                             }
 
+                            var inventoryDoctorId = _db.Clinics
+                                .Where(c => c.Id == onlineClinicId)
+                                .Select(c => c.DoctorId)
+                                .FirstOrDefault();
+
+                            if (inventoryDoctorId <= 0)
+                            {
+                                return new Response<ScheduleDTO>(
+                                    false,
+                                    $"Unable to resolve inventory owner doctor for clinic {onlineClinicId}.",
+                                    null
+                                );
+                            }
+
                             var brandInventory = _db.BrandAmounts
                                 .Where(
                                     b =>
                                         b.BrandId == scheduleBrand.BrandId
-                                        && b.DoctorId == scheduleDTO.DoctorId
+                                        && b.DoctorId == inventoryDoctorId
                                         && b.ClinicId == onlineClinicId
                                 )
                                 .FirstOrDefault();

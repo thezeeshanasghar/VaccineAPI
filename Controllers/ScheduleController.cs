@@ -110,16 +110,35 @@ namespace VaccineAPI.Controllers
                     .Include(x => x.Child)
                     .Where(c => c.Id == scheduleDTO.Id)
                     .FirstOrDefault();
-                var dbBrandInventory = _db.BrandAmounts
-                    .Where(
-                        b => b.BrandId == scheduleDTO.BrandId && b.DoctorId == scheduleDTO.DoctorId
-                    )
-                    .FirstOrDefault();
 
                 if (dbSchedule == null)
                 {
                     return new Response<ScheduleDTO>(false, "Schedule not found", null);
                 }
+
+                var previousBrandId = dbSchedule.BrandId;
+                var onlineClinicId = ResolveClinicIdForStock(
+                    scheduleDTO.DoctorId,
+                    dbSchedule.Child?.ClinicId ?? 0
+                );
+
+                if (onlineClinicId <= 0)
+                {
+                    return new Response<ScheduleDTO>(
+                        false,
+                        "Unable to resolve online clinic for inventory consumption.",
+                        null
+                    );
+                }
+
+                var dbBrandInventory = _db.BrandAmounts
+                    .Where(
+                        b =>
+                            b.BrandId == scheduleDTO.BrandId
+                            && b.DoctorId == scheduleDTO.DoctorId
+                            && b.ClinicId == onlineClinicId
+                    )
+                    .FirstOrDefault();
 
                 var dbSchedule2 = _db.Schedules
                   .Include(x => x.Dose)
@@ -134,12 +153,24 @@ namespace VaccineAPI.Controllers
                 }
                 var dbBrandInventory2 = _db.BrandAmounts
                     .Where(
-                        b => b.BrandId == dbSchedule2.BrandId && b.DoctorId == dbSchedule2.Child.Clinic.DoctorId
+                        b =>
+                            b.BrandId == previousBrandId
+                            && b.DoctorId == scheduleDTO.DoctorId
+                            && b.ClinicId == onlineClinicId
                     )
                     .FirstOrDefault();
 
                 if (scheduleDTO.IsDone == false)
                 {
+                    if (previousBrandId.HasValue && dbBrandInventory2 == null)
+                    {
+                        return new Response<ScheduleDTO>(
+                            false,
+                            $"Inventory row not found for previous brand {previousBrandId} in online clinic {onlineClinicId}.",
+                            null
+                        );
+                    }
+
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
                     dbSchedule.BrandId = null;
@@ -148,7 +179,7 @@ namespace VaccineAPI.Controllers
                     ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
                     if (dbBrandInventory2 != null)
                     {
-                        if (dbSchedule.Brand == null)
+                        if (previousBrandId.HasValue)
                         {
                             dbBrandInventory2.Count += 1;
                         }
@@ -156,12 +187,37 @@ namespace VaccineAPI.Controllers
                     _db.SaveChanges();
                     return new Response<ScheduleDTO>(true, "Congratulations", newData2);
                 }
-                if (dbBrandInventory != null)
+
+                if (!previousBrandId.HasValue)
                 {
-                    if (dbSchedule.Brand == null)
+                    if (!scheduleDTO.BrandId.HasValue || scheduleDTO.BrandId.Value <= 0)
                     {
-                        dbBrandInventory.Count -= 1;
+                        return new Response<ScheduleDTO>(
+                            false,
+                            "Brand is required to mark dose as injected.",
+                            null
+                        );
                     }
+
+                    if (dbBrandInventory == null)
+                    {
+                        return new Response<ScheduleDTO>(
+                            false,
+                            $"Inventory row not found for brand {scheduleDTO.BrandId} in online clinic {onlineClinicId}.",
+                            null
+                        );
+                    }
+
+                    if (dbBrandInventory.Count <= 0)
+                    {
+                        return new Response<ScheduleDTO>(
+                            false,
+                            $"Insufficient inventory for brand {scheduleDTO.BrandId} in online clinic {onlineClinicId}.",
+                            null
+                        );
+                    }
+
+                    dbBrandInventory.Count -= 1;
                 }
 
                 if (scheduleDTO.IsDisease == true)
@@ -681,6 +737,11 @@ namespace VaccineAPI.Controllers
                 .ThenInclude(x => x.Vaccine)
                 .FirstOrDefault();
 
+            if (dbSchedule == null)
+            {
+                return new Response<ScheduleDTO>(false, "Schedule not found", null);
+            }
+
             // Fetch all schedules for the child on the same date with proper includes
             var dbChildSchedules = _db.Schedules
                 .Include(x => x.Dose)
@@ -706,18 +767,55 @@ namespace VaccineAPI.Controllers
                     );
                     if (scheduleBrand != null)
                     {
+                        var previousBrandId = schedule.BrandId;
                         schedule.BrandId = scheduleBrand.BrandId;
                         if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                         {
+                            var onlineClinicId = ResolveClinicIdForStock(
+                                scheduleDTO.DoctorId,
+                                schedule.Child?.ClinicId ?? 0
+                            );
+
+                            if (onlineClinicId <= 0)
+                            {
+                                return new Response<ScheduleDTO>(
+                                    false,
+                                    "Unable to resolve online clinic for inventory consumption.",
+                                    null
+                                );
+                            }
+
                             var brandInventory = _db.BrandAmounts
                                 .Where(
                                     b =>
                                         b.BrandId == scheduleBrand.BrandId
                                         && b.DoctorId == scheduleDTO.DoctorId
+                                        && b.ClinicId == onlineClinicId
                                 )
                                 .FirstOrDefault();
-                            if (brandInventory != null)
+
+                            if (!previousBrandId.HasValue)
+                            {
+                                if (brandInventory == null)
+                                {
+                                    return new Response<ScheduleDTO>(
+                                        false,
+                                        $"Inventory row not found for brand {scheduleBrand.BrandId} in online clinic {onlineClinicId}.",
+                                        null
+                                    );
+                                }
+
+                                if (brandInventory.Count <= 0)
+                                {
+                                    return new Response<ScheduleDTO>(
+                                        false,
+                                        $"Insufficient inventory for brand {scheduleBrand.BrandId} in online clinic {onlineClinicId}.",
+                                        null
+                                    );
+                                }
+
                                 brandInventory.Count--;
+                            }
                         }
                     }
                 }

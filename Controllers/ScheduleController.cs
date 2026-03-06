@@ -180,7 +180,11 @@ namespace VaccineAPI.Controllers
                     {
                         return new Response<ScheduleDTO>(
                             false,
-                            $"Inventory row not found for previous brand {previousBrandId} in online clinic {onlineClinicId}.",
+                            BuildInventoryContextMessage(
+                                "Inventory row not found for previous brand",
+                                previousBrandId,
+                                onlineClinicId
+                            ),
                             null
                         );
                     }
@@ -211,7 +215,11 @@ namespace VaccineAPI.Controllers
                         {
                             return new Response<ScheduleDTO>(
                                 false,
-                                $"Inventory row not found for brand {scheduleDTO.BrandId} in online clinic {onlineClinicId}.",
+                                BuildInventoryContextMessage(
+                                    "Inventory row not found for brand",
+                                    scheduleDTO.BrandId,
+                                    onlineClinicId
+                                ),
                                 null
                             );
                         }
@@ -220,7 +228,11 @@ namespace VaccineAPI.Controllers
                         {
                             return new Response<ScheduleDTO>(
                                 false,
-                                $"Insufficient inventory for brand {scheduleDTO.BrandId} in online clinic {onlineClinicId}.",
+                                BuildInventoryContextMessage(
+                                    "Insufficient inventory for brand",
+                                    scheduleDTO.BrandId,
+                                    onlineClinicId
+                                ),
                                 null
                             );
                         }
@@ -829,7 +841,11 @@ namespace VaccineAPI.Controllers
                                 {
                                     return new Response<ScheduleDTO>(
                                         false,
-                                        $"Inventory row not found for brand {scheduleBrand.BrandId.Value} in online clinic {onlineClinicId}.",
+                                        BuildInventoryContextMessage(
+                                            "Inventory row not found for brand",
+                                            scheduleBrand.BrandId.Value,
+                                            onlineClinicId
+                                        ),
                                         null
                                     );
                                 }
@@ -838,7 +854,11 @@ namespace VaccineAPI.Controllers
                                 {
                                     return new Response<ScheduleDTO>(
                                         false,
-                                        $"Insufficient inventory for brand {scheduleBrand.BrandId.Value} in online clinic {onlineClinicId}.",
+                                        BuildInventoryContextMessage(
+                                            "Insufficient inventory for brand",
+                                            scheduleBrand.BrandId.Value,
+                                            onlineClinicId
+                                        ),
                                         null
                                     );
                                 }
@@ -924,6 +944,25 @@ namespace VaccineAPI.Controllers
                 return date.AddMonths((int)(GapInDays / 30));
             else
                 return date.AddDays(GapInDays);
+        }
+
+        private string BuildInventoryContextMessage(string prefix, long? brandId, long clinicId)
+        {
+            var brandName = _db.Brands
+                .Where(b => b.Id == (brandId ?? 0))
+                .Select(b => b.Name)
+                .FirstOrDefault();
+
+            var clinicName = _db.Clinics
+                .Where(c => c.Id == clinicId)
+                .Select(c => c.Name)
+                .FirstOrDefault();
+
+            var safeBrandName = string.IsNullOrWhiteSpace(brandName) ? "Unknown Brand" : brandName;
+            var safeClinicName = string.IsNullOrWhiteSpace(clinicName) ? "Unknown Clinic" : clinicName;
+            var brandIdLabel = brandId.HasValue ? brandId.Value.ToString() : "null";
+
+            return $"{prefix} {safeBrandName} (ID: {brandIdLabel}) in online clinic {safeClinicName} (ID: {clinicId}).";
         }
 
         //Reschedule Function

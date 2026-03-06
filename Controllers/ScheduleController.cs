@@ -204,34 +204,29 @@ namespace VaccineAPI.Controllers
 
                 if (!previousBrandId.HasValue)
                 {
-                    if (!scheduleDTO.BrandId.HasValue || scheduleDTO.BrandId.Value <= 0)
+                    // Null brand means OHF/external source; do not consume inventory.
+                    if (scheduleDTO.BrandId.HasValue && scheduleDTO.BrandId.Value > 0)
                     {
-                        return new Response<ScheduleDTO>(
-                            false,
-                            "Brand is required to mark dose as injected.",
-                            null
-                        );
-                    }
+                        if (dbBrandInventory == null)
+                        {
+                            return new Response<ScheduleDTO>(
+                                false,
+                                $"Inventory row not found for brand {scheduleDTO.BrandId} in online clinic {onlineClinicId}.",
+                                null
+                            );
+                        }
 
-                    if (dbBrandInventory == null)
-                    {
-                        return new Response<ScheduleDTO>(
-                            false,
-                            $"Inventory row not found for brand {scheduleDTO.BrandId} in online clinic {onlineClinicId}.",
-                            null
-                        );
-                    }
+                        if (dbBrandInventory.Count <= 0)
+                        {
+                            return new Response<ScheduleDTO>(
+                                false,
+                                $"Insufficient inventory for brand {scheduleDTO.BrandId} in online clinic {onlineClinicId}.",
+                                null
+                            );
+                        }
 
-                    if (dbBrandInventory.Count <= 0)
-                    {
-                        return new Response<ScheduleDTO>(
-                            false,
-                            $"Insufficient inventory for brand {scheduleDTO.BrandId} in online clinic {onlineClinicId}.",
-                            null
-                        );
+                        dbBrandInventory.Count -= 1;
                     }
-
-                    dbBrandInventory.Count -= 1;
                 }
 
                 if (scheduleDTO.IsDisease == true)
@@ -785,6 +780,12 @@ namespace VaccineAPI.Controllers
                         schedule.BrandId = scheduleBrand.BrandId;
                         if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                         {
+                            // Null brand means OHF/external source; do not consume inventory.
+                            if (!scheduleBrand.BrandId.HasValue || scheduleBrand.BrandId.Value <= 0)
+                            {
+                                continue;
+                            }
+
                             var onlineClinicId = ResolveClinicIdForStock(
                                 scheduleDTO.DoctorId,
                                 schedule.Child?.ClinicId ?? 0
@@ -816,7 +817,7 @@ namespace VaccineAPI.Controllers
                             var brandInventory = _db.BrandAmounts
                                 .Where(
                                     b =>
-                                        b.BrandId == scheduleBrand.BrandId
+                                        b.BrandId == scheduleBrand.BrandId.Value
                                         && b.DoctorId == inventoryDoctorId
                                         && b.ClinicId == onlineClinicId
                                 )
@@ -828,7 +829,7 @@ namespace VaccineAPI.Controllers
                                 {
                                     return new Response<ScheduleDTO>(
                                         false,
-                                        $"Inventory row not found for brand {scheduleBrand.BrandId} in online clinic {onlineClinicId}.",
+                                        $"Inventory row not found for brand {scheduleBrand.BrandId.Value} in online clinic {onlineClinicId}.",
                                         null
                                     );
                                 }
@@ -837,7 +838,7 @@ namespace VaccineAPI.Controllers
                                 {
                                     return new Response<ScheduleDTO>(
                                         false,
-                                        $"Insufficient inventory for brand {scheduleBrand.BrandId} in online clinic {onlineClinicId}.",
+                                        $"Insufficient inventory for brand {scheduleBrand.BrandId.Value} in online clinic {onlineClinicId}.",
                                         null
                                     );
                                 }

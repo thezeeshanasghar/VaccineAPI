@@ -8,6 +8,6 @@ namespace VaccineAPI.ModelDTO
     public class ScheduleBrandDTO
     {
         public int ScheduleId { get; set; }
-        public int BrandId { get; set; }
+        public long? BrandId { get; set; }
     }
 }

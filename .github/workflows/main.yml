@@ -70,11 +70,10 @@ jobs:
           mkdir -p ~/.ssh/
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
           chmod 600 ~/.ssh/ec2_key.pem
-          echo "${{ secrets.EC2_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           
       - name: Deploy to EC2
         run: |
-          ssh -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
           "cd VaccineAPI && \
           git fetch origin staging && \
           git reset --hard origin/staging && \
@@ -84,5 +83,5 @@ jobs:
           
       - name: Verify Deployment
         run: |
-          ssh -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
           "docker ps | grep vaccineapi-api"

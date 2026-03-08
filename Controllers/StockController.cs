@@ -84,6 +84,11 @@ namespace VaccineAPI.Controllers
                 return new Response<StockDTO>(false, "Invalid brandId or clinicId", null);
             }
 
+            if (!IsInventoryEnabledForClinic(clinicId))
+            {
+                return new Response<StockDTO>(true, "Inventory is disabled for this clinic.", null);
+            }
+
             var stock = _db.Stocks
                 .Include(s => s.Bill)
                 .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId)
@@ -548,6 +553,21 @@ namespace VaccineAPI.Controllers
                 }
                 return new Response<List<StockDTO>>(false, errorMessage, null);
             }
+        }
+
+        private bool IsInventoryEnabledForClinic(long clinicId)
+        {
+            if (clinicId <= 0)
+            {
+                return true;
+            }
+
+            var allowInventory = _db.Clinics
+                .Where(c => c.Id == clinicId)
+                .Select(c => (bool?)c.Doctor.AllowInventory)
+                .FirstOrDefault();
+
+            return allowInventory ?? true;
         }
     }
 }

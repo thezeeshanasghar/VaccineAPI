@@ -133,7 +133,7 @@ namespace VaccineAPI.Controllers
                     );
                 }
 
-                var inventoryEnabled = IsInventoryEnabledForClinic(onlineClinicId);
+                var inventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, onlineClinicId);
                 var inventoryDoctorId = 0L;
                 BrandAmount dbBrandInventory = null;
 
@@ -536,6 +536,34 @@ namespace VaccineAPI.Controllers
             return allowInventory ?? true;
         }
 
+        private bool IsInventoryEnabledForActor(long actorId, long clinicId)
+        {
+            if (actorId > 0)
+            {
+                var doctorAllowInventory = _db.Doctors
+                    .Where(d => d.Id == actorId)
+                    .Select(d => (bool?)d.AllowInventory)
+                    .FirstOrDefault();
+
+                if (doctorAllowInventory.HasValue)
+                {
+                    return doctorAllowInventory.Value;
+                }
+
+                var paOnlineClinicId = _db.PaAccess
+                    .Where(p => p.PersonalAssistantId == actorId && p.IsOnline)
+                    .Select(p => (long?)p.ClinicId)
+                    .FirstOrDefault();
+
+                if (paOnlineClinicId.HasValue && paOnlineClinicId.Value > 0)
+                {
+                    return IsInventoryEnabledForClinic(paOnlineClinicId.Value);
+                }
+            }
+
+            return IsInventoryEnabledForClinic(clinicId);
+        }
+
         private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Schedule dbSchedule)
         {
             var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
@@ -845,7 +873,7 @@ namespace VaccineAPI.Controllers
                                     );
                                 }
 
-                                var inventoryEnabled = IsInventoryEnabledForClinic(onlineClinicId);
+                                var inventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, onlineClinicId);
                                 if (inventoryEnabled)
                                 {
                                     var inventoryDoctorId = _db.Clinics

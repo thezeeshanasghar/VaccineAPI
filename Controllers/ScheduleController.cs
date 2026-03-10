@@ -149,6 +149,7 @@ namespace VaccineAPI.Controllers
                     return new Response<ScheduleDTO>(false, "Schedule not found", null);
                 }
                 BrandAmount dbBrandInventory2 = null;
+                var rollbackClinicId = onlineClinicId;
 
                 if (inventoryEnabled)
                 {
@@ -175,18 +176,37 @@ namespace VaccineAPI.Controllers
                         )
                         .FirstOrDefault();
 
-                    dbBrandInventory2 = _db.BrandAmounts
-                        .Where(
-                            b =>
-                                b.BrandId == previousBrandId
-                                && b.DoctorId == inventoryDoctorId
-                                && b.ClinicId == onlineClinicId
-                        )
-                        .FirstOrDefault();
                 }
 
                 if (scheduleDTO.IsDone == false)
                 {
+                    if (inventoryEnabled && previousBrandId.HasValue)
+                    {
+                        rollbackClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId, onlineClinicId);
+                        var rollbackDoctorId = _db.Clinics
+                            .Where(c => c.Id == rollbackClinicId)
+                            .Select(c => c.DoctorId)
+                            .FirstOrDefault();
+
+                        if (rollbackDoctorId <= 0)
+                        {
+                            return new Response<ScheduleDTO>(
+                                false,
+                                $"Unable to resolve inventory owner doctor for rollback clinic {rollbackClinicId}.",
+                                null
+                            );
+                        }
+
+                        dbBrandInventory2 = _db.BrandAmounts
+                            .Where(
+                                b =>
+                                    b.BrandId == previousBrandId
+                                    && b.DoctorId == rollbackDoctorId
+                                    && b.ClinicId == rollbackClinicId
+                            )
+                            .FirstOrDefault();
+                    }
+
                     if (inventoryEnabled && previousBrandId.HasValue && dbBrandInventory2 == null)
                     {
                         return new Response<ScheduleDTO>(
@@ -194,7 +214,7 @@ namespace VaccineAPI.Controllers
                             BuildInventoryContextMessage(
                                 "Inventory row not found for previous brand",
                                 previousBrandId,
-                                onlineClinicId
+                                rollbackClinicId
                             ),
                             null
                         );
@@ -516,6 +536,67 @@ namespace VaccineAPI.Controllers
                 {
                     return paOnlineClinicId;
                 }
+            }
+
+            return fallbackClinicId;
+        }
+
+        private long ResolveClinicIdForUngive(Schedule schedule, long actorId, long fallbackClinicId)
+        {
+            var childClinicId = schedule.Child?.ClinicId ?? 0;
+
+            // Prefer resolving from persisted stock source fields captured at give-time.
+            if (schedule.BrandId.HasValue && schedule.BrandId.Value > 0)
+            {
+                var candidateStocks = _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => s.BrandId == schedule.BrandId.Value && s.Bill != null);
+
+                if (!string.IsNullOrWhiteSpace(schedule.Lot))
+                {
+                    candidateStocks = candidateStocks.Where(s => s.BatchLot == schedule.Lot);
+                }
+
+                if (schedule.Expiry.HasValue)
+                {
+                    var scheduleExpiryDate = schedule.Expiry.Value.Date;
+                    candidateStocks = candidateStocks.Where(s => s.Expiry.HasValue && s.Expiry.Value.Date == scheduleExpiryDate);
+                }
+                else
+                {
+                    candidateStocks = candidateStocks.Where(s => !s.Expiry.HasValue);
+                }
+
+                var candidateClinicIds = candidateStocks
+                    .Select(s => s.Bill.ClinicId)
+                    .Distinct()
+                    .ToList();
+
+                if (candidateClinicIds.Count == 1)
+                {
+                    return candidateClinicIds[0];
+                }
+
+                if (childClinicId > 0 && candidateClinicIds.Contains(childClinicId))
+                {
+                    return childClinicId;
+                }
+
+                var actorClinicId = ResolveClinicIdForStock(actorId, childClinicId);
+                if (actorClinicId > 0 && candidateClinicIds.Contains(actorClinicId))
+                {
+                    return actorClinicId;
+                }
+
+                if (candidateClinicIds.Count > 0)
+                {
+                    return candidateClinicIds[0];
+                }
+            }
+
+            if (childClinicId > 0)
+            {
+                return childClinicId;
             }
 
             return fallbackClinicId;

@@ -3364,14 +3364,24 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public Response<string> Delete(int Id)
+        public Response<string> Delete(int Id, [FromQuery] string userType = null)
         {
+            if (!string.IsNullOrWhiteSpace(userType) && userType.Equals("PA", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Response<string>(false, "Personal Assistant is not allowed to delete patient records.", null);
+            }
+
             var dbChild = _db.Childs.Include(x => x.User)
                               .ThenInclude(x => x.Childs)
                               .Include(x => x.Schedules)
                               .Include(x => x.FollowUps)
                               .Where(c => c.Id == Id)
                               .FirstOrDefault();
+            if (dbChild == null)
+            {
+                return new Response<string>(false, "Child not found", null);
+            }
+
             _db.Schedules.RemoveRange(dbChild.Schedules);
             _db.FollowUps.RemoveRange(dbChild.FollowUps);
             if (dbChild.User.Childs.Count == 1) _db.Users.Remove(dbChild.User);

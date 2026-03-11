@@ -487,14 +487,32 @@ namespace VaccineAPI.Controllers
                 return null;
             }
 
-            return _db.Stocks
+            var stock = _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId.Value && s.Bill.ClinicId == clinicId)
-                .OrderByDescending(s => s.Expiry.HasValue)
-                .ThenByDescending(s => s.Expiry)
-                .ThenByDescending(s => s.Bill.BillDate)
+                .Where(s => s.BrandId == brandId.Value && s.Bill.ClinicId == clinicId);
+
+            var today = DateTime.UtcNow.Date;
+
+            var stockSelection = stock
+                .Where(s => s.Expiry.HasValue && s.Expiry.Value.Date >= today)
+                .OrderBy(s => s.Expiry)
+                .ThenBy(s => s.Bill.BillDate)
+                .ThenBy(s => s.Id)
+                .FirstOrDefault();
+
+            stockSelection ??= stock
+                .Where(s => s.Expiry.HasValue)
+                .OrderBy(s => s.Expiry)
+                .ThenBy(s => s.Bill.BillDate)
+                .ThenBy(s => s.Id)
+                .FirstOrDefault();
+
+            stockSelection ??= stock
+                .OrderByDescending(s => s.Bill.BillDate)
                 .ThenByDescending(s => s.Id)
                 .FirstOrDefault();
+
+            return stockSelection;
         }
 
         private void ApplyStockSourceFields(Schedule dbSchedule, long? brandId, long clinicId)

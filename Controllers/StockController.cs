@@ -91,20 +91,38 @@ namespace VaccineAPI.Controllers
 
             var stock = _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId)
-                // Always prefer rows with an expiry and pick the most recent expiry first.
-                .OrderByDescending(s => s.Expiry.HasValue)
-                .ThenByDescending(s => s.Expiry)
-                .ThenByDescending(s => s.Bill.BillDate)
+                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId);
+
+            var today = DateTime.UtcNow.Date;
+
+            // FEFO: Prefer the nearest upcoming expiry first.
+            var stockSelection = stock
+                .Where(s => s.Expiry.HasValue && s.Expiry.Value.Date >= today)
+                .OrderBy(s => s.Expiry)
+                .ThenBy(s => s.Bill.BillDate)
+                .ThenBy(s => s.Id)
+                .FirstOrDefault();
+
+            // Fallback 1: if all are already expired, still pick the earliest expiry.
+            stockSelection ??= stock
+                .Where(s => s.Expiry.HasValue)
+                .OrderBy(s => s.Expiry)
+                .ThenBy(s => s.Bill.BillDate)
+                .ThenBy(s => s.Id)
+                .FirstOrDefault();
+
+            // Fallback 2: rows without expiry.
+            stockSelection ??= stock
+                .OrderByDescending(s => s.Bill.BillDate)
                 .ThenByDescending(s => s.Id)
                 .FirstOrDefault();
 
-            if (stock == null)
+            if (stockSelection == null)
             {
                 return new Response<StockDTO>(false, "Stock not found", null);
             }
 
-            var stockDTO = _mapper.Map<StockDTO>(stock);
+            var stockDTO = _mapper.Map<StockDTO>(stockSelection);
             return new Response<StockDTO>(true, null, stockDTO);
         }
 

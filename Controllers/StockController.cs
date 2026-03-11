@@ -92,7 +92,9 @@ namespace VaccineAPI.Controllers
             var stock = _db.Stocks
                 .Include(s => s.Bill)
                 .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId)
-                .OrderByDescending(s => !string.IsNullOrWhiteSpace(s.BatchLot) || s.Expiry != null)
+                // Always prefer rows with an expiry and pick the most recent expiry first.
+                .OrderByDescending(s => s.Expiry.HasValue)
+                .ThenByDescending(s => s.Expiry)
                 .ThenByDescending(s => s.Bill.BillDate)
                 .ThenByDescending(s => s.Id)
                 .FirstOrDefault();

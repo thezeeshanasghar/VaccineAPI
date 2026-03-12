@@ -664,6 +664,24 @@ namespace VaccineAPI.Controllers
             return IsInventoryEnabledForClinic(clinicId);
         }
 
+        private static bool IsInfiniteDose(Dose? dose)
+        {
+            if (dose == null)
+            {
+                return false;
+            }
+
+            if (dose.Vaccine?.isInfinite == true)
+            {
+                return true;
+            }
+
+            var doseName = dose.Name ?? string.Empty;
+            return doseName.StartsWith("Flu", StringComparison.OrdinalIgnoreCase)
+                || doseName.StartsWith("Typhoid", StringComparison.OrdinalIgnoreCase)
+                || doseName.StartsWith("Vitamin A", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Schedule dbSchedule)
         {
             var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
@@ -1036,7 +1054,7 @@ namespace VaccineAPI.Controllers
                 }
                 
                 // Only reschedule future doses for non-infinite vaccines
-                if (schedule.Dose != null && schedule.Dose.Vaccine != null && !schedule.Dose.Vaccine.isInfinite)
+                if (!IsInfiniteDose(schedule.Dose))
                 {
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
                 }
@@ -1152,7 +1170,7 @@ namespace VaccineAPI.Controllers
             if (AllDoses.Count == 1)
             {
                 // for flu and typhoid
-                if (dbSchedule.Dose.Vaccine.isInfinite)
+                if (IsInfiniteDose(dbSchedule.Dose))
                 {
                     var TargetSchedule1 = db.Schedules
                         .Where(x => x.Id == dbSchedule.Id)

@@ -82,6 +82,13 @@ namespace VaccineAPI.Controllers
             if (scheduleDTO.DoseId == 131)
             {
                 var child = _db.Childs.FirstOrDefault(x => x.Id == scheduleDTO.ChildId);
+                var dose = _db.Doses
+                    .Include(x => x.Vaccine)
+                    .FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
+                var doseName = dose?.Name
+                    ?? dose?.Vaccine?.Name
+                    ?? $"Dose {scheduleDTO.DoseId}";
+
                 if (child != null)
                 {
                     var childAgeInDays = (DateTime.UtcNow.AddHours(5).Date - child.DOB.Date).TotalDays;
@@ -89,7 +96,11 @@ namespace VaccineAPI.Controllers
                     
                     if (childAgeInYears >= 5)
                     {
-                        return new Response<ScheduleDTO>(false, "Cannot add vaccine for children 5 years or older (DoseId: 131)", null);
+                        return new Response<ScheduleDTO>(
+                            false,
+                            $"Cannot add {doseName} for children 5 years or older.",
+                            null
+                        );
                     }
                 }
             }

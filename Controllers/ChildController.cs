@@ -1541,7 +1541,7 @@ namespace VaccineAPI.Controllers
 
                     <!-- Patient Info -->
                     <table>
-                        <tr><td><strong>MR No.</strong></td><td>{DateTime.Now.Year.ToString().Substring(2)}{child.Id}</td></tr>
+                        <tr><td><strong>MR No.</strong></td><td>{child.Id}</td></tr>
                         <tr><td><strong>Name</strong></td><td>{child.Name}</td></tr>
                         <tr><td><strong>S/D/W/o</strong></td><td>{child.FatherName}</td></tr>
                         <tr><td><strong>Passport/CNIC</strong></td><td>{child.CNIC}</td></tr>

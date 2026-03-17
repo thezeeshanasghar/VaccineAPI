@@ -1516,14 +1516,6 @@ namespace VaccineAPI.Controllers
                         border-radius: 5px;
                         margin-bottom: 20px;
                     }}
-                    .pdf-section {{
-                        max-width: 800px;
-                        margin: 40px auto 0 auto;
-                        background-color: #fff;
-                        padding: 20px;
-                        border-radius: 10px;
-                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                    }}
                     /* REMOVING .fetch-btn style as it's no longer used */
                 </style>
             </head>
@@ -1570,12 +1562,6 @@ namespace VaccineAPI.Controllers
                     <!-- Doctor Info -->
                     <p><strong>Physician/Doctor:</strong> {child.Clinic?.Doctor?.DisplayName} - {child.Clinic?.Doctor?.AdditionalInfo}</p>
                     <p><strong>Center:</strong> {child.Clinic?.Name} ({child.Clinic?.RegNo})</p>
-                </div>
-
-                <!-- PDF Embed Section -->
-                <div class='pdf-section'>
-                    <h3>Vaccination PDF:</h3>
-                    <iframe src='{fileUrl}' width='100%' height='600px' style='border: 1px solid #ccc;'></iframe>
                 </div>
             </body>
             </html>";

@@ -733,7 +733,7 @@ namespace VaccineAPI.Controllers
                 string cnic= child.CNIC;
                 document.Add(upperTable);
                 Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(0, 100, 0));
-                Paragraph title = new Paragraph("IMMUNIZATION RECORD", greenFont);
+                Paragraph title = new Paragraph($"IMMUNIZATION RECORD (MR No: {childId})", greenFont);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };

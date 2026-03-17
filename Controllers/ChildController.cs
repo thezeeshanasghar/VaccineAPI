@@ -4251,7 +4251,7 @@ int rowCount = 0;
             cb,
             Element.ALIGN_LEFT,
             new Phrase(
-                "This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.",
+                "This is a computer generated verifiable certificate. It does not require physical stamp/signatures. For verification, please scan the QR code or visit https://vaccinationcentre.com/verify and enter MR number."
                 regularFont
             ),
             document.LeftMargin + 5,
@@ -4315,7 +4315,7 @@ int rowCount = 0;
                     return "-";
                 }
 
-                return value.Value == 30000 ? "Life Time" : value.Value.ToString();
+                return GetYearOrMonthFromDays(value.Value);
             }
 
             var currentYear = DateTime.UtcNow.AddHours(5).Year;
@@ -4505,23 +4505,10 @@ int rowCount = 0;
                                                 color: var(--muted);
                                                 padding: 16px 8px;
                                             }}
-                                            .iframe-wrap {{
-                                                width: 100%;
-                                                border: 1px solid var(--line);
-                                                border-radius: 12px;
-                                                overflow: hidden;
-                                                background: #fff;
-                                            }}
-                                            iframe {{
-                                                width: 100%;
-                                                height: 720px;
-                                                border: 0;
-                                            }}
                                             @media (max-width: 768px) {{
                                                 .status-bar {{ grid-template-columns: 1fr; }}
                                                 .info-grid {{ grid-template-columns: 1fr; }}
                                                 .title {{ font-size: 22px; }}
-                                                iframe {{ height: 540px; }}
                                             }}
                                         </style>
                                     </head>
@@ -4590,10 +4577,6 @@ int rowCount = 0;
                                                         {rows}
                                                     </tbody>
                                                 </table>
-                                            </div>
-
-                                            <div class='card iframe-wrap'>
-                                                <iframe src='{fileUrl}' title='Immunization Record PDF'></iframe>
                                             </div>
                                         </div>
                                     </body>

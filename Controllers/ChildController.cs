@@ -4251,7 +4251,7 @@ int rowCount = 0;
             cb,
             Element.ALIGN_LEFT,
             new Phrase(
-                "This is a computer generated verifiable certificate. It does not require physical stamp/signatures. For verification, please scan the QR code or visit https://vaccinationcentre.com/verify and enter MR number."
+                "This is a computer generated verifiable certificate. It does not require physical stamp/signatures. For verification, please scan the QR code or visit https://vaccinationcentre.com/verify and enter MR number.",
                 regularFont
             ),
             document.LeftMargin + 5,

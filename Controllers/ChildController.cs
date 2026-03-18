@@ -4233,17 +4233,23 @@ int rowCount = 0;
             0
         );
 
-        ColumnText.ShowTextAligned(
-            cb,
-            Element.ALIGN_LEFT,
-            new Phrase(
-                "This is a computer generated verifiable certificate. It does not require physical stamp/signatures. For verification, please scan the QR code or visit https://vaccinationcentre.com/verify and enter MR number.",
-                regularFont
-            ),
-            document.LeftMargin + 5,
-            footerTextY,
-            0
+        Phrase verificationNote = new Phrase(
+            "This is a computer generated verifiable certificate. It does not require physical stamp/signatures. " +
+            "For verification, scan the QR code or visit vaccinationcentre.com/verify and enter MR number.",
+            regularFont
         );
+
+        ColumnText noteColumn = new ColumnText(cb);
+        noteColumn.SetSimpleColumn(
+            verificationNote,
+            document.LeftMargin + 5,
+            document.BottomMargin + 2f,
+            document.PageSize.Width - document.RightMargin,
+            footerTextY + 10f,
+            9f,
+            Element.ALIGN_LEFT
+        );
+        noteColumn.Go();
     }
     else
     {
@@ -4256,17 +4262,23 @@ int rowCount = 0;
             0
         );
 
-        ColumnText.ShowTextAligned(
-            cb,
-            Element.ALIGN_LEFT,
-            new Phrase(
-                "This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. For verification, scan the QR code.",
-                regularFont
-            ),
-            document.LeftMargin + 5,
-            document.BottomMargin + 18f,
-            0
+        Phrase fallbackNote = new Phrase(
+            "This is a computer-generated verifiable certificate. It does not require physical stamp/signatures. " +
+            "For verification, scan the QR code.",
+            regularFont
         );
+
+        ColumnText fallbackColumn = new ColumnText(cb);
+        fallbackColumn.SetSimpleColumn(
+            fallbackNote,
+            document.LeftMargin + 5,
+            document.BottomMargin + 2f,
+            document.PageSize.Width - document.RightMargin,
+            document.BottomMargin + 24f,
+            9f,
+            Element.ALIGN_LEFT
+        );
+        fallbackColumn.Go();
     }
 }
         }
@@ -4306,7 +4318,7 @@ int rowCount = 0;
 
             var currentYear = DateTime.UtcNow.AddHours(5).Year;
             var mrNo = $"{currentYear}-{id}";
-            var guardian = !string.IsNullOrWhiteSpace(child?.Guardian) ? child.Guardian : child?.FatherName;
+            var guardian = child?.FatherName ?? "-";
             var childName = child?.Name ?? "-";
             var city = child?.City ?? "-";
             var nationality = string.IsNullOrWhiteSpace(child?.Nationality) ? "-" : child?.Nationality;

@@ -4235,7 +4235,7 @@ int rowCount = 0;
 
         Phrase verificationNote = new Phrase(
             "This is a computer generated verifiable certificate. It does not require physical stamp/signatures. " +
-            "For verification, scan the QR code or visit vaccinationcentre.com/verify and enter MR number.",
+            "For verification, scan the QR code or visit https://vaccinationcentre.com/verify and enter MR number.",
             regularFont
         );
 

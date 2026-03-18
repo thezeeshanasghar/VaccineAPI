@@ -4243,9 +4243,9 @@ int rowCount = 0;
         noteColumn.SetSimpleColumn(
             verificationNote,
             document.LeftMargin + 5,
-            document.BottomMargin + 2f,
+            document.BottomMargin + 10f,
             document.PageSize.Width - document.RightMargin,
-            footerTextY + 10f,
+            footerTextY + 16f,
             9f,
             Element.ALIGN_LEFT
         );
@@ -4272,9 +4272,9 @@ int rowCount = 0;
         fallbackColumn.SetSimpleColumn(
             fallbackNote,
             document.LeftMargin + 5,
-            document.BottomMargin + 2f,
+            document.BottomMargin + 10f,
             document.PageSize.Width - document.RightMargin,
-            document.BottomMargin + 24f,
+            document.BottomMargin + 30f,
             9f,
             Element.ALIGN_LEFT
         );

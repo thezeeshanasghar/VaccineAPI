@@ -72,7 +72,7 @@ namespace VaccineAPI.Controllers
         }
 
        [HttpGet("invoice-id")]
-       public ActionResult<string> GetInvoiceId(long doseId, long childId)
+       public ActionResult<Response<InvoiceDTO>> GetInvoiceId([FromQuery] long doseId, [FromQuery] long childId)
        {
            var invoice = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == childId);
            if (invoice != null)

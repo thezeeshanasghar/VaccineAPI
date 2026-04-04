@@ -30,6 +30,7 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
+app.UseCors("corsapp");
 app.UseAuthorization();
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -39,7 +40,5 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.MapControllers();
-
-app.UseCors("corsapp");
 
 app.Run();

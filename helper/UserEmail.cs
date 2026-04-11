@@ -86,10 +86,17 @@ namespace VaccineAPI
         #endregion
         public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com")
         {
+            if (string.IsNullOrWhiteSpace(userEmail))
+            {
+                return;
+            }
+
             using (var client = new HttpClient())
             {
                 try
                 {
+                    client.Timeout = TimeSpan.FromSeconds(15);
+
                     var data = new
                     {
                         recipient_email = userEmail,
@@ -104,16 +111,16 @@ namespace VaccineAPI
                     var response = client.PostAsync("https://softvolta.com/testmail.php", content).Result;
                     var result = response.Content.ReadAsStringAsync().Result;
 
-                    // Optionally handle the JSON response
+                    // Keep business flow non-blocking if email provider rejects request.
                     if (!result.Contains("\"status\":\"success\""))
                     {
-                        throw new Exception("Failed to send email: " + result);
+                        Console.WriteLine("Failed to send email: " + result);
                     }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine("Error sending email: " + ex.Message);
-                    throw;
+                    // Do not rethrow: email failures must not break API workflows.
                 }
             }
         }

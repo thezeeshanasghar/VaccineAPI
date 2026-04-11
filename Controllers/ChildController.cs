@@ -2256,7 +2256,7 @@ namespace VaccineAPI.Controllers
                 {
                     if (c.Email != "") UserEmail.ParentEmail(c);
                 }
-                catch (SmtpException e)
+                catch (Exception e)
                 {
                     Console.WriteLine(e);
                 }

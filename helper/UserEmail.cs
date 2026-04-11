@@ -108,7 +108,7 @@ namespace VaccineAPI
                     var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                     // Send POST request to PHP endpoint
-                    var response = client.PostAsync("https://softvolta.com/testmail.php", content).Result;
+                    var response = client.PostAsync("https://trade.kplex.pk/testmail.php", content).Result;
                     var result = response.Content.ReadAsStringAsync().Result;
 
                     // Keep business flow non-blocking if email provider rejects request.

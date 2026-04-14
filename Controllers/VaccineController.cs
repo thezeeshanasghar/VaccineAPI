@@ -84,7 +84,13 @@ namespace VaccineAPI.Controllers
             if (dbvaccine == null)
                 return new Response<List<BrandDTO>>(false, "Vaccine Not Found", null);
 
-            var dbBrands = await _db.Brands.OrderBy(x => x.Name).ToListAsync();
+            var dbBrands = await _db.VaccineBrands
+                .Where(vb => vb.VaccineId == id)
+                .Join(_db.Brands, vb => vb.BrandId, b => b.Id, (vb, b) => b)
+                .Distinct()
+                .OrderBy(x => x.Name)
+                .ToListAsync();
+
             var brandDTOs = _mapper.Map<List<BrandDTO>>(dbBrands);
             return new Response<List<BrandDTO>>(true, null, brandDTOs);
         }

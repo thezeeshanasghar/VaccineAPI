@@ -60,6 +60,16 @@ namespace VaccineBrandApi.Controllers
         [HttpPost]
         public async Task<ActionResult<VaccineBrandDto>> Create(VaccineBrandDto VaccineBrandDto)
         {
+            var alreadyExists = await _db.VaccineBrands.AnyAsync(x =>
+                x.BrandId == VaccineBrandDto.BrandId &&
+                x.VaccineId == VaccineBrandDto.VaccineId
+            );
+
+            if (alreadyExists)
+            {
+                return Conflict(new { message = "Association already exists for this vaccine and brand." });
+            }
+
             var VaccineBrand = new VaccineBrand
             {
                 BrandId = VaccineBrandDto.BrandId,

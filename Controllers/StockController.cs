@@ -126,6 +126,47 @@ namespace VaccineAPI.Controllers
             return new Response<StockDTO>(true, null, stockDTO);
         }
 
+        [HttpGet("batch-lots")]
+        public Response<List<StockDTO>> GetBatchLotsByBrand([FromQuery] long brandId, [FromQuery] long clinicId)
+        {
+            if (brandId <= 0 || clinicId <= 0)
+            {
+                return new Response<List<StockDTO>>(false, "Invalid brandId or clinicId", null);
+            }
+
+            if (!IsInventoryEnabledForClinic(clinicId))
+            {
+                return new Response<List<StockDTO>>(true, "Inventory is disabled for this clinic.", new List<StockDTO>());
+            }
+
+            var stocks = _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId)
+                .Where(s => !string.IsNullOrEmpty(s.BatchLot))
+                .OrderByDescending(s => s.Bill.BillDate)
+                .ThenByDescending(s => s.Id)
+                .ToList();
+
+            if (!stocks.Any())
+            {
+                return new Response<List<StockDTO>>(true, null, new List<StockDTO>());
+            }
+
+            var batchLots = stocks
+                .GroupBy(s => s.BatchLot.Trim())
+                .Select(g => g.First())
+                .Select(s => new StockDTO
+                {
+                    BatchLot = s.BatchLot,
+                    Expiry = s.Expiry,
+                    BrandId = s.BrandId
+                })
+                .OrderBy(s => s.BatchLot)
+                .ToList();
+
+            return new Response<List<StockDTO>>(true, null, batchLots);
+        }
+
         [HttpPost]
         public async Task<Response<List<StockDTO>>> Post([FromBody] List<StockDTO> stockDTOs)
         {

@@ -153,15 +153,23 @@ namespace VaccineAPI.Controllers
             }
 
             var batchLots = stocks
-                .GroupBy(s => s.BatchLot.Trim())
-                .Select(g => g.First())
-                .Select(s => new StockDTO
+                .Select(s => new
                 {
-                    BatchLot = s.BatchLot,
+                    BatchLot = (s.BatchLot ?? "").Trim(),
                     Expiry = s.Expiry,
                     BrandId = s.BrandId
                 })
-                .OrderBy(s => s.BatchLot)
+                .Where(x => !string.IsNullOrWhiteSpace(x.BatchLot))
+                .Distinct()
+                .OrderBy(x => x.Expiry.HasValue ? 0 : 1)
+                .ThenBy(x => x.Expiry)
+                .ThenBy(x => x.BatchLot)
+                .Select(x => new StockDTO
+                {
+                    BatchLot = x.BatchLot,
+                    Expiry = x.Expiry,
+                    BrandId = x.BrandId
+                })
                 .ToList();
 
             return new Response<List<StockDTO>>(true, null, batchLots);

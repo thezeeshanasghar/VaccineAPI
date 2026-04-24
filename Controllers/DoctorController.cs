@@ -531,7 +531,11 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPatch("update-clinic-id")]
-        public async Task<IActionResult> UpdateClinicIdForChild([FromQuery] int doctorId, [FromQuery] long childId)
+        public async Task<IActionResult> UpdateClinicIdForChild(
+            [FromQuery] int? doctorId,
+            [FromQuery] long childId,
+            [FromQuery] long? clinicId
+        )
         {
             try
             {
@@ -540,9 +544,22 @@ namespace VaccineAPI.Controllers
                 if (child == null)
                     return NotFound($"Child with ID {childId} not found");
 
-                var clinic = await _db.Clinics.FirstOrDefaultAsync(x => x.DoctorId == doctorId);
-                if (clinic == null)
-                    return NotFound($"Clinic with Doctor ID {doctorId} not found");
+                Clinic clinic;
+                if (clinicId.HasValue && clinicId.Value > 0)
+                {
+                    clinic = await _db.Clinics.FirstOrDefaultAsync(x => x.Id == clinicId.Value);
+                    if (clinic == null)
+                        return NotFound($"Clinic with ID {clinicId.Value} not found");
+                }
+                else
+                {
+                    if (!doctorId.HasValue || doctorId.Value <= 0)
+                        return BadRequest("Either clinicId or doctorId is required");
+
+                    clinic = await _db.Clinics.FirstOrDefaultAsync(x => x.DoctorId == doctorId.Value);
+                    if (clinic == null)
+                        return NotFound($"Clinic with Doctor ID {doctorId.Value} not found");
+                }
 
                 child.ClinicId = clinic.Id;
 

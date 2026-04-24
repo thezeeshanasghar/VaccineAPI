@@ -531,7 +531,7 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPatch("update-clinic-id")]
-        public async Task<IActionResult> UpdateClinicIdForChild(
+        public async Task<ActionResult<Response<string>>> UpdateClinicIdForChild(
             [FromQuery] int? doctorId,
             [FromQuery] long childId,
             [FromQuery] long? clinicId
@@ -542,38 +542,46 @@ namespace VaccineAPI.Controllers
 
                 var child = await _db.Childs.FindAsync(childId);
                 if (child == null)
-                    return NotFound($"Child with ID {childId} not found");
+                    return NotFound(new Response<string>(false, $"Child with ID {childId} not found", null));
 
                 Clinic clinic;
                 if (clinicId.HasValue && clinicId.Value > 0)
                 {
                     clinic = await _db.Clinics.FirstOrDefaultAsync(x => x.Id == clinicId.Value);
                     if (clinic == null)
-                        return NotFound($"Clinic with ID {clinicId.Value} not found");
+                        return NotFound(new Response<string>(false, $"Clinic with ID {clinicId.Value} not found", null));
                 }
                 else
                 {
                     if (!doctorId.HasValue || doctorId.Value <= 0)
-                        return BadRequest("Either clinicId or doctorId is required");
+                        return BadRequest(new Response<string>(false, "Either clinicId or doctorId is required", null));
 
                     clinic = await _db.Clinics.FirstOrDefaultAsync(x => x.DoctorId == doctorId.Value);
                     if (clinic == null)
-                        return NotFound($"Clinic with Doctor ID {doctorId.Value} not found");
+                        return NotFound(new Response<string>(false, $"Clinic with Doctor ID {doctorId.Value} not found", null));
                 }
 
                 child.ClinicId = clinic.Id;
 
                 await _db.SaveChangesAsync();
 
-                return Ok("Clinic ID updated successfully");
+                return Ok(new Response<string>(true, null, "Clinic ID updated successfully"));
             }
             catch (DbUpdateException dbEx)
             {
-                return StatusCode(500, $"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}");
+                return StatusCode(500, new Response<string>(
+                    false,
+                    $"An error occurred while updating clinic ID for child ID {childId}: {dbEx.InnerException?.Message}",
+                    null
+                ));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}");
+                return StatusCode(500, new Response<string>(
+                    false,
+                    $"An error occurred while updating clinic ID for child ID {childId}: {ex.Message}",
+                    null
+                ));
             }
         }
 

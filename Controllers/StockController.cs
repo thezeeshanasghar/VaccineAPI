@@ -175,6 +175,65 @@ namespace VaccineAPI.Controllers
             return new Response<List<StockDTO>>(true, null, batchLots);
         }
 
+        [HttpGet("available-batches")]
+        public Response<List<AvailableBatchDTO>> GetAvailableBatches([FromQuery] long brandId, [FromQuery] long clinicId)
+        {
+            if (brandId <= 0 || clinicId <= 0)
+                return new Response<List<AvailableBatchDTO>>(false, "Invalid brandId or clinicId", null);
+
+            if (!IsInventoryEnabledForClinic(clinicId))
+                return new Response<List<AvailableBatchDTO>>(true, "Inventory is disabled for this clinic.", new List<AvailableBatchDTO>());
+
+            var costPrice = _db.BrandAmounts
+                .Where(ba => ba.BrandId == brandId && ba.ClinicId == clinicId)
+                .Select(ba => ba.PurchasedAmt)
+                .FirstOrDefault();
+
+            var brand = _db.Brands.FirstOrDefault(b => b.Id == brandId);
+            var brandName = brand?.Name ?? "";
+
+            var stocks = _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity > 0)
+                .ToList();
+
+            var batches = stocks
+                .GroupBy(s => new { Lot = (s.BatchLot ?? "").Trim(), s.Expiry })
+                .Where(g => !string.IsNullOrWhiteSpace(g.Key.Lot))
+                .Select(g => new AvailableBatchDTO
+                {
+                    BrandId = brandId,
+                    BrandName = brandName,
+                    BatchLot = g.Key.Lot,
+                    Expiry = g.Key.Expiry,
+                    AvailableQuantity = g.Sum(s => s.Quantity),
+                    CostPrice = costPrice
+                })
+                .OrderBy(b => b.Expiry.HasValue ? 0 : 1)
+                .ThenBy(b => b.Expiry)
+                .ThenBy(b => b.BatchLot)
+                .ToList();
+
+            if (!batches.Any())
+            {
+                var noLotStocks = stocks.Where(s => string.IsNullOrWhiteSpace(s.BatchLot)).ToList();
+                if (noLotStocks.Any())
+                {
+                    batches.Add(new AvailableBatchDTO
+                    {
+                        BrandId = brandId,
+                        BrandName = brandName,
+                        BatchLot = null,
+                        Expiry = noLotStocks.OrderBy(s => s.Expiry).FirstOrDefault()?.Expiry,
+                        AvailableQuantity = noLotStocks.Sum(s => s.Quantity),
+                        CostPrice = costPrice
+                    });
+                }
+            }
+
+            return new Response<List<AvailableBatchDTO>>(true, null, batches);
+        }
+
         [HttpPost]
         public async Task<Response<List<StockDTO>>> Post([FromBody] List<StockDTO> stockDTOs)
         {

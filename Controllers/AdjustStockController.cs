@@ -31,11 +31,9 @@ namespace VaccineAPI.Controllers
                 .ToListAsync();
 
             if (!adjustments.Any())
-            {
                 return new Response<List<AdjustStockDTO>>(false, "No stock adjustments found", null);
-            }
 
-            var dtos = _mapper.Map<List<AdjustStockDTO>>(adjustments);
+            var dtos = BuildHistoryDtos(adjustments);
             return new Response<List<AdjustStockDTO>>(true, null, dtos);
         }
 
@@ -47,89 +45,38 @@ namespace VaccineAPI.Controllers
                 .FirstOrDefaultAsync(a => a.Id == id);
 
             if (adjustment == null)
-            {
                 return new Response<AdjustStockDTO>(false, "Stock adjustment not found", null);
-            }
 
             var dto = _mapper.Map<AdjustStockDTO>(adjustment);
             return new Response<AdjustStockDTO>(true, null, dto);
         }
 
-        [HttpPost]
-        public async Task<Response<AdjustStockDTO>> Create(AdjustStockDTO dto)
+        [HttpGet("history")]
+        public async Task<Response<List<AdjustStockDTO>>> GetHistory(
+            [FromQuery] long? clinicId,
+            [FromQuery] long? brandId,
+            [FromQuery] long? doctorId,
+            [FromQuery] DateTime? fromDate,
+            [FromQuery] DateTime? toDate)
         {
-            using var transaction = await _db.Database.BeginTransactionAsync();
-            try
-            {
-                // Validate brand exists and include related data
-                var brandAmount = await _db.BrandAmounts
-                    .Include(b => b.Brand)
-                    .FirstOrDefaultAsync(b => b.BrandId == dto.BrandId && b.DoctorId == dto.DoctorId && b.ClinicId == dto.ClinicId);
+            var query = _db.AdjustStocks
+                .Include(a => a.Brand)
+                .AsQueryable();
 
-                if (brandAmount == null)
-                {
-                    return new Response<AdjustStockDTO>(false,
-                        $"Brand amount not found for Doctor ID {dto.DoctorId}", null);
-                }
+            if (clinicId.HasValue)
+                query = query.Where(a => a.ClinicId == clinicId.Value);
+            if (brandId.HasValue)
+                query = query.Where(a => a.BrandId == brandId.Value);
+            if (doctorId.HasValue)
+                query = query.Where(a => a.DoctorId == doctorId.Value);
+            if (fromDate.HasValue)
+                query = query.Where(a => a.Date >= fromDate.Value);
+            if (toDate.HasValue)
+                query = query.Where(a => a.Date <= toDate.Value.AddDays(1));
 
-                // Validate adjustment value
-                if (dto.Adjustment == 0)
-                {
-                    return new Response<AdjustStockDTO>(false, "Adjustment value cannot be zero", null);
-                }
-
-                // Check if adjustment would result in negative inventory
-                var newCount = brandAmount.Count + dto.Adjustment;
-                if (newCount < 0)
-                {
-                    return new Response<AdjustStockDTO>(false,
-                        $"Insufficient inventory. Current: {brandAmount.Count}, Adjustment: {dto.Adjustment}", null);
-                }
-                if (dto.Adjustment > 0)
-                {
-                    if (brandAmount.PurchasedAmt == 0)
-                    {
-                        brandAmount.PurchasedAmt = dto.Price;
-                    }
-                    else
-                    {
-                        brandAmount.PurchasedAmt =((brandAmount.PurchasedAmt * brandAmount.Count)+ (dto.Price * dto.Adjustment))
-                         / (brandAmount.Count + dto.Adjustment);
-                    }
-                }
-                var adjustment = new AdjustStock
-                {
-                    BrandId = dto.BrandId,
-                    Adjustment = dto.Adjustment,
-                    Reason = dto.Reason ?? "Stock adjustment",
-                    Price = dto.Price,
-                    Date = dto.Date != default ? dto.Date : DateTime.Now,
-                    ClinicId = dto.ClinicId,
-                };
-                _db.AdjustStocks.Add(adjustment);
-                
-                // brandAmount.PurchasedAmt = dto.Price;
-                brandAmount.Count = newCount;
-                _db.Entry(brandAmount).State = EntityState.Modified;
-
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                // Map result with included data
-                var resultDto = _mapper.Map<AdjustStockDTO>(adjustment);
-                resultDto.BrandName = brandAmount.Brand?.Name ?? "";
-                resultDto.VaccineName = "";
-
-                return new Response<AdjustStockDTO>(true,
-                    $"Stock adjusted successfully for Doctor ID {dto.DoctorId}. New count: {newCount}",
-                    resultDto);
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                var innerExceptionMessage =ex.InnerException != null ? ex.InnerException.Message : "No inner exception";
-                return new Response<AdjustStockDTO>(false,$"Error adjusting stock: {ex.Message}. Inner Exception: {innerExceptionMessage}",null);
-            }
+            var records = await query.OrderByDescending(a => a.Date).ThenByDescending(a => a.Id).ToListAsync();
+            var dtos = BuildHistoryDtos(records);
+            return new Response<List<AdjustStockDTO>>(true, null, dtos);
         }
 
         [HttpGet("brand/{brandId}")]
@@ -142,12 +89,112 @@ namespace VaccineAPI.Controllers
                 .ToListAsync();
 
             if (!adjustments.Any())
-            {
                 return new Response<List<AdjustStockDTO>>(false, "No adjustments found for this brand", null);
-            }
 
-            var dtos = _mapper.Map<List<AdjustStockDTO>>(adjustments);
+            var dtos = BuildHistoryDtos(adjustments);
             return new Response<List<AdjustStockDTO>>(true, null, dtos);
+        }
+
+        // Single item — kept for backward compatibility
+        [HttpPost]
+        public async Task<Response<List<AdjustStockDTO>>> Create([FromBody] List<AdjustStockDTO> dtos)
+        {
+            if (dtos == null || !dtos.Any())
+                return new Response<List<AdjustStockDTO>>(false, "No adjustment items provided.", null);
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var results = new List<AdjustStockDTO>();
+
+                foreach (var dto in dtos)
+                {
+                    if (dto.Adjustment == 0)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<AdjustStockDTO>>(false, "Adjustment value cannot be zero.", null);
+                    }
+
+                    var brandAmount = await _db.BrandAmounts
+                        .Include(b => b.Brand)
+                        .FirstOrDefaultAsync(b => b.BrandId == dto.BrandId
+                                               && b.DoctorId == dto.DoctorId
+                                               && b.ClinicId == dto.ClinicId);
+
+                    if (brandAmount == null)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<AdjustStockDTO>>(false,
+                            $"Brand not found in clinic inventory for brand ID {dto.BrandId}.", null);
+                    }
+
+                    var newCount = brandAmount.Count + dto.Adjustment;
+                    if (newCount < 0)
+                    {
+                        await transaction.RollbackAsync();
+                        return new Response<List<AdjustStockDTO>>(false,
+                            $"Insufficient inventory for '{brandAmount.Brand?.Name}'. Current: {brandAmount.Count}, Adjustment: {dto.Adjustment}.", null);
+                    }
+
+                    if (dto.Adjustment > 0)
+                    {
+                        brandAmount.PurchasedAmt = brandAmount.PurchasedAmt == 0 || brandAmount.Count == 0
+                            ? dto.Price
+                            : ((brandAmount.PurchasedAmt * brandAmount.Count) + (dto.Price * dto.Adjustment))
+                              / (brandAmount.Count + dto.Adjustment);
+                    }
+
+                    brandAmount.Count = newCount;
+                    _db.Entry(brandAmount).State = EntityState.Modified;
+
+                    var adjustment = new AdjustStock
+                    {
+                        BrandId   = dto.BrandId,
+                        ClinicId  = dto.ClinicId,
+                        DoctorId  = dto.DoctorId,
+                        Adjustment = dto.Adjustment,
+                        Reason    = dto.Reason?.Trim().Length > 0 ? dto.Reason : "Stock adjustment",
+                        Price     = dto.Price,
+                        Date      = dto.Date != default ? dto.Date : DateTime.Now,
+                        BatchLot  = dto.BatchLot?.Trim(),
+                        ExpiryDate = dto.ExpiryDate
+                    };
+                    _db.AdjustStocks.Add(adjustment);
+                    await _db.SaveChangesAsync();
+
+                    var resultDto = _mapper.Map<AdjustStockDTO>(adjustment);
+                    resultDto.BrandName = brandAmount.Brand?.Name ?? "";
+                    results.Add(resultDto);
+                }
+
+                await transaction.CommitAsync();
+                return new Response<List<AdjustStockDTO>>(true,
+                    $"{results.Count} item(s) adjusted successfully.", results);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                var inner = ex.InnerException != null ? ex.InnerException.Message : "";
+                return new Response<List<AdjustStockDTO>>(false,
+                    $"Error: {ex.Message}{(inner.Length > 0 ? " | " + inner : "")}", null);
+            }
+        }
+
+        private List<AdjustStockDTO> BuildHistoryDtos(List<AdjustStock> records)
+        {
+            var clinicIds  = records.Select(r => r.ClinicId).Distinct().ToList();
+            var doctorIds  = records.Select(r => r.DoctorId).Distinct().ToList();
+            var clinics    = _db.Clinics.Where(c => clinicIds.Contains(c.Id)).ToList();
+            var doctors    = _db.Doctors.Where(d => doctorIds.Contains(d.Id)).ToList();
+
+            return records.Select(a =>
+            {
+                var dto = _mapper.Map<AdjustStockDTO>(a);
+                dto.BrandName  = a.Brand?.Name ?? "";
+                dto.ClinicName = clinics.FirstOrDefault(c => c.Id == a.ClinicId)?.Name ?? "";
+                dto.DoctorName = doctors.FirstOrDefault(d => d.Id == a.DoctorId)?.FirstName ?? "";
+                return dto;
+            }).ToList();
         }
     }
 }

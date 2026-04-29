@@ -24,6 +24,12 @@ namespace VaccineAPI.Models
 
         public DateTime Date { get; set; }
 
+        public string? BatchLot { get; set; }
+
+        public DateTime? ExpiryDate { get; set; }
+
+        public long DoctorId { get; set; }
+
         // Navigation property
         // [ForeignKey("BrandId")]
         public virtual Brand Brand { get; set; } = null!;

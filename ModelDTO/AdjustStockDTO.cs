@@ -10,8 +10,11 @@ namespace VaccineAPI.ModelDTO
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }
         public DateTime Date { get; set; }
-        public string BrandName { get; set; } = "";  // For display purposes
-        public string VaccineName { get; set; } = ""; // For display purposes
-
+        public string? BatchLot { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        public string BrandName { get; set; } = "";
+        public string VaccineName { get; set; } = "";
+        public string ClinicName { get; set; } = "";
+        public string DoctorName { get; set; } = "";
     }
 }

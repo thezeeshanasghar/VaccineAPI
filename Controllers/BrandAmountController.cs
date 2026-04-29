@@ -227,7 +227,7 @@ namespace VaccineAPI.Controllers
                     .Include(x => x.Brand)
                     .Include(x => x.Bill)
                     .Include(x => x.Bill.Clinic)
-                    .Where(x => x.Bill != null && x.Bill.ClinicId == clinicId)
+                    .Where(x => x.Bill != null && x.Bill.ClinicId == clinicId && x.Quantity > 0)
                     .ToList();
 
                 if (!stocks.Any())
@@ -235,19 +235,65 @@ namespace VaccineAPI.Controllers
 
                 var clinicName = stocks.FirstOrDefault()?.Bill?.Clinic?.Name ?? "Unknown clinic";
 
-                var reportRows = stocks
+                // BrandAmount.Count is the authoritative current inventory.
+                // Stock.Quantity reflects original purchase amounts and is not decremented
+                // when vaccines are administered — only BrandAmount.Count is.
+                // So we use BrandAmount.Count as the true total per brand and distribute
+                // it proportionally across batches using Stock.Quantity as the weight.
+                var brandAmounts = _db.BrandAmounts
+                    .Where(b => b.ClinicId == clinicId)
+                    .ToList();
+
+                // Build a lookup: BrandId -> actual current count
+                var actualCountByBrand = brandAmounts
+                    .GroupBy(b => b.BrandId)
+                    .ToDictionary(g => g.Key, g => g.Sum(b => b.Count));
+
+                // Group stock records by brand + batch + expiry to get purchase proportions
+                var batchGroups = stocks
                     .GroupBy(x => new
                     {
+                        BrandId   = x.BrandId,
                         BrandName = x.Brand != null ? x.Brand.Name : "Unknown",
-                        BatchLot = string.IsNullOrWhiteSpace(x.BatchLot) ? "" : x.BatchLot.Trim(),
-                        Expiry = x.Expiry.HasValue ? x.Expiry.Value.Date : (DateTime?)null
+                        BatchLot  = string.IsNullOrWhiteSpace(x.BatchLot) ? "" : x.BatchLot.Trim(),
+                        Expiry    = x.Expiry.HasValue ? x.Expiry.Value.Date : (DateTime?)null
                     })
                     .Select(g => new
                     {
-                        BrandName = g.Key.BrandName,
-                        BatchLot = g.Key.BatchLot,
-                        Expiry = g.Key.Expiry,
-                        Quantity = g.Sum(x => x.Quantity)
+                        g.Key.BrandId,
+                        g.Key.BrandName,
+                        g.Key.BatchLot,
+                        g.Key.Expiry,
+                        PurchasedQty = g.Sum(x => x.Quantity)
+                    })
+                    .ToList();
+
+                // For each brand, total purchased qty across all batches (denominator for ratio)
+                var totalPurchasedByBrand = batchGroups
+                    .GroupBy(x => x.BrandId)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.PurchasedQty));
+
+                // Calculate actual available qty per batch by proportional distribution
+                var reportRows = batchGroups
+                    .Select(b =>
+                    {
+                        int actualTotal = actualCountByBrand.ContainsKey(b.BrandId)
+                            ? actualCountByBrand[b.BrandId] : 0;
+                        int purchasedTotal = totalPurchasedByBrand.ContainsKey(b.BrandId)
+                            ? totalPurchasedByBrand[b.BrandId] : 0;
+
+                        // Proportional share of actual inventory for this batch
+                        int batchQty = purchasedTotal > 0
+                            ? (int)Math.Round((double)b.PurchasedQty / purchasedTotal * actualTotal)
+                            : 0;
+
+                        return new
+                        {
+                            b.BrandName,
+                            b.BatchLot,
+                            b.Expiry,
+                            Quantity = batchQty
+                        };
                     })
                     .Where(x => x.Quantity > 0)
                     .OrderBy(x => x.BrandName)

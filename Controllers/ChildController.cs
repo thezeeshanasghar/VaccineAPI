@@ -4652,8 +4652,8 @@ int rowCount = 0;
                 var vc = new PdfPCell(new Phrase(value ?? "", normSm)) { Border = Rectangle.BOX, Padding = 2 };
                 leftContent.AddCell(lc); leftContent.AddCell(vc);
             }
-            AddInfoRow("Name",  child.Name);
-            AddInfoRow(child.Gender == "Girl" ? "D/o" : "S/o", child.FatherName);
+            AddInfoRow("Name",     child.Name);
+            AddInfoRow("S/D/W of", child.FatherName);
             AddInfoRow("DoB",   child.DOB.ToString("dd-MM-yyyy"));
             AddInfoRow("City",  child.City ?? "");
             AddInfoRow("Phone", child.User?.MobileNumber ?? "");
@@ -4734,77 +4734,107 @@ int rowCount = 0;
                 .FirstOrDefault(c => c.Id == id);
             if (dbChild == null) return NotFound("Child not found");
 
-            var schedules = _db.Schedules
-                .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
-                .Include(s => s.Brand)
-                .Where(s => s.ChildId == id && s.IsSkip != true)
-                .OrderBy(s => s.Dose.MinAge)
-                .ToList();
-
             using var ms = new MemoryStream();
             var doc = new Document(PageSize.A5, 15, 15, 15, 15);
             PdfWriter.GetInstance(doc, ms).CloseStream = false;
             doc.Open();
 
-            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7);
+            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7.5f);
             var normSm = FontFactory.GetFont(FontFactory.HELVETICA, 6.5f);
             var boldMd = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9f);
             var normTy = FontFactory.GetFont(FontFactory.HELVETICA, 7f);
+            var hBg    = new BaseColor(21, 101, 192);
+            var altBg  = new BaseColor(244, 246, 252);
 
-            // Header
-            doc.Add(new Paragraph("IMMUNIZATION RECORD", boldMd) { Alignment = Element.ALIGN_LEFT, SpacingAfter = 2f });
-            var headLine = new Paragraph();
-            headLine.Add(new Chunk(dbChild.Name, boldSm));
-            headLine.Add(new Chunk("   " + (dbChild.Gender == "Girl" ? "D/O" : "S/O") + " " + dbChild.FatherName, normSm));
-            doc.Add(headLine);
-            doc.Add(new Paragraph(" ") { SpacingAfter = 2f });
+            // ── Header ──────────────────────────────────────────────────────
+            var hdrPara = new Paragraph();
+            hdrPara.Add(new Chunk("IMMUNIZATION RECORD   ", boldMd));
+            hdrPara.Add(new Chunk(dbChild.Name, boldSm));
+            hdrPara.Add(new Chunk("   S/D/W of   " + dbChild.FatherName, normSm));
+            hdrPara.SpacingAfter = 5f;
+            doc.Add(hdrPara);
 
-            // Main table: VACCINES | # | AGE | GIVEN | Weight | OFC | BRAND | Sign.
+            // ── Hardcoded vaccine-wise template with rowspan ─────────────────
+            // (vaccineName, doseNumber 0=blank, ageLabel)
+            var template = new List<(string Vaccine, int DoseNum, string Age)>
+            {
+                ("BCG, OPV",                    0, "At Birth"),
+                ("Hepatitis B",                 0, "At Birth"),
+                ("IPV,DPT,HBV,Hib",             1, "6-8 Weeks"),
+                ("IPV,DPT,HBV,Hib",             2, "10-16 Weeks"),
+                ("IPV,DPT,HBV,Hib",             3, "14-24 Weeks"),
+                ("IPV,DPT,HBV,Hib",             4, "21-24 Months"),
+                ("Pneumococcal",                1, "6-8 Weeks"),
+                ("Pneumococcal",                2, "10-16 Weeks"),
+                ("Pneumococcal",                3, "14-24 Weeks"),
+                ("Pneumococcal",                4, "12-15 Months"),
+                ("Rotavirus GE",                1, "6-8 Weeks"),
+                ("Rotavirus GE",                2, "10-16 Weeks"),
+                ("Influenza (Yearly)",          1, "6, 7 Months"),
+                ("Meningococcal\n(Men ACWY)",   1, "9 Months"),
+                ("Meningococcal\n(Men ACWY)",   2, "12 Months"),
+                ("Typhoid/TCV",                 1, "9 Months"),
+                ("MR (Measles, Rubella)",       1, "9 Months"),
+                ("MMR (Measles,\nMumps, Rubella)", 1, "15 Months"),
+                ("MMR (Measles,\nMumps, Rubella)", 2, "30 Months"),
+                ("Chickenpox",                  1, "12-15 Months"),
+                ("Chickenpox",                  2, "2 Years"),
+                ("Hepatitis A",                 1, "12-15 Months"),
+                ("Hepatitis A",                 2, "18-21 Months"),
+                ("PPSV/PCV",                    1, "4-6 Years"),
+                ("DTaP",                        2, "4-6 Years"),
+            };
+
+            // Count how many rows each vaccine name spans
+            var spanCount = new Dictionary<string, int>();
+            foreach (var row in template)
+                spanCount[row.Vaccine] = spanCount.ContainsKey(row.Vaccine)
+                    ? spanCount[row.Vaccine] + 1 : 1;
+
             var tbl = new PdfPTable(8) { WidthPercentage = 100 };
             tbl.SetWidths(new float[] { 22f, 5f, 14f, 14f, 10f, 10f, 14f, 10f });
 
-            var hBg = new BaseColor(21, 101, 192);
-            PdfPCell Hdr(string t) => new PdfPCell(new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.WHITE)))
+            PdfPCell Hdr(string t) => new PdfPCell(
+                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.WHITE)))
                 { BackgroundColor = hBg, Padding = 2, HorizontalAlignment = Element.ALIGN_CENTER };
             tbl.AddCell(Hdr("VACCINES")); tbl.AddCell(Hdr("#")); tbl.AddCell(Hdr("AGE"));
             tbl.AddCell(Hdr("GIVEN")); tbl.AddCell(Hdr("Wt(kg)")); tbl.AddCell(Hdr("OFC"));
             tbl.AddCell(Hdr("BRAND")); tbl.AddCell(Hdr("Sign."));
 
-            // Group by vaccine name
-            var byVaccine = schedules
-                .GroupBy(s => s.Dose?.Vaccine?.Name ?? s.Dose?.Name ?? "Other")
-                .OrderBy(g => schedules.First(s => (s.Dose?.Vaccine?.Name ?? s.Dose?.Name ?? "Other") == g.Key).Dose.MinAge);
-
-            foreach (var grp in byVaccine)
+            var emittedVaccine = new HashSet<string>();
+            int rowIdx2 = 0;
+            foreach (var row in template)
             {
-                var doses = grp.OrderBy(s => s.Dose.MinAge).ToList();
-                int doseNum = 1;
-                foreach (var s in doses)
-                {
-                    bool shade = doseNum % 2 == 0;
-                    var bg = shade ? new BaseColor(244, 246, 252) : BaseColor.WHITE;
-                    string ageLabel = GetYearOrMonthFromDaysSchedule(s.Dose.MinAge);
-                    string given = s.IsDone && s.GivenDate.HasValue ? s.GivenDate.Value.ToString("dd/MM/yy") : "";
-                    string weight = s.Weight.HasValue ? s.Weight.Value.ToString("0.#") : "";
-                    string ofc = s.Circle.HasValue ? s.Circle.Value.ToString("0.#") : "";
-                    string brand = s.Brand?.Name ?? s.Manufacturer ?? "";
+                var bg = rowIdx2 % 2 == 0 ? BaseColor.WHITE : altBg;
+                PdfPCell C(string v, int rs = 1) => new PdfPCell(new Phrase(v, normSm))
+                    { Padding = 2, BackgroundColor = bg, Rowspan = rs };
 
-                    PdfPCell C(string v) => new PdfPCell(new Phrase(v, normSm)) { Padding = 2, BackgroundColor = bg };
-                    tbl.AddCell(C(grp.Key)); tbl.AddCell(C(doseNum.ToString())); tbl.AddCell(C(ageLabel));
-                    tbl.AddCell(C(given)); tbl.AddCell(C(weight)); tbl.AddCell(C(ofc));
-                    tbl.AddCell(C(brand)); tbl.AddCell(C(""));
-                    doseNum++;
+                if (!emittedVaccine.Contains(row.Vaccine))
+                {
+                    // Add spanning vaccine name cell
+                    var span = spanCount[row.Vaccine];
+                    var nameCell = new PdfPCell(new Phrase(row.Vaccine, boldSm))
+                        { Padding = 2, BackgroundColor = bg, Rowspan = span,
+                          VerticalAlignment = Element.ALIGN_MIDDLE };
+                    tbl.AddCell(nameCell);
+                    emittedVaccine.Add(row.Vaccine);
                 }
+
+                string numStr = row.DoseNum > 0 ? row.DoseNum.ToString() : "";
+                tbl.AddCell(C(numStr)); tbl.AddCell(C(row.Age));
+                tbl.AddCell(C("")); tbl.AddCell(C("")); tbl.AddCell(C(""));
+                tbl.AddCell(C("")); tbl.AddCell(C(""));
+                rowIdx2++;
             }
             tbl.SpacingAfter = 6f;
             doc.Add(tbl);
 
             AddRecurringVaccinesFooter(doc, normTy, boldSm);
-
             doc.Close();
+
             var pdfBytes = ms.ToArray();
-            var fileName = $"{dbChild.Name.Replace(" ", "")}_VaccineWise_{DateTime.Now:yyyyMMdd}.pdf";
-            return File(pdfBytes, "application/pdf", fileName);
+            return File(pdfBytes, "application/pdf",
+                $"{dbChild.Name.Replace(" ", "")}_VaccineWise_{DateTime.Now:yyyyMMdd}.pdf");
         }
 
         // ── IMMUNIZATION CARD: AGE WISE (Page 3) ──────────────────────────
@@ -4817,76 +4847,106 @@ int rowCount = 0;
                 .FirstOrDefault(c => c.Id == id);
             if (dbChild == null) return NotFound("Child not found");
 
-            var schedules = _db.Schedules
-                .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
-                .Include(s => s.Brand)
-                .Where(s => s.ChildId == id && s.IsSkip != true)
-                .OrderBy(s => s.Dose.MinAge)
-                .ToList();
-
             using var ms = new MemoryStream();
             var doc = new Document(PageSize.A5, 15, 15, 15, 15);
             PdfWriter.GetInstance(doc, ms).CloseStream = false;
             doc.Open();
 
-            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7);
+            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7.5f);
             var normSm = FontFactory.GetFont(FontFactory.HELVETICA, 6.5f);
             var boldMd = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9f);
             var normTy = FontFactory.GetFont(FontFactory.HELVETICA, 7f);
+            var hBg    = new BaseColor(21, 101, 192);
+            var altBg  = new BaseColor(244, 246, 252);
 
-            // Header
-            doc.Add(new Paragraph("IMMUNIZATION RECORD", boldMd) { Alignment = Element.ALIGN_LEFT, SpacingAfter = 2f });
-            var headLine = new Paragraph();
-            headLine.Add(new Chunk(dbChild.Name, boldSm));
-            headLine.Add(new Chunk("   " + (dbChild.Gender == "Girl" ? "D/O" : "S/O") + " " + dbChild.FatherName, normSm));
-            doc.Add(headLine);
-            doc.Add(new Paragraph(" ") { SpacingAfter = 2f });
+            // ── Header ──────────────────────────────────────────────────────
+            var hdrPara = new Paragraph();
+            hdrPara.Add(new Chunk("IMMUNIZATION RECORD   ", boldMd));
+            hdrPara.Add(new Chunk(dbChild.Name, boldSm));
+            hdrPara.Add(new Chunk("   S/D/W of   " + dbChild.FatherName, normSm));
+            hdrPara.SpacingAfter = 5f;
+            doc.Add(hdrPara);
 
-            // Main table: AGE | VACCINES | GIVEN | Weight | OFC | BRAND | Sign.
+            // ── Hardcoded age-wise template with rowspan ─────────────────────
+            // (ageLabel, vaccineText)
+            var template = new List<(string Age, string Vaccine)>
+            {
+                ("At Birth",    "BCG, OPV"),
+                ("At Birth",    "Hepatitis B"),
+                ("6 Weeks",     "IPV,DPT,HBV,Hib 1"),
+                ("6 Weeks",     "Rotavirus GE 1"),
+                ("10 Weeks",    "Pneumococcal 1"),
+                ("10 Weeks",    "Rotavirus GE 2"),
+                ("14 Weeks",    "IPV,DPT,HBV,Hib 2"),
+                ("14 Weeks",    "Pneumococcal 2"),
+                ("18 Weeks",    "IPV,DPT,HBV,Hib 3"),
+                ("18 Weeks",    "Pneumococcal 3"),
+                ("6, 7 Months", "Flu (Yearly)"),
+                ("9 Months",    "MenACWY 1"),
+                ("9 Months",    "Typhoid/TCV"),
+                ("9 Months",    "MR 1"),
+                ("1 Year",      "Chickenpox 1"),
+                ("1 Year",      "MenACWY 2"),
+                ("13 Months",   "Pneumococcal 4"),
+                ("13 Months",   "Hepatitis A 1"),
+                ("15 Months",   "MMR 1"),
+                ("18 Months",   "IPV,DPT,HBV,Hib 4"),
+                ("19 Months",   "Hepatitis A 2"),
+                ("2 Years",     "Chickenpox 2"),
+                ("30 Months",   "MMR 2"),
+                ("4-6 Years",   "PPSV/PCV"),
+                ("4-6 Years",   "DtaP"),
+            };
+
+            // Count rowspan per age label (preserving order — track by first occurrence)
+            var ageOrder = new List<string>();
+            var ageSpan  = new Dictionary<string, int>();
+            foreach (var row in template)
+            {
+                if (!ageSpan.ContainsKey(row.Age)) { ageSpan[row.Age] = 0; ageOrder.Add(row.Age); }
+                ageSpan[row.Age]++;
+            }
+
             var tbl = new PdfPTable(7) { WidthPercentage = 100 };
-            tbl.SetWidths(new float[] { 16f, 26f, 14f, 10f, 10f, 14f, 10f });
+            tbl.SetWidths(new float[] { 16f, 28f, 14f, 10f, 10f, 12f, 10f });
 
-            var hBg = new BaseColor(21, 101, 192);
-            PdfPCell Hdr(string t) => new PdfPCell(new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.WHITE)))
+            PdfPCell Hdr(string t) => new PdfPCell(
+                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.WHITE)))
                 { BackgroundColor = hBg, Padding = 2, HorizontalAlignment = Element.ALIGN_CENTER };
             tbl.AddCell(Hdr("AGE")); tbl.AddCell(Hdr("VACCINES")); tbl.AddCell(Hdr("GIVEN"));
             tbl.AddCell(Hdr("Wt(kg)")); tbl.AddCell(Hdr("OFC")); tbl.AddCell(Hdr("BRAND")); tbl.AddCell(Hdr("Sign."));
 
-            // Group by age label (MinAge days)
-            var byAge = schedules
-                .GroupBy(s => GetYearOrMonthFromDaysSchedule(s.Dose.MinAge))
-                .OrderBy(g => schedules.First(s => GetYearOrMonthFromDaysSchedule(s.Dose.MinAge) == g.Key).Dose.MinAge);
-
-            int rowIdx = 0;
-            foreach (var grp in byAge)
+            var emittedAge = new HashSet<string>();
+            int rowIdx3 = 0;
+            foreach (var row in template)
             {
-                var dosesInAge = grp.OrderBy(s => s.Dose.MinAge).ToList();
-                foreach (var s in dosesInAge)
-                {
-                    bool shade = rowIdx % 2 == 0;
-                    var bg = shade ? new BaseColor(244, 246, 252) : BaseColor.WHITE;
-                    string vacName = (s.Dose?.Vaccine?.Name ?? s.Dose?.Name ?? "");
-                    string given = s.IsDone && s.GivenDate.HasValue ? s.GivenDate.Value.ToString("dd/MM/yy") : "";
-                    string weight = s.Weight.HasValue ? s.Weight.Value.ToString("0.#") : "";
-                    string ofc = s.Circle.HasValue ? s.Circle.Value.ToString("0.#") : "";
-                    string brand = s.Brand?.Name ?? s.Manufacturer ?? "";
+                var bg = rowIdx3 % 2 == 0 ? BaseColor.WHITE : altBg;
+                PdfPCell C(string v) => new PdfPCell(new Phrase(v, normSm))
+                    { Padding = 2, BackgroundColor = bg };
 
-                    PdfPCell C(string v) => new PdfPCell(new Phrase(v, normSm)) { Padding = 2, BackgroundColor = bg };
-                    tbl.AddCell(C(grp.Key)); tbl.AddCell(C(vacName));
-                    tbl.AddCell(C(given)); tbl.AddCell(C(weight)); tbl.AddCell(C(ofc));
-                    tbl.AddCell(C(brand)); tbl.AddCell(C(""));
-                    rowIdx++;
+                if (!emittedAge.Contains(row.Age))
+                {
+                    var ageCell = new PdfPCell(new Phrase(row.Age, boldSm))
+                        { Padding = 2, BackgroundColor = bg, Rowspan = ageSpan[row.Age],
+                          VerticalAlignment = Element.ALIGN_MIDDLE };
+                    tbl.AddCell(ageCell);
+                    emittedAge.Add(row.Age);
                 }
+
+                tbl.AddCell(C(row.Vaccine));
+                tbl.AddCell(C("")); tbl.AddCell(C("")); tbl.AddCell(C(""));
+                tbl.AddCell(C("")); tbl.AddCell(C(""));
+                rowIdx3++;
             }
             tbl.SpacingAfter = 6f;
             doc.Add(tbl);
 
             AddRecurringVaccinesFooter(doc, normTy, boldSm);
-
             doc.Close();
+
             var pdfBytes = ms.ToArray();
-            var fileName = $"{dbChild.Name.Replace(" ", "")}_AgeWise_{DateTime.Now:yyyyMMdd}.pdf";
-            return File(pdfBytes, "application/pdf", fileName);
+            return File(pdfBytes, "application/pdf",
+                $"{dbChild.Name.Replace(" ", "")}_AgeWise_{DateTime.Now:yyyyMMdd}.pdf");
         }
 
         private void AddRecurringVaccinesFooter(Document doc, iTextSharpFont normFont, iTextSharpFont boldFont)

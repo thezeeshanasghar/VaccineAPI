@@ -25,6 +25,9 @@ namespace VaccineAPI
             CreateMap<Bill, BillDTO>().ReverseMap();
             CreateMap<Stock, StockDTO>().ReverseMap();
             CreateMap<AdjustStock, AdjustStockDTO>().ReverseMap();
+            CreateMap<DirectSale, DirectSaleDTO>()
+                .ForMember(d => d.BrandName,  o => o.MapFrom(s => s.Brand != null  ? s.Brand.Name  : ""))
+                .ForMember(d => d.ClinicName, o => o.MapFrom(s => s.Clinic != null ? s.Clinic.Name : ""));
             CreateMap<StockTransfer, StockTransferHistoryDTO>()
                 .ForMember(d => d.FromClinicName, o => o.MapFrom(s => s.FromClinic != null ? s.FromClinic.Name : ""))
                 .ForMember(d => d.ToClinicName, o => o.MapFrom(s => s.ToClinic != null ? s.ToClinic.Name : ""))

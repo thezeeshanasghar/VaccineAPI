@@ -13,6 +13,7 @@ namespace VaccineAPI.ModelDTO
         public string UserType { get; set; } = "";
         public long DoctorId { get; set; }
         public bool AllowInventory { get; set; }
+        public bool AllowSupplier { get; set; }
         public bool AllowFinancial { get; set; }
         public bool AllowInvoice { get; set; }
         public long ChildId { get; set; }

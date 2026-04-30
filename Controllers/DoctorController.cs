@@ -280,6 +280,7 @@ namespace VaccineAPI.Controllers
             dbDoctor.AllowFollowUp = doctorDTO.AllowFollowUp;
             dbDoctor.AllowChart = doctorDTO.AllowChart;
             dbDoctor.AllowInventory = doctorDTO.AllowInventory;
+            dbDoctor.AllowSupplier  = doctorDTO.AllowSupplier;
             dbDoctor.AllowFinancial = doctorDTO.AllowFinancial;
             _db.SaveChanges();
             //  dbDoctor = _mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);

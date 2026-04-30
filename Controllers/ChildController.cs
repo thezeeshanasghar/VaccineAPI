@@ -4681,10 +4681,10 @@ int rowCount = 0;
             schedTable.SetWidths(new float[] { 30f, 70f });
 
             var headerBg = new BaseColor(21, 101, 192);
-            PdfPCell Hdr(string txt) => new PdfPCell(new Phrase(txt, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8, BaseColor.WHITE)))
+            PdfPCell Hdr(string txt) => new PdfPCell(new Phrase(txt, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8, BaseColor.White)))
                 { BackgroundColor = headerBg, Padding = 3, HorizontalAlignment = Element.ALIGN_CENTER };
             PdfPCell Row(string age, string vax, bool shade = false) {
-                var bg = shade ? new BaseColor(244, 246, 252) : BaseColor.WHITE;
+                var bg = shade ? new BaseColor(244, 246, 252) : BaseColor.White;
                 var ac = new PdfPCell(new Phrase(age, normSm)) { Padding = 2, BackgroundColor = bg };
                 var vc = new PdfPCell(new Phrase(vax, normSm)) { Padding = 2, BackgroundColor = bg };
                 schedTable.AddCell(ac); schedTable.AddCell(vc);
@@ -4795,7 +4795,7 @@ int rowCount = 0;
             tbl.SetWidths(new float[] { 22f, 5f, 14f, 14f, 10f, 10f, 14f, 10f });
 
             PdfPCell Hdr(string t) => new PdfPCell(
-                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.WHITE)))
+                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.White)))
                 { BackgroundColor = hBg, Padding = 2, HorizontalAlignment = Element.ALIGN_CENTER };
             tbl.AddCell(Hdr("VACCINES")); tbl.AddCell(Hdr("#")); tbl.AddCell(Hdr("AGE"));
             tbl.AddCell(Hdr("GIVEN")); tbl.AddCell(Hdr("Wt(kg)")); tbl.AddCell(Hdr("OFC"));
@@ -4805,7 +4805,7 @@ int rowCount = 0;
             int rowIdx2 = 0;
             foreach (var row in template)
             {
-                var bg = rowIdx2 % 2 == 0 ? BaseColor.WHITE : altBg;
+                var bg = rowIdx2 % 2 == 0 ? BaseColor.White : altBg;
                 PdfPCell C(string v, int rs = 1) => new PdfPCell(new Phrase(v, normSm))
                     { Padding = 2, BackgroundColor = bg, Rowspan = rs };
 
@@ -4911,7 +4911,7 @@ int rowCount = 0;
             tbl.SetWidths(new float[] { 16f, 28f, 14f, 10f, 10f, 12f, 10f });
 
             PdfPCell Hdr(string t) => new PdfPCell(
-                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.WHITE)))
+                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.White)))
                 { BackgroundColor = hBg, Padding = 2, HorizontalAlignment = Element.ALIGN_CENTER };
             tbl.AddCell(Hdr("AGE")); tbl.AddCell(Hdr("VACCINES")); tbl.AddCell(Hdr("GIVEN"));
             tbl.AddCell(Hdr("Wt(kg)")); tbl.AddCell(Hdr("OFC")); tbl.AddCell(Hdr("BRAND")); tbl.AddCell(Hdr("Sign."));
@@ -4920,7 +4920,7 @@ int rowCount = 0;
             int rowIdx3 = 0;
             foreach (var row in template)
             {
-                var bg = rowIdx3 % 2 == 0 ? BaseColor.WHITE : altBg;
+                var bg = rowIdx3 % 2 == 0 ? BaseColor.White : altBg;
                 PdfPCell C(string v) => new PdfPCell(new Phrase(v, normSm))
                     { Padding = 2, BackgroundColor = bg };
 
@@ -4953,7 +4953,7 @@ int rowCount = 0;
         {
             var footTbl = new PdfPTable(6) { WidthPercentage = 100 };
             var hBg = new BaseColor(21, 101, 192);
-            PdfPCell FHdr(string t) => new PdfPCell(new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.WHITE)))
+            PdfPCell FHdr(string t) => new PdfPCell(new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.White)))
                 { BackgroundColor = hBg, Padding = 2, HorizontalAlignment = Element.ALIGN_CENTER };
             PdfPCell FCell(string t = "") => new PdfPCell(new Phrase(t, normFont))
                 { Padding = 2, MinimumHeight = 14f, HorizontalAlignment = Element.ALIGN_CENTER };

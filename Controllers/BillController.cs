@@ -138,6 +138,12 @@ namespace VaccineAPI.Controllers
                 );
 
             var billDTOs = _mapper.Map<List<BillDTO>>(bills);
+            foreach (var dto in billDTOs)
+            {
+                var bill = bills.First(b => b.Id == dto.Id);
+                dto.TotalAmount = bill.Stocks.Sum(s => s.StockAmount * s.Quantity);
+                dto.TotalItems  = bill.Stocks.Count;
+            }
             return new Response<List<BillDTO>>(true, null, billDTOs);
         }
 
@@ -172,6 +178,46 @@ namespace VaccineAPI.Controllers
             _db.Bills.Remove(bill);
             _db.SaveChanges();
             return new Response<BillDTO>(true, "Bill deleted successfully", null);
+        }
+
+        [HttpDelete("{id}/reverse")]
+        public async Task<Response<BillDTO>> DeleteWithReversal(int id)
+        {
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var bill = await _db.Bills
+                    .Include(b => b.Stocks)
+                    .FirstOrDefaultAsync(b => b.Id == id);
+
+                if (bill == null)
+                    return new Response<BillDTO>(false, "Bill not found", null);
+
+                // Reverse stock for each item in this bill
+                foreach (var stock in bill.Stocks.ToList())
+                {
+                    var brandAmount = await _db.BrandAmounts
+                        .FirstOrDefaultAsync(ba => ba.BrandId == stock.BrandId && ba.ClinicId == bill.ClinicId);
+
+                    if (brandAmount != null)
+                    {
+                        brandAmount.Count = Math.Max(0, brandAmount.Count - stock.Quantity);
+                        _db.Entry(brandAmount).State = EntityState.Modified;
+                    }
+                    _db.Stocks.Remove(stock);
+                }
+
+                _db.Bills.Remove(bill);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return new Response<BillDTO>(true, "Bill deleted and stock reversed successfully", null);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return new Response<BillDTO>(false, $"Error: {ex.Message}", null);
+            }
         }
 
         [HttpGet("Suppliers")]

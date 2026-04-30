@@ -4632,91 +4632,151 @@ int rowCount = 0;
             PdfWriter.GetInstance(doc, ms).CloseStream = false;
             doc.Open();
 
-            var boldSm  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7);
-            var normSm  = FontFactory.GetFont(FontFactory.HELVETICA, 7);
-            var boldMd  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8.5f);
-            var normMd  = FontFactory.GetFont(FontFactory.HELVETICA, 8f);
-            var boldLg  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10f);
-            var titleFt = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11f);
+            // ── Fonts — matching schedule PDF style, larger sizes ────────────
+            var normXs  = FontFactory.GetFont(FontFactory.HELVETICA, 7f);
+            var normSm  = FontFactory.GetFont(FontFactory.HELVETICA, 8.5f);
+            var boldSm  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8.5f);
+            var normMd  = FontFactory.GetFont(FontFactory.HELVETICA, 9.5f);
+            var boldMd  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10f);
+            var boldLg  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12f);
+            var titleFt = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13f);
+            var hdrWhite= FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9.5f, BaseColor.White);
+            var hdrBg   = new BaseColor(21, 101, 192);
+            var altBg   = new BaseColor(244, 246, 252);
 
-            // ── Top section: Patient info (left) + Doctor info (right) ──────
+            // ── TOP SECTION ──────────────────────────────────────────────────
             var topTable = new PdfPTable(2) { WidthPercentage = 100 };
             topTable.SetWidths(new float[] { 50f, 50f });
 
-            // Left: IMMUNIZATION CARD + patient info table
+            // ── LEFT: IMMUNIZATION CARD title + patient info table ───────────
             var leftContent = new PdfPTable(2);
-            leftContent.SetWidths(new float[] { 35f, 65f });
+            leftContent.SetWidths(new float[] { 32f, 68f });
             leftContent.WidthPercentage = 100;
-            void AddInfoRow(string label, string value) {
-                var lc = new PdfPCell(new Phrase(label, boldSm)) { Border = Rectangle.BOX, Padding = 2 };
-                var vc = new PdfPCell(new Phrase(value ?? "", normSm)) { Border = Rectangle.BOX, Padding = 2 };
-                leftContent.AddCell(lc); leftContent.AddCell(vc);
+            void InfoRow(string label, string val) {
+                leftContent.AddCell(new PdfPCell(new Phrase(label, boldSm)) { Border = Rectangle.BOX, Padding = 3 });
+                leftContent.AddCell(new PdfPCell(new Phrase(val ?? "", normSm)) { Border = Rectangle.BOX, Padding = 3 });
             }
-            AddInfoRow("Name",     child.Name);
-            AddInfoRow("S/D/W of", child.FatherName);
-            AddInfoRow("DoB",   child.DOB.ToString("dd-MM-yyyy"));
-            AddInfoRow("City",  child.City ?? "");
-            AddInfoRow("Phone", child.User?.MobileNumber ?? "");
+            InfoRow("Name",     child.Name);
+            InfoRow("S/D/W of", child.FatherName ?? "");
+            InfoRow("DoB",      child.DOB.ToString("dd-MM-yyyy"));
+            InfoRow("City",     child.City ?? "");
+            InfoRow("Phone",    child.User?.MobileNumber ?? "");
 
-            var leftCell = new PdfPCell { Border = 0, Padding = 3 };
-            leftCell.AddElement(new Paragraph("IMMUNIZATION CARD", titleFt) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 4f });
+            var leftCell = new PdfPCell { Border = 0, Padding = 4 };
+            leftCell.AddElement(new Paragraph("IMMUNIZATION CARD", titleFt)
+                { Alignment = Element.ALIGN_CENTER, SpacingAfter = 5f });
             leftCell.AddElement(leftContent);
             topTable.AddCell(leftCell);
 
-            // Right: Doctor + Clinic info
-            var rightCell = new PdfPCell { Border = 0, Padding = 3 };
-            rightCell.AddElement(new Paragraph(doctor?.DisplayName ?? doctor?.FirstName ?? "", boldMd) { Alignment = Element.ALIGN_CENTER });
-            rightCell.AddElement(new Paragraph(doctor?.Qualification ?? doctor?.PMDC ?? "", normSm) { Alignment = Element.ALIGN_CENTER });
-            rightCell.AddElement(new Paragraph(clinic?.Name ?? "", boldMd) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 3f });
-            rightCell.AddElement(new Paragraph(clinic?.Address ?? "", normSm) { Alignment = Element.ALIGN_CENTER });
+            // ── RIGHT: Logo (GREEN) + Doctor box (RED) ───────────────────────
+            var rightCell = new PdfPCell { Border = 0, Padding = 4 };
+
+            // GREEN area: clinic logo + clinic name (matching schedule top-right)
+            var logoPath = clinic?.MonogramImage != null
+                ? Path.Combine(_host.ContentRootPath, clinic.MonogramImage) : null;
+
+            if (logoPath != null && System.IO.File.Exists(logoPath))
+            {
+                try
+                {
+                    var logo = iTextSharpImage.GetInstance(logoPath);
+                    logo.ScaleAbsolute(80f, 40f);
+                    logo.Alignment = Element.ALIGN_CENTER;
+                    rightCell.AddElement(logo);
+                }
+                catch { /* skip logo if load fails */ }
+            }
+
+            // Clinic name (bold, centered) — GREEN area text
+            rightCell.AddElement(new Paragraph(clinic?.Name ?? "", boldMd)
+                { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f, SpacingAfter = 4f });
+
+            // RED area: Doctor info in a bordered box (matches schedule header)
+            var doctorBox = new PdfPTable(1) { WidthPercentage = 100 };
+            var doctorInner = new PdfPCell { Border = Rectangle.BOX, Padding = 4 };
+
+            // Doctor name (bold)
+            doctorInner.AddElement(new Paragraph(doctor?.DisplayName ?? doctor?.FirstName ?? "", boldMd)
+                { Alignment = Element.ALIGN_CENTER });
+
+            // Full qualifications — each line from the Qualification field
+            var qualText = doctor?.Qualification ?? "";
+            if (!string.IsNullOrWhiteSpace(qualText))
+            {
+                // Split on comma to get individual credentials, max 2 per line for readability
+                doctorInner.AddElement(new Paragraph(qualText, normSm)
+                    { Alignment = Element.ALIGN_CENTER, SpacingBefore = 1f });
+            }
+
+            // Clinic address
+            if (!string.IsNullOrWhiteSpace(clinic?.Address))
+                doctorInner.AddElement(new Paragraph(clinic.Address, normSm)
+                    { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f });
+
+            doctorBox.AddCell(doctorInner);
+            rightCell.AddElement(doctorBox);
             topTable.AddCell(rightCell);
-            topTable.SpacingAfter = 6f;
+            topTable.SpacingAfter = 5f;
             doc.Add(topTable);
 
-            // ── Standard Pakistan Immunization Schedule ──────────────────────
-            doc.Add(new Paragraph("LATEST IMMUNIZATION SCHEDULE", boldLg) { Alignment = Element.ALIGN_CENTER });
-            doc.Add(new Paragraph("FOR KIDS LIVING IN PAKISTAN", normSm) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 4f });
+            // ── SCHEDULE TABLE ────────────────────────────────────────────────
+            doc.Add(new Paragraph("LATEST IMMUNIZATION SCHEDULE", boldLg)
+                { Alignment = Element.ALIGN_CENTER });
+            doc.Add(new Paragraph("FOR KIDS LIVING IN PAKISTAN", normMd)
+                { Alignment = Element.ALIGN_CENTER, SpacingAfter = 4f });
 
             var schedTable = new PdfPTable(2) { WidthPercentage = 100 };
-            schedTable.SetWidths(new float[] { 30f, 70f });
+            schedTable.SetWidths(new float[] { 28f, 72f });
 
-            var headerBg = new BaseColor(21, 101, 192);
-            PdfPCell Hdr(string txt) => new PdfPCell(new Phrase(txt, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8, BaseColor.White)))
-                { BackgroundColor = headerBg, Padding = 3, HorizontalAlignment = Element.ALIGN_CENTER };
-            PdfPCell Row(string age, string vax, bool shade = false) {
-                var bg = shade ? new BaseColor(244, 246, 252) : BaseColor.White;
-                var ac = new PdfPCell(new Phrase(age, normSm)) { Padding = 2, BackgroundColor = bg };
-                var vc = new PdfPCell(new Phrase(vax, normSm)) { Padding = 2, BackgroundColor = bg };
-                schedTable.AddCell(ac); schedTable.AddCell(vc);
-                return ac;
+            PdfPCell SHdr(string t) => new PdfPCell(new Phrase(t, hdrWhite))
+                { BackgroundColor = hdrBg, Padding = 4, HorizontalAlignment = Element.ALIGN_CENTER };
+            void SRow(string age, string vax, bool shade = false) {
+                var bg = shade ? altBg : BaseColor.White;
+                schedTable.AddCell(new PdfPCell(new Phrase(age, normSm)) { Padding = 3, BackgroundColor = bg });
+                schedTable.AddCell(new PdfPCell(new Phrase(vax, normSm)) { Padding = 3, BackgroundColor = bg });
             }
-            schedTable.AddCell(Hdr("Age")); schedTable.AddCell(Hdr("Vaccines"));
-            Row("Birth",       "BCG, OPV, Hepatitis B");
-            Row("6-8 Weeks",   "OPV/IPV, DPT, HBV, Hib, PCV, Rotavirus GE", true);
-            Row("10-16 Weeks", "OPV/IPV, DPT, HBV, Hib, PCV, Rotavirus GE");
-            Row("14-24 Weeks", "OPV/IPV, DPT, HBV, Hib, PCV", true);
-            Row("6 & 7 Months","Influenza");
-            Row("9 Months",    "MR, TCV, IPV, MenACWY", true);
-            Row("12-15 Months","Chickenpox, Hepatitis A, MenACWY, MMR, PCV");
-            Row("18-21 Months","Hepatitis A, IPV, DPT, HBV, Hib", true);
-            Row("3-4 Years",   "MMR, Chickenpox, Typhoid");
-            Row("5 Years",     "DTaP, PPSV, Covid19", true);
-            Row("9 Years",     "HPV");
+            schedTable.AddCell(SHdr("Age")); schedTable.AddCell(SHdr("Vaccines"));
+            SRow("Birth",         "BCG, OPV, Hepatitis B");
+            SRow("6-8 Weeks",     "OPV/IPV, DPT, HBV, Hib, PCV, Rotavirus GE",  true);
+            SRow("10-16 Weeks",   "OPV/IPV, DPT, HBV, Hib, PCV, Rotavirus GE");
+            SRow("14-24 Weeks",   "OPV/IPV, DPT, HBV, Hib, PCV",               true);
+            SRow("6 & 7 Months",  "Influenza");
+            SRow("9 Months",      "MR, TCV, IPV, MenACWY",                      true);
+            SRow("12-15 Months",  "Chickenpox, Hepatitis A, MenACWY, MMR, PCV");
+            SRow("18-21 Months",  "Hepatitis A, IPV, DPT, HBV, Hib",            true);
+            SRow("3-4 Years",     "MMR, Chickenpox, Typhoid");
+            SRow("5 Years",       "DTaP, PPSV, Covid19",                         true);
+            SRow("9 Years",       "HPV");
             schedTable.SpacingAfter = 6f;
             doc.Add(schedTable);
 
-            // ── Footer: clinic contact ────────────────────────────────────────
-            var footerText = new Paragraph
+            // ── DISCLAIMER (BLUE area) ────────────────────────────────────────
+            doc.Add(new Paragraph(
+                "Vaccines can cause fever, redness, rashes and pain. Rotarix vaccine can have loose " +
+                "motions and intestinal complications. Pertussis vaccine may cause excessive crying " +
+                "episodes and fits also rarely. This immunization card is valid to produce on demand at " +
+                "all embassies, airports and schools of the world.",
+                normXs)
+            { Alignment = Element.ALIGN_JUSTIFIED, SpacingAfter = 5f });
+
+            // ── FOOTER BAR: Clinic | Address | Phone ─────────────────────────
+            var footerTable = new PdfPTable(1) { WidthPercentage = 100 };
+            var footerCell = new PdfPCell
             {
-                Alignment = Element.ALIGN_CENTER,
-                SpacingBefore = 4f
+                BackgroundColor = hdrBg,
+                Border = Rectangle.NO_BORDER,
+                Padding = 5,
+                HorizontalAlignment = Element.ALIGN_CENTER
             };
-            footerText.Add(new Chunk(clinic?.Name ?? "", boldSm));
-            if (!string.IsNullOrEmpty(clinic?.Address))
-                footerText.Add(new Chunk("  |  " + clinic.Address, normSm));
-            if (!string.IsNullOrEmpty(clinic?.PhoneNumber))
-                footerText.Add(new Chunk("  |  " + clinic.PhoneNumber, normSm));
-            doc.Add(footerText);
+            var footerLine = new StringBuilder();
+            footerLine.Append(clinic?.Name ?? "");
+            if (!string.IsNullOrEmpty(clinic?.Address))  footerLine.Append("  |  " + clinic.Address);
+            if (!string.IsNullOrEmpty(clinic?.PhoneNumber)) footerLine.Append("  |  " + clinic.PhoneNumber);
+            footerCell.AddElement(new Paragraph(footerLine.ToString(),
+                FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8f, BaseColor.White))
+                { Alignment = Element.ALIGN_CENTER });
+            footerTable.AddCell(footerCell);
+            doc.Add(footerTable);
 
             doc.Close();
             var pdfBytes = ms.ToArray();

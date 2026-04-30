@@ -45,3 +45,11 @@ SET pa1.IsOnline = 1;
 -- =====================================================
 -- To rollback this change, run:
 -- ALTER TABLE `paaccess` DROP COLUMN `IsOnline`;
+
+-- =====================================================
+-- Add AllowFinancial Column to Doctors Table
+-- =====================================================
+ALTER TABLE `doctors`
+ADD COLUMN `AllowFinancial` tinyint(1) NOT NULL DEFAULT 0;
+
+-- Rollback: ALTER TABLE `doctors` DROP COLUMN `AllowFinancial`;

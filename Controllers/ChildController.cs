@@ -4681,43 +4681,23 @@ int rowCount = 0;
                 try
                 {
                     var logo = iTextSharpImage.GetInstance(logoPath);
-                    logo.ScaleAbsolute(80f, 40f);
+                    logo.ScaleAbsolute(120f, 60f);
                     logo.Alignment = Element.ALIGN_CENTER;
                     rightCell.AddElement(logo);
                 }
                 catch { /* skip logo if load fails */ }
             }
 
-            // Doctor info in a bordered box
-            var doctorBox = new PdfPTable(1) { WidthPercentage = 100 };
-            var doctorInner = new PdfPCell { Border = Rectangle.BOX, Padding = 4 };
-
-            // Doctor name (bold)
-            doctorInner.AddElement(new Paragraph(doctor?.DisplayName ?? doctor?.FirstName ?? "", boldMd)
-                { Alignment = Element.ALIGN_CENTER });
-
-            // Full qualifications — each line from the Qualification field
-            var qualText = doctor?.Qualification ?? "";
-            if (!string.IsNullOrWhiteSpace(qualText))
-            {
-                // Split on comma to get individual credentials, max 2 per line for readability
-                doctorInner.AddElement(new Paragraph(qualText, normSm)
-                    { Alignment = Element.ALIGN_CENTER, SpacingBefore = 1f });
-            }
-
-            // Clinic address
-            if (!string.IsNullOrWhiteSpace(clinic?.Address))
-                doctorInner.AddElement(new Paragraph(clinic.Address, normSm)
-                    { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f });
+            // Doctor name (no box)
+            rightCell.AddElement(new Paragraph(doctor?.DisplayName ?? doctor?.FirstName ?? "", boldMd)
+                { Alignment = Element.ALIGN_CENTER, SpacingBefore = 4f });
 
             // Additional info from doctor profile
             var additionalInfo = doctor?.AdditionalInfo ?? "";
             if (!string.IsNullOrWhiteSpace(additionalInfo))
-                doctorInner.AddElement(new Paragraph(additionalInfo, normSm)
+                rightCell.AddElement(new Paragraph(additionalInfo, normSm)
                     { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f });
 
-            doctorBox.AddCell(doctorInner);
-            rightCell.AddElement(doctorBox);
             topTable.AddCell(rightCell);
             topTable.SpacingAfter = 5f;
             doc.Add(topTable);

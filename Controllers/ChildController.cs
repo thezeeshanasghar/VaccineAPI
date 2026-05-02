@@ -4633,15 +4633,15 @@ int rowCount = 0;
             writer.CloseStream = false;
             doc.Open();
 
-            // ── Fonts — matching schedule PDF style, larger sizes ────────────
-            var normXs  = FontFactory.GetFont(FontFactory.HELVETICA, 7f);
-            var normSm  = FontFactory.GetFont(FontFactory.HELVETICA, 8.5f);
-            var boldSm  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8.5f);
-            var normMd  = FontFactory.GetFont(FontFactory.HELVETICA, 9.5f);
-            var boldMd  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10f);
-            var boldLg  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12f);
-            var titleFt = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13f);
-            var hdrWhite= FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9.5f, BaseColor.White);
+            // ── Fonts ────────────────────────────────────────────────────────
+            var normXs  = FontFactory.GetFont(FontFactory.HELVETICA, 8f);
+            var normSm  = FontFactory.GetFont(FontFactory.HELVETICA, 10f);
+            var boldSm  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10f);
+            var normMd  = FontFactory.GetFont(FontFactory.HELVETICA, 10f);
+            var boldMd  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13f);
+            var boldLg  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13f);
+            var titleFt = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14f);
+            var hdrWhite= FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11f, BaseColor.White);
             var hdrBg   = new BaseColor(21, 101, 192);
             var altBg   = new BaseColor(244, 246, 252);
 
@@ -4654,8 +4654,8 @@ int rowCount = 0;
             leftContent.SetWidths(new float[] { 32f, 68f });
             leftContent.WidthPercentage = 100;
             void InfoRow(string label, string val) {
-                leftContent.AddCell(new PdfPCell(new Phrase(label, boldSm)) { Border = Rectangle.BOX, Padding = 3 });
-                leftContent.AddCell(new PdfPCell(new Phrase(val ?? "", normSm)) { Border = Rectangle.BOX, Padding = 3 });
+                leftContent.AddCell(new PdfPCell(new Phrase(label, boldSm)) { Border = Rectangle.BOX, Padding = 5 });
+                leftContent.AddCell(new PdfPCell(new Phrase(val ?? "", normSm)) { Border = Rectangle.BOX, Padding = 5 });
             }
             InfoRow("Name",     child.Name);
             InfoRow("S/D/W of", child.FatherName ?? "");
@@ -4712,11 +4712,11 @@ int rowCount = 0;
             schedTable.SetWidths(new float[] { 28f, 72f });
 
             PdfPCell SHdr(string t) => new PdfPCell(new Phrase(t, hdrWhite))
-                { BackgroundColor = hdrBg, Padding = 4, HorizontalAlignment = Element.ALIGN_CENTER };
+                { BackgroundColor = hdrBg, Padding = 5, HorizontalAlignment = Element.ALIGN_CENTER };
             void SRow(string age, string vax, bool shade = false) {
                 var bg = shade ? altBg : BaseColor.White;
-                schedTable.AddCell(new PdfPCell(new Phrase(age, normSm)) { Padding = 3, BackgroundColor = bg });
-                schedTable.AddCell(new PdfPCell(new Phrase(vax, normSm)) { Padding = 3, BackgroundColor = bg });
+                schedTable.AddCell(new PdfPCell(new Phrase(age, normSm)) { Padding = 5, BackgroundColor = bg });
+                schedTable.AddCell(new PdfPCell(new Phrase(vax, normSm)) { Padding = 5, BackgroundColor = bg });
             }
             schedTable.AddCell(SHdr("Age")); schedTable.AddCell(SHdr("Vaccines"));
             SRow("Birth",         "BCG, OPV, Hepatitis B");
@@ -4758,7 +4758,7 @@ int rowCount = 0;
 
             // Disclaimer text just above footer
             float disclaimerBottom = bm + footerH + 4f;
-            float disclaimerTop    = disclaimerBottom + 40f;
+            float disclaimerTop    = disclaimerBottom + 60f;
             var disclaimerCt = new ColumnText(cb);
             disclaimerCt.SetSimpleColumn(lm, disclaimerBottom, pageW - lm, disclaimerTop);
             disclaimerCt.AddText(new Phrase(

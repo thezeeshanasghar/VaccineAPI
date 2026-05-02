@@ -335,7 +335,7 @@ namespace VaccineAPI.Controllers
                 table.SetWidths(new float[] { 0.25f, 1.4f, 0.85f, 0.75f, 0.4f, 0.8f, 0.85f });
 
                 var headerBg  = new BaseColor(21, 101, 192);
-                var whiteFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10, BaseColor.WHITE);
+                var whiteFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10, BaseColor.White);
                 var rowFont   = FontFactory.GetFont(FontFactory.HELVETICA, 10);
                 var altBg     = new BaseColor(244, 246, 252);
 
@@ -352,7 +352,7 @@ namespace VaccineAPI.Controllers
                 int rowNum = 1;
                 foreach (var t in transfers)
                 {
-                    var bg = rowNum % 2 == 0 ? altBg : BaseColor.WHITE;
+                    var bg = rowNum % 2 == 0 ? altBg : BaseColor.White;
                     table.AddCell(new PdfPCell(new Phrase(rowNum.ToString(), rowFont))
                         { BackgroundColor = bg, Padding = 5f, HorizontalAlignment = Element.ALIGN_CENTER });
                     table.AddCell(new PdfPCell(new Phrase(t.Brand?.Name ?? "", rowFont))
@@ -385,7 +385,7 @@ namespace VaccineAPI.Controllers
 
                 // ── Footer ────────────────────────────────────────────────────
                 doc2.Add(new Paragraph("\n"));
-                var footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 9, BaseColor.GRAY);
+                var footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 9, BaseColor.Gray);
                 doc2.Add(new Paragraph("This is a system-generated transfer voucher. Stock moved at cost price — no sale value.", footerFont)
                 {
                     Alignment = Element.ALIGN_CENTER

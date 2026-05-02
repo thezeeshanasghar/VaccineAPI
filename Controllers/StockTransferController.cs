@@ -3,6 +3,9 @@ using AutoMapper;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
 using Microsoft.EntityFrameworkCore;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.IO;
 
 namespace VaccineAPI.Controllers
 {
@@ -266,6 +269,135 @@ namespace VaccineAPI.Controllers
             }).ToList();
 
             return new Response<List<StockTransferHistoryDTO>>(true, null, dtos);
+        }
+
+        [HttpGet("pdf")]
+        public IActionResult GetTransferPdf([FromQuery] string ids)
+        {
+            try
+            {
+                var idList = (ids ?? "")
+                    .Split(',')
+                    .Select(s => long.TryParse(s.Trim(), out var n) ? n : 0)
+                    .Where(n => n > 0)
+                    .ToList();
+
+                if (!idList.Any())
+                    return BadRequest("No transfer IDs provided.");
+
+                var transfers = _db.StockTransfers
+                    .Include(t => t.FromClinic)
+                    .Include(t => t.ToClinic)
+                    .Include(t => t.Brand)
+                    .Where(t => idList.Contains(t.Id))
+                    .OrderBy(t => t.Id)
+                    .ToList();
+
+                if (!transfers.Any())
+                    return NotFound("No transfers found.");
+
+                var fromClinicName = transfers.First().FromClinic?.Name ?? "Unknown";
+                var toClinicName   = transfers.First().ToClinic?.Name  ?? "Unknown";
+                var transferDate   = transfers.First().CreatedAt;
+                var doctor         = _db.Doctors.Find(transfers.First().CreatedBy);
+                var doctorName     = doctor != null ? doctor.FirstName : "Unknown";
+
+                using var ms = new MemoryStream();
+                var doc2 = new Document(PageSize.A4, 30, 30, 40, 30);
+                PdfWriter.GetInstance(doc2, ms);
+                doc2.Open();
+
+                // ── Title ─────────────────────────────────────────────────────
+                var titleFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 18);
+                doc2.Add(new Paragraph("STOCK TRANSFER VOUCHER", titleFont)
+                {
+                    Alignment = Element.ALIGN_CENTER,
+                    SpacingAfter = 6f
+                });
+
+                var subFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13);
+                doc2.Add(new Paragraph($"{fromClinicName}  →  {toClinicName}", subFont)
+                {
+                    Alignment = Element.ALIGN_CENTER,
+                    SpacingAfter = 16f
+                });
+
+                var metaFont = FontFactory.GetFont(FontFactory.HELVETICA, 11);
+                doc2.Add(new Paragraph(
+                    $"Date: {transferDate:dd/MM/yyyy HH:mm}     Transferred By: {doctorName}",
+                    metaFont)
+                {
+                    SpacingAfter = 20f
+                });
+
+                // ── Table ─────────────────────────────────────────────────────
+                var table = new PdfPTable(7) { WidthPercentage = 100 };
+                table.SetWidths(new float[] { 0.25f, 1.4f, 0.85f, 0.75f, 0.4f, 0.8f, 0.85f });
+
+                var headerBg  = new BaseColor(21, 101, 192);
+                var whiteFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10, BaseColor.WHITE);
+                var rowFont   = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+                var altBg     = new BaseColor(244, 246, 252);
+
+                foreach (var h in new[] { "#", "Brand", "Batch / Lot", "Expiry", "Qty", "Cost Price", "Total Value" })
+                {
+                    table.AddCell(new PdfPCell(new Phrase(h, whiteFont))
+                    {
+                        BackgroundColor = headerBg,
+                        Padding = 6f,
+                        HorizontalAlignment = Element.ALIGN_CENTER
+                    });
+                }
+
+                int rowNum = 1;
+                foreach (var t in transfers)
+                {
+                    var bg = rowNum % 2 == 0 ? altBg : BaseColor.WHITE;
+                    table.AddCell(new PdfPCell(new Phrase(rowNum.ToString(), rowFont))
+                        { BackgroundColor = bg, Padding = 5f, HorizontalAlignment = Element.ALIGN_CENTER });
+                    table.AddCell(new PdfPCell(new Phrase(t.Brand?.Name ?? "", rowFont))
+                        { BackgroundColor = bg, Padding = 5f });
+                    table.AddCell(new PdfPCell(new Phrase(t.BatchNumber ?? "—", rowFont))
+                        { BackgroundColor = bg, Padding = 5f });
+                    table.AddCell(new PdfPCell(new Phrase(t.ExpiryDate?.ToString("dd/MM/yyyy") ?? "—", rowFont))
+                        { BackgroundColor = bg, Padding = 5f, HorizontalAlignment = Element.ALIGN_CENTER });
+                    table.AddCell(new PdfPCell(new Phrase(t.Quantity.ToString(), rowFont))
+                        { BackgroundColor = bg, Padding = 5f, HorizontalAlignment = Element.ALIGN_CENTER });
+                    table.AddCell(new PdfPCell(new Phrase($"Rs {t.CostPrice:N2}", rowFont))
+                        { BackgroundColor = bg, Padding = 5f, HorizontalAlignment = Element.ALIGN_RIGHT });
+                    table.AddCell(new PdfPCell(new Phrase($"Rs {t.TotalValue:N2}", rowFont))
+                        { BackgroundColor = bg, Padding = 5f, HorizontalAlignment = Element.ALIGN_RIGHT });
+                    rowNum++;
+                }
+
+                doc2.Add(table);
+
+                // ── Totals ────────────────────────────────────────────────────
+                doc2.Add(new Paragraph("\n"));
+                var totalFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12);
+                doc2.Add(new Paragraph(
+                    $"Total Items: {transfers.Count}     Total Qty: {transfers.Sum(t => t.Quantity)}     Total Value: Rs {transfers.Sum(t => t.TotalValue):N2}",
+                    totalFont)
+                {
+                    Alignment = Element.ALIGN_RIGHT,
+                    SpacingBefore = 8f
+                });
+
+                // ── Footer ────────────────────────────────────────────────────
+                doc2.Add(new Paragraph("\n"));
+                var footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 9, BaseColor.GRAY);
+                doc2.Add(new Paragraph("This is a system-generated transfer voucher. Stock moved at cost price — no sale value.", footerFont)
+                {
+                    Alignment = Element.ALIGN_CENTER
+                });
+
+                doc2.Close();
+                return File(ms.ToArray(), "application/pdf", $"StockTransfer_{transferDate:yyyyMMdd_HHmm}.pdf");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error generating PDF: {ex.Message}");
+            }
         }
     }
 }

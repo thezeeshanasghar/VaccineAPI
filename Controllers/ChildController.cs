@@ -4695,7 +4695,7 @@ int rowCount = 0;
             // Additional info from doctor profile
             var additionalInfo = doctor?.AdditionalInfo ?? "";
             if (!string.IsNullOrWhiteSpace(additionalInfo))
-                rightCell.AddElement(new Paragraph(additionalInfo, normSm)
+                rightCell.AddElement(new Paragraph(additionalInfo, normXs)
                     { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f });
 
             topTable.AddCell(rightCell);

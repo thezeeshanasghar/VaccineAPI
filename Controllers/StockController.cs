@@ -599,6 +599,9 @@ namespace VaccineAPI.Controllers
                         return new Response<List<StockDTO>>(false,$"Brand with ID {stockDTO.BrandId} not found",null);
                     }
 
+                    // Capture old quantity before overwriting — needed for Count delta below
+                    int oldQty = stock.Quantity;
+
                     // Update stock details
                     stock.BrandId = stockDTO.BrandId;
                     stock.Quantity = stockDTO.Quantity;
@@ -634,9 +637,9 @@ namespace VaccineAPI.Controllers
                             "ClinicId is required to update stock.", null);
                     }
 
-                    // Recalculate BrandAmount using a true weighted average across ALL stocks
-                    // for this brand/clinic. EF's identity map means the just-updated stock
-                    // entity is returned with its new StockAmount and Quantity values.
+                    // Recalculate PurchasedAmt as a true weighted average across ALL stocks.
+                    // EF's identity map returns the just-updated stock entity with its new
+                    // StockAmount, so the average already reflects the corrected price.
                     var allBrandStocks = await _db.Stocks
                         .Include(s => s.Bill)
                         .Where(s => s.BrandId == stockDTO.BrandId
@@ -644,18 +647,23 @@ namespace VaccineAPI.Controllers
                                  && s.Quantity > 0)
                         .ToListAsync();
 
-                    int     totalQty  = allBrandStocks.Sum(s => s.Quantity);
-                    decimal totalCost = allBrandStocks.Sum(s => (decimal)s.StockAmount * s.Quantity);
-                    decimal avgPrice  = totalQty > 0
-                        ? Math.Round(totalCost / totalQty, 2)
+                    int     totalPurchased = allBrandStocks.Sum(s => s.Quantity);
+                    decimal totalCost      = allBrandStocks.Sum(s => (decimal)s.StockAmount * s.Quantity);
+                    decimal avgPrice       = totalPurchased > 0
+                        ? Math.Round(totalCost / totalPurchased, 2)
                         : Math.Round(stockDTO.StockAmount, 2);
+
+                    // Count delta: BrandAmount.Count is the live administered-adjusted inventory.
+                    // Stock.Quantity is never decremented by sales — only Count is.
+                    // So we adjust Count by the quantity difference, not reset it entirely.
+                    int qtyDelta = stockDTO.Quantity - oldQty;
 
                     var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
                         ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId);
 
                     if (brandAmount != null)
                     {
-                        brandAmount.Count        = totalQty;
+                        brandAmount.Count        = Math.Max(0, brandAmount.Count + qtyDelta);
                         brandAmount.PurchasedAmt = avgPrice;
                         brandAmount.ClinicId     = effectiveClinicId;
                         _db.Entry(brandAmount).State = EntityState.Modified;
@@ -665,7 +673,7 @@ namespace VaccineAPI.Controllers
                         _db.BrandAmounts.Add(new BrandAmount
                         {
                             BrandId      = stockDTO.BrandId,
-                            Count        = totalQty,
+                            Count        = Math.Max(0, stockDTO.Quantity),
                             DoctorId     = stockDTO.DoctorId,
                             ClinicId     = effectiveClinicId,
                             PurchasedAmt = avgPrice,

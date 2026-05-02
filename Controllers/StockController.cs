@@ -634,31 +634,42 @@ namespace VaccineAPI.Controllers
                             "ClinicId is required to update stock.", null);
                     }
 
-                    // Update or create BrandAmount
-                    var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
-                        ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId
-                    );
+                    // Recalculate BrandAmount using a true weighted average across ALL stocks
+                    // for this brand/clinic. EF's identity map means the just-updated stock
+                    // entity is returned with its new StockAmount and Quantity values.
+                    var allBrandStocks = await _db.Stocks
+                        .Include(s => s.Bill)
+                        .Where(s => s.BrandId == stockDTO.BrandId
+                                 && s.Bill.ClinicId == effectiveClinicId
+                                 && s.Quantity > 0)
+                        .ToListAsync();
 
-                    decimal unitPrice = Math.Round(stockDTO.StockAmount, 2);
+                    int     totalQty  = allBrandStocks.Sum(s => s.Quantity);
+                    decimal totalCost = allBrandStocks.Sum(s => (decimal)s.StockAmount * s.Quantity);
+                    decimal avgPrice  = totalQty > 0
+                        ? Math.Round(totalCost / totalQty, 2)
+                        : Math.Round(stockDTO.StockAmount, 2);
+
+                    var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
+                        ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId);
 
                     if (brandAmount != null)
                     {
-                        brandAmount.Count = stockDTO.Quantity;
-                        brandAmount.PurchasedAmt = (int)unitPrice;
-                        brandAmount.ClinicId = effectiveClinicId;
+                        brandAmount.Count        = totalQty;
+                        brandAmount.PurchasedAmt = avgPrice;
+                        brandAmount.ClinicId     = effectiveClinicId;
                         _db.Entry(brandAmount).State = EntityState.Modified;
                     }
                     else
                     {
-                        brandAmount = new BrandAmount
+                        _db.BrandAmounts.Add(new BrandAmount
                         {
-                            BrandId = stock.BrandId,
-                            Count = stock.Quantity,
-                            DoctorId = stockDTO.DoctorId,
-                            ClinicId = effectiveClinicId,
-                            PurchasedAmt = (int)unitPrice,
-                        };
-                        _db.BrandAmounts.Add(brandAmount);
+                            BrandId      = stockDTO.BrandId,
+                            Count        = totalQty,
+                            DoctorId     = stockDTO.DoctorId,
+                            ClinicId     = effectiveClinicId,
+                            PurchasedAmt = avgPrice,
+                        });
                     }
 
                     await _db.SaveChangesAsync();

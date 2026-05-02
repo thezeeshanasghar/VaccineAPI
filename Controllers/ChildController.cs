@@ -4661,7 +4661,9 @@ int rowCount = 0;
             InfoRow("S/D/W of", child.FatherName ?? "");
             InfoRow("DoB",      child.DOB.ToString("dd-MM-yyyy"));
             InfoRow("City",     child.City ?? "");
-            InfoRow("Phone",    child.User?.MobileNumber ?? "");
+            var mobileRaw = child.User?.MobileNumber ?? "";
+            var mobileDisplay = string.IsNullOrWhiteSpace(mobileRaw) ? "" : "+92 " + mobileRaw;
+            InfoRow("Phone",    mobileDisplay);
 
             var leftCell = new PdfPCell { Border = 0, Padding = 4 };
             leftCell.AddElement(new Paragraph("IMMUNIZATION CARD", titleFt)

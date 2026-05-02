@@ -83,6 +83,7 @@ namespace VaccineAPI.Controllers
             existingAssistant.AllowAnalytics = personalAssistant.AllowAnalytics;
             existingAssistant.AllowChild = personalAssistant.AllowChild;
             existingAssistant.IsVerified = personalAssistant.IsVerified;
+            existingAssistant.IsActive = personalAssistant.IsActive;
             _db.Entry(existingAssistant).State = EntityState.Modified;
             _db.SaveChanges();
             return Ok(new Response<PersonalAssistant>(true, "Personal Assistant updated successfully.", existingAssistant));
@@ -162,6 +163,44 @@ namespace VaccineAPI.Controllers
                 Console.WriteLine($"Error fetching clinics for PA ID {paId}: {ex.Message}");
                 return StatusCode(500,new { message = "An error occurred while fetching clinics." });
             }
+        }
+
+        [HttpPut("{id:long}/profile")]
+        public ActionResult UpdateProfile(long id, [FromBody] PersonalAssistantDTO dto)
+        {
+            var pa = _db.PersonalAssistant
+                .Include(p => p.User)
+                .FirstOrDefault(p => p.Id == id);
+            if (pa == null)
+                return NotFound(new { message = "Personal Assistant not found." });
+
+            pa.Name  = dto.Name?.Trim() ?? pa.Name;
+            pa.Email = dto.Email?.Trim() ?? pa.Email;
+
+            if (pa.User != null && !string.IsNullOrWhiteSpace(dto.MobileNumber))
+            {
+                pa.User.MobileNumber = dto.MobileNumber.Trim();
+                _db.Entry(pa.User).State = EntityState.Modified;
+            }
+
+            _db.Entry(pa).State = EntityState.Modified;
+            _db.SaveChanges();
+            return Ok(new Response<PersonalAssistant>(true, "Profile updated successfully.", pa));
+        }
+
+        [HttpPut("{id:long}/toggle-active")]
+        public ActionResult ToggleActive(long id)
+        {
+            var pa = _db.PersonalAssistant.Find(id);
+            if (pa == null)
+                return NotFound(new { message = "Personal Assistant not found." });
+
+            pa.IsActive = !pa.IsActive;
+            _db.Entry(pa).State = EntityState.Modified;
+            _db.SaveChanges();
+
+            string status = pa.IsActive ? "activated" : "deactivated";
+            return Ok(new Response<PersonalAssistant>(true, $"Personal Assistant {status} successfully.", pa));
         }
 
         [HttpPost("signup")]

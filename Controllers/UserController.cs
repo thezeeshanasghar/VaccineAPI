@@ -137,10 +137,10 @@ namespace VaccineAPI.Controllers
                 var paDb = _db.PersonalAssistant.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
                 if (paDb == null)
                     return new Response<UserDTO>(false, "Personal Assistant not found.", null);
+                else if (paDb.IsActive == false)
+                    return new Response<UserDTO>(false, "Your account has been deactivated. Contact your doctor.", null);
                 else if (paDb.IsVerified == false)
-                {
                     return new Response<UserDTO>(false, "You are not approved. Contact doctor for approval.", null);
-                }
                 else
                     userDTO.PAId = paDb.Id;
                 userDTO.DoctorId = paDb.DoctorId;

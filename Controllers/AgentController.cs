@@ -4,6 +4,7 @@ using VaccineAPI.Models;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using System;
 
 namespace VaccineAPI.Controllers
 {
@@ -106,6 +107,55 @@ namespace VaccineAPI.Controllers
         private bool AgentExists(int id)
         {
             return _context.Agents.Any(e => e.Id == id);
+        }
+
+        // GET: api/Agent/{id}/report?from=2024-01-01&to=2024-12-31
+        [HttpGet("{id}/report")]
+        public async Task<ActionResult<object>> GetAgentReport(int id, [FromQuery] DateTime from, [FromQuery] DateTime to)
+        {
+            var agent = await _context.Agents.FindAsync(id);
+            if (agent == null) return NotFound();
+
+            var travelChildren = await _context.Childs
+                .Where(c => c.Type == "Travel" && c.Agent == agent.Name)
+                .Include(c => c.Schedules)
+                .ToListAsync();
+
+            var clientsInRange = travelChildren
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Name,
+                    c.Guardian,
+                    FirstVisitDate = c.Schedules
+                        .Where(s => s.IsDone && s.GivenDate.HasValue)
+                        .OrderBy(s => s.GivenDate)
+                        .Select(s => s.GivenDate)
+                        .FirstOrDefault()
+                })
+                .Where(x => x.FirstVisitDate.HasValue
+                            && x.FirstVisitDate.Value.Date >= from.Date
+                            && x.FirstVisitDate.Value.Date <= to.Date)
+                .ToList();
+
+            return Ok(new
+            {
+                AgentId = agent.Id,
+                AgentName = agent.Name,
+                PhoneNumber = agent.PhoneNumber,
+                ReferralFeePerClient = agent.ReferralFeePerClient,
+                From = from.ToString("yyyy-MM-dd"),
+                To = to.ToString("yyyy-MM-dd"),
+                ClientCount = clientsInRange.Count,
+                TotalFee = clientsInRange.Count * agent.ReferralFeePerClient,
+                Clients = clientsInRange.Select(x => new
+                {
+                    x.Id,
+                    x.Name,
+                    x.Guardian,
+                    FirstVisitDate = x.FirstVisitDate.Value.ToString("yyyy-MM-dd")
+                })
+            });
         }
 
         // GET: api/Agent/AgentAlert

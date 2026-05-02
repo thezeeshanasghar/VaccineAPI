@@ -4629,7 +4629,8 @@ int rowCount = 0;
 
             using var ms = new MemoryStream();
             var doc = new Document(PageSize.A5, 18, 18, 18, 18);
-            PdfWriter.GetInstance(doc, ms).CloseStream = false;
+            var writer = PdfWriter.GetInstance(doc, ms);
+            writer.CloseStream = false;
             doc.Open();
 
             // ── Fonts — matching schedule PDF style, larger sizes ────────────
@@ -4687,11 +4688,7 @@ int rowCount = 0;
                 catch { /* skip logo if load fails */ }
             }
 
-            // Clinic name (bold, centered) — GREEN area text
-            rightCell.AddElement(new Paragraph(clinic?.Name ?? "", boldMd)
-                { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f, SpacingAfter = 4f });
-
-            // RED area: Doctor info in a bordered box (matches schedule header)
+            // Doctor info in a bordered box
             var doctorBox = new PdfPTable(1) { WidthPercentage = 100 };
             var doctorInner = new PdfPCell { Border = Rectangle.BOX, Padding = 4 };
 
@@ -4711,6 +4708,12 @@ int rowCount = 0;
             // Clinic address
             if (!string.IsNullOrWhiteSpace(clinic?.Address))
                 doctorInner.AddElement(new Paragraph(clinic.Address, normSm)
+                    { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f });
+
+            // Additional info from doctor profile
+            var additionalInfo = doctor?.AdditionalInfo ?? "";
+            if (!string.IsNullOrWhiteSpace(additionalInfo))
+                doctorInner.AddElement(new Paragraph(additionalInfo, normSm)
                     { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f });
 
             doctorBox.AddCell(doctorInner);
@@ -4747,36 +4750,44 @@ int rowCount = 0;
             SRow("3-4 Years",     "MMR, Chickenpox, Typhoid");
             SRow("5 Years",       "DTaP, PPSV, Covid19",                         true);
             SRow("9 Years",       "HPV");
-            schedTable.SpacingAfter = 6f;
+            schedTable.SpacingAfter = 0f;
             doc.Add(schedTable);
 
-            // ── DISCLAIMER (BLUE area) ────────────────────────────────────────
-            doc.Add(new Paragraph(
-                "Vaccines can cause fever, redness, rashes and pain. Rotarix vaccine can have loose " +
-                "motions and intestinal complications. Pertussis vaccine may cause excessive crying " +
-                "episodes and fits also rarely. This immunization card is valid to produce on demand at " +
-                "all embassies, airports and schools of the world.",
-                normXs)
-            { Alignment = Element.ALIGN_JUSTIFIED, SpacingAfter = 5f });
-
-            // ── FOOTER BAR: Clinic | Address | Phone ─────────────────────────
-            var footerTable = new PdfPTable(1) { WidthPercentage = 100 };
-            var footerCell = new PdfPCell
-            {
-                BackgroundColor = hdrBg,
-                Border = Rectangle.NO_BORDER,
-                Padding = 5,
-                HorizontalAlignment = Element.ALIGN_CENTER
-            };
+            // ── FOOTER + DISCLAIMER pinned to absolute bottom of page ─────────
             var footerLine = new StringBuilder();
             footerLine.Append(clinic?.Name ?? "");
             if (!string.IsNullOrEmpty(clinic?.Address))  footerLine.Append("  |  " + clinic.Address);
             if (!string.IsNullOrEmpty(clinic?.PhoneNumber)) footerLine.Append("  |  " + clinic.PhoneNumber);
-            footerCell.AddElement(new Paragraph(footerLine.ToString(),
-                FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8f, BaseColor.White))
-                { Alignment = Element.ALIGN_CENTER });
-            footerTable.AddCell(footerCell);
-            doc.Add(footerTable);
+
+            var cb = writer.DirectContent;
+            float pageW  = doc.PageSize.Width;
+            float lm = 18f, bm = 18f;
+            float contentW = pageW - lm - lm;
+
+            // Footer bar (blue) at very bottom
+            float footerH = 22f;
+            cb.SaveState();
+            cb.SetColorFill(new BaseColor(21, 101, 192));
+            cb.Rectangle(lm, bm, contentW, footerH);
+            cb.Fill();
+            cb.RestoreState();
+            ColumnText.ShowTextAligned(cb, Element.ALIGN_CENTER,
+                new Phrase(footerLine.ToString(),
+                    FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8f, BaseColor.White)),
+                pageW / 2f, bm + 7f, 0f);
+
+            // Disclaimer text just above footer
+            float disclaimerBottom = bm + footerH + 4f;
+            float disclaimerTop    = disclaimerBottom + 40f;
+            var disclaimerCt = new ColumnText(cb);
+            disclaimerCt.SetSimpleColumn(lm, disclaimerBottom, pageW - lm, disclaimerTop);
+            disclaimerCt.AddText(new Phrase(
+                "Vaccines can cause fever, redness, rashes and pain. Rotarix vaccine can have loose " +
+                "motions and intestinal complications. Pertussis vaccine may cause excessive crying " +
+                "episodes and fits also rarely. This immunization card is valid to produce on demand at " +
+                "all embassies, airports and schools of the world.",
+                normXs));
+            disclaimerCt.Go();
 
             doc.Close();
             var pdfBytes = ms.ToArray();

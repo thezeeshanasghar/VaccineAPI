@@ -184,10 +184,14 @@ namespace VaccineAPI.Controllers
             if (!IsInventoryEnabledForClinic(clinicId))
                 return new Response<List<AvailableBatchDTO>>(true, "Inventory is disabled for this clinic.", new List<AvailableBatchDTO>());
 
-            var costPrice = _db.BrandAmounts
+            var brandAmount = _db.BrandAmounts
                 .Where(ba => ba.BrandId == brandId && ba.ClinicId == clinicId)
-                .Select(ba => ba.PurchasedAmt)
                 .FirstOrDefault();
+
+            var costPrice = brandAmount?.PurchasedAmt ?? 0;
+            // BrandAmount.Count is the authoritative current inventory — Stock.Quantity is the
+            // original purchase quantity and is never decremented when vaccines are administered.
+            var actualTotal = brandAmount?.Count ?? 0;
 
             var brand = _db.Brands.FirstOrDefault(b => b.Id == brandId);
             var brandName = brand?.Name ?? "";
@@ -197,18 +201,28 @@ namespace VaccineAPI.Controllers
                 .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity > 0)
                 .ToList();
 
+            var purchasedTotal = stocks.Sum(s => s.Quantity);
+
             var batches = stocks
                 .GroupBy(s => new { Lot = (s.BatchLot ?? "").Trim(), s.Expiry })
                 .Where(g => !string.IsNullOrWhiteSpace(g.Key.Lot))
-                .Select(g => new AvailableBatchDTO
+                .Select(g =>
                 {
-                    BrandId = brandId,
-                    BrandName = brandName,
-                    BatchLot = g.Key.Lot,
-                    Expiry = g.Key.Expiry,
-                    AvailableQuantity = g.Sum(s => s.Quantity),
-                    CostPrice = costPrice
+                    var batchPurchased = g.Sum(s => s.Quantity);
+                    var available = purchasedTotal > 0
+                        ? (int)Math.Round((double)batchPurchased / purchasedTotal * actualTotal)
+                        : 0;
+                    return new AvailableBatchDTO
+                    {
+                        BrandId = brandId,
+                        BrandName = brandName,
+                        BatchLot = g.Key.Lot,
+                        Expiry = g.Key.Expiry,
+                        AvailableQuantity = available,
+                        CostPrice = costPrice
+                    };
                 })
+                .Where(b => b.AvailableQuantity > 0)
                 .OrderBy(b => b.Expiry.HasValue ? 0 : 1)
                 .ThenBy(b => b.Expiry)
                 .ThenBy(b => b.BatchLot)
@@ -225,7 +239,7 @@ namespace VaccineAPI.Controllers
                         BrandName = brandName,
                         BatchLot = null,
                         Expiry = noLotStocks.OrderBy(s => s.Expiry).FirstOrDefault()?.Expiry,
-                        AvailableQuantity = noLotStocks.Sum(s => s.Quantity),
+                        AvailableQuantity = actualTotal,
                         CostPrice = costPrice
                     });
                 }

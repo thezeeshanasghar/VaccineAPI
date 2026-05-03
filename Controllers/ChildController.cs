@@ -4802,20 +4802,22 @@ int rowCount = 0;
             PdfWriter.GetInstance(doc, ms).CloseStream = false;
             doc.Open();
 
-            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7.5f);
-            var normSm = FontFactory.GetFont(FontFactory.HELVETICA, 6.5f);
-            var boldMd = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9f);
+            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8f);
+            var normSm = FontFactory.GetFont(FontFactory.HELVETICA, 7.5f);
+            var boldMd = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11f);
             var normTy = FontFactory.GetFont(FontFactory.HELVETICA, 7f);
+            var normNm = FontFactory.GetFont(FontFactory.HELVETICA, 8f);
             var hBg    = new BaseColor(21, 101, 192);
             var altBg  = new BaseColor(244, 246, 252);
 
-            // ── Header ──────────────────────────────────────────────────────
-            var hdrPara = new Paragraph();
-            hdrPara.Add(new Chunk("IMMUNIZATION RECORD   ", boldMd));
-            hdrPara.Add(new Chunk(dbChild.Name, boldSm));
-            hdrPara.Add(new Chunk("   S/D/W of   " + dbChild.FatherName, normSm));
-            hdrPara.SpacingAfter = 5f;
-            doc.Add(hdrPara);
+            // ── Header: two centred lines ────────────────────────────────────
+            doc.Add(new Paragraph("IMMUNIZATION RECORD", boldMd)
+                { Alignment = Element.ALIGN_CENTER, SpacingAfter = 2f });
+
+            var nameLine = new Paragraph { Alignment = Element.ALIGN_CENTER, SpacingAfter = 8f };
+            nameLine.Add(new Chunk(dbChild.Name, boldSm));
+            nameLine.Add(new Chunk("   S/D/W of   " + (dbChild.FatherName ?? ""), normNm));
+            doc.Add(nameLine);
 
             // ── Hardcoded vaccine-wise template with rowspan ─────────────────
             // (vaccineName, doseNumber 0=blank, ageLabel)
@@ -4858,8 +4860,8 @@ int rowCount = 0;
             tbl.SetWidths(new float[] { 22f, 5f, 14f, 14f, 10f, 10f, 14f, 10f });
 
             PdfPCell Hdr(string t) => new PdfPCell(
-                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.White)))
-                { BackgroundColor = hBg, Padding = 2, HorizontalAlignment = Element.ALIGN_CENTER };
+                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7f, BaseColor.White)))
+                { BackgroundColor = hBg, Padding = 4, HorizontalAlignment = Element.ALIGN_CENTER };
             tbl.AddCell(Hdr("VACCINES")); tbl.AddCell(Hdr("#")); tbl.AddCell(Hdr("AGE"));
             tbl.AddCell(Hdr("GIVEN")); tbl.AddCell(Hdr("Wt(kg)")); tbl.AddCell(Hdr("OFC"));
             tbl.AddCell(Hdr("BRAND")); tbl.AddCell(Hdr("Sign."));
@@ -4870,14 +4872,13 @@ int rowCount = 0;
             {
                 var bg = rowIdx2 % 2 == 0 ? BaseColor.White : altBg;
                 PdfPCell C(string v, int rs = 1) => new PdfPCell(new Phrase(v, normSm))
-                    { Padding = 2, BackgroundColor = bg, Rowspan = rs };
+                    { Padding = 4, BackgroundColor = bg, Rowspan = rs };
 
                 if (!emittedVaccine.Contains(row.Vaccine))
                 {
-                    // Add spanning vaccine name cell
                     var span = spanCount[row.Vaccine];
                     var nameCell = new PdfPCell(new Phrase(row.Vaccine, boldSm))
-                        { Padding = 2, BackgroundColor = bg, Rowspan = span,
+                        { Padding = 4, BackgroundColor = bg, Rowspan = span,
                           VerticalAlignment = Element.ALIGN_MIDDLE };
                     tbl.AddCell(nameCell);
                     emittedVaccine.Add(row.Vaccine);
@@ -4889,7 +4890,7 @@ int rowCount = 0;
                 tbl.AddCell(C("")); tbl.AddCell(C(""));
                 rowIdx2++;
             }
-            tbl.SpacingAfter = 6f;
+            tbl.SpacingAfter = 8f;
             doc.Add(tbl);
 
             AddRecurringVaccinesFooter(doc, normTy, boldSm);
@@ -4915,20 +4916,21 @@ int rowCount = 0;
             PdfWriter.GetInstance(doc, ms).CloseStream = false;
             doc.Open();
 
-            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7.5f);
-            var normSm = FontFactory.GetFont(FontFactory.HELVETICA, 6.5f);
-            var boldMd = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9f);
+            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8f);
+            var normSm = FontFactory.GetFont(FontFactory.HELVETICA, 7.5f);
+            var boldMd = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11f);
             var normTy = FontFactory.GetFont(FontFactory.HELVETICA, 7f);
             var hBg    = new BaseColor(21, 101, 192);
             var altBg  = new BaseColor(244, 246, 252);
 
-            // ── Header ──────────────────────────────────────────────────────
-            var hdrPara = new Paragraph();
-            hdrPara.Add(new Chunk("IMMUNIZATION RECORD   ", boldMd));
-            hdrPara.Add(new Chunk(dbChild.Name, boldSm));
-            hdrPara.Add(new Chunk("   S/D/W of   " + dbChild.FatherName, normSm));
-            hdrPara.SpacingAfter = 5f;
-            doc.Add(hdrPara);
+            // ── Header: two centred lines ────────────────────────────────────
+            doc.Add(new Paragraph("IMMUNIZATION RECORD", boldMd)
+                { Alignment = Element.ALIGN_CENTER, SpacingAfter = 2f });
+
+            var nameLine = new Paragraph { Alignment = Element.ALIGN_CENTER, SpacingAfter = 8f };
+            nameLine.Add(new Chunk(dbChild.Name, boldSm));
+            nameLine.Add(new Chunk("   S/D/W of   " + (dbChild.FatherName ?? ""), normSm));
+            doc.Add(nameLine);
 
             // ── Hardcoded age-wise template with rowspan ─────────────────────
             // (ageLabel, vaccineText)
@@ -4974,8 +4976,8 @@ int rowCount = 0;
             tbl.SetWidths(new float[] { 16f, 28f, 14f, 10f, 10f, 12f, 10f });
 
             PdfPCell Hdr(string t) => new PdfPCell(
-                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.White)))
-                { BackgroundColor = hBg, Padding = 2, HorizontalAlignment = Element.ALIGN_CENTER };
+                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7f, BaseColor.White)))
+                { BackgroundColor = hBg, Padding = 4, HorizontalAlignment = Element.ALIGN_CENTER };
             tbl.AddCell(Hdr("AGE")); tbl.AddCell(Hdr("VACCINES")); tbl.AddCell(Hdr("GIVEN"));
             tbl.AddCell(Hdr("Wt(kg)")); tbl.AddCell(Hdr("OFC")); tbl.AddCell(Hdr("BRAND")); tbl.AddCell(Hdr("Sign."));
 
@@ -4985,12 +4987,12 @@ int rowCount = 0;
             {
                 var bg = rowIdx3 % 2 == 0 ? BaseColor.White : altBg;
                 PdfPCell C(string v) => new PdfPCell(new Phrase(v, normSm))
-                    { Padding = 2, BackgroundColor = bg };
+                    { Padding = 4, BackgroundColor = bg };
 
                 if (!emittedAge.Contains(row.Age))
                 {
                     var ageCell = new PdfPCell(new Phrase(row.Age, boldSm))
-                        { Padding = 2, BackgroundColor = bg, Rowspan = ageSpan[row.Age],
+                        { Padding = 4, BackgroundColor = bg, Rowspan = ageSpan[row.Age],
                           VerticalAlignment = Element.ALIGN_MIDDLE };
                     tbl.AddCell(ageCell);
                     emittedAge.Add(row.Age);
@@ -5001,7 +5003,7 @@ int rowCount = 0;
                 tbl.AddCell(C("")); tbl.AddCell(C(""));
                 rowIdx3++;
             }
-            tbl.SpacingAfter = 6f;
+            tbl.SpacingAfter = 8f;
             doc.Add(tbl);
 
             AddRecurringVaccinesFooter(doc, normTy, boldSm);

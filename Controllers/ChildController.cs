@@ -4653,9 +4653,19 @@ int rowCount = 0;
             var leftContent = new PdfPTable(2);
             leftContent.SetWidths(new float[] { 32f, 68f });
             leftContent.WidthPercentage = 100;
+            // value column ≈ 68% of half-page minus cell padding on both sides
+            float valColPt = ((doc.PageSize.Width - 36f) * 0.5f - 8f) * 0.68f - 10f;
+            var infoValBf  = BaseFont.CreateFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+            Font FitFont(string text) {
+                float maxSize = 10f;
+                if (string.IsNullOrEmpty(text)) return normSm;
+                float w = infoValBf.GetWidthPoint(text, maxSize);
+                if (w <= valColPt) return normSm;
+                return FontFactory.GetFont(FontFactory.HELVETICA, Math.Max(maxSize * valColPt / w, 6f));
+            }
             void InfoRow(string label, string val) {
                 leftContent.AddCell(new PdfPCell(new Phrase(label, boldSm)) { Border = Rectangle.BOX, Padding = 5 });
-                leftContent.AddCell(new PdfPCell(new Phrase(val ?? "", normSm)) { Border = Rectangle.BOX, Padding = 5 });
+                leftContent.AddCell(new PdfPCell(new Phrase(val ?? "", FitFont(val ?? ""))) { Border = Rectangle.BOX, Padding = 5 });
             }
             InfoRow("Name",     child.Name);
             InfoRow("S/D/W of", child.FatherName ?? "");
@@ -4763,7 +4773,7 @@ int rowCount = 0;
             float disclaimerTop    = disclaimerBottom + 60f;
             var disclaimerCt = new ColumnText(cb);
             disclaimerCt.SetSimpleColumn(lm, disclaimerBottom, pageW - lm, disclaimerTop);
-            disclaimerCt.AddText(new Phrase(
+            disclaimerCt.AddText(new Phrase(9.5f,
                 "Vaccines can cause fever, redness, rashes and pain. Rotarix vaccine can have loose " +
                 "motions and intestinal complications. Pertussis vaccine may cause excessive crying " +
                 "episodes and fits also rarely. This immunization card is valid to produce on demand at " +

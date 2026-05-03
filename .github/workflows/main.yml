@@ -85,3 +85,8 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
           "docker ps | grep vaccineapi-api"
+
+      - name: Prune Docker
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} \
+          "docker system prune -f"

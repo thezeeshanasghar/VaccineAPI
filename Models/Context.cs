@@ -38,6 +38,7 @@ namespace VaccineAPI.Models
         public DbSet<VaccineBrand> VaccineBrands { get; set; }
         public DbSet<StockTransfer> StockTransfers { get; set; }
         public DbSet<DirectSale> DirectSales { get; set; }
+        public DbSet<Supplier> Suppliers { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

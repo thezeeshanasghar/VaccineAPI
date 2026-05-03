@@ -1,6 +1,8 @@
-namespace VaccineAPI.ModelDTO
+using System.Collections.Generic;
+
+namespace VaccineAPI.Models
 {
-    public class SupplierDTO
+    public class Supplier
     {
         public long Id { get; set; }
         public string Name { get; set; } = "";
@@ -12,5 +14,6 @@ namespace VaccineAPI.ModelDTO
         public string? STRN { get; set; }
         public decimal? OpeningBalance { get; set; }
         public bool IsActive { get; set; } = true;
+        public virtual ICollection<Bill> Bills { get; set; } = new HashSet<Bill>();
     }
 }

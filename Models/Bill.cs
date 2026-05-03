@@ -17,6 +17,8 @@ namespace VaccineAPI.Models
         public virtual Doctor Doctor { get; set; } = null!;
         public long ClinicId { get; set; }
         public virtual Clinic Clinic { get; set; } = null!;
+        public long? SupplierId { get; set; }
+        public virtual Supplier? SupplierRef { get; set; }
         public virtual ICollection<Stock> Stocks { get; set; } = new HashSet<Stock>();
     }
 }

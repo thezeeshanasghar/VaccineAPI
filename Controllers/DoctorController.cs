@@ -282,6 +282,7 @@ namespace VaccineAPI.Controllers
             dbDoctor.AllowInventory = doctorDTO.AllowInventory;
             dbDoctor.AllowSupplier  = doctorDTO.AllowSupplier;
             dbDoctor.AllowFinancial = doctorDTO.AllowFinancial;
+            dbDoctor.AllowAgent     = doctorDTO.AllowAgent;
             _db.SaveChanges();
             //  dbDoctor = _mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
             return new Response<DoctorDTO>(true, null, doctorDTO);

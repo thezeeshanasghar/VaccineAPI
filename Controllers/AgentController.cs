@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
+using VaccineAPI.ModelDTO;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
@@ -54,7 +55,8 @@ namespace VaccineAPI.Controllers
         {
             _context.Agents.Add(agent);
             await _context.SaveChangesAsync();
-
+            agent.AgentCode = $"{DateTime.UtcNow.AddHours(5).Year}-{agent.Id}";
+            await _context.SaveChangesAsync();
             return CreatedAtAction("GetAgent", new { id = agent.Id }, agent);
         }
 
@@ -176,6 +178,56 @@ namespace VaccineAPI.Controllers
             var agentsNotInAgentTable = latestAgents.Except(existingAgents);
 
             return agentsNotInAgentTable;
+        }
+
+        // POST: api/Agent/login
+        [HttpPost("login")]
+        public async Task<ActionResult<object>> LoginAgent([FromBody] AgentLoginDTO dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.PhoneNumber) || string.IsNullOrWhiteSpace(dto.Password))
+                return BadRequest(new { IsSuccess = false, Message = "Phone number and password are required." });
+
+            var agent = await _context.Agents
+                .FirstOrDefaultAsync(a => a.PhoneNumber == dto.PhoneNumber && a.Password == dto.Password);
+
+            if (agent == null)
+                return Unauthorized(new { IsSuccess = false, Message = "Invalid phone number or password." });
+
+            return Ok(new
+            {
+                IsSuccess = true,
+                Message = "Login successful.",
+                ResponseData = new
+                {
+                    agent.Id,
+                    agent.Name,
+                    agent.PhoneNumber,
+                    agent.Email,
+                    agent.AgentCode,
+                    agent.ReferralFeePerClient
+                }
+            });
+        }
+
+        // PUT: api/Agent/change-password
+        [HttpPut("change-password")]
+        public async Task<ActionResult<object>> ChangePassword([FromBody] AgentChangePasswordDTO dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.PhoneNumber) || string.IsNullOrWhiteSpace(dto.OldPassword) || string.IsNullOrWhiteSpace(dto.NewPassword))
+                return BadRequest(new { IsSuccess = false, Message = "All fields are required." });
+
+            if (dto.NewPassword.Length < 4)
+                return BadRequest(new { IsSuccess = false, Message = "New password must be at least 4 characters." });
+
+            var agent = await _context.Agents
+                .FirstOrDefaultAsync(a => a.PhoneNumber == dto.PhoneNumber && a.Password == dto.OldPassword);
+
+            if (agent == null)
+                return Unauthorized(new { IsSuccess = false, Message = "Current password is incorrect." });
+
+            agent.Password = dto.NewPassword;
+            await _context.SaveChangesAsync();
+            return Ok(new { IsSuccess = true, Message = "Password changed successfully." });
         }
 
         // PUT: api/Agent/update

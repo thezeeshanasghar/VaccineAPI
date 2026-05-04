@@ -5040,5 +5040,105 @@ int rowCount = 0;
             }
             doc.Add(footTbl);
         }
+
+        // GET: api/Child/agent-search?query=2025-123  OR  query=1234567890123
+        [HttpGet("agent-search")]
+        public ActionResult<object> AgentSearch([FromQuery] string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return BadRequest(new { IsSuccess = false, Message = "Search query is required." });
+
+            query = query.Trim();
+            Child child = null;
+
+            // Try MR number format: YYYY-ID
+            var parts = query.Split('-');
+            if (parts.Length == 2 && int.TryParse(parts[1], out int childId))
+            {
+                child = _db.Childs
+                    .Where(c => c.Type == "Travel" && c.Id == childId)
+                    .FirstOrDefault();
+            }
+
+            // Fallback: search by CNIC / passport
+            if (child == null)
+            {
+                child = _db.Childs
+                    .Where(c => c.Type == "Travel" && c.CNIC == query)
+                    .FirstOrDefault();
+            }
+
+            if (child == null)
+                return NotFound(new { IsSuccess = false, Message = "No travel patient found with the given MR number or CNIC/Passport." });
+
+            var year = DateTime.UtcNow.AddHours(5).Year;
+            return Ok(new
+            {
+                IsSuccess = true,
+                ResponseData = new
+                {
+                    child.Id,
+                    child.Name,
+                    child.FatherName,
+                    child.CNIC,
+                    MrNo = $"{year}-{child.Id}",
+                    VerificationUrl = $"https://myapi.vaccinationcentre.com/api/Child/Travel-PDF-Download/{child.Id}"
+                }
+            });
+        }
+
+        // GET: api/Child/{id}/agent-travel-pdf  — same travel PDF with diagonal VERIFICATION COPY watermark
+        [HttpGet("{id}/agent-travel-pdf")]
+        public IActionResult AgentTravelPdf(int id)
+        {
+            var child = _db.Childs.Where(c => c.Id == id).FirstOrDefault();
+            if (child == null)
+                return NotFound("Patient not found.");
+
+            var sourceStream = CreateTravelPdf(id);
+            if (sourceStream == null)
+                return NotFound("Could not generate certificate.");
+
+            var sourceBytes = sourceStream.ToArray();
+
+            using (var reader = new PdfReader(sourceBytes))
+            using (var outputMs = new MemoryStream())
+            {
+                var stamper = new PdfStamper(reader, outputMs);
+                var bf = BaseFont.CreateFont(BaseFont.HELVETICA_BOLD, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
+
+                for (int p = 1; p <= reader.NumberOfPages; p++)
+                {
+                    var pageSize = reader.GetPageSizeWithRotation(p);
+                    float cx = pageSize.Width / 2f;
+                    float cy = pageSize.Height / 2f;
+
+                    // Font size to span ~2/3 of page diagonally
+                    float fontSize = pageSize.Width * 0.09f;
+
+                    var over = stamper.GetOverContent(p);
+                    over.SaveState();
+
+                    var gs = new PdfGState();
+                    gs.FillOpacity = 0.18f;
+                    gs.StrokeOpacity = 0.18f;
+                    over.SetGState(gs);
+
+                    over.BeginText();
+                    over.SetFontAndSize(bf, fontSize);
+                    over.SetColorFill(new BaseColor(180, 0, 0));
+                    over.ShowTextAligned(Element.ALIGN_CENTER, "VERIFICATION COPY", cx, cy, 45);
+                    over.EndText();
+
+                    over.RestoreState();
+                }
+
+                stamper.Close();
+
+                var fileName = child.Name.Replace(" ", "_") + "_Verification_Copy_" +
+                               DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+                return File(outputMs.ToArray(), "application/pdf", fileName);
+            }
+        }
     }
 }

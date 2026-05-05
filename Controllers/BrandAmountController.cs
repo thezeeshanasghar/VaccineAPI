@@ -56,6 +56,75 @@ namespace VaccineAPI.Controllers
             return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
         }
 
+        [HttpGet("clinic/{clinicId}/batches")]
+        public Response<List<BatchBreakdownDTO>> GetBatchBreakdown(int clinicId)
+        {
+            var brandAmounts = _db.BrandAmounts
+                .Include(x => x.Brand)
+                .Where(b => b.ClinicId == clinicId)
+                .ToList();
+
+            if (!brandAmounts.Any())
+                return new Response<List<BatchBreakdownDTO>>(false, "No brand amounts found", null);
+
+            var actualCountByBrandId = brandAmounts
+                .GroupBy(b => b.BrandId)
+                .ToDictionary(g => g.Key, g => g.Sum(b => b.Count));
+
+            var brandIds = actualCountByBrandId.Keys.ToList();
+
+            var stocks = _db.Stocks
+                .Include(x => x.Brand)
+                .Where(x => brandIds.Contains(x.BrandId) && x.Quantity > 0)
+                .ToList();
+
+            if (!stocks.Any())
+                return new Response<List<BatchBreakdownDTO>>(true, null, new List<BatchBreakdownDTO>());
+
+            var batchGroups = stocks
+                .GroupBy(x => new {
+                    x.BrandId,
+                    BrandName = x.Brand != null ? x.Brand.Name : "Unknown",
+                    BatchLot  = string.IsNullOrWhiteSpace(x.BatchLot) ? "" : x.BatchLot.Trim(),
+                    Expiry    = x.Expiry.HasValue ? x.Expiry.Value.Date : (DateTime?)null
+                })
+                .Select(g => new {
+                    g.Key.BrandId,
+                    g.Key.BrandName,
+                    g.Key.BatchLot,
+                    g.Key.Expiry,
+                    PurchasedQty = g.Sum(x => x.Quantity)
+                })
+                .ToList();
+
+            var totalPurchasedByBrand = batchGroups
+                .GroupBy(x => x.BrandId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.PurchasedQty));
+
+            var result = batchGroups
+                .Select(b => {
+                    int actualTotal    = actualCountByBrandId.ContainsKey(b.BrandId) ? actualCountByBrandId[b.BrandId] : 0;
+                    int purchasedTotal = totalPurchasedByBrand.ContainsKey(b.BrandId) ? totalPurchasedByBrand[b.BrandId] : 0;
+                    int batchQty       = purchasedTotal > 0
+                        ? (int)Math.Round((double)b.PurchasedQty / purchasedTotal * actualTotal)
+                        : 0;
+                    return new BatchBreakdownDTO {
+                        BrandId  = b.BrandId,
+                        BrandName = b.BrandName,
+                        BatchLot = b.BatchLot,
+                        Expiry   = b.Expiry,
+                        Quantity = batchQty
+                    };
+                })
+                .Where(x => x.Quantity > 0)
+                .OrderBy(x => x.BrandName)
+                .ThenBy(x => x.Expiry ?? DateTime.MaxValue)
+                .ThenBy(x => x.BatchLot)
+                .ToList();
+
+            return new Response<List<BatchBreakdownDTO>>(true, null, result);
+        }
+
         // [HttpPost]
         // public async Task<ActionResult<BrandAmount>> Post(BrandAmount BrandAmount)
         // {

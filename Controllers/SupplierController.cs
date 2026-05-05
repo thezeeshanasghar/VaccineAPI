@@ -61,8 +61,6 @@ namespace VaccineAPI.Controllers
             supplier.Phone = dto.Phone != null ? dto.Phone.Trim() : null;
             supplier.Email = dto.Email != null ? dto.Email.Trim() : null;
             supplier.Address = dto.Address != null ? dto.Address.Trim() : null;
-            supplier.NTN = dto.NTN != null ? dto.NTN.Trim() : null;
-            supplier.STRN = dto.STRN != null ? dto.STRN.Trim() : null;
             supplier.OpeningBalance = dto.OpeningBalance;
             supplier.IsActive = dto.IsActive;
             _db.SaveChanges();

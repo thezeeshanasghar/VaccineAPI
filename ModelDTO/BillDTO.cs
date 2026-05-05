@@ -15,6 +15,8 @@ namespace VaccineAPI.ModelDTO
         [Required]
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }
+        public long? SupplierId { get; set; }
+        public decimal? AwtAmount { get; set; }
         public string DoctorName { get; set; } = "";
         public decimal TotalAmount { get; set; }
         public int TotalItems { get; set; }

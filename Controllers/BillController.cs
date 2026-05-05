@@ -225,36 +225,21 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                // Fetch distinct agent names where Agent is not null/empty and matches the given DoctorId
-                var supplierNames = _db
-                    .Bills.Where(c => !string.IsNullOrEmpty(c.Supplier))
-                    .Select(c => c.Supplier)
-                    .Distinct()
+                var supplierNames = _db.Suppliers
+                    .Where(s => s.IsActive)
+                    .OrderBy(s => s.Name)
+                    .Select(s => s.Name)
                     .ToList();
 
                 if (!supplierNames.Any())
-                {
-                    return new Response<IEnumerable<string>>(
-                        false,
-                        "No suppliers found for the specified doctor",
-                        null
-                    );
-                }
+                    return new Response<IEnumerable<string>>(false, "No suppliers found", null);
 
-                return new Response<IEnumerable<string>>(
-                    true,
-                    "suppliers retrieved successfully",
-                    supplierNames
-                );
+                return new Response<IEnumerable<string>>(true, "Suppliers retrieved successfully", supplierNames);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error retrieving suppliers: {ex.Message}");
-                return new Response<IEnumerable<string>>(
-                    false,
-                    "An error occurred while retrieving suppliers",
-                    null
-                );
+                return new Response<IEnumerable<string>>(false, "An error occurred while retrieving suppliers", null);
             }
         }
 

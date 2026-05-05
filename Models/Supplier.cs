@@ -10,8 +10,6 @@ namespace VaccineAPI.Models
         public string? Phone { get; set; }
         public string? Email { get; set; }
         public string? Address { get; set; }
-        public string? NTN { get; set; }
-        public string? STRN { get; set; }
         public decimal? OpeningBalance { get; set; }
         public bool IsActive { get; set; } = true;
         public virtual ICollection<Bill> Bills { get; set; } = new HashSet<Bill>();

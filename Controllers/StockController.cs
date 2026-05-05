@@ -67,6 +67,8 @@ namespace VaccineAPI.Controllers
                 var stock = stocks.First(s => s.Id == dto.Id);
                 dto.BillNo = stock.Bill?.BillNo ?? "";
                 dto.Supplier = stock.Bill?.Supplier ?? "";
+                dto.SupplierId = stock.Bill?.SupplierId;
+                dto.AwtAmount = stock.Bill?.AwtAmount;
                 dto.BillDate = stock.Bill?.BillDate ?? DateTime.MinValue;
                 dto.IsPaid = stock.Bill?.IsPaid ?? false;
                 dto.PaidDate = stock.Bill?.PaidDate ?? DateTime.MinValue;
@@ -289,17 +291,32 @@ namespace VaccineAPI.Controllers
                     return new Response<List<StockDTO>>(false, $"Clinic not found for ClinicId {resolvedClinicId}", null);
                 }
 
+                // Resolve supplier name from master if SupplierId is provided
+                string resolvedSupplierName = firstStock.Supplier?.Trim() ?? "";
+                long? resolvedSupplierId = null;
+                if (firstStock.SupplierId.HasValue && firstStock.SupplierId.Value > 0)
+                {
+                    var supplierEntity = await _db.Suppliers.FindAsync(firstStock.SupplierId.Value);
+                    if (supplierEntity != null)
+                    {
+                        resolvedSupplierId = supplierEntity.Id;
+                        resolvedSupplierName = supplierEntity.Name;
+                    }
+                }
+
                 // Create Bill
                 var bill = new Bill
                 {
                     BillNo = firstStock.BillNo,
-                    Supplier = firstStock.Supplier?.Trim() ?? "",
+                    Supplier = resolvedSupplierName,
+                    SupplierId = resolvedSupplierId,
                     BillDate = firstStock.BillDate != default ? firstStock.BillDate : DateTime.Now,
                     IsPaid = firstStock.IsPaid,
                     DoctorId = firstStock.DoctorId,
                     PaidDate = firstStock.PaidDate,
                     ClinicId = resolvedClinicId,
                     IsPAApprove = firstStock.IsPAApprove,
+                    AwtAmount = firstStock.AwtAmount,
                 };
 
                 _db.Bills.Add(bill);
@@ -617,12 +634,26 @@ namespace VaccineAPI.Controllers
                     if (stock.Bill != null)
                     {
                         stock.Bill.BillNo = stockDTO.BillNo;
-                        stock.Bill.Supplier = stockDTO.Supplier?.Trim() ?? stock.Bill.Supplier;
                         stock.Bill.BillDate = stockDTO.BillDate != default ? stockDTO.BillDate : stock.Bill.BillDate;
                         stock.Bill.IsPaid = stockDTO.IsPaid;
                         stock.Bill.PaidDate = stockDTO.PaidDate != default ? stockDTO.PaidDate : stock.Bill.PaidDate;
                         stock.Bill.DoctorId = stockDTO.DoctorId != default ? stockDTO.DoctorId : stock.Bill.DoctorId;
                         stock.Bill.ClinicId = stockDTO.ClinicId != default ? stockDTO.ClinicId : stock.Bill.ClinicId;
+                        stock.Bill.AwtAmount = stockDTO.AwtAmount ?? stock.Bill.AwtAmount;
+
+                        if (stockDTO.SupplierId.HasValue && stockDTO.SupplierId.Value > 0)
+                        {
+                            var supplierEntity = await _db.Suppliers.FindAsync(stockDTO.SupplierId.Value);
+                            if (supplierEntity != null)
+                            {
+                                stock.Bill.SupplierId = supplierEntity.Id;
+                                stock.Bill.Supplier = supplierEntity.Name;
+                            }
+                        }
+                        else
+                        {
+                            stock.Bill.Supplier = stockDTO.Supplier?.Trim() ?? stock.Bill.Supplier;
+                        }
 
                         _db.Entry(stock.Bill).State = EntityState.Modified;
                     }

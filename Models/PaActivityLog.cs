@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace VaccineAPI.Models
 {
@@ -15,6 +16,7 @@ namespace VaccineAPI.Models
         public bool IsReversal { get; set; }
         public long? ReversalOfLogId { get; set; }
         public DateTime ActionDate { get; set; } = DateTime.UtcNow;
+        [ForeignKey("PaId")]
         public PersonalAssistant PersonalAssistant { get; set; } = null!;
     }
 }

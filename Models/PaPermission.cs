@@ -1,9 +1,12 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace VaccineAPI.Models
 {
     public class PaPermission
     {
         public long Id { get; set; }
         public long PaId { get; set; }
+        [ForeignKey("PaId")]
         public PersonalAssistant PersonalAssistant { get; set; } = null!;
 
         // Patient Management

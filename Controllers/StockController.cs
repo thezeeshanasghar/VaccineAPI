@@ -205,15 +205,36 @@ namespace VaccineAPI.Controllers
 
             var purchasedTotal = stocks.Sum(s => s.Quantity);
 
+            // Load all adjustments that are tied to a specific batch lot for this brand+clinic.
+            // Unbatched adjustments (no BatchLot) are intentionally excluded here — they stay
+            // inside pureCount and get distributed proportionally across batches.
+            var batchedAdjRecords = _db.AdjustStocks
+                .Where(a => a.BrandId == brandId && a.ClinicId == clinicId
+                            && a.BatchLot != null && a.BatchLot != "")
+                .ToList();
+
+            var totalBatchedAdj = batchedAdjRecords.Sum(a => a.Adjustment);
+
+            // Per-batch net adjustment map, keyed by (lot, expiryDate)
+            var batchAdjMap = batchedAdjRecords
+                .GroupBy(a => (Lot: a.BatchLot!.Trim(), a.ExpiryDate))
+                .ToDictionary(g => g.Key, g => g.Sum(a => a.Adjustment));
+
+            // pureCount = inventory count with batch-specific adjustments removed,
+            // so the proportional formula only distributes purchases + unbatched adjustments.
+            var pureCount = Math.Max(0, actualTotal - totalBatchedAdj);
+
             var batches = stocks
                 .GroupBy(s => new { Lot = (s.BatchLot ?? "").Trim(), s.Expiry })
                 .Where(g => !string.IsNullOrWhiteSpace(g.Key.Lot))
                 .Select(g =>
                 {
                     var batchPurchased = g.Sum(s => s.Quantity);
-                    var available = purchasedTotal > 0
-                        ? (int)Math.Round((double)batchPurchased / purchasedTotal * actualTotal)
+                    var proportionalBase = purchasedTotal > 0
+                        ? (int)Math.Round((double)batchPurchased / purchasedTotal * pureCount)
                         : 0;
+                    batchAdjMap.TryGetValue((g.Key.Lot, g.Key.Expiry), out var batchAdj);
+                    var available = Math.Max(0, proportionalBase + batchAdj);
                     return new AvailableBatchDTO
                     {
                         BrandId = brandId,

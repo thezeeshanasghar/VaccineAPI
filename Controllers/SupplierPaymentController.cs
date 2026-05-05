@@ -130,6 +130,13 @@ namespace VaccineAPI.Controllers
                 });
             }
 
+            // Build a set of bill IDs that already have a SupplierPayment record
+            var paidBillIds = new HashSet<int>(
+                payments.Where(p => p.BillId.HasValue).Select(p => p.BillId!.Value)
+            );
+
+            decimal legacyPaidTotal = 0m;
+
             foreach (var bill in bills)
             {
                 var billTotal = bill.Stocks.Sum(s => s.StockAmount * s.Quantity);
@@ -157,6 +164,23 @@ namespace VaccineAPI.Controllers
                         ReferenceId = bill.Id
                     });
                 }
+
+                // Legacy: bill was marked paid via old IsPaid checkbox — no SupplierPayment exists
+                if (bill.IsPaid && !bill.AmountPaid.HasValue && !paidBillIds.Contains(bill.Id))
+                {
+                    decimal legacyCredit = billTotal - (bill.AwtAmount ?? 0m);
+                    legacyPaidTotal += legacyCredit;
+                    entries.Add(new LedgerEntryDTO
+                    {
+                        Date = bill.PaidDate ?? bill.BillDate,
+                        Type = "Payment",
+                        Description = $"Payment — Bill #{bill.BillNo}",
+                        Debit = 0,
+                        Credit = legacyCredit,
+                        Balance = 0,
+                        ReferenceId = bill.Id
+                    });
+                }
             }
 
             foreach (var p in payments)
@@ -173,11 +197,11 @@ namespace VaccineAPI.Controllers
                 });
             }
 
-            // Sort: opening balance first, then chronologically
+            // Sort: opening balance first, then chronologically, AWT always after its bill
             entries = entries
                 .OrderBy(e => e.Type == "OpeningBalance" ? 0 : 1)
                 .ThenBy(e => e.Date)
-                .ThenBy(e => e.Type == "AWT" ? 1 : 0) // AWT immediately after its bill
+                .ThenBy(e => e.Type == "AWT" ? 1 : 0)
                 .ToList();
 
             // Calculate running balance (positive = we owe supplier)
@@ -195,7 +219,7 @@ namespace VaccineAPI.Controllers
 
             var totalBills = bills.Sum(b => b.Stocks.Sum(s => s.StockAmount * s.Quantity));
             var totalAwt = bills.Where(b => b.AwtAmount.HasValue).Sum(b => b.AwtAmount!.Value);
-            var totalPaid = payments.Sum(p => p.Amount);
+            var totalPaid = payments.Sum(p => p.Amount) + legacyPaidTotal;
             var outstanding = openingBalance + totalBills - totalAwt - totalPaid;
 
             var ledger = new SupplierLedgerDTO

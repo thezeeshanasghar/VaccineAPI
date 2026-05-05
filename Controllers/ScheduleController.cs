@@ -1129,19 +1129,95 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpPut("update-bulk-invoice")]
-        public Response<IEnumerable<ScheduleDTO>> updateInvoice(IEnumerable<ScheduleDTO> dsDTOS)
+        public Response<object> updateInvoice([FromBody] BulkInvoiceSubmitDTO dto)
         {
-            foreach (var schedule in dsDTOS)
+            if (dto.PaId.HasValue)
             {
-                var schedulec = _db.Schedules.Where(x => x.Id == schedule.Id).FirstOrDefault();
-                schedulec.Amount = schedule.Amount;
+                var existing = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                    x.ChildId == dto.ChildId &&
+                    x.DoctorId == dto.DoctorId &&
+                    x.InvoiceDate.Date == dto.InvoiceDate.Date);
+
+                if (existing != null)
+                {
+                    if (existing.EditCount >= 1)
+                        return new Response<object>(false, "Invoice has already been edited once. Further changes are not allowed.", null);
+
+                    if (existing.SubmittedAt.Date != DateTime.UtcNow.Date)
+                        return new Response<object>(false, "Invoice can only be edited on the same day it was first submitted.", null);
+
+                    if (existing.PaId != dto.PaId)
+                        return new Response<object>(false, "Only the PA who submitted this invoice can edit it.", null);
+
+                    existing.EditCount++;
+                    existing.ConsultationFee = dto.ConsultationFee;
+                    _db.Entry(existing).State = EntityState.Modified;
+
+                    _db.PaActivityLogs.Add(new PaActivityLog
+                    {
+                        PaId = dto.PaId.Value,
+                        DoctorId = dto.DoctorId,
+                        ClinicId = dto.ClinicId,
+                        PatientId = dto.ChildId,
+                        ActionCode = "InvoiceEdit",
+                        Description = "PA edited invoice prices after first submission",
+                        Notes = "Consultation fee: " + dto.ConsultationFee,
+                        IsReversal = false,
+                        ActionDate = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    _db.InvoiceSubmissions.Add(new InvoiceSubmission
+                    {
+                        ChildId = dto.ChildId,
+                        DoctorId = dto.DoctorId,
+                        PaId = dto.PaId,
+                        ClinicId = dto.ClinicId,
+                        InvoiceDate = dto.InvoiceDate.Date,
+                        SubmittedAt = DateTime.UtcNow,
+                        ConsultationFee = dto.ConsultationFee,
+                        EditCount = 0
+                    });
+
+                    _db.PaActivityLogs.Add(new PaActivityLog
+                    {
+                        PaId = dto.PaId.Value,
+                        DoctorId = dto.DoctorId,
+                        ClinicId = dto.ClinicId,
+                        PatientId = dto.ChildId,
+                        ActionCode = "InvoiceSubmit",
+                        Description = "PA submitted invoice",
+                        Notes = "Consultation fee: " + dto.ConsultationFee,
+                        ActionDate = DateTime.UtcNow
+                    });
+                }
             }
+
+            foreach (var item in dto.Schedules)
+            {
+                var schedulec = _db.Schedules.FirstOrDefault(x => x.Id == item.Id);
+                if (schedulec != null)
+                    schedulec.Amount = item.Amount;
+            }
+
             _db.SaveChanges();
-            return new Response<IEnumerable<ScheduleDTO>>(
-                true,
-                "Invoice updated successfully.",
-                null
-            );
+            return new Response<object>(true, "Invoice updated successfully.", null);
+        }
+
+        [HttpGet("invoice-status")]
+        public ActionResult GetInvoiceStatus([FromQuery] long childId, [FromQuery] long doctorId, [FromQuery] DateTime invoiceDate)
+        {
+            var submission = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                x.ChildId == childId &&
+                x.DoctorId == doctorId &&
+                x.InvoiceDate.Date == invoiceDate.Date);
+
+            if (submission == null)
+                return Ok(new { isSubmitted = false, editCount = 0, canEdit = true, submittedByPaId = (long?)null });
+
+            bool canEdit = submission.EditCount < 1 && submission.SubmittedAt.Date == DateTime.UtcNow.Date;
+            return Ok(new { isSubmitted = true, editCount = submission.EditCount, canEdit, submittedByPaId = submission.PaId });
         }
 
         //date Function

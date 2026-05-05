@@ -32,6 +32,7 @@ namespace VaccineAPI.ModelDTO
         public bool IsInactive { get; set; }
         public long ClinicId { get; set; }
         public bool IsPAApprove { get; set; }
+        public long? AddedByPaId { get; set; }
         [JsonIgnore]
         public ClinicDTO Clinic { get; set; } = null!;
 

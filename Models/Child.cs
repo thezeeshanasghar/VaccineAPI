@@ -34,6 +34,8 @@ namespace VaccineAPI.Models
         public virtual Clinic Clinic { get; set; } = null!;
 
         public long UserId { get; set; }
+        public long? AddedByPaId { get; set; }
+        public DateTime? CreatedAt { get; set; }
         [JsonIgnore]
         public User User { get; set; } = null!;
 

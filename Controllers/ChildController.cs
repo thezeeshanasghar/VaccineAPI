@@ -2107,6 +2107,8 @@ namespace VaccineAPI.Controllers
             {
                 Child childDB = _mapper.Map<Child>(childDTO);
                 childDB.IsPAApprove = childDTO.IsPAApprove;
+                childDB.CreatedAt = DateTime.UtcNow;
+                childDB.AddedByPaId = childDTO.AddedByPaId;
                 User user = _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
                 if (user == null)
                 {
@@ -3350,11 +3352,19 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public Response<string> Delete(int Id, [FromQuery] string userType = null)
+        public Response<string> Delete(int Id, [FromQuery] string userType = null, [FromQuery] long? paId = null)
         {
             if (!string.IsNullOrWhiteSpace(userType) && userType.Equals("PA", StringComparison.OrdinalIgnoreCase))
             {
-                return new Response<string>(false, "Personal Assistant is not allowed to delete patient records.", null);
+                var child = _db.Childs.Find((long)Id);
+                if (child == null)
+                    return new Response<string>(false, "Child not found", null);
+
+                if (child.AddedByPaId == null || child.AddedByPaId != paId)
+                    return new Response<string>(false, "You can only delete patients you added yourself.", null);
+
+                if (child.CreatedAt == null || child.CreatedAt.Value.Date != DateTime.UtcNow.Date)
+                    return new Response<string>(false, "You can only delete a patient on the same day they were added.", null);
             }
 
             var dbChild = _db.Childs.Include(x => x.User)

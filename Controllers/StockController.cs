@@ -375,13 +375,14 @@ namespace VaccineAPI.Controllers
                         ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId
                     );
                     decimal unitPrice = 0;
-                    if (brandAmount == null || brandAmount.PurchasedAmt == 0)
+                    if (brandAmount == null || brandAmount.PurchasedAmt == 0 || brandAmount.Count == 0)
                     {
                         unitPrice = stockDTO.StockAmount;
                     }
                     else
                     {
-                        unitPrice = (brandAmount.PurchasedAmt + stockDTO.StockAmount) / 2;
+                        unitPrice = ((brandAmount.PurchasedAmt * brandAmount.Count) + (stockDTO.StockAmount * stockDTO.Quantity))
+                                    / (brandAmount.Count + stockDTO.Quantity);
                     }
 
                     if (brandAmount != null)

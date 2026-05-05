@@ -69,9 +69,11 @@ namespace VaccineAPI.Controllers
                 dto.Supplier = stock.Bill?.Supplier ?? "";
                 dto.SupplierId = stock.Bill?.SupplierId;
                 dto.AwtAmount = stock.Bill?.AwtAmount;
+                dto.AmountPaid = stock.Bill?.AmountPaid;
+                dto.PaymentMethod = stock.Bill?.PaymentMethod;
                 dto.BillDate = stock.Bill?.BillDate ?? DateTime.MinValue;
                 dto.IsPaid = stock.Bill?.IsPaid ?? false;
-                dto.PaidDate = stock.Bill?.PaidDate ?? DateTime.MinValue;
+                dto.PaidDate = stock.Bill?.PaidDate;
                 dto.DoctorId = stock.Bill?.DoctorId ?? 0;
                 dto.ClinicId = stock.Bill?.ClinicId ?? 0;
             }
@@ -325,16 +327,24 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                // Calculate total upfront to determine payment status
+                decimal totalAmount = stockDTOs.Sum(s => s.StockAmount * s.Quantity);
+                decimal amountPaid = firstStock.AmountPaid ?? 0m;
+                bool isPaid = amountPaid > 0 && amountPaid >= totalAmount;
+                var billDate = firstStock.BillDate != default ? firstStock.BillDate : DateTime.Now;
+
                 // Create Bill
                 var bill = new Bill
                 {
                     BillNo = firstStock.BillNo,
                     Supplier = resolvedSupplierName,
                     SupplierId = resolvedSupplierId,
-                    BillDate = firstStock.BillDate != default ? firstStock.BillDate : DateTime.Now,
-                    IsPaid = firstStock.IsPaid,
+                    BillDate = billDate,
+                    IsPaid = isPaid,
+                    PaidDate = amountPaid > 0 ? billDate : (DateTime?)null,
+                    AmountPaid = amountPaid > 0 ? amountPaid : null,
+                    PaymentMethod = amountPaid > 0 ? firstStock.PaymentMethod : null,
                     DoctorId = firstStock.DoctorId,
-                    PaidDate = firstStock.PaidDate,
                     ClinicId = resolvedClinicId,
                     IsPAApprove = firstStock.IsPAApprove,
                     AwtAmount = firstStock.AwtAmount,
@@ -440,11 +450,26 @@ namespace VaccineAPI.Controllers
                     resultStocks.Add(resultDto);
                 }
 
+                // Auto-create SupplierPayment when amount was paid at time of bill
+                if (amountPaid > 0 && resolvedSupplierId.HasValue)
+                {
+                    _db.SupplierPayments.Add(new SupplierPayment
+                    {
+                        SupplierId = resolvedSupplierId.Value,
+                        ClinicId = resolvedClinicId,
+                        Amount = amountPaid,
+                        PaymentDate = billDate,
+                        PaymentMethod = firstStock.PaymentMethod ?? "Cash",
+                        Notes = $"Paid at time of bill #{bill.BillNo}",
+                        BillId = bill.Id
+                    });
+                    await _db.SaveChangesAsync();
+                }
+
                 await transaction.CommitAsync();
 
-                var message = $"Stocks created successfully. Bill #{bill.BillNo} " +
-                    $"{(bill.IsPaid ? "is paid" : "is pending payment")}. " +
-                    $"Total items: {resultStocks.Count}";
+                string payStatus = amountPaid <= 0 ? "unpaid" : isPaid ? "fully paid" : "partially paid";
+                var message = $"Bill #{bill.BillNo} created — {payStatus}. Total items: {resultStocks.Count}";
 
                 return new Response<List<StockDTO>>(true, message, resultStocks);
             }
@@ -657,8 +682,6 @@ namespace VaccineAPI.Controllers
                     {
                         stock.Bill.BillNo = stockDTO.BillNo;
                         stock.Bill.BillDate = stockDTO.BillDate != default ? stockDTO.BillDate : stock.Bill.BillDate;
-                        stock.Bill.IsPaid = stockDTO.IsPaid;
-                        stock.Bill.PaidDate = stockDTO.PaidDate != default ? stockDTO.PaidDate : stock.Bill.PaidDate;
                         stock.Bill.DoctorId = stockDTO.DoctorId != default ? stockDTO.DoctorId : stock.Bill.DoctorId;
                         stock.Bill.ClinicId = stockDTO.ClinicId != default ? stockDTO.ClinicId : stock.Bill.ClinicId;
                         stock.Bill.AwtAmount = stockDTO.AwtAmount ?? stock.Bill.AwtAmount;
@@ -675,6 +698,59 @@ namespace VaccineAPI.Controllers
                         else
                         {
                             stock.Bill.Supplier = stockDTO.Supplier?.Trim() ?? stock.Bill.Supplier;
+                        }
+
+                        // Recalculate payment status from AmountPaid
+                        if (stockDTO.AmountPaid.HasValue)
+                        {
+                            var allStocks = await _db.Stocks
+                                .Where(s => s.BillId == stock.BillId)
+                                .ToListAsync();
+                            decimal newTotal = allStocks.Sum(s =>
+                                s.Id == stock.Id
+                                    ? stockDTO.StockAmount * stockDTO.Quantity
+                                    : s.StockAmount * s.Quantity);
+
+                            decimal newAmountPaid = stockDTO.AmountPaid.Value;
+                            stock.Bill.AmountPaid = newAmountPaid > 0 ? newAmountPaid : null;
+                            stock.Bill.PaymentMethod = newAmountPaid > 0
+                                ? (stockDTO.PaymentMethod ?? stock.Bill.PaymentMethod)
+                                : null;
+                            stock.Bill.IsPaid = newAmountPaid > 0 && newAmountPaid >= newTotal;
+                            stock.Bill.PaidDate = newAmountPaid > 0 ? stock.Bill.BillDate : null;
+
+                            // Sync the linked SupplierPayment if supplier is set
+                            if (stock.Bill.SupplierId.HasValue)
+                            {
+                                var existingPmt = await _db.SupplierPayments
+                                    .FirstOrDefaultAsync(p => p.BillId == stock.BillId);
+                                if (newAmountPaid > 0)
+                                {
+                                    if (existingPmt != null)
+                                    {
+                                        existingPmt.Amount = newAmountPaid;
+                                        existingPmt.PaymentMethod = stockDTO.PaymentMethod ?? existingPmt.PaymentMethod;
+                                        _db.Entry(existingPmt).State = EntityState.Modified;
+                                    }
+                                    else
+                                    {
+                                        _db.SupplierPayments.Add(new SupplierPayment
+                                        {
+                                            SupplierId = stock.Bill.SupplierId.Value,
+                                            ClinicId = stock.Bill.ClinicId,
+                                            Amount = newAmountPaid,
+                                            PaymentDate = stock.Bill.BillDate,
+                                            PaymentMethod = stockDTO.PaymentMethod ?? "Cash",
+                                            Notes = $"Paid at time of bill #{stock.Bill.BillNo}",
+                                            BillId = stock.Bill.Id
+                                        });
+                                    }
+                                }
+                                else if (existingPmt != null)
+                                {
+                                    _db.SupplierPayments.Remove(existingPmt);
+                                }
+                            }
                         }
 
                         _db.Entry(stock.Bill).State = EntityState.Modified;

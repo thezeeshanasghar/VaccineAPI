@@ -17,11 +17,13 @@ namespace VaccineAPI.ModelDTO
         public DateTime BillDate { get; set; }
         public bool IsPAApprove { get; set; }
         public bool IsPaid { get; set; }
-        public DateTime PaidDate { get; set; }
+        public DateTime? PaidDate { get; set; }
         public long DoctorId { get; set; }
         public string VaccineName { get; set; } = "";
         public long ClinicId { get; set; }
         public long? SupplierId { get; set; }
         public decimal? AwtAmount { get; set; }
+        public decimal? AmountPaid { get; set; }
+        public string? PaymentMethod { get; set; }
     }
 }

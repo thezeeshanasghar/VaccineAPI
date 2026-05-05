@@ -215,11 +215,6 @@ namespace VaccineAPI.Controllers
 
             var totalBatchedAdj = batchedAdjRecords.Sum(a => a.Adjustment);
 
-            // Per-batch net adjustment map, keyed by (lot, expiryDate)
-            var batchAdjMap = batchedAdjRecords
-                .GroupBy(a => (Lot: a.BatchLot!.Trim(), a.ExpiryDate))
-                .ToDictionary(g => g.Key, g => g.Sum(a => a.Adjustment));
-
             // pureCount = inventory count with batch-specific adjustments removed,
             // so the proportional formula only distributes purchases + unbatched adjustments.
             var pureCount = Math.Max(0, actualTotal - totalBatchedAdj);
@@ -233,7 +228,12 @@ namespace VaccineAPI.Controllers
                     var proportionalBase = purchasedTotal > 0
                         ? (int)Math.Round((double)batchPurchased / purchasedTotal * pureCount)
                         : 0;
-                    batchAdjMap.TryGetValue((g.Key.Lot, g.Key.Expiry), out var batchAdj);
+                    // Match adjustments by lot + expiry using a 24-hour tolerance to absorb
+                    // any timezone shift that may have occurred when the browser serialized the date.
+                    var batchAdj = batchedAdjRecords
+                        .Where(a => (a.BatchLot?.Trim() ?? "") == g.Key.Lot
+                                    && AdjustExpiryMatches(a.ExpiryDate, g.Key.Expiry))
+                        .Sum(a => a.Adjustment);
                     var available = Math.Max(0, proportionalBase + batchAdj);
                     return new AvailableBatchDTO
                     {
@@ -767,6 +767,18 @@ namespace VaccineAPI.Controllers
                 }
                 return new Response<List<StockDTO>>(false, errorMessage, null);
             }
+        }
+
+        // Expiry dates are always midnight values. A browser in UTC+5 converts
+        // "2027-02-28T00:00:00" local to "2027-02-27T19:00:00" UTC before sending,
+        // so stored AdjustStock.ExpiryDate may differ from Stock.Expiry by up to ~14 hours.
+        // A 24-hour tolerance safely covers this without risk of matching different expiry dates
+        // (adjacent expiry dates are always >= 24 hours apart).
+        private static bool AdjustExpiryMatches(DateTime? adjExpiry, DateTime? stockExpiry)
+        {
+            if (!adjExpiry.HasValue && !stockExpiry.HasValue) return true;
+            if (!adjExpiry.HasValue || !stockExpiry.HasValue) return false;
+            return Math.Abs((adjExpiry.Value - stockExpiry.Value).TotalHours) < 24;
         }
 
         private bool IsInventoryEnabledForClinic(long clinicId)

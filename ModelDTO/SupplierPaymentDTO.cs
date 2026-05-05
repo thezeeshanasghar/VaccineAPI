@@ -12,7 +12,7 @@ namespace VaccineAPI.ModelDTO
         public DateTime PaymentDate { get; set; }
         public string PaymentMethod { get; set; } = "Cash";
         public string? Notes { get; set; }
-        public long? BillId { get; set; }
+        public int? BillId { get; set; }
         public string? BillNo { get; set; }
     }
 }

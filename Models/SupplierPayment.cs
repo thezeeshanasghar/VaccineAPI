@@ -13,7 +13,7 @@ namespace VaccineAPI.Models
         public DateTime PaymentDate { get; set; }
         public string PaymentMethod { get; set; } = "Cash"; // Cash | Online Transfer | Partial
         public string? Notes { get; set; }
-        public long? BillId { get; set; }
+        public int? BillId { get; set; }
         public virtual Bill? Bill { get; set; }
     }
 }

@@ -118,7 +118,6 @@ namespace VaccineAPI.Controllers
                     var brandAmount = await _db.BrandAmounts
                         .Include(b => b.Brand)
                         .FirstOrDefaultAsync(b => b.BrandId == dto.BrandId
-                                               && b.DoctorId == dto.DoctorId
                                                && b.ClinicId == dto.ClinicId);
 
                     if (brandAmount == null)

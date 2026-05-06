@@ -2500,59 +2500,76 @@ namespace VaccineAPI.Controllers
                 var address = clinic.Address ?? "Unknown Address";
                 var phoneNumber = clinic.PhoneNumber ?? "Unknown Phone Number";
 
-                var schedules = _db
-                    .Schedules.Include(s => s.Child)
-                    .ThenInclude(c => c.Clinic)
-                    .ThenInclude(clinic => clinic.Doctor)
-                    .Include(s => s.Dose)
-                    .ThenInclude(d => d.Vaccine)
-                    .Include(s => s.Brand)
+                var nextDay = parsedToDate.Date.AddDays(1);
+
+                var rawSchedules = _db.Schedules
                     .Where(s =>
                         s.Child.ClinicId == clinicId
                         && s.GivenDate.HasValue
-                        && s.GivenDate.Value.Date >= parsedFromDate.Date
-                        && s.GivenDate.Value.Date <= parsedToDate.Date
+                        && s.GivenDate.Value >= parsedFromDate.Date
+                        && s.GivenDate.Value < nextDay
                         && s.IsDone == true
                     )
                     .Select(s => new
                     {
-                        s.Child.Id,
-                        s.Child.Name,
+                        Id = s.Child.Id,
+                        Name = s.Child.Name,
+                        ChildId = s.ChildId,
                         s.DoseId,
                         VaccineName = s.Dose.Vaccine.Name,
                         DoseName = s.Dose.Name,
                         GivenDate = s.GivenDate.Value,
                         DoctorName = s.Child.Clinic.Doctor.DisplayName,
-                        InvoicePrice = _db.Invoices.Where(i =>
-                                i.ChildId == s.ChildId
-                                && i.DoctorId == s.Child.Clinic.DoctorId
-                                && i.ClinicId == s.Child.ClinicId
-                                && i.DoseId == s.DoseId
-                            )
-                            .Select(i => (decimal?)i.Amount)
-                            .FirstOrDefault() ?? 0m,
-                        ConsultationFee = _db.Fee.Where(f =>
-                                f.InvoiceId
-                                == _db.Invoices.Where(i =>
-                                        i.ChildId == s.ChildId
-                                        && i.DoctorId == s.Child.Clinic.DoctorId
-                                        && i.ClinicId == s.Child.ClinicId
-                                        && i.DoseId == s.DoseId
-                                    )
-                                    .Select(i => i.InvoiceId)
-                                    .FirstOrDefault()
-                            )
-                            .Select(f => (decimal?)f.Amount)
-                            .FirstOrDefault() ?? 0m,
                         BrandName = s.Brand.Name ?? "Unknown Brand",
                     })
                     .OrderBy(s => s.GivenDate)
                     .ToList();
 
-                if (!schedules.Any())
+                if (!rawSchedules.Any())
                 {
                     return NotFound("No data found for the specified clinic and date range.");
                 }
+
+                var childIds = rawSchedules.Select(s => s.ChildId).Distinct().ToList();
+                var doseIds = rawSchedules.Select(s => s.DoseId).Distinct().ToList();
+
+                var invoiceMap = _db.Invoices
+                    .Where(i =>
+                        childIds.Contains(i.ChildId)
+                        && i.ClinicId == clinicId
+                        && doseIds.Contains(i.DoseId)
+                    )
+                    .Select(i => new { i.InvoiceId, i.ChildId, i.DoseId, i.Amount })
+                    .ToList()
+                    .GroupBy(i => (i.ChildId, i.DoseId))
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                var invoiceIds = invoiceMap.Values.Select(i => i.InvoiceId).ToList();
+
+                var feeMap = _db.Fee
+                    .Where(f => invoiceIds.Contains(f.InvoiceId))
+                    .Select(f => new { f.InvoiceId, f.Amount })
+                    .ToList()
+                    .ToDictionary(f => f.InvoiceId, f => (decimal)f.Amount);
+
+                var schedules = rawSchedules.Select(s =>
+                {
+                    invoiceMap.TryGetValue((s.ChildId, s.DoseId), out var invoice);
+                    var feeAmt = invoice != null && feeMap.TryGetValue(invoice.InvoiceId, out var fa) ? fa : 0m;
+                    return new
+                    {
+                        s.Id,
+                        s.Name,
+                        s.DoseId,
+                        s.VaccineName,
+                        s.DoseName,
+                        s.GivenDate,
+                        s.DoctorName,
+                        InvoicePrice = invoice?.Amount ?? 0m,
+                        ConsultationFee = feeAmt,
+                        s.BrandName,
+                    };
+                }).ToList();
 
                 var groupedSchedules = schedules
                     .GroupBy(s => new { s.Id, s.Name })

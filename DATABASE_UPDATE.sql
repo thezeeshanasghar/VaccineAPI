@@ -64,3 +64,11 @@ ALTER TABLE `schedules`
 ADD COLUMN `DoneAt` datetime NULL;
 
 -- Rollback: ALTER TABLE `schedules` DROP COLUMN `DoneAt`;
+
+-- =====================================================
+-- Add IsPAApprove Column to Schedules Table
+-- =====================================================
+ALTER TABLE `schedules`
+ADD COLUMN `IsPAApprove` tinyint(1) NOT NULL DEFAULT 0;
+
+-- Rollback: ALTER TABLE `schedules` DROP COLUMN `IsPAApprove`;

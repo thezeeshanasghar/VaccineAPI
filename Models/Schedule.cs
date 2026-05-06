@@ -19,6 +19,7 @@ namespace VaccineAPI.Models
         public bool Due2EPI { get; set; }
         public string DiseaseYear { get; set; } = "";
         public DateTime? GivenDate { get; set; }
+        public DateTime? DoneAt { get; set; }
         public long? BrandId { get; set; }
         public virtual Brand Brand { get; set; } = null!;
         public decimal? Amount { get; set; }

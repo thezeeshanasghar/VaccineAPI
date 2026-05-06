@@ -239,6 +239,7 @@ namespace VaccineAPI.Controllers
 
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
+                    dbSchedule.DoneAt = null;
                     dbSchedule.BrandId = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
 
@@ -353,6 +354,7 @@ namespace VaccineAPI.Controllers
                         dbSchedule.Circle = scheduleDTO.Circle;
                         dbSchedule.IsDone = scheduleDTO.IsDone;
                         dbSchedule.GivenDate = scheduleDTO.GivenDate;
+                        dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
                         dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                         dbSchedule.IsDisease = scheduleDTO.IsDisease;
                         var stockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
@@ -456,6 +458,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Circle = scheduleDTO.Circle;
                 dbSchedule.IsDone = scheduleDTO.IsDone;
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
+                dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                 dbSchedule.IsDisease = scheduleDTO.IsDisease;
                 var onlineStockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
@@ -1021,6 +1024,7 @@ namespace VaccineAPI.Controllers
                 schedule.Circle =(scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
                 schedule.IsDone = scheduleDTO.IsDone;
                 schedule.GivenDate = scheduleDTO.GivenDate.Date;
+                schedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
                 schedule.IsPAApprove= scheduleDTO.IsPAApprove;
 
                 if (scheduleDTO.ScheduleBrands.Count > 0)

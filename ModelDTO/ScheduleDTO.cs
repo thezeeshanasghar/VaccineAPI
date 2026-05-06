@@ -38,6 +38,7 @@ namespace VaccineAPI.ModelDTO
         public long DoctorId { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public System.DateTime GivenDate { get; set; }
+        public DateTime? DoneAt { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime FromDate { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]

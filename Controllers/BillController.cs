@@ -382,9 +382,20 @@ namespace VaccineAPI.Controllers
                     .Schedules.Where(s =>
                         s.BrandId == brandId
                         && s.GivenDate >= parsedFromDate
-                        && s.GivenDate <= today 
+                        && s.GivenDate <= today
                         && s.Child.ClinicId == clinicId)
                     .ToList();
+
+                var directSaleGroups = _db.DirectSales
+                    .Where(ds =>
+                        ds.BrandId == brandId
+                        && ds.ClinicId == clinicId
+                        && ds.SaleDate >= parsedFromDate
+                        && ds.SaleDate <= today
+                    )
+                    .AsEnumerable()
+                    .GroupBy(ds => ds.SaleDate.Date)
+                    .ToDictionary(g => g.Key, g => g.Sum(ds => ds.Quantity));
 
                 var stockPurchases = _db
                     .Stocks.Join(
@@ -429,23 +440,26 @@ namespace VaccineAPI.Controllers
                 int totalVaccinesFromFirstDate = schedules
                     .Where(s => s.GivenDate >= parsedFromDate && s.GivenDate <= today)
                     .Count();
-                
+
+                int totalDirectSalesFromFirstDate = directSaleGroups.Sum(kvp => kvp.Value);
+
                 int totalPurchasesFromFirstDate = stockPurchases
                     .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
                     .Sum(kvp => kvp.Value);
-                
+
                 int totalAdjustmentsFromFirstDate = stockAdjustments
                     .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
                     .Sum(kvp => kvp.Value);
-                
+
                 // Calculate initial opening stock for the first date in range
-                int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
+                int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate + totalDirectSalesFromFirstDate - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
 
                 var reportData =
                     new List<(
                         DateTime Date,
                         int OpeningStock,
                         int VaccinesDone,
+                        int DirectSaleQty,
                         int StockPurchased,
                         int StockAdjusted,
                         int StockInHand
@@ -458,6 +472,9 @@ namespace VaccineAPI.Controllers
                     int vaccinesDoneToday = vaccineGroups.ContainsKey(date)
                         ? vaccineGroups[date]
                         : 0;
+                    int directSaleTodayQty = directSaleGroups.ContainsKey(date.Date)
+                        ? directSaleGroups[date.Date]
+                        : 0;
                     int stockPurchasedToday = stockPurchases.ContainsKey(date)
                         ? stockPurchases[date]
                         : 0;
@@ -466,13 +483,14 @@ namespace VaccineAPI.Controllers
                         : 0;
 
                     int openingStock = currentStock;
-                    int stockInHand = openingStock - vaccinesDoneToday + stockPurchasedToday + stockAdjustedToday;
+                    int stockInHand = openingStock - vaccinesDoneToday - directSaleTodayQty + stockPurchasedToday + stockAdjustedToday;
 
                     reportData.Add(
                         (
                             date,
                             openingStock,
                             vaccinesDoneToday,
+                            directSaleTodayQty,
                             stockPurchasedToday,
                             stockAdjustedToday,
                             stockInHand
@@ -567,14 +585,15 @@ namespace VaccineAPI.Controllers
                             SpacingAfter = 10f,
                         }
                     );
-                    PdfPTable table = new PdfPTable(6) { WidthPercentage = 100 };
-                    table.SetWidths(new float[] { 2f, 2f, 2f, 2f, 2f, 2f });
+                    PdfPTable table = new PdfPTable(7) { WidthPercentage = 100 };
+                    table.SetWidths(new float[] { 2f, 2f, 2f, 2f, 2f, 2f, 2f });
 
                     string[] headers =
                     {
                         "Date",
                         "Opening Stock",
                         "Sold",
+                        "Direct Sale",
                         "Purchased",
                         "Adjusted",
                         "Stock In Hand",
@@ -620,6 +639,12 @@ namespace VaccineAPI.Controllers
                             }
                         );
                         table.AddCell(
+                            new PdfPCell(new Phrase(row.DirectSaleQty.ToString(), normalFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                            }
+                        );
+                        table.AddCell(
                             new PdfPCell(new Phrase(row.StockPurchased.ToString(), normalFont))
                             {
                                 HorizontalAlignment = Element.ALIGN_CENTER,
@@ -638,10 +663,10 @@ namespace VaccineAPI.Controllers
                             }
                         );
                     }
-                    
+
                     // Filter to only rows that were displayed (have activity)
                     var displayedRows = reportData
-                        .Where(r => r.VaccinesDone != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
+                        .Where(r => r.VaccinesDone != 0 || r.DirectSaleQty != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
                         .ToList();
 
                     // Check if there's any data to display
@@ -653,58 +678,54 @@ namespace VaccineAPI.Controllers
                     if (displayedRows.Any())
                     {
                         int totalSold = displayedRows.Sum(r => r.VaccinesDone);
+                        int totalDirectSale = displayedRows.Sum(r => r.DirectSaleQty);
                         int totalPurchased = displayedRows.Sum(r => r.StockPurchased);
                         int totalAdjusted = displayedRows.Sum(r => r.StockAdjusted);
                         int totalOpeningStock = displayedRows.First().OpeningStock;
                         int totalStockInHand = displayedRows.Last().StockInHand;
 
-                        PdfPCell totalDateCell = new PdfPCell(new Phrase("Totals", boldFont))
+                        table.AddCell(new PdfPCell(new Phrase("Totals", boldFont))
                         {
                             HorizontalAlignment = Element.ALIGN_CENTER,
                             BackgroundColor = BaseColor.LightGray,
                             Padding = 5
-                        };
-                        table.AddCell(totalDateCell);
-
-                        PdfPCell totalOpeningStockCell = new PdfPCell(new Phrase(totalOpeningStock.ToString(), boldFont))
+                        });
+                        table.AddCell(new PdfPCell(new Phrase(totalOpeningStock.ToString(), boldFont))
                         {
                             HorizontalAlignment = Element.ALIGN_CENTER,
                             BackgroundColor = BaseColor.LightGray,
                             Padding = 5
-                        };
-                        table.AddCell(totalOpeningStockCell);
-
-                        PdfPCell totalSoldCell = new PdfPCell(new Phrase(totalSold.ToString(), boldFont))
+                        });
+                        table.AddCell(new PdfPCell(new Phrase(totalSold.ToString(), boldFont))
                         {
                             HorizontalAlignment = Element.ALIGN_CENTER,
                             BackgroundColor = BaseColor.LightGray,
                             Padding = 5
-                        };
-                        table.AddCell(totalSoldCell);
-
-                        PdfPCell totalPurchasedCell = new PdfPCell(new Phrase(totalPurchased.ToString(), boldFont))
+                        });
+                        table.AddCell(new PdfPCell(new Phrase(totalDirectSale.ToString(), boldFont))
                         {
                             HorizontalAlignment = Element.ALIGN_CENTER,
                             BackgroundColor = BaseColor.LightGray,
                             Padding = 5
-                        };
-                        table.AddCell(totalPurchasedCell);
-
-                        PdfPCell totalAdjustedCell = new PdfPCell(new Phrase(totalAdjusted.ToString(), boldFont))
+                        });
+                        table.AddCell(new PdfPCell(new Phrase(totalPurchased.ToString(), boldFont))
                         {
                             HorizontalAlignment = Element.ALIGN_CENTER,
                             BackgroundColor = BaseColor.LightGray,
                             Padding = 5
-                        };
-                        table.AddCell(totalAdjustedCell);
-
-                        PdfPCell totalStockInHandCell = new PdfPCell(new Phrase(totalStockInHand.ToString(), boldFont))
+                        });
+                        table.AddCell(new PdfPCell(new Phrase(totalAdjusted.ToString(), boldFont))
                         {
                             HorizontalAlignment = Element.ALIGN_CENTER,
                             BackgroundColor = BaseColor.LightGray,
                             Padding = 5
-                        };
-                        table.AddCell(totalStockInHandCell);
+                        });
+                        table.AddCell(new PdfPCell(new Phrase(totalStockInHand.ToString(), boldFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            BackgroundColor = BaseColor.LightGray,
+                            Padding = 5
+                        });
                     }
                   
                     document.Add(table);
@@ -830,9 +851,9 @@ namespace VaccineAPI.Controllers
                         }
                     );
 
-                    // Create table with 7 columns (Brand Name + 6 existing columns)
-                    PdfPTable table = new PdfPTable(7) { WidthPercentage = 100 };
-                    table.SetWidths(new float[] { 3f, 2f, 2f, 2f, 2f, 2f, 2f });
+                    // Create table with 8 columns (Brand Name + 7 data columns)
+                    PdfPTable table = new PdfPTable(8) { WidthPercentage = 100 };
+                    table.SetWidths(new float[] { 3f, 2f, 2f, 2f, 2f, 2f, 2f, 2f });
 
                     string[] headers =
                     {
@@ -840,6 +861,7 @@ namespace VaccineAPI.Controllers
                         "Date",
                         "Opening Stock",
                         "Sold",
+                        "Direct Sale",
                         "Purchased",
                         "Adjusted",
                         "Stock In Hand",
@@ -857,6 +879,7 @@ namespace VaccineAPI.Controllers
                     }
 
                     int grandTotalSold = 0;
+                    int grandTotalDirectSale = 0;
                     int grandTotalPurchased = 0;
                     int grandTotalAdjusted = 0;
                     int grandTotalOpeningStock = 0;
@@ -877,6 +900,17 @@ namespace VaccineAPI.Controllers
                                 && s.GivenDate <= today
                                 && s.Child.ClinicId == clinicId)
                             .ToList();
+
+                        var directSaleGroups = _db.DirectSales
+                            .Where(ds =>
+                                ds.BrandId == brandId
+                                && ds.ClinicId == clinicId
+                                && ds.SaleDate >= parsedFromDate
+                                && ds.SaleDate <= today
+                            )
+                            .AsEnumerable()
+                            .GroupBy(ds => ds.SaleDate.Date)
+                            .ToDictionary(g => g.Key, g => g.Sum(ds => ds.Quantity));
 
                         var stockPurchases = _db
                             .Stocks.Join(
@@ -921,6 +955,8 @@ namespace VaccineAPI.Controllers
                             .Where(s => s.GivenDate >= parsedFromDate && s.GivenDate <= today)
                             .Count();
 
+                        int totalDirectSalesFromFirstDate = directSaleGroups.Sum(kvp => kvp.Value);
+
                         int totalPurchasesFromFirstDate = stockPurchases
                             .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
                             .Sum(kvp => kvp.Value);
@@ -929,13 +965,14 @@ namespace VaccineAPI.Controllers
                             .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
                             .Sum(kvp => kvp.Value);
 
-                        int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate 
+                        int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate + totalDirectSalesFromFirstDate
                             - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
 
                         var reportData = new List<(
                             DateTime Date,
                             int OpeningStock,
                             int VaccinesDone,
+                            int DirectSaleQty,
                             int StockPurchased,
                             int StockAdjusted,
                             int StockInHand
@@ -948,6 +985,9 @@ namespace VaccineAPI.Controllers
                             int vaccinesDoneToday = vaccineGroups.ContainsKey(date)
                                 ? vaccineGroups[date]
                                 : 0;
+                            int directSaleTodayQty = directSaleGroups.ContainsKey(date.Date)
+                                ? directSaleGroups[date.Date]
+                                : 0;
                             int stockPurchasedToday = stockPurchases.ContainsKey(date)
                                 ? stockPurchases[date]
                                 : 0;
@@ -956,13 +996,14 @@ namespace VaccineAPI.Controllers
                                 : 0;
 
                             int openingStock = currentStock;
-                            int stockInHand = openingStock - vaccinesDoneToday + stockPurchasedToday + stockAdjustedToday;
+                            int stockInHand = openingStock - vaccinesDoneToday - directSaleTodayQty + stockPurchasedToday + stockAdjustedToday;
 
                             reportData.Add(
                                 (
                                     date,
                                     openingStock,
                                     vaccinesDoneToday,
+                                    directSaleTodayQty,
                                     stockPurchasedToday,
                                     stockAdjustedToday,
                                     stockInHand
@@ -974,7 +1015,7 @@ namespace VaccineAPI.Controllers
 
                         // Filter to only rows with activity
                         var displayedRows = reportData
-                            .Where(r => r.VaccinesDone != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
+                            .Where(r => r.VaccinesDone != 0 || r.DirectSaleQty != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
                             .ToList();
 
                         if (displayedRows.Any())
@@ -1017,6 +1058,12 @@ namespace VaccineAPI.Controllers
                                     }
                                 );
                                 table.AddCell(
+                                    new PdfPCell(new Phrase(row.DirectSaleQty.ToString(), normalFont))
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_CENTER,
+                                    }
+                                );
+                                table.AddCell(
                                     new PdfPCell(new Phrase(row.StockPurchased.ToString(), normalFont))
                                     {
                                         HorizontalAlignment = Element.ALIGN_CENTER,
@@ -1038,12 +1085,14 @@ namespace VaccineAPI.Controllers
 
                             // Add brand totals
                             int brandTotalSold = displayedRows.Sum(r => r.VaccinesDone);
+                            int brandTotalDirectSale = displayedRows.Sum(r => r.DirectSaleQty);
                             int brandTotalPurchased = displayedRows.Sum(r => r.StockPurchased);
                             int brandTotalAdjusted = displayedRows.Sum(r => r.StockAdjusted);
                             int brandOpeningStock = displayedRows.First().OpeningStock;
                             int brandClosingStock = displayedRows.Last().StockInHand;
 
                             grandTotalSold += brandTotalSold;
+                            grandTotalDirectSale += brandTotalDirectSale;
                             grandTotalPurchased += brandTotalPurchased;
                             grandTotalAdjusted += brandTotalAdjusted;
 
@@ -1051,15 +1100,13 @@ namespace VaccineAPI.Controllers
                             grandTotalClosingStock += brandClosingStock;
 
                             // Brand subtotal row
-                            PdfPCell subtotalCell = new PdfPCell(new Phrase($"Subtotal: {brandName}", boldFont))
+                            table.AddCell(new PdfPCell(new Phrase($"Subtotal: {brandName}", boldFont))
                             {
                                 Colspan = 2,
                                 HorizontalAlignment = Element.ALIGN_RIGHT,
                                 BackgroundColor = new BaseColor(240, 240, 240),
                                 Padding = 5
-                            };
-                            table.AddCell(subtotalCell);
-
+                            });
                             table.AddCell(new PdfPCell(new Phrase(brandOpeningStock.ToString(), boldFont))
                             {
                                 HorizontalAlignment = Element.ALIGN_CENTER,
@@ -1067,6 +1114,12 @@ namespace VaccineAPI.Controllers
                                 Padding = 5
                             });
                             table.AddCell(new PdfPCell(new Phrase(brandTotalSold.ToString(), boldFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                                BackgroundColor = new BaseColor(240, 240, 240),
+                                Padding = 5
+                            });
+                            table.AddCell(new PdfPCell(new Phrase(brandTotalDirectSale.ToString(), boldFont))
                             {
                                 HorizontalAlignment = Element.ALIGN_CENTER,
                                 BackgroundColor = new BaseColor(240, 240, 240),
@@ -1115,6 +1168,12 @@ namespace VaccineAPI.Controllers
                         Padding = 5
                     });
                     table.AddCell(new PdfPCell(new Phrase(grandTotalSold.ToString(), boldFont))
+                    {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        BackgroundColor = BaseColor.LightGray,
+                        Padding = 5
+                    });
+                    table.AddCell(new PdfPCell(new Phrase(grandTotalDirectSale.ToString(), boldFont))
                     {
                         HorizontalAlignment = Element.ALIGN_CENTER,
                         BackgroundColor = BaseColor.LightGray,

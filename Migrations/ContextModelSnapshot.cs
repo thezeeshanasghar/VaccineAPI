@@ -626,6 +626,9 @@ namespace VaccineAPI.Migrations
                     b.Property<DateTime?>("GivenDate")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<DateTime?>("DoneAt")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<float?>("Height")
                         .HasColumnType("float");
 

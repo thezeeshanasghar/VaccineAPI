@@ -53,3 +53,14 @@ ALTER TABLE `doctors`
 ADD COLUMN `AllowFinancial` tinyint(1) NOT NULL DEFAULT 0;
 
 -- Rollback: ALTER TABLE `doctors` DROP COLUMN `AllowFinancial`;
+
+-- =====================================================
+-- Add DoneAt Column to Schedules Table
+-- =====================================================
+-- Tracks the exact UTC timestamp when a vaccine was marked as given.
+-- Used so PA users can only unfill vaccines they administered today.
+-- =====================================================
+ALTER TABLE `schedules`
+ADD COLUMN `DoneAt` datetime NULL;
+
+-- Rollback: ALTER TABLE `schedules` DROP COLUMN `DoneAt`;

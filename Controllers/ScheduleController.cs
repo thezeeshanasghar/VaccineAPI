@@ -2525,7 +2525,25 @@ namespace VaccineAPI.Controllers
                     .OrderBy(s => s.GivenDate)
                     .ToList();
 
-                if (!rawSchedules.Any())
+                // Query direct sales early so we can check before returning NotFound
+                var directSales = _db.DirectSales
+                    .Where(ds =>
+                        ds.ClinicId == clinicId
+                        && ds.SaleDate >= parsedFromDate.Date
+                        && ds.SaleDate < nextDay
+                    )
+                    .Select(ds => new
+                    {
+                        ds.SaleDate,
+                        ClientName = ds.ClientName ?? "Direct Sale",
+                        BrandName = ds.Brand.Name ?? "Unknown",
+                        ds.Quantity,
+                        ds.TotalSaleValue,
+                    })
+                    .OrderBy(ds => ds.SaleDate)
+                    .ToList();
+
+                if (!rawSchedules.Any() && !directSales.Any())
                 {
                     return NotFound("No data found for the specified clinic and date range.");
                 }
@@ -2578,23 +2596,6 @@ namespace VaccineAPI.Controllers
                         Patient = patientGroup.Key,
                         Dates = patientGroup.GroupBy(s => s.GivenDate.Date),
                     });
-
-                var directSales = _db.DirectSales
-                    .Where(ds =>
-                        ds.ClinicId == clinicId
-                        && ds.SaleDate >= parsedFromDate.Date
-                        && ds.SaleDate < nextDay
-                    )
-                    .Select(ds => new
-                    {
-                        ds.SaleDate,
-                        ClientName = ds.ClientName ?? "Direct Sale",
-                        BrandName = ds.Brand.Name ?? "Unknown",
-                        ds.Quantity,
-                        ds.TotalSaleValue,
-                    })
-                    .OrderBy(ds => ds.SaleDate)
-                    .ToList();
 
                 using (MemoryStream ms = new MemoryStream())
                 {

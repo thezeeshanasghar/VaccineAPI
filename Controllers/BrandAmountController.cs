@@ -71,11 +71,13 @@ namespace VaccineAPI.Controllers
                 .GroupBy(b => b.BrandId)
                 .ToDictionary(g => g.Key, g => g.Sum(b => b.Count));
 
-            var brandIds = actualCountByBrandId.Keys.ToList();
-
+            // Filter stocks by Bill.ClinicId (same as expiry PDF) so only this clinic's
+            // purchased stock is used — avoids pulling in lots from other clinics that
+            // share the same BrandId.
             var stocks = _db.Stocks
                 .Include(x => x.Brand)
-                .Where(x => brandIds.Contains(x.BrandId) && x.Quantity > 0)
+                .Include(x => x.Bill)
+                .Where(x => x.Bill != null && x.Bill.ClinicId == clinicId && x.Quantity > 0)
                 .ToList();
 
             if (!stocks.Any())

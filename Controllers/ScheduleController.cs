@@ -2579,6 +2579,23 @@ namespace VaccineAPI.Controllers
                         Dates = patientGroup.GroupBy(s => s.GivenDate.Date),
                     });
 
+                var directSales = _db.DirectSales
+                    .Where(ds =>
+                        ds.ClinicId == clinicId
+                        && ds.SaleDate >= parsedFromDate.Date
+                        && ds.SaleDate < nextDay
+                    )
+                    .Select(ds => new
+                    {
+                        ds.SaleDate,
+                        ClientName = ds.ClientName ?? "Direct Sale",
+                        BrandName = ds.Brand.Name ?? "Unknown",
+                        ds.Quantity,
+                        ds.TotalSaleValue,
+                    })
+                    .OrderBy(ds => ds.SaleDate)
+                    .ToList();
+
                 using (MemoryStream ms = new MemoryStream())
                 {
                     Document document = new Document(PageSize.A4, 25, 25, 30, 30);
@@ -2792,13 +2809,54 @@ namespace VaccineAPI.Controllers
                     }
 
 
+                    // Direct sale rows
+                    decimal totalDirectSalesValue = 0m;
+                    if (directSales.Any())
+                    {
+                        var directSalesByDate = directSales.GroupBy(ds => ds.SaleDate.Date);
+                        foreach (var dateGroup in directSalesByDate)
+                        {
+                            bool isFirstInDate = true;
+                            foreach (var ds in dateGroup)
+                            {
+                                if (isFirstInDate)
+                                {
+                                    table.AddCell(new PdfPCell(new Phrase(ds.SaleDate.ToString("dd-MM-yyyy"), normalFont)) { HorizontalAlignment = Element.ALIGN_LEFT });
+                                    table.AddCell(new PdfPCell(new Phrase("Direct Sale", headerFont)) { HorizontalAlignment = Element.ALIGN_LEFT });
+                                    table.AddCell(new PdfPCell(new Phrase("", normalFont)) { HorizontalAlignment = Element.ALIGN_RIGHT });
+                                    isFirstInDate = false;
+                                }
+                                else
+                                {
+                                    table.AddCell(new PdfPCell(new Phrase("", normalFont)) { HorizontalAlignment = Element.ALIGN_LEFT });
+                                    table.AddCell(new PdfPCell(new Phrase("", normalFont)) { HorizontalAlignment = Element.ALIGN_LEFT });
+                                    table.AddCell(new PdfPCell(new Phrase("", normalFont)) { HorizontalAlignment = Element.ALIGN_RIGHT });
+                                }
+                                table.AddCell(new PdfPCell(new Phrase(ds.BrandName, normalFont)) { HorizontalAlignment = Element.ALIGN_LEFT });
+                                table.AddCell(new PdfPCell(new Phrase(ds.Quantity.ToString(), normalFont)) { HorizontalAlignment = Element.ALIGN_RIGHT });
+                                table.AddCell(new PdfPCell(new Phrase($"₹{ds.TotalSaleValue:N2}", normalFont)) { HorizontalAlignment = Element.ALIGN_RIGHT });
+                            }
+
+                            decimal dateTotalSales = dateGroup.Sum(ds => ds.TotalSaleValue);
+                            totalDirectSalesValue += dateTotalSales;
+                            table.AddCell(new PdfPCell(new Phrase($"Total for Direct Sales ({dateGroup.Key:dd-MM-yyyy}): ₹{dateTotalSales:N2}", headerFont))
+                            {
+                                Colspan = 6,
+                                HorizontalAlignment = Element.ALIGN_RIGHT,
+                                Padding = 6,
+                            });
+                        }
+                    }
+
                     document.Add(table);
 
+                    decimal totalItemsPrice = schedules.Sum(s => s.InvoicePrice) + totalDirectSalesValue;
                     Paragraph summary = new Paragraph(
                         $"\nTotal Patients: {groupedSchedules.Count()}"
                             + $"\nTotal Vaccination Fee: ₹{grandTotalConsultationFee:N2}"
-                            + $"\nTotal Items Price: ₹{schedules.Sum(s => s.InvoicePrice):N2}"
-                            + $"\nGrand Total Cash: ₹{schedules.Sum(s => s.InvoicePrice) + grandTotalConsultationFee:N2}",
+                            + $"\nTotal Items Price: ₹{totalItemsPrice:N2}"
+                            + $"\nTotal Direct Sales: ₹{totalDirectSalesValue:N2}"
+                            + $"\nGrand Total Cash: ₹{totalItemsPrice + grandTotalConsultationFee:N2}",
                         headerFont
                     );
                     summary.SpacingBefore = 20f;

@@ -158,8 +158,8 @@ namespace VaccineAPI.Controllers
                         Date = bill.BillDate,
                         Type = "AWT",
                         Description = $"AWT on Bill #{bill.BillNo}",
-                        Debit = 0,
-                        Credit = bill.AwtAmount.Value,
+                        Debit = bill.AwtAmount.Value,
+                        Credit = 0,
                         Balance = 0,
                         ReferenceId = bill.Id
                     });

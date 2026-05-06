@@ -407,11 +407,25 @@ namespace VaccineAPI.Controllers
                     .Where(sb =>
                         sb.stock.BrandId == brandId
                         && sb.bill.BillDate >= parsedFromDate
-                        && sb.bill.BillDate <= parsedToDate && 
-                        sb.bill.ClinicId == clinicId
+                        && sb.bill.BillDate <= parsedToDate
+                        && sb.bill.ClinicId == clinicId
+                        && !sb.bill.BillNo.StartsWith("XFER-")
                     )
                     .GroupBy(sb => sb.bill.BillDate.Date)
                     .ToDictionary(g => g.Key, g => g.Sum(sb => sb.stock.Quantity));
+
+                // Net transfer per day: positive = received, negative = sent
+                var transferGroups = _db.StockTransfers
+                    .Where(t =>
+                        t.BrandId == brandId
+                        && t.CreatedAt >= parsedFromDate
+                        && t.CreatedAt <= today
+                        && (t.ToClinicId == clinicId || t.FromClinicId == clinicId)
+                    )
+                    .AsEnumerable()
+                    .GroupBy(t => t.CreatedAt.Date)
+                    .ToDictionary(g => g.Key, g =>
+                        g.Sum(t => t.ToClinicId == clinicId ? t.Quantity : -t.Quantity));
 
                 var vaccineGroups = schedules
                     .Where(s => s.GivenDate.HasValue)
@@ -451,8 +465,11 @@ namespace VaccineAPI.Controllers
                     .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
                     .Sum(kvp => kvp.Value);
 
+                // Net transfers in range (positive = received, negative = sent)
+                int totalNetTransferFromFirstDate = transferGroups.Sum(kvp => kvp.Value);
+
                 // Calculate initial opening stock for the first date in range
-                int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate + totalDirectSalesFromFirstDate - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
+                int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate + totalDirectSalesFromFirstDate - totalNetTransferFromFirstDate - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
 
                 var reportData =
                     new List<(
@@ -460,6 +477,7 @@ namespace VaccineAPI.Controllers
                         int OpeningStock,
                         int VaccinesDone,
                         int DirectSaleQty,
+                        int NetTransfer,
                         int StockPurchased,
                         int StockAdjusted,
                         int StockInHand
@@ -475,6 +493,9 @@ namespace VaccineAPI.Controllers
                     int directSaleTodayQty = directSaleGroups.ContainsKey(date.Date)
                         ? directSaleGroups[date.Date]
                         : 0;
+                    int netTransferToday = transferGroups.ContainsKey(date.Date)
+                        ? transferGroups[date.Date]
+                        : 0;
                     int stockPurchasedToday = stockPurchases.ContainsKey(date)
                         ? stockPurchases[date]
                         : 0;
@@ -483,7 +504,7 @@ namespace VaccineAPI.Controllers
                         : 0;
 
                     int openingStock = currentStock;
-                    int stockInHand = openingStock - vaccinesDoneToday - directSaleTodayQty + stockPurchasedToday + stockAdjustedToday;
+                    int stockInHand = openingStock - vaccinesDoneToday - directSaleTodayQty + netTransferToday + stockPurchasedToday + stockAdjustedToday;
 
                     reportData.Add(
                         (
@@ -491,6 +512,7 @@ namespace VaccineAPI.Controllers
                             openingStock,
                             vaccinesDoneToday,
                             directSaleTodayQty,
+                            netTransferToday,
                             stockPurchasedToday,
                             stockAdjustedToday,
                             stockInHand
@@ -585,8 +607,8 @@ namespace VaccineAPI.Controllers
                             SpacingAfter = 10f,
                         }
                     );
-                    PdfPTable table = new PdfPTable(7) { WidthPercentage = 100 };
-                    table.SetWidths(new float[] { 2f, 2f, 2f, 2f, 2f, 2f, 2f });
+                    PdfPTable table = new PdfPTable(8) { WidthPercentage = 100 };
+                    table.SetWidths(new float[] { 2f, 2f, 2f, 2f, 2f, 2f, 2f, 2f });
 
                     string[] headers =
                     {
@@ -594,6 +616,7 @@ namespace VaccineAPI.Controllers
                         "Opening Stock",
                         "Sold",
                         "Direct Sale",
+                        "Transfer",
                         "Purchased",
                         "Adjusted",
                         "Stock In Hand",
@@ -645,6 +668,12 @@ namespace VaccineAPI.Controllers
                             }
                         );
                         table.AddCell(
+                            new PdfPCell(new Phrase(row.NetTransfer == 0 ? "0" : (row.NetTransfer > 0 ? $"+{row.NetTransfer}" : row.NetTransfer.ToString()), normalFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                            }
+                        );
+                        table.AddCell(
                             new PdfPCell(new Phrase(row.StockPurchased.ToString(), normalFont))
                             {
                                 HorizontalAlignment = Element.ALIGN_CENTER,
@@ -666,7 +695,7 @@ namespace VaccineAPI.Controllers
 
                     // Filter to only rows that were displayed (have activity)
                     var displayedRows = reportData
-                        .Where(r => r.VaccinesDone != 0 || r.DirectSaleQty != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
+                        .Where(r => r.VaccinesDone != 0 || r.DirectSaleQty != 0 || r.NetTransfer != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
                         .ToList();
 
                     // Check if there's any data to display
@@ -679,10 +708,12 @@ namespace VaccineAPI.Controllers
                     {
                         int totalSold = displayedRows.Sum(r => r.VaccinesDone);
                         int totalDirectSale = displayedRows.Sum(r => r.DirectSaleQty);
+                        int totalNetTransfer = displayedRows.Sum(r => r.NetTransfer);
                         int totalPurchased = displayedRows.Sum(r => r.StockPurchased);
                         int totalAdjusted = displayedRows.Sum(r => r.StockAdjusted);
                         int totalOpeningStock = displayedRows.First().OpeningStock;
                         int totalStockInHand = displayedRows.Last().StockInHand;
+                        string transferTotalStr = totalNetTransfer == 0 ? "0" : (totalNetTransfer > 0 ? $"+{totalNetTransfer}" : totalNetTransfer.ToString());
 
                         table.AddCell(new PdfPCell(new Phrase("Totals", boldFont))
                         {
@@ -703,6 +734,12 @@ namespace VaccineAPI.Controllers
                             Padding = 5
                         });
                         table.AddCell(new PdfPCell(new Phrase(totalDirectSale.ToString(), boldFont))
+                        {
+                            HorizontalAlignment = Element.ALIGN_CENTER,
+                            BackgroundColor = BaseColor.LightGray,
+                            Padding = 5
+                        });
+                        table.AddCell(new PdfPCell(new Phrase(transferTotalStr, boldFont))
                         {
                             HorizontalAlignment = Element.ALIGN_CENTER,
                             BackgroundColor = BaseColor.LightGray,
@@ -851,9 +888,9 @@ namespace VaccineAPI.Controllers
                         }
                     );
 
-                    // Create table with 8 columns (Brand Name + 7 data columns)
-                    PdfPTable table = new PdfPTable(8) { WidthPercentage = 100 };
-                    table.SetWidths(new float[] { 3f, 2f, 2f, 2f, 2f, 2f, 2f, 2f });
+                    // Create table with 9 columns (Brand Name + 8 data columns)
+                    PdfPTable table = new PdfPTable(9) { WidthPercentage = 100 };
+                    table.SetWidths(new float[] { 2.5f, 1.8f, 1.8f, 1.8f, 1.8f, 1.8f, 1.8f, 1.8f, 1.8f });
 
                     string[] headers =
                     {
@@ -862,6 +899,7 @@ namespace VaccineAPI.Controllers
                         "Opening Stock",
                         "Sold",
                         "Direct Sale",
+                        "Transfer",
                         "Purchased",
                         "Adjusted",
                         "Stock In Hand",
@@ -924,9 +962,22 @@ namespace VaccineAPI.Controllers
                                 && sb.bill.BillDate >= parsedFromDate
                                 && sb.bill.BillDate <= parsedToDate
                                 && sb.bill.ClinicId == clinicId
+                                && !sb.bill.BillNo.StartsWith("XFER-")
                             )
                             .GroupBy(sb => sb.bill.BillDate.Date)
                             .ToDictionary(g => g.Key, g => g.Sum(sb => sb.stock.Quantity));
+
+                        var transferGroups = _db.StockTransfers
+                            .Where(t =>
+                                t.BrandId == brandId
+                                && t.CreatedAt >= parsedFromDate
+                                && t.CreatedAt <= today
+                                && (t.ToClinicId == clinicId || t.FromClinicId == clinicId)
+                            )
+                            .AsEnumerable()
+                            .GroupBy(t => t.CreatedAt.Date)
+                            .ToDictionary(g => g.Key, g =>
+                                g.Sum(t => t.ToClinicId == clinicId ? t.Quantity : -t.Quantity));
 
                         var vaccineGroups = schedules
                             .Where(s => s.GivenDate.HasValue)
@@ -965,14 +1016,17 @@ namespace VaccineAPI.Controllers
                             .Where(kvp => kvp.Key >= parsedFromDate && kvp.Key <= today)
                             .Sum(kvp => kvp.Value);
 
+                        int totalNetTransferFromFirstDate = transferGroups.Sum(kvp => kvp.Value);
+
                         int initialOpeningStock = todaysInventory + totalVaccinesFromFirstDate + totalDirectSalesFromFirstDate
-                            - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
+                            - totalNetTransferFromFirstDate - totalPurchasesFromFirstDate - totalAdjustmentsFromFirstDate;
 
                         var reportData = new List<(
                             DateTime Date,
                             int OpeningStock,
                             int VaccinesDone,
                             int DirectSaleQty,
+                            int NetTransfer,
                             int StockPurchased,
                             int StockAdjusted,
                             int StockInHand
@@ -988,6 +1042,9 @@ namespace VaccineAPI.Controllers
                             int directSaleTodayQty = directSaleGroups.ContainsKey(date.Date)
                                 ? directSaleGroups[date.Date]
                                 : 0;
+                            int netTransferToday = transferGroups.ContainsKey(date.Date)
+                                ? transferGroups[date.Date]
+                                : 0;
                             int stockPurchasedToday = stockPurchases.ContainsKey(date)
                                 ? stockPurchases[date]
                                 : 0;
@@ -996,7 +1053,7 @@ namespace VaccineAPI.Controllers
                                 : 0;
 
                             int openingStock = currentStock;
-                            int stockInHand = openingStock - vaccinesDoneToday - directSaleTodayQty + stockPurchasedToday + stockAdjustedToday;
+                            int stockInHand = openingStock - vaccinesDoneToday - directSaleTodayQty + netTransferToday + stockPurchasedToday + stockAdjustedToday;
 
                             reportData.Add(
                                 (
@@ -1004,6 +1061,7 @@ namespace VaccineAPI.Controllers
                                     openingStock,
                                     vaccinesDoneToday,
                                     directSaleTodayQty,
+                                    netTransferToday,
                                     stockPurchasedToday,
                                     stockAdjustedToday,
                                     stockInHand
@@ -1015,7 +1073,7 @@ namespace VaccineAPI.Controllers
 
                         // Filter to only rows with activity
                         var displayedRows = reportData
-                            .Where(r => r.VaccinesDone != 0 || r.DirectSaleQty != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
+                            .Where(r => r.VaccinesDone != 0 || r.DirectSaleQty != 0 || r.NetTransfer != 0 || r.StockPurchased != 0 || r.StockAdjusted != 0)
                             .ToList();
 
                         if (displayedRows.Any())
@@ -1064,6 +1122,12 @@ namespace VaccineAPI.Controllers
                                     }
                                 );
                                 table.AddCell(
+                                    new PdfPCell(new Phrase(row.NetTransfer == 0 ? "0" : (row.NetTransfer > 0 ? $"+{row.NetTransfer}" : row.NetTransfer.ToString()), normalFont))
+                                    {
+                                        HorizontalAlignment = Element.ALIGN_CENTER,
+                                    }
+                                );
+                                table.AddCell(
                                     new PdfPCell(new Phrase(row.StockPurchased.ToString(), normalFont))
                                     {
                                         HorizontalAlignment = Element.ALIGN_CENTER,
@@ -1086,10 +1150,12 @@ namespace VaccineAPI.Controllers
                             // Add brand totals
                             int brandTotalSold = displayedRows.Sum(r => r.VaccinesDone);
                             int brandTotalDirectSale = displayedRows.Sum(r => r.DirectSaleQty);
+                            int brandTotalNetTransfer = displayedRows.Sum(r => r.NetTransfer);
                             int brandTotalPurchased = displayedRows.Sum(r => r.StockPurchased);
                             int brandTotalAdjusted = displayedRows.Sum(r => r.StockAdjusted);
                             int brandOpeningStock = displayedRows.First().OpeningStock;
                             int brandClosingStock = displayedRows.Last().StockInHand;
+                            string brandTransferStr = brandTotalNetTransfer == 0 ? "0" : (brandTotalNetTransfer > 0 ? $"+{brandTotalNetTransfer}" : brandTotalNetTransfer.ToString());
 
                             grandTotalSold += brandTotalSold;
                             grandTotalDirectSale += brandTotalDirectSale;
@@ -1120,6 +1186,12 @@ namespace VaccineAPI.Controllers
                                 Padding = 5
                             });
                             table.AddCell(new PdfPCell(new Phrase(brandTotalDirectSale.ToString(), boldFont))
+                            {
+                                HorizontalAlignment = Element.ALIGN_CENTER,
+                                BackgroundColor = new BaseColor(240, 240, 240),
+                                Padding = 5
+                            });
+                            table.AddCell(new PdfPCell(new Phrase(brandTransferStr, boldFont))
                             {
                                 HorizontalAlignment = Element.ALIGN_CENTER,
                                 BackgroundColor = new BaseColor(240, 240, 240),
@@ -1174,6 +1246,12 @@ namespace VaccineAPI.Controllers
                         Padding = 5
                     });
                     table.AddCell(new PdfPCell(new Phrase(grandTotalDirectSale.ToString(), boldFont))
+                    {
+                        HorizontalAlignment = Element.ALIGN_CENTER,
+                        BackgroundColor = BaseColor.LightGray,
+                        Padding = 5
+                    });
+                    table.AddCell(new PdfPCell(new Phrase("-", boldFont))
                     {
                         HorizontalAlignment = Element.ALIGN_CENTER,
                         BackgroundColor = BaseColor.LightGray,

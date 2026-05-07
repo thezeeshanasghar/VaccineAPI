@@ -240,6 +240,9 @@ namespace VaccineAPI.Controllers
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
                     dbSchedule.DoneAt = null;
+                    dbSchedule.PaymentMode = "Cash";
+                    dbSchedule.OnlineService = null;
+                    dbSchedule.IsPaymentApproved = false;
                     dbSchedule.BrandId = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
 
@@ -355,6 +358,9 @@ namespace VaccineAPI.Controllers
                         dbSchedule.IsDone = scheduleDTO.IsDone;
                         dbSchedule.GivenDate = scheduleDTO.GivenDate;
                         dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
+                        dbSchedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
+                        dbSchedule.OnlineService = scheduleDTO.OnlineService;
+                        dbSchedule.IsPaymentApproved = false;
                         dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                         dbSchedule.IsDisease = scheduleDTO.IsDisease;
                         var stockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
@@ -459,6 +465,9 @@ namespace VaccineAPI.Controllers
                 dbSchedule.IsDone = scheduleDTO.IsDone;
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
+                dbSchedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
+                dbSchedule.OnlineService = scheduleDTO.OnlineService;
+                dbSchedule.IsPaymentApproved = false;
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                 dbSchedule.IsDisease = scheduleDTO.IsDisease;
                 var onlineStockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
@@ -1025,6 +1034,9 @@ namespace VaccineAPI.Controllers
                 schedule.IsDone = scheduleDTO.IsDone;
                 schedule.GivenDate = scheduleDTO.GivenDate.Date;
                 schedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
+                schedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
+                schedule.OnlineService = scheduleDTO.OnlineService;
+                schedule.IsPaymentApproved = false;
                 schedule.IsPAApprove= scheduleDTO.IsPAApprove;
 
                 if (scheduleDTO.ScheduleBrands.Count > 0)

@@ -47,6 +47,10 @@ namespace VaccineAPI.Models
 
         public string PaymentMode { get; set; } = "Cash";
 
+        public string? OnlineService { get; set; }
+
+        public bool IsPaymentApproved { get; set; } = false;
+
         public string? Notes { get; set; }
 
         public DateTime SaleDate { get; set; } = DateTime.UtcNow;

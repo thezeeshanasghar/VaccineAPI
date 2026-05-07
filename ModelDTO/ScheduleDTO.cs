@@ -39,6 +39,9 @@ namespace VaccineAPI.ModelDTO
         [JsonConverter(typeof(OnlyDateConverter))]
         public System.DateTime GivenDate { get; set; }
         public DateTime? DoneAt { get; set; }
+        public string PaymentMode { get; set; } = "Cash";
+        public string? OnlineService { get; set; }
+        public bool IsPaymentApproved { get; set; } = false;
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime FromDate { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]

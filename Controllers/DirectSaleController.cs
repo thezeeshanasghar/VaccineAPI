@@ -97,6 +97,8 @@ namespace VaccineAPI.Controllers
                     Profit             = profit,
                     ClientName         = dto.ClientName?.Trim(),
                     PaymentMode        = dto.PaymentMode ?? "Cash",
+                    OnlineService      = dto.OnlineService,
+                    IsPaymentApproved  = false,
                     Notes              = dto.Notes?.Trim(),
                     SaleDate           = dto.SaleDate != default ? dto.SaleDate : System.DateTime.UtcNow
                 };
@@ -202,6 +204,8 @@ namespace VaccineAPI.Controllers
                         Profit               = profit,
                         ClientName           = request.ClientName?.Trim(),
                         PaymentMode          = request.PaymentMode ?? "Cash",
+                        OnlineService        = request.OnlineService,
+                        IsPaymentApproved    = false,
                         Notes                = request.Notes?.Trim(),
                         SaleDate             = request.SaleDate != default ? request.SaleDate : System.DateTime.UtcNow
                     };

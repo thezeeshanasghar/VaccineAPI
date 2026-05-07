@@ -20,6 +20,9 @@ namespace VaccineAPI.Models
         public string DiseaseYear { get; set; } = "";
         public DateTime? GivenDate { get; set; }
         public DateTime? DoneAt { get; set; }
+        public string PaymentMode { get; set; } = "Cash";
+        public string? OnlineService { get; set; }
+        public bool IsPaymentApproved { get; set; } = false;
         public long? BrandId { get; set; }
         public virtual Brand Brand { get; set; } = null!;
         public decimal? Amount { get; set; }

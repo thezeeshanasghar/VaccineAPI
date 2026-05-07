@@ -36,13 +36,12 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("doctor/{doctorId:long}")]
-        public ActionResult<IEnumerable<PersonalAssistant>> GetByDoctorId(long doctorId)
+        public ActionResult GetByDoctorId(long doctorId)
         {
-            var personalAssistants = _db.PersonalAssistant.Where(pa => pa.DoctorId == doctorId).ToList();
-            if (!personalAssistants.Any())
-            {
-                return Ok(new { message = "No Personal Assistants found for the given Doctor ID." });
-            }
+            var personalAssistants = _db.PersonalAssistant
+                .Where(pa => pa.DoctorId == doctorId)
+                .Select(pa => new { pa.Id, pa.Name, pa.Email, pa.IsActive, pa.IsVerified })
+                .ToList();
 
             return Ok(personalAssistants);
         }

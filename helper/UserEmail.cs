@@ -83,6 +83,21 @@ namespace VaccineAPI
             SendEmail(pa.Email, body, "Your Personal Assistant Account Details");
         }
         
+        public static void AgentLoginDetails(Agent agent, string password)
+        {
+            string body = ""
+                + "Hello " + agent.Name + ",\n\n"
+                + "You have been registered as a Referring Agent at Vaccination Centre.\n\n"
+                + "Your login details for the VacAgent app are:\n"
+                + "Login ID (Phone): " + agent.PhoneNumber + "\n"
+                + "Password: " + password + "\n"
+                + "Agent Code: " + agent.AgentCode + "\n\n"
+                + "Regards,\n"
+                + "Vaccination Centre Team";
+
+            SendEmail(agent.Email, body, "Your VacAgent Login Details");
+        }
+
         #endregion
         public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com")
         {

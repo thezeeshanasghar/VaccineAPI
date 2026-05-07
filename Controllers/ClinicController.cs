@@ -188,6 +188,25 @@ namespace VaccineAPI.Controllers
             return new Response<string>(true, null, "record deleted");
         }
 
+        [HttpPost("{fromClinicId}/transfer/{toClinicId}")]
+        public async Task<Response<string>> TransferPatients(long fromClinicId, long toClinicId)
+        {
+            var fromClinic = await _db.Clinics.FindAsync(fromClinicId);
+            if (fromClinic == null)
+                return new Response<string>(false, "Source clinic not found", null);
+
+            var toClinic = await _db.Clinics.FindAsync(toClinicId);
+            if (toClinic == null)
+                return new Response<string>(false, "Target clinic not found", null);
+
+            var children = await _db.Childs.Where(c => c.ClinicId == fromClinicId).ToListAsync();
+            foreach (var child in children)
+                child.ClinicId = toClinicId;
+
+            await _db.SaveChangesAsync();
+            return new Response<string>(true, null, $"{children.Count} patients transferred successfully");
+        }
+
         [HttpGet("doctor/{clinicId}")]
         public async Task<Response<DoctorDTO>> GetDoctorByClinicId(long clinicId)
         {

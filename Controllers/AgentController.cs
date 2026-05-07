@@ -53,10 +53,12 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public async Task<ActionResult<Agent>> PostAgent(Agent agent)
         {
+            var plainPassword = agent.Password;
             _context.Agents.Add(agent);
             await _context.SaveChangesAsync();
             agent.AgentCode = $"{DateTime.UtcNow.AddHours(5).Year}-{agent.Id}";
             await _context.SaveChangesAsync();
+            UserEmail.AgentLoginDetails(agent, plainPassword);
             return CreatedAtAction("GetAgent", new { id = agent.Id }, agent);
         }
 

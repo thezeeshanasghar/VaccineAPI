@@ -755,21 +755,14 @@ namespace VaccineAPI.Controllers
                 var TargetSchedule = _db.Schedules
                     .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
                     .FirstOrDefault();
-                if (TargetSchedule != null)
+                if (TargetSchedule != null && minimumGap.HasValue && minimumGap.Value > 0)
                 {
-                    var Targetdosegap = Convert.ToInt32(
-                        (TargetSchedule.Date.Date - previousdosedate).TotalDays
-                    );
-                    if (Targetdosegap < minimumGap)
+                    var correctDate = calculateDate(previousdosedate, minimumGap.Value);
+                    if (TargetSchedule.Date.Date < correctDate.Date)
                     {
-                        // TargetSchedule.Date =
-                        //     calculateDate(TargetSchedule.Date, Convert.ToInt32(d.MinGap)); //TargetSchedule.Date.AddDays(daysDifference);
-                        TargetSchedule.Date = calculateDate(
-                                previousdosedate,
-                                Convert.ToInt32(minimumGap)
-                            ); //TargetSchedule.Date.AddDays(daysDifference);
-                        previousdosedate = TargetSchedule.Date.Date;
+                        TargetSchedule.Date = correctDate;
                     }
+                    previousdosedate = TargetSchedule.Date.Date;
                 }
             }
         }

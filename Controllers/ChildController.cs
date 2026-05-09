@@ -2141,15 +2141,24 @@ namespace VaccineAPI.Controllers
                 {
                     Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x => x.Doctor).FirstOrDefault();
                     Doctor doctor = clinic.Doctor;
-                    List<DoctorSchedule> dss = _db.DoctorSchedules.Where(x => x.DoctorId == doctor.Id).ToList();
+                    List<DoctorSchedule> dss = _db.DoctorSchedules
+                        .Where(x => x.DoctorId == doctor.Id)
+                        .Include(x => x.Dose)
+                        .ThenInclude(d => d.Vaccine)
+                        .OrderBy(x => x.Dose.VaccineId)
+                        .ThenBy(x => x.Dose.DoseOrder)
+                        .ToList();
+                    // Track last scheduled date per vaccine so Dose 2+ can use MinGap from previous dose
+                    var lastDateByVaccineId = new Dictionary<long, DateTime>();
                     foreach (DoctorSchedule ds in dss)
                     {
-                        var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).Include(x => x.Vaccine).FirstOrDefault();
+                        var dbDose = ds.Dose;
+                        if (dbDose == null) continue;
                         {
                             Schedule cvd = new Schedule();
                             cvd.ChildId = childDTO.Id;
                             cvd.DoseId = ds.DoseId;
-                            if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith("HPV"))
+                            if (childDTO.Gender == "Boy" && dbDose.Name.StartsWith("HPV"))
                                 continue;
 
                             if (childDTO.IsSkip == true && ds.IsActive != true)
@@ -2164,7 +2173,7 @@ namespace VaccineAPI.Controllers
                                 DateTime comparisonDate2021 = DateTime.Parse("01/04/2021");
                                 if (dob < comparisonDate2002)
                                 {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
+                                    if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
                                     {
                                         cvd.DoseId = 130;
                                         ds.GapInDays = 0;
@@ -2172,7 +2181,7 @@ namespace VaccineAPI.Controllers
                                 }
                                 else if (dob > comparisonDate2021)
                                 {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
+                                    if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
                                     {
                                         cvd.DoseId = 135;
                                         ds.GapInDays = 0;
@@ -2180,7 +2189,7 @@ namespace VaccineAPI.Controllers
                                 }
                                 else if (dob > comparisonDate2002 && dob < comparisonDate2009)
                                 {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
+                                    if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
                                     {
                                         cvd.DoseId = 131;
                                         ds.GapInDays = 0;
@@ -2188,7 +2197,7 @@ namespace VaccineAPI.Controllers
                                 }
                                 else if (dob > comparisonDate2009 && dob < comparisonDate2015)
                                 {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
+                                    if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
                                     {
                                         cvd.DoseId = 132;
                                         ds.GapInDays = 0;
@@ -2199,8 +2208,21 @@ namespace VaccineAPI.Controllers
                                     cvd.DoseId = ds.DoseId;
                                 }
                             }
-                            if (ds.Dose.Name.StartsWith("HPV") && ds.Dose.DoseOrder == 3) cvd.IsSkip = true;
-                            cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
+                            if (dbDose.Name.StartsWith("HPV") && dbDose.DoseOrder == 3) cvd.IsSkip = true;
+
+                            // Dose 2+: schedule from previous dose date + MinGap
+                            // Dose 1: schedule from DOB + GapInDays (absolute minimum age)
+                            if (dbDose.DoseOrder > 1 && dbDose.MinGap.HasValue && dbDose.MinGap.Value > 0
+                                && lastDateByVaccineId.ContainsKey(dbDose.VaccineId))
+                            {
+                                cvd.Date = calculateDate(lastDateByVaccineId[dbDose.VaccineId], dbDose.MinGap.Value);
+                            }
+                            else
+                            {
+                                cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
+                            }
+                            lastDateByVaccineId[dbDose.VaccineId] = cvd.Date;
+
                             cvd.DiseaseYear = "";
                             _db.Schedules.Add(cvd);
                             _db.SaveChanges();

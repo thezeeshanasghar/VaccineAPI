@@ -97,9 +97,10 @@ namespace VaccineAPI.Controllers
 
                 if (child != null)
                 {
-                    var childAgeInDays = (DateTime.UtcNow.AddHours(5).Date - child.DOB.Date).TotalDays;
+                    var givenDate = scheduleDTO.Date != default ? scheduleDTO.Date.Date : DateTime.UtcNow.AddHours(5).Date;
+                    var childAgeInDays = (givenDate - child.DOB.Date).TotalDays;
                     var childAgeInYears = childAgeInDays / 365.25;
-                    
+
                     if (childAgeInYears >= 5)
                     {
                         return new Response<ScheduleDTO>(

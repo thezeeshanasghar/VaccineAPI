@@ -27,7 +27,11 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public async Task<Response<List<DoseDTO>>> GetAll()
         {
-            var list = await _db.Doses.OrderBy(x => x.Name).ToListAsync();
+            var list = await _db.Doses
+                .Include(d => d.Vaccine)
+                .OrderBy(d => d.Vaccine.Name)
+                .ThenBy(d => d.DoseOrder)
+                .ToListAsync();
             List<DoseDTO> listDTO = _mapper.Map<List<DoseDTO>>(list);
 
             return new Response<List<DoseDTO>>(true, null, listDTO);

@@ -1413,7 +1413,11 @@ namespace VaccineAPI.Controllers
                                     (TargetSchedule.Date.Date - previousDate.Date).TotalDays
                                 );
                                 if (doseDaysDifference <= MinGap)
-                                    TargetSchedule.Date = calculateDate(previousDate, Convert.ToInt32(MinGap));
+                                    TargetSchedule.Date = TargetSchedule.Date.AddDays(
+                                        daysDifference
+                                    );
+                                // calculateDate(TargetSchedule.Date,
+                                // daysDifference); //
                             }
                             else
                             {
@@ -1427,6 +1431,9 @@ namespace VaccineAPI.Controllers
                                                 .ToDateTime(scheduleDTO.Date.Date)
                                                 .ToString("dd-MM-yyyy")
                                             + " because it is greater than the Max Age of dose.";
+
+                                        //    +
+                                        //    "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>";
                                         return message;
                                     }
                                     else
@@ -1437,9 +1444,14 @@ namespace VaccineAPI.Controllers
                                                 .ToDateTime(scheduleDTO.Date.Date)
                                                 .ToString("dd-MM-yyyy")
                                             + " because it is greater than the Max Age of dose. ";
+
+                                        //     +
+                                        //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>";
                                         return message;
                                     }
-                                TargetSchedule.Date = scheduleDTO.Date.Date;
+                                TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
+                                //calculateDate(TargetSchedule.Date,
+                                // daysDifference); //
                             }
                             previousDate = TargetSchedule.Date;
                         }
@@ -1503,7 +1515,9 @@ namespace VaccineAPI.Controllers
                                 //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,true,false)'> Ignore Rule</ion-button>";
                             }
                         else
-                            FirstDoseSchedule.Date = scheduleDTO.Date.Date;
+                            FirstDoseSchedule.Date = FirstDoseSchedule.Date.AddDays(daysDifference);
+                        // calculateDate(FirstDoseSchedule.Date,
+                        // daysDifference);
                     }
                     else
                     // if we rescdule other than first dose of any vaccine
@@ -1572,7 +1586,9 @@ namespace VaccineAPI.Controllers
                                 return message;
                             }
                         if (TargetSchedule != null)
-                            TargetSchedule.Date = scheduleDTO.Date.Date;
+                            TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
+                        // calculateDate(TargetSchedule.Date,
+                        // daysDifference);
                     }
                 }
             }

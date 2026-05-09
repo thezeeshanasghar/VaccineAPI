@@ -57,6 +57,8 @@ namespace VaccineAPI.Controllers
                 .ThenInclude(d => d.Vaccine)
                 .Include(ds => ds.Doctor)
                 .Where(ds => ds.DoctorId == id)
+                .OrderBy(ds => ds.Dose.MinAge)
+                .ThenBy(ds => ds.Dose.DoseOrder)
                 .ToList();
             if (doctorSchedules == null || doctorSchedules.Count == 0)
             {

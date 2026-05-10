@@ -758,7 +758,7 @@ namespace VaccineAPI.Controllers
                     .FirstOrDefault();
                 if (TargetSchedule != null && minimumGap.HasValue && minimumGap.Value > 0)
                 {
-                    var correctDate = calculateDate(previousdosedate, minimumGap.Value);
+                    var correctDate = previousdosedate.AddDays(minimumGap.Value);
                     if (TargetSchedule.Date.Date < correctDate.Date)
                     {
                         TargetSchedule.Date = correctDate;

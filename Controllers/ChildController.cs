@@ -2210,16 +2210,15 @@ namespace VaccineAPI.Controllers
                             }
                             if (dbDose.Name.StartsWith("HPV") && dbDose.DoseOrder == 3) cvd.IsSkip = true;
 
-                            // Dose 2+: schedule from previous dose date + MinGap
-                            // Dose 1: schedule from DOB + GapInDays (absolute minimum age)
+                            // All doses: use doctor's GapInDays as absolute age from DOB
+                            // Dose 2+: if that date violates MinGap from previous dose, push forward to MinGap floor
+                            cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
                             if (dbDose.DoseOrder > 1 && dbDose.MinGap.HasValue && dbDose.MinGap.Value > 0
                                 && lastDateByVaccineId.ContainsKey(dbDose.VaccineId))
                             {
-                                cvd.Date = calculateDate(lastDateByVaccineId[dbDose.VaccineId], dbDose.MinGap.Value);
-                            }
-                            else
-                            {
-                                cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
+                                var minGapDate = calculateDate(lastDateByVaccineId[dbDose.VaccineId], dbDose.MinGap.Value);
+                                if (cvd.Date < minGapDate)
+                                    cvd.Date = minGapDate;
                             }
                             lastDateByVaccineId[dbDose.VaccineId] = cvd.Date;
 

@@ -31,6 +31,12 @@ namespace VaccineAPI
                 .ForMember(d => d.BrandName,  o => o.MapFrom(s => s.Brand != null  ? s.Brand.Name  : ""))
                 .ForMember(d => d.ClinicName, o => o.MapFrom(s => s.Clinic != null ? s.Clinic.Name : ""));
             CreateMap<ExpenseCategory, ExpenseCategoryDTO>().ReverseMap();
+            CreateMap<FixedAsset, FixedAssetDTO>()
+                .ForMember(d => d.ClinicName, o => o.MapFrom(s => s.Clinic != null ? s.Clinic.Name : ""));
+            CreateMap<FixedAssetDTO, FixedAsset>()
+                .ForMember(d => d.Clinic,   o => o.Ignore())
+                .ForMember(d => d.Doctor,   o => o.Ignore())
+                .ForMember(d => d.Expense,  o => o.Ignore());
             CreateMap<Expense, ExpenseDTO>()
                 .ForMember(d => d.ClinicName,   o => o.MapFrom(s => s.Clinic   != null ? s.Clinic.Name   : ""))
                 .ForMember(d => d.CategoryName, o => o.MapFrom(s => s.Category != null ? s.Category.Name : ""));

@@ -17,6 +17,7 @@ namespace VaccineAPI.Models
         public decimal AccumDeprn { get; set; } = 0;
         public decimal BookValue { get; set; }
         public DateTime? WarrantyExpiry { get; set; }
+        public string? InvoiceImagePath { get; set; }
         public string? WarrantyImagePath { get; set; }
         public bool IsDisposed { get; set; } = false;
         public DateTime? DisposalDate { get; set; }

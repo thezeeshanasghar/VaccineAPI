@@ -90,6 +90,8 @@ namespace VaccineAPI.Controllers
             asset.AccumDeprn = ComputeAccumDeprn(dto.PurchaseDate, asset.MonthlyDeprn);
             asset.BookValue = Math.Max(0, dto.PurchaseCost - asset.AccumDeprn);
             asset.WarrantyExpiry = dto.WarrantyExpiry;
+            if (!string.IsNullOrEmpty(dto.InvoiceImagePath))
+                asset.InvoiceImagePath = dto.InvoiceImagePath;
             if (!string.IsNullOrEmpty(dto.WarrantyImagePath))
                 asset.WarrantyImagePath = dto.WarrantyImagePath;
             asset.Notes = dto.Notes;
@@ -125,6 +127,33 @@ namespace VaccineAPI.Controllers
             _db.FixedAssets.Remove(asset);
             _db.SaveChanges();
             return Ok(new Response<object>(true, "Deleted", null));
+        }
+
+        [HttpPost("upload-invoice")]
+        [DisableRequestSizeLimit]
+        public IActionResult UploadInvoice()
+        {
+            try
+            {
+                if (Request.Form?.Files == null || Request.Form.Files.Count == 0)
+                    return BadRequest("No file uploaded.");
+                var file = Request.Form.Files[0];
+                var folderName = Path.Combine("Resources", "Expenses", "invoices");
+                var pathToSave = Path.Combine(Directory.GetCurrentDirectory(), folderName);
+                Directory.CreateDirectory(pathToSave);
+                if (file.Length == 0) return BadRequest("Empty file.");
+                var ext = Path.GetExtension(file.FileName);
+                var fileName = $"{Guid.NewGuid()}{ext}";
+                var fullPath = Path.Combine(pathToSave, fileName);
+                var dbPath = Path.Combine(folderName, fileName).Replace("\\", "/");
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                    file.CopyTo(stream);
+                return Ok(new { dbPath });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Upload failed: " + ex.Message);
+            }
         }
 
         [HttpPost("upload-warranty")]

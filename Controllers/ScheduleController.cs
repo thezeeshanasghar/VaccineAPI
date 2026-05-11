@@ -1224,10 +1224,10 @@ namespace VaccineAPI.Controllers
                 x.InvoiceDate.Date == invoiceDate.Date);
 
             if (submission == null)
-                return Ok(new { isSubmitted = false, editCount = 0, canEdit = true, submittedByPaId = (long?)null });
+                return Ok(new { isSubmitted = false, editCount = 0, canEdit = true, submittedByPaId = (long?)null, consultationFee = (decimal?)null });
 
             bool canEdit = submission.EditCount < 1 && submission.SubmittedAt.Date == DateTime.UtcNow.Date;
-            return Ok(new { isSubmitted = true, editCount = submission.EditCount, canEdit, submittedByPaId = submission.PaId });
+            return Ok(new { isSubmitted = true, editCount = submission.EditCount, canEdit, submittedByPaId = submission.PaId, consultationFee = submission.ConsultationFee });
         }
 
         //date Function

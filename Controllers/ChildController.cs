@@ -2520,6 +2520,116 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [HttpGet("{id}/regenerate-schedules")]
+        public Response<string> RegenerateSchedules(int id)
+        {
+            var dbChild = _db.Childs
+                .Include(x => x.Clinic)
+                    .ThenInclude(x => x.Doctor)
+                .FirstOrDefault(c => c.Id == id);
+            if (dbChild == null)
+                return new Response<string>(false, "Child not found", null);
+
+            var existingCount = _db.Schedules.Count(s => s.ChildId == id);
+            if (existingCount > 0)
+                return new Response<string>(false, $"Child already has {existingCount} schedules. Delete them first.", null);
+
+            var clinic = dbChild.Clinic;
+            var doctor = clinic.Doctor;
+            List<DoctorSchedule> dss = _db.DoctorSchedules
+                .Where(x => x.DoctorId == doctor.Id)
+                .Include(x => x.Dose)
+                    .ThenInclude(d => d.Vaccine)
+                .OrderBy(x => x.Dose.VaccineId)
+                .ThenBy(x => x.Dose.DoseOrder)
+                .ToList();
+
+            var lastDateByVaccineId = new Dictionary<long, DateTime>();
+            foreach (DoctorSchedule ds in dss)
+            {
+                var dbDose = ds.Dose;
+                if (dbDose == null) continue;
+
+                Schedule cvd = new Schedule();
+                cvd.ChildId = id;
+                cvd.DoseId = ds.DoseId;
+
+                if (dbChild.Gender == "Boy" && dbDose.Name.StartsWith("HPV"))
+                    continue;
+
+                if (dbChild.IsEPIDone == true)
+                {
+                    var dob = dbChild.DOB.Date;
+                    DateTime comparisonDate2002 = DateTime.Parse("01/01/2002");
+                    DateTime comparisonDate2009 = DateTime.Parse("01/01/2009");
+                    DateTime comparisonDate2015 = DateTime.Parse("01/01/2015");
+                    DateTime comparisonDate2021 = DateTime.Parse("01/04/2021");
+                    if (dob < comparisonDate2002)
+                    {
+                        if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1")) { cvd.DoseId = 130; ds.GapInDays = 0; }
+                    }
+                    else if (dob > comparisonDate2021)
+                    {
+                        if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1")) { cvd.DoseId = 135; ds.GapInDays = 0; }
+                    }
+                    else if (dob > comparisonDate2002 && dob < comparisonDate2009)
+                    {
+                        if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1")) { cvd.DoseId = 131; ds.GapInDays = 0; }
+                    }
+                    else if (dob > comparisonDate2009 && dob < comparisonDate2015)
+                    {
+                        if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1")) { cvd.DoseId = 132; ds.GapInDays = 0; }
+                    }
+                }
+
+                if (dbDose.Name.StartsWith("HPV") && dbDose.DoseOrder == 3) cvd.IsSkip = true;
+
+                cvd.Date = calculateDate(dbChild.DOB, ds.GapInDays);
+                if (dbDose.DoseOrder > 1 && dbDose.MinGap.HasValue && dbDose.MinGap.Value > 0
+                    && lastDateByVaccineId.ContainsKey(dbDose.VaccineId))
+                {
+                    var minGapDate = lastDateByVaccineId[dbDose.VaccineId].AddDays(dbDose.MinGap.Value);
+                    if (cvd.Date < minGapDate)
+                        cvd.Date = minGapDate;
+                }
+                lastDateByVaccineId[dbDose.VaccineId] = cvd.Date;
+                cvd.DiseaseYear = "";
+                _db.Schedules.Add(cvd);
+            }
+
+            if (dbChild.IsEPIDone == true)
+            {
+                var dob2 = dbChild.DOB.Date;
+                DateTime comparisonDate2012 = DateTime.Parse("01/01/2012");
+                DateTime comparisonDate2018 = DateTime.Parse("01/01/2018");
+                DateTime comparisonDate2020 = DateTime.Parse("01/01/2020");
+                if (dob2 > comparisonDate2020)
+                {
+                    Schedule cvd3 = new Schedule();
+                    cvd3.DoseId = 136; cvd3.DiseaseYear = "";
+                    cvd3.Date = calculateDate(dbChild.DOB, 0); cvd3.ChildId = id;
+                    _db.Schedules.Add(cvd3);
+                }
+                else if (dob2 > comparisonDate2018)
+                {
+                    Schedule cvd2 = new Schedule();
+                    cvd2.DoseId = 134; cvd2.DiseaseYear = "";
+                    cvd2.Date = calculateDate(dbChild.DOB, 0); cvd2.ChildId = id;
+                    _db.Schedules.Add(cvd2);
+                }
+                else if (dob2 > comparisonDate2012)
+                {
+                    Schedule cvd1 = new Schedule();
+                    cvd1.DoseId = 133; cvd1.DiseaseYear = "";
+                    cvd1.Date = calculateDate(dbChild.DOB, 0); cvd1.ChildId = id;
+                    _db.Schedules.Add(cvd1);
+                }
+            }
+
+            _db.SaveChanges();
+            return new Response<string>(true, "Schedules regenerated successfully", id.ToString());
+        }
+
         [HttpPost("followup")]
         public Response<List<FollowUpDTO>> GetFollowUp(FollowUpDTO followUpDto)
         {

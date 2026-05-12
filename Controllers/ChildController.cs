@@ -2462,7 +2462,10 @@ namespace VaccineAPI.Controllers
                         clinicDoseIds.Add(45);  // MMR 2
                         clinicDoseIds.Add(70);  // Hepatitis A 1
                         clinicDoseIds.Add(71);  // Hepatitis A 2
-                        clinicDoseIds.Add(57);  // OPV/IPV+HBV+DPT+Hib 4 (18m booster)
+                        if (epiAgeInDaysAtReg > 730)
+                            clinicDoseIds.Add(136); // Tdap — adult catch-up replaces toddler booster
+                        else
+                            clinicDoseIds.Add(57);  // OPV/IPV+HBV+DPT+Hib 4 — toddler booster
                         if (childDTO.Gender != "Boy") clinicDoseIds.Add(74); // HPV girls only
 
                         var epiDoseIds     = new HashSet<long>(epiGapDays.Keys);
@@ -2715,7 +2718,10 @@ namespace VaccineAPI.Controllers
             clinicDoseIds.Add(45);  // MMR 2
             clinicDoseIds.Add(70);  // Hepatitis A 1
             clinicDoseIds.Add(71);  // Hepatitis A 2
-            clinicDoseIds.Add(57);  // OPV/IPV+HBV+DPT+Hib 4 (18m booster)
+            if (ageInDaysAtReg > 730)
+                clinicDoseIds.Add(136); // Tdap — adult catch-up replaces toddler booster
+            else
+                clinicDoseIds.Add(57);  // OPV/IPV+HBV+DPT+Hib 4 — toddler booster
             if (dbChild.Gender != "Boy") clinicDoseIds.Add(74); // HPV — girls only
 
             // ── Create EPI schedules (IsDone=true, Due2EPI=true) ─────────────────

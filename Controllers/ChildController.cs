@@ -2436,7 +2436,9 @@ namespace VaccineAPI.Controllers
                             });
                         }
 
-                        // PCV clinic doses based on age-at-registration rules
+                        // PCV clinic doses — based on age when PCV dose 1 was first given
+                        // EPI gives PCV 1/2/3 at 6 weeks (< 6 months) → always needs booster from clinic
+                        // No EPI PCV → use age-at-registration to decide how many doses clinic gives
                         bool epiGavePCV = epiDob >= epiD2009;
                         var clinicDoseIds = new HashSet<long>();
                         if (!epiGavePCV)
@@ -2446,9 +2448,10 @@ namespace VaccineAPI.Controllers
                             else if (epiAgeInDaysAtReg < 730)  { clinicDoseIds.Add(41); clinicDoseIds.Add(42); }
                             else                               { clinicDoseIds.Add(41); }
                         }
-                        else if (epiAgeInDaysAtReg < 365)
+                        else
                         {
-                            clinicDoseIds.Add(66); // PCV Booster only
+                            // EPI gave PCV 1/2/3 at 6 weeks — dose 1 was < 6 months, so booster always needed
+                            clinicDoseIds.Add(66);
                         }
 
                         clinicDoseIds.Add(62);  // Chickenpox 1
@@ -2679,15 +2682,14 @@ namespace VaccineAPI.Controllers
             var epiDoseIds   = new HashSet<long>(epiGapDays.Keys);
             var infiniteNames = new[] { "Typhoid", "Flu", "Vitamin A" };
 
-            // ── PCV clinic doses — based on age-at-registration rules ────────────
-            // Brackets 1 & 2: EPI gave NO PCV
+            // ── PCV clinic doses — based on age when PCV dose 1 was first given ────
+            // Brackets 1 & 2: EPI gave NO PCV → use age-at-registration to decide
             //   < 6m  → PCV 1+2+3 + Booster   (41,42,43,66)
             //   6-12m → PCV 1+2 + Booster      (41,42,66)
             //   12-24m→ PCV 1+2 only            (41,42)
             //   >24m  → PCV 1 only              (41)
-            // Brackets 3+: EPI gave PCV 1/2/3
-            //   < 12m → add Booster only (66)
-            //   ≥ 12m → no further PCV
+            // Brackets 3+: EPI gave PCV 1/2/3 at 6 weeks (< 6 months)
+            //   → dose 1 was < 6 months, always needs booster from clinic
             var clinicDoseIds = new HashSet<long>();
 
             bool epiGavePCV = dob >= d2009;  // brackets 3+ got PCV in EPI
@@ -2699,7 +2701,7 @@ namespace VaccineAPI.Controllers
                 else if (ageInDaysAtReg < 730)  { clinicDoseIds.Add(41); clinicDoseIds.Add(42); }
                 else                            { clinicDoseIds.Add(41); }
             }
-            else if (ageInDaysAtReg < 365)
+            else
             {
                 clinicDoseIds.Add(66); // PCV Booster only
             }

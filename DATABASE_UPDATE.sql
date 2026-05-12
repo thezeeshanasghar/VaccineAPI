@@ -72,3 +72,14 @@ ALTER TABLE `schedules`
 ADD COLUMN `IsPAApprove` tinyint(1) NOT NULL DEFAULT 0;
 
 -- Rollback: ALTER TABLE `schedules` DROP COLUMN `IsPAApprove`;
+
+-- =====================================================
+-- EPI Bracket 1 (DOB before 2002) — OPV+DPT+HBV without Hib
+-- VaccineId 19 = OPV/IPV+HBV+DPT+Hib vaccine group (reusing same group)
+-- =====================================================
+INSERT INTO `doses` (`Id`, `Name`, `MinAge`, `MaxAge`, `MinGap`, `DoseOrder`, `VaccineId`)
+VALUES
+  (148, 'OPV+DPT+HBV 1', 42,  NULL, NULL, 1, 19),
+  (149, 'OPV+DPT+HBV 2', 70,  NULL, 28,   2, 19),
+  (150, 'OPV+DPT+HBV 3', 98,  NULL, 28,   3, 19);
+-- Rollback: DELETE FROM `doses` WHERE `Id` IN (148, 149, 150);

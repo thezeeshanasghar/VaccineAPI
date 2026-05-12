@@ -2530,104 +2530,197 @@ namespace VaccineAPI.Controllers
             if (dbChild == null)
                 return new Response<string>(false, "Child not found", null);
 
-            var existingCount = _db.Schedules.Count(s => s.ChildId == id);
-            if (existingCount > 0)
-                return new Response<string>(false, $"Child already has {existingCount} schedules. Delete them first.", null);
+            if (dbChild.IsEPIDone != true)
+                return new Response<string>(false, "Child is not EPI type. Use normal registration.", null);
 
+            // Delete existing schedules — idempotent
+            var existing = _db.Schedules.Where(s => s.ChildId == id).ToList();
+            if (existing.Count > 0) { _db.Schedules.RemoveRange(existing); _db.SaveChanges(); }
+
+            var dob = dbChild.DOB.Date;
+            var today = DateTime.UtcNow.AddHours(5).Date;
+            var ageInDaysAtReg = (today - dob).Days;
+
+            // bracket boundaries
+            var d2000 = new DateTime(2000,  1, 1);
+            var d2002 = new DateTime(2002,  1, 1);
+            var d2009 = new DateTime(2009,  1, 1);
+            var d2014 = new DateTime(2014,  1, 1);
+            var d2021 = new DateTime(2021,  1, 1);
+
+            // epiGapDays: doseId → days from DOB (used to set Date and GivenDate)
+            var epiGapDays = new Dictionary<long, int>();
+
+            void EpiAdd(long doseId, int gap) { epiGapDays[doseId] = gap; }
+
+            // ── At Birth — all brackets ──────────────────────────────────────────
+            EpiAdd(1,   0);   // BCG
+            EpiAdd(3,   0);   // OPV 0
+            EpiAdd(102, 0);   // Hep B birth
+
+            // ── 6w / 10w / 14w combos — bracket dependent ───────────────────────
+            if (dob >= d2000 && dob < d2002)
+            {
+                // Bracket 1: OPV+DPT+HBV without Hib (new doses 148/149/150)
+                // No PCV, No Rota
+                EpiAdd(148, 42);  // OPV+DPT+HBV 1
+                EpiAdd(149, 70);  // OPV+DPT+HBV 2
+                EpiAdd(150, 98);  // OPV+DPT+HBV 3
+            }
+            else if (dob >= d2002 && dob < d2009)
+            {
+                // Bracket 2: OPV/IPV+HBV+DPT+Hib — no PCV, no Rota
+                EpiAdd(34, 42); EpiAdd(35, 70); EpiAdd(36, 98);
+            }
+            else if (dob >= d2009 && dob < d2014)
+            {
+                // Bracket 3: full combo + PCV 1/2/3 — no Rota
+                EpiAdd(34, 42); EpiAdd(35, 70); EpiAdd(36, 98);
+                EpiAdd(41, 42); EpiAdd(42, 70); EpiAdd(43, 98);  // PCV 1/2/3
+            }
+            else if (dob >= d2014)
+            {
+                // Brackets 4-7: full combo + PCV + Rota (Rota only if age ≤ 15w6d at registration)
+                EpiAdd(34, 42); EpiAdd(35, 70); EpiAdd(36, 98);
+                EpiAdd(41, 42); EpiAdd(42, 70); EpiAdd(43, 98);  // PCV 1/2/3
+                if (ageInDaysAtReg <= 111) { EpiAdd(64, 42); EpiAdd(65, 70); } // Rota 1/2
+            }
+
+            // ── MR 1 & 2 — all brackets ─────────────────────────────────────────
+            EpiAdd(113, 270);  // MR 1 at 9 months
+            EpiAdd(114, 456);  // MR 2 at 15 months
+
+            // ── TCV at 9 months — bracket 6/7 only (DOB ≥ 2021) ────────────────
+            if (dob >= d2021) EpiAdd(30, 270);  // TCV = Typhoid dose 1
+
+            // ── Fetch doctor's doses for GapInDays lookup ───────────────────────
             var clinic = dbChild.Clinic;
             var doctor = clinic.Doctor;
-            List<DoctorSchedule> dss = _db.DoctorSchedules
+            var doctorDoses = _db.DoctorSchedules
                 .Where(x => x.DoctorId == doctor.Id)
                 .Include(x => x.Dose)
-                    .ThenInclude(d => d.Vaccine)
-                .OrderBy(x => x.Dose.VaccineId)
-                .ThenBy(x => x.Dose.DoseOrder)
-                .ToList();
+                .ToList()
+                .ToDictionary(x => x.DoseId, x => x);
 
-            var lastDateByVaccineId = new Dictionary<long, DateTime>();
-            foreach (DoctorSchedule ds in dss)
+            var epiDoseIds   = new HashSet<long>(epiGapDays.Keys);
+            var infiniteNames = new[] { "Typhoid", "Flu", "Vitamin A" };
+
+            // ── PCV clinic doses — based on age-at-registration rules ────────────
+            // Brackets 1 & 2: EPI gave NO PCV
+            //   < 6m  → PCV 1+2+3 + Booster   (41,42,43,66)
+            //   6-12m → PCV 1+2 + Booster      (41,42,66)
+            //   12-24m→ PCV 1+2 only            (41,42)
+            //   >24m  → PCV 1 only              (41)
+            // Brackets 3+: EPI gave PCV 1/2/3
+            //   < 12m → add Booster only (66)
+            //   ≥ 12m → no further PCV
+            var clinicDoseIds = new HashSet<long>();
+
+            bool epiGavePCV = dob >= d2009;  // brackets 3+ got PCV in EPI
+
+            if (!epiGavePCV)
             {
-                var dbDose = ds.Dose;
-                if (dbDose == null) continue;
+                if      (ageInDaysAtReg < 182)  { clinicDoseIds.Add(41); clinicDoseIds.Add(42); clinicDoseIds.Add(43); clinicDoseIds.Add(66); }
+                else if (ageInDaysAtReg < 365)  { clinicDoseIds.Add(41); clinicDoseIds.Add(42); clinicDoseIds.Add(66); }
+                else if (ageInDaysAtReg < 730)  { clinicDoseIds.Add(41); clinicDoseIds.Add(42); }
+                else                            { clinicDoseIds.Add(41); }
+            }
+            else if (ageInDaysAtReg < 365)
+            {
+                clinicDoseIds.Add(66); // PCV Booster only
+            }
 
-                Schedule cvd = new Schedule();
-                cvd.ChildId = id;
-                cvd.DoseId = ds.DoseId;
+            // ── Remaining private clinic doses ───────────────────────────────────
+            clinicDoseIds.Add(62);  // Chickenpox 1
+            clinicDoseIds.Add(63);  // Chickenpox 2
+            clinicDoseIds.Add(60);  // MenACWY 1 (at 1yr)
+            clinicDoseIds.Add(59);  // MenACWY 2 (at 2yr)
+            clinicDoseIds.Add(44);  // MMR 1
+            clinicDoseIds.Add(45);  // MMR 2
+            clinicDoseIds.Add(70);  // Hepatitis A 1
+            clinicDoseIds.Add(71);  // Hepatitis A 2
+            clinicDoseIds.Add(57);  // OPV/IPV+HBV+DPT+Hib 4 (18m booster)
+            if (dbChild.Gender != "Boy") clinicDoseIds.Add(74); // HPV — girls only
 
-                if (dbChild.Gender == "Boy" && dbDose.Name.StartsWith("HPV"))
-                    continue;
-
-                if (dbChild.IsEPIDone == true)
+            // ── Create EPI schedules (IsDone=true, Due2EPI=true) ─────────────────
+            foreach (var kvp in epiGapDays)
+            {
+                var scheduledDate = dob.AddDays(kvp.Value);
+                _db.Schedules.Add(new Schedule
                 {
-                    var dob = dbChild.DOB.Date;
-                    DateTime comparisonDate2002 = DateTime.Parse("01/01/2002");
-                    DateTime comparisonDate2009 = DateTime.Parse("01/01/2009");
-                    DateTime comparisonDate2015 = DateTime.Parse("01/01/2015");
-                    DateTime comparisonDate2021 = DateTime.Parse("01/04/2021");
-                    if (dob < comparisonDate2002)
-                    {
-                        if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1")) { cvd.DoseId = 130; ds.GapInDays = 0; }
-                    }
-                    else if (dob > comparisonDate2021)
-                    {
-                        if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1")) { cvd.DoseId = 135; ds.GapInDays = 0; }
-                    }
-                    else if (dob > comparisonDate2002 && dob < comparisonDate2009)
-                    {
-                        if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1")) { cvd.DoseId = 131; ds.GapInDays = 0; }
-                    }
-                    else if (dob > comparisonDate2009 && dob < comparisonDate2015)
-                    {
-                        if (dbDose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1")) { cvd.DoseId = 132; ds.GapInDays = 0; }
-                    }
-                }
+                    ChildId     = id,
+                    DoseId      = kvp.Key,
+                    Date        = scheduledDate,
+                    GivenDate   = scheduledDate,
+                    IsDone      = true,
+                    Due2EPI     = true,
+                    DiseaseYear = ""
+                });
+            }
 
-                if (dbDose.Name.StartsWith("HPV") && dbDose.DoseOrder == 3) cvd.IsSkip = true;
+            // ── Create clinic schedules ──────────────────────────────────────────
+            var lastDateByVaccineId = new Dictionary<long, DateTime>();
+            foreach (var kvp in doctorDoses.OrderBy(k => k.Value.Dose != null ? k.Value.Dose.DoseOrder : 0))
+            {
+                long doseId = kvp.Key;
+                var ds      = kvp.Value;
+                var dbDose  = ds.Dose;
+                if (dbDose == null) continue;
+                if (epiDoseIds.Contains(doseId)) continue;
+                if (infiniteNames.Any(n => dbDose.Name.StartsWith(n, StringComparison.OrdinalIgnoreCase))) continue;
+                if (!clinicDoseIds.Contains(doseId)) continue;
 
-                cvd.Date = calculateDate(dbChild.DOB, ds.GapInDays);
+                var schedDate = calculateDate(dbChild.DOB, ds.GapInDays);
                 if (dbDose.DoseOrder > 1 && dbDose.MinGap.HasValue && dbDose.MinGap.Value > 0
                     && lastDateByVaccineId.ContainsKey(dbDose.VaccineId))
                 {
                     var minGapDate = lastDateByVaccineId[dbDose.VaccineId].AddDays(dbDose.MinGap.Value);
-                    if (cvd.Date < minGapDate)
-                        cvd.Date = minGapDate;
+                    if (schedDate < minGapDate) schedDate = minGapDate;
                 }
-                lastDateByVaccineId[dbDose.VaccineId] = cvd.Date;
-                cvd.DiseaseYear = "";
-                _db.Schedules.Add(cvd);
+                lastDateByVaccineId[dbDose.VaccineId] = schedDate;
+
+                _db.Schedules.Add(new Schedule
+                {
+                    ChildId     = id,
+                    DoseId      = doseId,
+                    Date        = schedDate,
+                    IsDone      = false,
+                    Due2EPI     = false,
+                    DiseaseYear = ""
+                });
             }
 
-            if (dbChild.IsEPIDone == true)
+            // ── Infinite vaccines (bottom table): Flu, Typhoid, Vitamin A ────────
+            // Vitamin A: omit if child > 5 years at registration
+            // Typhoid dose 1: omit if DOB >= 2021 (TCV already covered it as EPI)
+            foreach (var kvp in doctorDoses)
             {
-                var dob2 = dbChild.DOB.Date;
-                DateTime comparisonDate2012 = DateTime.Parse("01/01/2012");
-                DateTime comparisonDate2018 = DateTime.Parse("01/01/2018");
-                DateTime comparisonDate2020 = DateTime.Parse("01/01/2020");
-                if (dob2 > comparisonDate2020)
+                long doseId = kvp.Key;
+                var ds      = kvp.Value;
+                var dbDose  = ds.Dose;
+                if (dbDose == null) continue;
+
+                bool isTyphoid  = dbDose.Name.StartsWith("Typhoid",   StringComparison.OrdinalIgnoreCase);
+                bool isFlu      = dbDose.Name.StartsWith("Flu",       StringComparison.OrdinalIgnoreCase);
+                bool isVitaminA = dbDose.Name.StartsWith("Vitamin A", StringComparison.OrdinalIgnoreCase);
+                if (!isTyphoid && !isFlu && !isVitaminA) continue;
+
+                if (isVitaminA && ageInDaysAtReg > 1825) continue;  // > 5 years
+                if (isTyphoid && dob >= d2021 && dbDose.DoseOrder == 1) continue; // TCV was dose 1
+
+                _db.Schedules.Add(new Schedule
                 {
-                    Schedule cvd3 = new Schedule();
-                    cvd3.DoseId = 136; cvd3.DiseaseYear = "";
-                    cvd3.Date = calculateDate(dbChild.DOB, 0); cvd3.ChildId = id;
-                    _db.Schedules.Add(cvd3);
-                }
-                else if (dob2 > comparisonDate2018)
-                {
-                    Schedule cvd2 = new Schedule();
-                    cvd2.DoseId = 134; cvd2.DiseaseYear = "";
-                    cvd2.Date = calculateDate(dbChild.DOB, 0); cvd2.ChildId = id;
-                    _db.Schedules.Add(cvd2);
-                }
-                else if (dob2 > comparisonDate2012)
-                {
-                    Schedule cvd1 = new Schedule();
-                    cvd1.DoseId = 133; cvd1.DiseaseYear = "";
-                    cvd1.Date = calculateDate(dbChild.DOB, 0); cvd1.ChildId = id;
-                    _db.Schedules.Add(cvd1);
-                }
+                    ChildId     = id,
+                    DoseId      = doseId,
+                    Date        = calculateDate(dbChild.DOB, ds.GapInDays),
+                    IsDone      = false,
+                    Due2EPI     = false,
+                    DiseaseYear = ""
+                });
             }
 
             _db.SaveChanges();
-            return new Response<string>(true, "Schedules regenerated successfully", id.ToString());
+            return new Response<string>(true, "EPI schedules regenerated successfully", id.ToString());
         }
 
         [HttpPost("followup")]

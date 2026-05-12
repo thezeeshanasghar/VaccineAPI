@@ -895,7 +895,7 @@ namespace VaccineAPI.Controllers
                     .ToList();
 
                 var lastGivenInfiniteDoses = dbSchedules
-                    .Where(s => s.IsSkip != true && s.IsDone == true && infiniteVaccineNames.Any(name =>
+                    .Where(s => s.IsSkip != true && s.IsDone == true && s.Due2EPI != true && infiniteVaccineNames.Any(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
                     .GroupBy(s => infiniteVaccineNames.First(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
@@ -903,7 +903,7 @@ namespace VaccineAPI.Controllers
                     .ToList();
 
                 var dueInfiniteDoses = dbSchedules
-                    .Where(s => s.IsSkip != true && s.IsDone == false && infiniteVaccineNames.Any(name =>
+                    .Where(s => s.IsSkip != true && s.IsDone == false && s.Due2EPI != true && infiniteVaccineNames.Any(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
                     .GroupBy(s => infiniteVaccineNames.First(name =>
                         s.Dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)))

@@ -986,6 +986,275 @@ namespace VaccineAPI.Controllers
 
                 var upperTableDates = new HashSet<string>();
                 int srNo = 0;
+
+                if (dbChild.IsEPIDone == true)
+                {
+                    // ── EPI-TYPE SCHEDULE RENDERING ──────────────────────────────────────
+                    // Separate EPI rows (Due2EPI==true, IsDone==true) from clinic rows.
+                    // EPI rows: Sr# = sequential group number, Date = age label, Brand = "By EPI", Status = "Done"
+                    // Clinic rows: Sr# = continues after EPI groups, Date = actual date, Brand = real brand
+
+                    Font font       = FontFactory.GetFont(FontFactory.HELVETICA, 10);
+                    Font rangevaluefont  = FontFactory.GetFont(FontFactory.HELVETICA, 9);
+                    Font boldfont1  = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.BOLD, new BaseColor(0, 128, 0));
+                    Font italicfont1 = FontFactory.GetFont(FontFactory.HELVETICA, 10, Font.ITALIC, new BaseColor(255, 0, 0));
+                    Font rangefont  = FontFactory.GetFont(FontFactory.HELVETICA, 6);
+                    Font ofcValueFont = FontFactory.GetFont(FontFactory.HELVETICA, 7);
+                    Font ofcRangeFont = FontFactory.GetFont(FontFactory.HELVETICA, 5);
+
+                    // EPI age-label lookup by MinAge on the Dose
+                    string EpiAgeLabel(Schedule s)
+                    {
+                        int gap = s.Dose != null ? s.Dose.MinAge : 0;
+                        if (gap == 0)   return "At Birth";
+                        if (gap <= 42)  return "6 Weeks";
+                        if (gap <= 70)  return "10 Weeks";
+                        if (gap <= 105) return "14 Weeks";
+                        if (gap <= 280) return "9 Months";
+                        if (gap <= 460) return "15 Months";
+                        return gap.ToString() + "d";
+                    }
+
+                    // Split schedules into EPI and clinic groups
+                    var epiSchedules    = orderedDbSchedules.Where(s => s.Due2EPI == true && s.IsDone == true).ToList();
+                    var clinicSchedules = orderedDbSchedules.Where(s => s.Due2EPI != true).ToList();
+
+                    // Group EPI by age label (preserves order: Birth, 6w, 10w, 14w, 9m, 15m)
+                    var epiGroups = epiSchedules
+                        .GroupBy(s => EpiAgeLabel(s))
+                        .OrderBy(g =>
+                        {
+                            var labels = new[] { "At Birth","6 Weeks","10 Weeks","14 Weeks","9 Months","15 Months" };
+                            int idx = System.Array.IndexOf(labels, g.Key);
+                            return idx < 0 ? 99 : idx;
+                        })
+                        .ToList();
+
+                    // Group clinic schedules by date (same logic as regular schedule)
+                    var clinicGroups = clinicSchedules
+                        .GroupBy(s => (s.GivenDate ?? s.Date).Date)
+                        .OrderBy(g => g.Key)
+                        .ToList();
+
+                    // ── Render EPI groups ─────────────────────────────────────────────────
+                    foreach (var epiGroup in epiGroups)
+                    {
+                        srNo++;
+                        var groupList = epiGroup.ToList();
+                        int rowSpanCount = groupList.Count;
+                        bool isFirstRow  = true;
+
+                        foreach (var s in groupList)
+                        {
+                            if (isFirstRow)
+                            {
+                                // Sr#
+                                PdfPCell srCell = new PdfPCell(new Phrase(srNo.ToString(), font));
+                                srCell.Rowspan = rowSpanCount;
+                                srCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                srCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                srCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(srCell);
+
+                                // Date = age label
+                                PdfPCell dateCell = new PdfPCell(new Phrase(epiGroup.Key, font));
+                                dateCell.Rowspan = rowSpanCount;
+                                dateCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(dateCell);
+                            }
+
+                            // Vaccine — individual
+                            PdfPCell vaccineCell = new PdfPCell(new Phrase(s.Dose.Name, rangevaluefont));
+                            vaccineCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                            vaccineCell.BorderColor = GrayColor.LightGray;
+                            table.AddCell(vaccineCell);
+
+                            // Brand = "By EPI" — individual
+                            PdfPCell brandCell = new PdfPCell(new Phrase("By EPI", font));
+                            brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                            brandCell.BorderColor = GrayColor.LightGray;
+                            table.AddCell(brandCell);
+
+                            if (isFirstRow)
+                            {
+                                // Status = "Done" — merged
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Done", font));
+                                statusCell.Rowspan = rowSpanCount;
+                                statusCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+
+                                // Weight — merged, empty for EPI
+                                PdfPCell weightCell = new PdfPCell(new Phrase("—", font));
+                                weightCell.Rowspan = rowSpanCount;
+                                weightCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                weightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(weightCell);
+
+                                // Height — merged, empty for EPI
+                                PdfPCell heightCell = new PdfPCell(new Phrase("—", font));
+                                heightCell.Rowspan = rowSpanCount;
+                                heightCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                heightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(heightCell);
+
+                                // OFC/BMI — merged, empty for EPI
+                                PdfPCell circleCell = new PdfPCell(new Phrase("—", font));
+                                circleCell.Rowspan = rowSpanCount;
+                                circleCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                circleCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(circleCell);
+
+                                isFirstRow = false;
+                            }
+                        }
+                    }
+
+                    // ── Render clinic groups (same merging logic as regular schedule) ─────
+                    foreach (var clinicGroup in clinicGroups)
+                    {
+                        srNo++;
+                        var groupList    = clinicGroup.ToList();
+                        int rowSpanCount = groupList.Count;
+                        bool isFirstRow  = true;
+
+                        var firstSchedule = groupList[0];
+
+                        // Group status
+                        string groupStatus;
+                        Font groupStatusFont;
+                        if (firstSchedule.IsDone == true && firstSchedule.IsDisease != true)
+                        { groupStatus = "Given"; groupStatusFont = boldfont1; }
+                        else if (firstSchedule.IsDone == false && firstSchedule.IsDisease != true && !checkForMissed(firstSchedule.Date))
+                        { groupStatus = "Due"; groupStatusFont = font; }
+                        else if (firstSchedule.IsDone == false && firstSchedule.IsDisease != true && checkForMissed(firstSchedule.Date))
+                        { groupStatus = "Missed"; groupStatusFont = italicfont1; }
+                        else
+                        { groupStatus = "Diseased"; groupStatusFont = font; }
+
+                        // Group date label
+                        string groupDateLabel;
+                        if (firstSchedule.IsDone == true && firstSchedule.IsDisease != true)
+                            groupDateLabel = firstSchedule.GivenDate?.ToString("dd/MM/yyyy") ?? firstSchedule.Date.ToString("dd/MM/yyyy");
+                        else
+                            groupDateLabel = firstSchedule.Date.ToString("dd/MM/yyyy");
+
+                        if (!string.IsNullOrEmpty(groupDateLabel) && firstSchedule.IsDone == true)
+                            upperTableDates.Add(groupDateLabel);
+
+                        // Weight/Height/OFC for clinic group
+                        var doneSchedule = groupList.FirstOrDefault(s => s.IsDone == true && s.IsDisease != true);
+                        Paragraph pw = new Paragraph("", rangevaluefont);
+                        Paragraph ph = new Paragraph("", rangevaluefont);
+                        Paragraph pc = new Paragraph("", ofcValueFont);
+                        if (doneSchedule != null)
+                        {
+                            var ageInMonths = Convert.ToInt32(
+                                (doneSchedule.GivenDate?.Date.Year - dbChild.DOB.Date.Year) * 12 +
+                                doneSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month +
+                                (doneSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0 : -1));
+                            NormalRange normalrange = _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
+                            if (doneSchedule.Weight > 0 && normalrange != null)
+                            {
+                                pw.Add(new Chunk(doneSchedule.Weight.ToString(), rangevaluefont));
+                                pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
+                            }
+                            if (doneSchedule.Height > 0 && normalrange != null)
+                            {
+                                ph.Add(new Chunk(doneSchedule.Height.ToString(), rangevaluefont));
+                                ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
+                            }
+                            if (doneSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
+                            {
+                                pc.Add(new Chunk(doneSchedule.Circle.ToString(), ofcValueFont));
+                                pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", ofcRangeFont));
+                            }
+                            else if (doneSchedule.Height > 0 && doneSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
+                            {
+                                double BMI = (double)(doneSchedule.Weight / (doneSchedule.Height * doneSchedule.Height / 10000));
+                                BMI = Math.Round(BMI, 1);
+                                pc.Add(new Chunk(BMI.ToString(), ofcValueFont));
+                                pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", ofcRangeFont));
+                            }
+                        }
+
+                        foreach (var s in groupList)
+                        {
+                            if (isFirstRow)
+                            {
+                                PdfPCell srCell = new PdfPCell(new Phrase(srNo.ToString(), font));
+                                srCell.Rowspan = rowSpanCount;
+                                srCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                srCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                srCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(srCell);
+
+                                PdfPCell dateCell = new PdfPCell(new Phrase(groupDateLabel, font));
+                                dateCell.Rowspan = rowSpanCount;
+                                dateCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                dateCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(dateCell);
+                            }
+
+                            PdfPCell vaccineCell = new PdfPCell(new Phrase(s.Dose.Name, rangevaluefont));
+                            vaccineCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                            vaccineCell.BorderColor = GrayColor.LightGray;
+                            table.AddCell(vaccineCell);
+
+                            string brandName = "";
+                            if (s.BrandId != null && s.IsDone != false)
+                                brandName = s.Brand.Name.ToString();
+                            else if (s.BrandId == null && s.IsDone != false && s.IsDisease != true)
+                                brandName = "OHF*";
+                            PdfPCell brandCell = new PdfPCell(new Phrase(brandName, font));
+                            brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
+                            brandCell.BorderColor = GrayColor.LightGray;
+                            table.AddCell(brandCell);
+
+                            if (isFirstRow)
+                            {
+                                PdfPCell statusCell = new PdfPCell(new Phrase(groupStatus, groupStatusFont));
+                                statusCell.Rowspan = rowSpanCount;
+                                statusCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                statusCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                statusCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(statusCell);
+
+                                PdfPCell weightCell = new PdfPCell(pw);
+                                weightCell.Rowspan = rowSpanCount;
+                                weightCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                weightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(weightCell);
+
+                                PdfPCell heightCell = new PdfPCell(ph);
+                                heightCell.Rowspan = rowSpanCount;
+                                heightCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                heightCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(heightCell);
+
+                                PdfPCell circleCell = new PdfPCell(pc);
+                                circleCell.Rowspan = rowSpanCount;
+                                circleCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                                circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                                circleCell.BorderColor = GrayColor.LightGray;
+                                table.AddCell(circleCell);
+
+                                isFirstRow = false;
+                            }
+                        }
+                    }
+                }
+                else // regular (non-EPI) schedule — unchanged
+                {
                 foreach (var group in groupedSchedules)
                 {
                     srNo++;
@@ -1145,6 +1414,7 @@ namespace VaccineAPI.Controllers
                         }
                     }
                 }
+                } // end else (regular schedule)
 
                 foreach (var dbSchedule in dueInfiniteDoses)
                 {

@@ -31,6 +31,8 @@ namespace VaccineAPI.ModelDTO
         public bool AllowSupplier { get; set; }
         public bool AllowFinancial { get; set; }
         public bool AllowAgent { get; set; }
+        public bool AllowTravel { get; set; }
+        public bool AllowAdult { get; set; }
         public int SMSLimit { get; set; }
         public string DoctorType { get; set; } = "";
         public string? Qualification { get; set; }

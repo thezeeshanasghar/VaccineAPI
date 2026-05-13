@@ -251,17 +251,27 @@ namespace VaccineAPI.Controllers
                var child = await _db.Childs
                    .AsNoTracking()
                    .Include(c => c.User)
+                   .Include(c => c.Clinic)
+                       .ThenInclude(cl => cl.Doctor)
                    .Include(c => c.Schedules)
-                       .ThenInclude(s => s.Dose)  
+                       .ThenInclude(s => s.Dose)
                    .Include(c => c.Schedules)
                        .ThenInclude(s => s.Brand)
                    .FirstOrDefaultAsync(c => c.Id == id);
-       
+
            if (child == null)
            {
                return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
            }
            var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(child.Schedules.OrderBy(x => x.Date).ToList());
+           if (child.Clinic != null && child.Clinic.Doctor != null)
+           {
+               foreach (var s in schedulesDTO)
+               {
+                   s.Child.AllowHomeBooking   = child.Clinic.Doctor.AllowHomeBooking;
+                   s.Child.AllowClinicBooking = child.Clinic.Doctor.AllowClinicBooking;
+               }
+           }
            return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);
            }
            catch (Exception ex)

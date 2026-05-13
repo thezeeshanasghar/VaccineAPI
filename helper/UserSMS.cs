@@ -50,8 +50,6 @@ namespace VaccineAPI
             var response2 = SendSMS(child.User.CountryCode, child.User.MobileNumber, child.Email, sms2);
             addMessageToDB(child.User.MobileNumber, response1, sms1, child.Clinic.Doctor.User.Id);
             addMessageToDB(child.User.MobileNumber, response2, sms2, child.Clinic.Doctor.User.Id);
-            minusDoctorSMSCount(child.Clinic.Doctor);
-            minusDoctorSMSCount(child.Clinic.Doctor);
             return response1 + response2;
 
         }
@@ -77,7 +75,6 @@ namespace VaccineAPI
             sms1 += " @ " + child.Clinic.Doctor.PhoneNo + " OR " + child.Clinic.PhoneNumber;
             var response1 = SendSMS(child.User.CountryCode, child.User.MobileNumber, child.Email, sms1);
             addMessageToDB(child.User.MobileNumber, response1, sms1, child.Clinic.Doctor.User.Id);
-            minusDoctorSMSCount(child.Clinic.Doctor);
             return response1;
         }
 
@@ -120,8 +117,6 @@ namespace VaccineAPI
 
             var response1 = SendSMS(followUp.Child.User.CountryCode, followUp.Child.User.MobileNumber, followUp.Child.Email, sms1);
             addMessageToDB(followUp.Child.User.MobileNumber, response1, sms1, followUp.Child.Clinic.Doctor.User.Id);
-            minusDoctorSMSCount(followUp.Child.Clinic.Doctor);
-
             return response1;
         }
 
@@ -141,20 +136,6 @@ namespace VaccineAPI
                 _db.SaveChanges();
             }
         }
-        public void minusDoctorSMSCount(Doctor doctor)
-        {
-            // using (VDEntities entities = new VDEntities())
-            {
-                Doctor? dbDoctor = _db.Doctors.Where(x => x.Id == doctor.Id).FirstOrDefault();
-                if (dbDoctor == null)
-                {
-                    return;
-                }
-                dbDoctor.SMSLimit--;
-                _db.SaveChanges();
-            }
-        }
-
         public string SendSMS(string CountryCode, string MobileNumber, string Email, string text)
         {
 

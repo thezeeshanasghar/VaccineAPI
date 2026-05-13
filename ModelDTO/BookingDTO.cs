@@ -7,6 +7,8 @@ namespace VaccineAPI.ModelDTO
 
     public class BookingDTO
     {
+        public long ChildId { get; set; }
+        public long UserId { get; set; }
         public string ChildName { get; set; } = "";
         public string FatherName { get; set; } = "";
         public string DOB { get; set; } = "";
@@ -14,6 +16,7 @@ namespace VaccineAPI.ModelDTO
         public string Email { get; set; } = "";
         public string Phone { get; set; } = "";
         public string Address { get; set; } = "";
+        public string Location { get; set; } = "";
         public string Card { get; set; } = "";
         public string City { get; set; } = "";
         public string BookingDate { get; set; } = "";

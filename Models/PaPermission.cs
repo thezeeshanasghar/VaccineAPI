@@ -93,5 +93,9 @@ namespace VaccineAPI.Models
 
         // Analytics
         public bool ViewAnalytics { get; set; }
+
+        // Clinical Assessment
+        public bool DevelopmentalAssessment { get; set; }
+        public bool ChangePaymentMode { get; set; }
     }
 }

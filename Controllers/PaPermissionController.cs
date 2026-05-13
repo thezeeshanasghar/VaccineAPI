@@ -117,6 +117,9 @@ namespace VaccineAPI.Controllers
 
                 existing.ViewAnalytics = incoming.ViewAnalytics;
 
+                existing.DevelopmentalAssessment = incoming.DevelopmentalAssessment;
+                existing.ChangePaymentMode = incoming.ChangePaymentMode;
+
                 _db.Entry(existing).State = EntityState.Modified;
             }
 

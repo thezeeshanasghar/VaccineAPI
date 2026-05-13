@@ -37,6 +37,7 @@ namespace VaccineAPI.Models
         public bool AllowAgent { get; set; }
         public bool AllowTravel { get; set; }
         public bool AllowAdult { get; set; }
+        public bool AllowDevelopmentalAssessment { get; set; }
         public string DoctorType { get; set; } = "";
         public string? Qualification { get; set; }
         public string AdditionalInfo { get; set; } = string.Empty;

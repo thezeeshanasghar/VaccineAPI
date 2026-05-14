@@ -127,6 +127,7 @@ namespace VaccineAPI.Controllers
                 var dbSchedule = _db.Schedules
                     .Include(x => x.Dose)
                     .ThenInclude(x => x.Vaccine)
+                    .ThenInclude(x => x.Doses)
                     .Include(x => x.Child)
                     .Where(c => c.Id == scheduleDTO.Id)
                     .FirstOrDefault();
@@ -756,7 +757,7 @@ namespace VaccineAPI.Controllers
                 var TargetSchedule = _db.Schedules
                     .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
                     .FirstOrDefault();
-                if (TargetSchedule != null)
+                if (TargetSchedule != null && TargetSchedule.IsSkip != true)
                 {
                     if (minimumGap.HasValue && minimumGap.Value > 0)
                     {

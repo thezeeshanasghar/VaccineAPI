@@ -105,31 +105,47 @@ namespace VaccineAPI.Controllers
 
             // 5 — email to doctor
             string bookingTypeName = booking.Type == "HomeBooked" ? "Home Vaccination" : "Clinic Visit";
-            string mapsLine = !string.IsNullOrWhiteSpace(booking.Location)
-                ? $"\nLocation (Maps): {booking.Location}" : "";
-            string addressLine = !string.IsNullOrWhiteSpace(booking.Address)
-                ? $"\nAddress: {booking.Address}\nCity: {booking.City}" : "";
-            string preferredLine = !string.IsNullOrWhiteSpace(booking.PreferredDate)
-                ? $"\nPreferred Date: {booking.PreferredDate}" : "";
+            string addressRows = booking.Type == "HomeBooked"
+                ? $"│  Address         │  {booking.Address,-32}│\n" +
+                  $"│  City            │  {booking.City,-32}│\n" +
+                  (!string.IsNullOrWhiteSpace(booking.Location)
+                    ? $"│  Location (Maps) │  {booking.Location,-32}│\n" : "")
+                : "";
+            string preferredRow = !string.IsNullOrWhiteSpace(booking.PreferredDate)
+                ? $"│  Preferred Date  │  {booking.PreferredDate,-32}│\n" : "";
 
             string doctorEmailBody =
-                $"New {bookingTypeName} Booking\n" +
-                $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-                $"Patient: {booking.ChildName}\n" +
-                $"Father: {booking.FatherName}\n" +
-                $"Phone: {booking.Phone}\n" +
-                $"Vaccines: {booking.Vaccines}" +
-                addressLine +
-                mapsLine +
-                preferredLine +
-                $"\nBooked on: {booking.CreatedAt:dd MMM yyyy, hh:mm tt}\n" +
-                $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-                $"Login to VacDoc to confirm or cancel this booking.";
+                $"Dear Doctor,\n\n" +
+                $"A new {bookingTypeName} booking has been submitted via the Patient Portal.\n\n" +
+                $"┌──────────────────┬──────────────────────────────────┐\n" +
+                $"│  BOOKING DETAILS                                    │\n" +
+                $"├──────────────────┼──────────────────────────────────┤\n" +
+                $"│  Type            │  {bookingTypeName,-32}│\n" +
+                $"│  Booked On       │  {booking.CreatedAt:dd MMM yyyy, hh:mm tt}{"",10}│\n" +
+                preferredRow +
+                $"├──────────────────┼──────────────────────────────────┤\n" +
+                $"│  PATIENT                                            │\n" +
+                $"├──────────────────┼──────────────────────────────────┤\n" +
+                $"│  Name            │  {booking.ChildName,-32}│\n" +
+                $"│  Father's Name   │  {booking.FatherName,-32}│\n" +
+                $"│  Phone           │  {booking.Phone,-32}│\n" +
+                $"├──────────────────┼──────────────────────────────────┤\n" +
+                $"│  VACCINES        │  {booking.Vaccines,-32}│\n" +
+                (!string.IsNullOrWhiteSpace(addressRows)
+                    ? $"├──────────────────┼──────────────────────────────────┤\n" + addressRows : "") +
+                $"└──────────────────┴──────────────────────────────────┘\n\n" +
+                $"Please login to VacDoc to confirm or cancel this booking.\n" +
+                $"https://doctor.vaccinationcentre.com";
 
-            _email.Send(doctorEmail, $"New {bookingTypeName} Booking — {booking.ChildName}", doctorEmailBody);
+            UserEmail.SendEmail(doctorEmail, $"New {bookingTypeName} Booking — {booking.ChildName}", doctorEmailBody);
 
-            _email.Send(booking.Email, "Booking Received",
-                $"Dear {booking.ChildName}'s parent,\n\nYour booking request has been received. We will confirm shortly.");
+            UserEmail.SendEmail(booking.Email, "Booking Received — vaccinationcentre.com",
+                $"Dear {booking.ChildName}'s parent,\n\n" +
+                $"Your {bookingTypeName.ToLower()} booking request has been received.\n" +
+                $"We will confirm your appointment shortly.\n\n" +
+                $"Vaccines: {booking.Vaccines}\n" +
+                (!string.IsNullOrWhiteSpace(booking.PreferredDate) ? $"Preferred Date: {booking.PreferredDate}\n" : "") +
+                $"\nRegards,\nVaccination Centre Team");
 
             // 6 — write Google Sheet
             try
@@ -202,8 +218,7 @@ namespace VaccineAPI.Controllers
             });
             _db.SaveChanges();
 
-            // email stub to parent
-            _email.Send(booking.Email, $"Booking {status}", $"Dear parent,\n\n{parentMsg}");
+            UserEmail.SendEmail(booking.Email, $"Booking {status} — vaccinationcentre.com", $"Dear parent,\n\n{parentMsg}\n\nRegards,\nVaccination Centre Team");
 
             return new Response<BookingDTO>(true, $"Booking {status.ToLower()}.", null);
         }

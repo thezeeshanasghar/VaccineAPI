@@ -1398,10 +1398,12 @@ namespace VaccineAPI.Controllers
                 {
                     AllDoses = AllDoses
                         .Where(x => x.DoseOrder >= dbSchedule.Dose.DoseOrder)
+                        .OrderBy(x => x.DoseOrder)
                         .ToList();
-                    DateTime previousDate = DateTime.UtcNow.AddHours(5);
 
-                    //foreach (var d in AllDoses)
+                    // previousDate tracks the settled date of the last processed dose
+                    DateTime previousDate = scheduleDTO.Date.Date;
+
                     for (int i = 0; i < AllDoses.Count; i++)
                     {
                         var d = AllDoses.ElementAt(i);
@@ -1410,25 +1412,11 @@ namespace VaccineAPI.Controllers
                             .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
                             .FirstOrDefault();
 
-                        // if MinGap is this dose < MinAge of Previouse Dose; then dont reschedule
-                        // stop updating date of a dose if minimum gap is valid
                         if (TargetSchedule != null)
                         {
-                            if (i != 0)
+                            if (i == 0)
                             {
-                                var doseDaysDifference = Convert.ToInt32(
-                                    (TargetSchedule.Date.Date - previousDate.Date).TotalDays
-                                );
-                                if (doseDaysDifference <= MinGap)
-                                    TargetSchedule.Date = TargetSchedule.Date.AddDays(
-                                        daysDifference
-                                    );
-                                // calculateDate(TargetSchedule.Date,
-                                // daysDifference); //
-                            }
-                            else
-                            {
-                                // check for MaxAge of any Dose
+                                // this is the dose being moved — check MaxAge then apply new date
                                 if (daysDifference > d.MaxAge && !ignoreMaxAgeRule)
                                     if (mode.Equals("bulk"))
                                     {
@@ -1438,9 +1426,6 @@ namespace VaccineAPI.Controllers
                                                 .ToDateTime(scheduleDTO.Date.Date)
                                                 .ToString("dd-MM-yyyy")
                                             + " because it is greater than the Max Age of dose.";
-
-                                        //    +
-                                        //    "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>";
                                         return message;
                                     }
                                     else
@@ -1451,16 +1436,21 @@ namespace VaccineAPI.Controllers
                                                 .ToDateTime(scheduleDTO.Date.Date)
                                                 .ToString("dd-MM-yyyy")
                                             + " because it is greater than the Max Age of dose. ";
-
-                                        //     +
-                                        //    "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},true,false,false)'> Ignore Rule</ion-button>";
                                         return message;
                                     }
-                                TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
-                                //calculateDate(TargetSchedule.Date,
-                                // daysDifference); //
+                                TargetSchedule.Date = scheduleDTO.Date.Date;
                             }
-                            previousDate = TargetSchedule.Date;
+                            else
+                            {
+                                // subsequent doses: only push forward if gap from previous is now less than MinGap
+                                if (MinGap.HasValue && MinGap.Value > 0)
+                                {
+                                    var correctDate = previousDate.AddDays(MinGap.Value);
+                                    if (TargetSchedule.Date.Date < correctDate.Date)
+                                        TargetSchedule.Date = correctDate;
+                                }
+                            }
+                            previousDate = TargetSchedule.Date.Date;
                         }
                     }
                 }

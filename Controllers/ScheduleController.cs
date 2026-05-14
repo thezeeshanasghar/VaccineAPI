@@ -1517,7 +1517,7 @@ namespace VaccineAPI.Controllers
                         // daysDifference);
                     }
                     else
-                    // if we rescdule other than first dose of any vaccine
+                    // if we reschedule other than first dose of any vaccine
                     {
                         var lastDose = AllDoses.Last<Dose>();
                         var secondLastDose = AllDoses.ElementAt(AllDoses.Count - 2);
@@ -1562,9 +1562,6 @@ namespace VaccineAPI.Controllers
                                     + " because Minimum Gap from previous dose of this vaccine should be "
                                     + lastDose.MinGap
                                     + " days.";
-
-                                //  +
-                                // "<ion-button (click)='BulkReschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,false,true);'> Ignore Rule</a>";
                                 return message;
                             }
                             else
@@ -1577,15 +1574,39 @@ namespace VaccineAPI.Controllers
                                     + " because Minimum Gap from previous dose of this vaccine should be "
                                     + lastDose.MinGap
                                     + " days.";
-
-                                //  +
-                                // "<ion-button (click)='Reschedule({Id:" + scheduleDTO.Id + ",Date:'" + scheduleDTO.Date.ToString("dd-MM-yyyy") + "'},false,false,true);'> Ignore Rule</ion-button>";
                                 return message;
                             }
+
+                        // Move the rescheduled dose to the new (earlier) date
                         if (TargetSchedule != null)
-                            TargetSchedule.Date = TargetSchedule.Date.AddDays(daysDifference);
-                        // calculateDate(TargetSchedule.Date,
-                        // daysDifference);
+                            TargetSchedule.Date = scheduleDTO.Date.Date;
+
+                        // Cascade: walk all future doses after the moved dose.
+                        // Only push a future dose forward if its gap from the previous dose is now less than MinGap.
+                        // If gap >= MinGap, leave it exactly where it is.
+                        var futureDoses = dbSchedule.Dose.Vaccine.Doses
+                            .Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder)
+                            .OrderBy(x => x.DoseOrder)
+                            .ToList();
+
+                        DateTime previousDate = scheduleDTO.Date.Date;
+                        foreach (var fd in futureDoses)
+                        {
+                            var futureSchedule = db.Schedules
+                                .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == fd.Id)
+                                .FirstOrDefault();
+
+                            if (futureSchedule != null)
+                            {
+                                if (fd.MinGap.HasValue && fd.MinGap.Value > 0)
+                                {
+                                    var correctDate = previousDate.AddDays(fd.MinGap.Value);
+                                    if (futureSchedule.Date.Date < correctDate.Date)
+                                        futureSchedule.Date = correctDate;
+                                }
+                                previousDate = futureSchedule.Date.Date;
+                            }
+                        }
                     }
                 }
             }

@@ -57,20 +57,21 @@ namespace VaccineAPI.Controllers
             // 2 — save to DB
             var booking = new Booking
             {
-                ChildId    = bookingDTO.ChildId,
-                DoctorId   = doctorId,
-                UserId     = userId,
-                Type       = bookingDTO.Status,   // "HomeBooked" | "ClinicBooked"
-                Vaccines   = bookingDTO.Vaccines,
-                Address    = bookingDTO.Address,
-                Location   = bookingDTO.Location,
-                City       = bookingDTO.City,
-                ChildName  = bookingDTO.ChildName,
-                FatherName = bookingDTO.FatherName,
-                Phone      = bookingDTO.Phone,
-                Email      = bookingDTO.Email,
-                Status     = "Pending",
-                CreatedAt  = DateTime.UtcNow.AddHours(5)
+                ChildId       = bookingDTO.ChildId,
+                DoctorId      = doctorId,
+                UserId        = userId,
+                Type          = bookingDTO.Status,   // "HomeBooked" | "ClinicBooked"
+                Vaccines      = bookingDTO.Vaccines,
+                Address       = bookingDTO.Address,
+                Location      = bookingDTO.Location,
+                City          = bookingDTO.City,
+                ChildName     = bookingDTO.ChildName,
+                FatherName    = bookingDTO.FatherName,
+                Phone         = bookingDTO.Phone,
+                Email         = bookingDTO.Email,
+                PreferredDate = bookingDTO.PreferredDate,
+                Status        = "Pending",
+                CreatedAt     = DateTime.UtcNow.AddHours(5)
             };
             _db.Bookings.Add(booking);
             _db.SaveChanges();
@@ -102,9 +103,30 @@ namespace VaccineAPI.Controllers
 
             _db.SaveChanges();
 
-            // 5 — email stubs
-            _email.Send(doctorEmail, "New Booking Received",
-                $"New {booking.Type} booking:\nPatient: {booking.ChildName}\nVaccines: {booking.Vaccines}\nPhone: {booking.Phone}\nAddress: {booking.Address}\nLocation: {booking.Location}");
+            // 5 — email to doctor
+            string bookingTypeName = booking.Type == "HomeBooked" ? "Home Vaccination" : "Clinic Visit";
+            string mapsLine = !string.IsNullOrWhiteSpace(booking.Location)
+                ? $"\nLocation (Maps): {booking.Location}" : "";
+            string addressLine = !string.IsNullOrWhiteSpace(booking.Address)
+                ? $"\nAddress: {booking.Address}\nCity: {booking.City}" : "";
+            string preferredLine = !string.IsNullOrWhiteSpace(booking.PreferredDate)
+                ? $"\nPreferred Date: {booking.PreferredDate}" : "";
+
+            string doctorEmailBody =
+                $"New {bookingTypeName} Booking\n" +
+                $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                $"Patient: {booking.ChildName}\n" +
+                $"Father: {booking.FatherName}\n" +
+                $"Phone: {booking.Phone}\n" +
+                $"Vaccines: {booking.Vaccines}" +
+                addressLine +
+                mapsLine +
+                preferredLine +
+                $"\nBooked on: {booking.CreatedAt:dd MMM yyyy, hh:mm tt}\n" +
+                $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                $"Login to VacDoc to confirm or cancel this booking.";
+
+            _email.Send(doctorEmail, $"New {bookingTypeName} Booking — {booking.ChildName}", doctorEmailBody);
 
             _email.Send(booking.Email, "Booking Received",
                 $"Dear {booking.ChildName}'s parent,\n\nYour booking request has been received. We will confirm shortly.");
@@ -245,6 +267,30 @@ namespace VaccineAPI.Controllers
             notif.IsRead = true;
             _db.SaveChanges();
             return new Response<object>(true, "Marked as read.", null);
+        }
+
+        // PUT /api/notification/doctor/{doctorId}/read-all
+        [HttpPut("/api/notification/doctor/{doctorId}/read-all")]
+        public Response<object> MarkAllReadDoctor(long doctorId)
+        {
+            var unread = _db.Notifications
+                .Where(n => n.RecipientId == doctorId && n.RecipientType == "Doctor" && !n.IsRead)
+                .ToList();
+            unread.ForEach(n => n.IsRead = true);
+            _db.SaveChanges();
+            return new Response<object>(true, "All marked as read.", null);
+        }
+
+        // PUT /api/notification/parent/{userId}/read-all
+        [HttpPut("/api/notification/parent/{userId}/read-all")]
+        public Response<object> MarkAllReadParent(long userId)
+        {
+            var unread = _db.Notifications
+                .Where(n => n.RecipientId == userId && n.RecipientType == "Parent" && !n.IsRead)
+                .ToList();
+            unread.ForEach(n => n.IsRead = true);
+            _db.SaveChanges();
+            return new Response<object>(true, "All marked as read.", null);
         }
 
         // ── Google Sheet helpers ────────────────────────────────────────────

@@ -761,7 +761,7 @@ namespace VaccineAPI.Controllers
                 {
                     if (minimumGap.HasValue && minimumGap.Value > 0)
                     {
-                        var correctDate = previousdosedate.AddDays(minimumGap.Value);
+                        var correctDate = calculateDate(previousdosedate, minimumGap.Value);
                         if (TargetSchedule.Date.Date < correctDate.Date)
                         {
                             TargetSchedule.Date = correctDate;
@@ -854,7 +854,7 @@ namespace VaccineAPI.Controllers
                         }
                         else if (dbDose.MinGap.HasValue && dbDose.MinGap.Value > 0)
                         {
-                            var minGapDate = previousDate.AddDays(dbDose.MinGap.Value);
+                            var minGapDate = calculateDate(previousDate, dbDose.MinGap.Value);
                             scheduledDate = minAgeDate > minGapDate ? minAgeDate : minGapDate;
                         }
                         else
@@ -1474,7 +1474,7 @@ namespace VaccineAPI.Controllers
                                 // subsequent doses: only push forward if gap from previous is now less than MinGap
                                 if (MinGap.HasValue && MinGap.Value > 0)
                                 {
-                                    var correctDate = previousDate.AddDays(MinGap.Value);
+                                    var correctDate = calculateDate(previousDate, MinGap.Value);
                                     if (TargetSchedule.Date.Date < correctDate.Date)
                                         TargetSchedule.Date = correctDate;
                                 }
@@ -1629,7 +1629,7 @@ namespace VaccineAPI.Controllers
                             {
                                 if (fd.MinGap.HasValue && fd.MinGap.Value > 0)
                                 {
-                                    var correctDate = previousDate.AddDays(fd.MinGap.Value);
+                                    var correctDate = calculateDate(previousDate, fd.MinGap.Value);
                                     if (futureSchedule.Date.Date < correctDate.Date)
                                         futureSchedule.Date = correctDate;
                                 }

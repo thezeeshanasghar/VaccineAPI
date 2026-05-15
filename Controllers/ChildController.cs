@@ -2488,7 +2488,6 @@ namespace VaccineAPI.Controllers
                             .ToDictionary(x => x.DoseId, x => x);
 
                         // Clinic schedules
-                        var lastDateByVaccineId = new Dictionary<long, DateTime>();
                         foreach (var kvp in doctorDoses.OrderBy(k => k.Value.Dose != null ? k.Value.Dose.DoseOrder : 0))
                         {
                             long doseId = kvp.Key;
@@ -2500,13 +2499,6 @@ namespace VaccineAPI.Controllers
                             if (!clinicDoseIds.Contains(doseId)) continue;
 
                             var schedDate = calculateDate(childDTO.DOB, ds.GapInDays);
-                            if (dbDose.DoseOrder > 1 && dbDose.MinGap.HasValue && dbDose.MinGap.Value > 0
-                                && lastDateByVaccineId.ContainsKey(dbDose.VaccineId))
-                            {
-                                var minGapDate = lastDateByVaccineId[dbDose.VaccineId].AddDays(dbDose.MinGap.Value);
-                                if (schedDate < minGapDate) schedDate = minGapDate;
-                            }
-                            lastDateByVaccineId[dbDose.VaccineId] = schedDate;
 
                             _db.Schedules.Add(new Schedule
                             {
@@ -2558,7 +2550,6 @@ namespace VaccineAPI.Controllers
                             .OrderBy(x => x.Dose.VaccineId)
                             .ThenBy(x => x.Dose.DoseOrder)
                             .ToList();
-                        var lastDateByVaccineId = new Dictionary<long, DateTime>();
                         foreach (DoctorSchedule ds in dss)
                         {
                             var dbDose = ds.Dose;
@@ -2576,14 +2567,6 @@ namespace VaccineAPI.Controllers
                                 if (dbDose.Name.StartsWith("HPV") && dbDose.DoseOrder == 3) cvd.IsSkip = true;
 
                                 cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
-                                if (dbDose.DoseOrder > 1 && dbDose.MinGap.HasValue && dbDose.MinGap.Value > 0
-                                    && lastDateByVaccineId.ContainsKey(dbDose.VaccineId))
-                                {
-                                    var minGapDate = lastDateByVaccineId[dbDose.VaccineId].AddDays(dbDose.MinGap.Value);
-                                    if (cvd.Date < minGapDate)
-                                        cvd.Date = minGapDate;
-                                }
-                                lastDateByVaccineId[dbDose.VaccineId] = cvd.Date;
 
                                 cvd.DiseaseYear = "";
                                 _db.Schedules.Add(cvd);
@@ -2751,7 +2734,6 @@ namespace VaccineAPI.Controllers
             }
 
             // ── Create clinic schedules ──────────────────────────────────────────
-            var lastDateByVaccineId = new Dictionary<long, DateTime>();
             foreach (var kvp in doctorDoses.OrderBy(k => k.Value.Dose != null ? k.Value.Dose.DoseOrder : 0))
             {
                 long doseId = kvp.Key;
@@ -2763,13 +2745,6 @@ namespace VaccineAPI.Controllers
                 if (!clinicDoseIds.Contains(doseId)) continue;
 
                 var schedDate = calculateDate(dbChild.DOB, ds.GapInDays);
-                if (dbDose.DoseOrder > 1 && dbDose.MinGap.HasValue && dbDose.MinGap.Value > 0
-                    && lastDateByVaccineId.ContainsKey(dbDose.VaccineId))
-                {
-                    var minGapDate = lastDateByVaccineId[dbDose.VaccineId].AddDays(dbDose.MinGap.Value);
-                    if (schedDate < minGapDate) schedDate = minGapDate;
-                }
-                lastDateByVaccineId[dbDose.VaccineId] = schedDate;
 
                 _db.Schedules.Add(new Schedule
                 {

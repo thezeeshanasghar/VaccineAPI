@@ -106,75 +106,38 @@ namespace VaccineAPI.Controllers
 
             // 5 — email to doctor
             string bookingTypeName = booking.Type == "HomeBooked" ? "Home Vaccination" : "Clinic Visit";
-            string typeColor       = booking.Type == "HomeBooked" ? "#e65c00" : "#1565C0";
 
-            string addressHtml = booking.Type == "HomeBooked" ? $@"
-                <tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600;width:160px'>City</td><td style='padding:8px 12px'>{booking.City}</td></tr>
-                <tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600'>Address</td><td style='padding:8px 12px'>{booking.Address}</td></tr>
-                {(!string.IsNullOrWhiteSpace(booking.Location) ? $"<tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600'>Location</td><td style='padding:8px 12px'><a href='{booking.Location}' style='color:#1565C0'>View on Google Maps</a></td></tr>" : "")}" : "";
-
-            string commentsHtml = !string.IsNullOrWhiteSpace(booking.Comments)
-                ? $"<tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600'>Comments</td><td style='padding:8px 12px;color:#c0392b'>{booking.Comments}</td></tr>"
-                : "";
-
-            string preferredHtml = !string.IsNullOrWhiteSpace(booking.PreferredDate)
-                ? $"<tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600'>Preferred Date</td><td style='padding:8px 12px'>{booking.PreferredDate}</td></tr>"
-                : "";
-
-            string doctorEmailBody = $@"
-<!DOCTYPE html>
-<html>
-<body style='margin:0;padding:0;background:#f0f4fb;font-family:Arial,sans-serif'>
-  <div style='max-width:580px;margin:30px auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)'>
-
-    <div style='background:{typeColor};padding:24px 28px'>
-      <h2 style='margin:0;color:#ffffff;font-size:20px'>&#128203; New {bookingTypeName} Booking</h2>
-      <p style='margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:14px'>Submitted via Patient Portal</p>
-    </div>
-
-    <div style='padding:24px 28px'>
-
-      <p style='font-size:16px;font-weight:600;color:#333;margin:0 0 16px'>Booking Details</p>
-      <table style='width:100%;border-collapse:collapse;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-size:14px'>
-        <tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600;width:160px'>Type</td><td style='padding:8px 12px'><span style='background:{typeColor};color:#fff;padding:3px 10px;border-radius:12px;font-size:13px'>{bookingTypeName}</span></td></tr>
-        <tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600'>Booked On</td><td style='padding:8px 12px'>{booking.CreatedAt:dd MMM yyyy, hh:mm tt}</td></tr>
-        {preferredHtml}
-      </table>
-
-      <p style='font-size:16px;font-weight:600;color:#333;margin:20px 0 16px'>Patient</p>
-      <table style='width:100%;border-collapse:collapse;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-size:14px'>
-        <tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600;width:160px'>Name</td><td style='padding:8px 12px'>{booking.ChildName}</td></tr>
-        <tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600'>Father's Name</td><td style='padding:8px 12px'>{booking.FatherName}</td></tr>
-        <tr><td style='padding:8px 12px;background:#f9f9f9;color:#555;font-weight:600'>Phone</td><td style='padding:8px 12px'>{booking.Phone}</td></tr>
-      </table>
-
-      <p style='font-size:16px;font-weight:600;color:#333;margin:20px 0 16px'>Vaccines</p>
-      <table style='width:100%;border-collapse:collapse;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-size:14px'>
-        <tr><td style='padding:10px 12px'>{booking.Vaccines}</td></tr>
-      </table>
-
-      {(booking.Type == "HomeBooked" ? $@"
-      <p style='font-size:16px;font-weight:600;color:#333;margin:20px 0 16px'>Location</p>
-      <table style='width:100%;border-collapse:collapse;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-size:14px'>
-        {addressHtml}
-      </table>" : "")}
-
-      {(!string.IsNullOrWhiteSpace(booking.Comments) ? $@"
-      <p style='font-size:16px;font-weight:600;color:#c0392b;margin:20px 0 16px'>Special Requirements / Comments</p>
-      <table style='width:100%;border-collapse:collapse;border:1px solid #f5c6c6;border-radius:8px;overflow:hidden;font-size:14px;background:#fff8f8'>
-        <tr><td style='padding:10px 12px;color:#c0392b'>{booking.Comments}</td></tr>
-      </table>" : "")}
-
-    </div>
-
-    <div style='background:#f9f9f9;padding:16px 28px;text-align:center;border-top:1px solid #e0e0e0'>
-      <p style='margin:0;font-size:13px;color:#888'>Please login to VacDoc to confirm or cancel this booking.</p>
-      <a href='https://doctor.vaccinationcentre.com' style='display:inline-block;margin-top:10px;background:{typeColor};color:#fff;padding:9px 24px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600'>Open VacDoc</a>
-    </div>
-
-  </div>
-</body>
-</html>";
+            string doctorEmailBody =
+                $"New {bookingTypeName} Booking\n" +
+                $"================================\n\n" +
+                $"BOOKING INFO\n" +
+                $"------------\n" +
+                $"Type          : {bookingTypeName}\n" +
+                $"Booked On     : {booking.CreatedAt:dd MMM yyyy, hh:mm tt}\n" +
+                (!string.IsNullOrWhiteSpace(booking.PreferredDate) ? $"Preferred Date: {booking.PreferredDate}\n" : "") +
+                $"\nPATIENT\n" +
+                $"-------\n" +
+                $"Name          : {booking.ChildName}\n" +
+                $"Father's Name : {booking.FatherName}\n" +
+                $"Phone         : {booking.Phone}\n" +
+                $"\nVACCINES\n" +
+                $"--------\n" +
+                $"{booking.Vaccines}\n" +
+                (booking.Type == "HomeBooked" ?
+                    $"\nLOCATION\n" +
+                    $"--------\n" +
+                    $"City          : {booking.City}\n" +
+                    $"Address       : {booking.Address}\n" +
+                    (!string.IsNullOrWhiteSpace(booking.Location) ? $"Google Maps   : {booking.Location}\n" : "")
+                    : "") +
+                (!string.IsNullOrWhiteSpace(booking.Comments) ?
+                    $"\nSPECIAL REQUIREMENTS\n" +
+                    $"--------------------\n" +
+                    $"{booking.Comments}\n"
+                    : "") +
+                $"\n================================\n" +
+                $"Login to VacDoc to confirm or cancel:\n" +
+                $"https://doctor.vaccinationcentre.com";
 
             UserEmail.SendEmail(doctorEmail, doctorEmailBody, $"New {bookingTypeName} Booking — {booking.ChildName}");
 

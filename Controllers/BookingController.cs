@@ -142,6 +142,7 @@ namespace VaccineAPI.Controllers
                 $"Please login to VacDoc to confirm or cancel this booking.\n" +
                 $"https://doctor.vaccinationcentre.com";
 
+            Console.WriteLine($"[BookingController] Sending doctor email to: '{doctorEmail}'");
             UserEmail.SendEmail(doctorEmail, $"New {bookingTypeName} Booking — {booking.ChildName}", doctorEmailBody);
 
             UserEmail.SendEmail(booking.Email, "Booking Received — vaccinationcentre.com",

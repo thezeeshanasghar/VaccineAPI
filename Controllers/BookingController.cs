@@ -142,16 +142,16 @@ namespace VaccineAPI.Controllers
                 $"Please login to VacDoc to confirm or cancel this booking.\n" +
                 $"https://doctor.vaccinationcentre.com";
 
-            Console.WriteLine($"[BookingController] Sending doctor email to: '{doctorEmail}'");
-            UserEmail.SendEmail(doctorEmail, $"New {bookingTypeName} Booking — {booking.ChildName}", doctorEmailBody);
+            UserEmail.SendEmail(doctorEmail, doctorEmailBody, $"New {bookingTypeName} Booking — {booking.ChildName}");
 
-            UserEmail.SendEmail(booking.Email, "Booking Received — vaccinationcentre.com",
+            UserEmail.SendEmail(booking.Email,
                 $"Dear {booking.ChildName}'s parent,\n\n" +
                 $"Your {bookingTypeName.ToLower()} booking request has been received.\n" +
                 $"We will confirm your appointment shortly.\n\n" +
                 $"Vaccines: {booking.Vaccines}\n" +
                 (!string.IsNullOrWhiteSpace(booking.PreferredDate) ? $"Preferred Date: {booking.PreferredDate}\n" : "") +
-                $"\nRegards,\nVaccination Centre Team");
+                $"\nRegards,\nVaccination Centre Team",
+                "Booking Received — vaccinationcentre.com");
 
             // 6 — write Google Sheet
             try
@@ -224,7 +224,7 @@ namespace VaccineAPI.Controllers
             });
             _db.SaveChanges();
 
-            UserEmail.SendEmail(booking.Email, $"Booking {status} — vaccinationcentre.com", $"Dear parent,\n\n{parentMsg}\n\nRegards,\nVaccination Centre Team");
+            UserEmail.SendEmail(booking.Email, $"Dear parent,\n\n{parentMsg}\n\nRegards,\nVaccination Centre Team", $"Booking {status} — vaccinationcentre.com");
 
             return new Response<BookingDTO>(true, $"Booking {status.ToLower()}.", null);
         }

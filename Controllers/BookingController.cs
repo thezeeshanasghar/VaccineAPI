@@ -221,9 +221,10 @@ namespace VaccineAPI.Controllers
 
         // PUT /api/booking/{id}/confirm
         [HttpPut("{id}/confirm")]
-        public Response<BookingDTO> Confirm(long id)
+        public Response<BookingDTO> Confirm(long id, [FromBody] BookingDTO dto)
         {
-            return UpdateStatus(id, "Confirmed",
+            string doctorComment = dto?.DoctorComment ?? "";
+            return UpdateStatus(id, "Confirmed", doctorComment,
                 parentMsg: "Your booking has been confirmed. We look forward to seeing you.",
                 notifMsg:  "Your booking has been confirmed.");
         }
@@ -232,33 +233,45 @@ namespace VaccineAPI.Controllers
         [HttpPut("{id}/cancel")]
         public Response<BookingDTO> Cancel(long id)
         {
-            return UpdateStatus(id, "Cancelled",
+            return UpdateStatus(id, "Cancelled", "",
                 parentMsg: "We regret that your booking could not be confirmed. Please contact the clinic.",
                 notifMsg:  "Your booking has been cancelled. Please contact the clinic.");
         }
 
-        private Response<BookingDTO> UpdateStatus(long id, string status, string parentMsg, string notifMsg)
+        private Response<BookingDTO> UpdateStatus(long id, string status, string doctorComment, string parentMsg, string notifMsg)
         {
             var booking = _db.Bookings.FirstOrDefault(b => b.Id == id);
             if (booking == null)
                 return new Response<BookingDTO>(false, "Booking not found.", null);
 
             booking.Status = status;
+            if (!string.IsNullOrWhiteSpace(doctorComment))
+                booking.DoctorComment = doctorComment;
             _db.SaveChanges();
 
-            // notification for parent
+            string fullNotifMsg = notifMsg;
+            if (!string.IsNullOrWhiteSpace(doctorComment))
+                fullNotifMsg += $" Note from doctor: {doctorComment}";
+
             _db.Notifications.Add(new Notification
             {
                 BookingId     = booking.Id,
                 RecipientId   = booking.UserId,
                 RecipientType = "Parent",
-                Message       = notifMsg,
+                Message       = fullNotifMsg,
                 IsRead        = false,
                 CreatedAt     = DateTime.UtcNow.AddHours(5)
             });
             _db.SaveChanges();
 
-            UserEmail.SendEmail(booking.Email, $"Dear parent,\n\n{parentMsg}\n\nRegards,\nVaccination Centre Team", $"Booking {status} — vaccinationcentre.com");
+            string commentSection = !string.IsNullOrWhiteSpace(doctorComment)
+                ? $"\n\nNote from your doctor:\n{doctorComment}"
+                : "";
+
+            UserEmail.SendEmail(
+                booking.Email,
+                $"Dear parent,\n\n{parentMsg}{commentSection}\n\nVaccines: {booking.Vaccines}\n\nRegards,\nVaccination Centre Team",
+                $"Booking {status} — vaccinationcentre.com");
 
             return new Response<BookingDTO>(true, $"Booking {status.ToLower()}.", null);
         }

@@ -1265,23 +1265,7 @@ namespace VaccineAPI.Controllers
         //date Function
         public static DateTime calculateDate(DateTime date, int GapInDays)
         {
-            if (GapInDays == 28)
-                return date.AddMonths(1);
-            else if (GapInDays == 30 || GapInDays == 31)
-                return date.AddMonths(1);
-            else if (GapInDays == 56)
-                return date.AddMonths(2);
-            else if (GapInDays == 84)
-                return date.AddMonths(3);
-            else if (GapInDays == 112)
-                return date.AddMonths(4);
-            else if (GapInDays == 140)
-                return date.AddMonths(5);
-            else if (GapInDays == 150)
-                return date.AddMonths(5);
-            else if (GapInDays == 168)
-                return date.AddMonths(6);
-            else if (GapInDays == 3315)
+            if (GapInDays == 3315)
                 return date.AddYears(9).AddMonths(1);
             else if (GapInDays == 3833)
                 return date.AddYears(10).AddMonths(6);

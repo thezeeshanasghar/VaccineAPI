@@ -21,6 +21,7 @@ namespace VaccineAPI.ModelDTO
         public string City { get; set; } = "";
         public string BookingDate { get; set; } = "";
         public string PreferredDate { get; set; } = "";
+        public string Comments { get; set; } = "";
         public string Status { get; set; } = "";
     }
 

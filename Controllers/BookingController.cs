@@ -70,6 +70,7 @@ namespace VaccineAPI.Controllers
                 Phone         = bookingDTO.Phone,
                 Email         = bookingDTO.Email,
                 PreferredDate = bookingDTO.PreferredDate,
+                Comments      = bookingDTO.Comments,
                 Status        = "Pending",
                 CreatedAt     = DateTime.UtcNow.AddHours(5)
             };
@@ -113,6 +114,9 @@ namespace VaccineAPI.Controllers
                 : "";
             string preferredRow = !string.IsNullOrWhiteSpace(booking.PreferredDate)
                 ? $"│  Preferred Date  │  {booking.PreferredDate,-32}│\n" : "";
+            string commentsRow = !string.IsNullOrWhiteSpace(booking.Comments)
+                ? $"├──────────────────┼──────────────────────────────────┤\n" +
+                  $"│  Comments        │  {booking.Comments,-32}│\n" : "";
 
             string doctorEmailBody =
                 $"Dear Doctor,\n\n" +
@@ -133,6 +137,7 @@ namespace VaccineAPI.Controllers
                 $"│  VACCINES        │  {booking.Vaccines,-32}│\n" +
                 (!string.IsNullOrWhiteSpace(addressRows)
                     ? $"├──────────────────┼──────────────────────────────────┤\n" + addressRows : "") +
+                commentsRow +
                 $"└──────────────────┴──────────────────────────────────┘\n\n" +
                 $"Please login to VacDoc to confirm or cancel this booking.\n" +
                 $"https://doctor.vaccinationcentre.com";

@@ -19,6 +19,7 @@ namespace VaccineAPI.Models
         public string Email { get; set; } = "";
         public string Status { get; set; } = "Pending"; // "Pending" | "Confirmed" | "Cancelled"
         public string PreferredDate { get; set; } = "";
+        public string Comments { get; set; } = "";
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow.AddHours(5);
         public virtual Child Child { get; set; } = null!;
     }

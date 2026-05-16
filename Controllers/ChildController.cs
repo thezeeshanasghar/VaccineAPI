@@ -263,13 +263,15 @@ namespace VaccineAPI.Controllers
            {
                return new Response<IEnumerable<ScheduleDTO>>(false, "Child not found", null);
            }
-           var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(child.Schedules.OrderBy(x => x.Date).ToList());
-           if (child.Clinic != null && child.Clinic.Doctor != null)
+           var orderedSchedules = child.Schedules.OrderBy(x => x.Date).ToList();
+           var schedulesDTO = _mapper.Map<List<ScheduleDTO>>(orderedSchedules);
+           for (int i = 0; i < schedulesDTO.Count; i++)
            {
-               foreach (var s in schedulesDTO)
+               schedulesDTO[i].InvoiceDate = orderedSchedules[i].GivenDate;
+               if (child.Clinic != null && child.Clinic.Doctor != null)
                {
-                   s.Child.AllowHomeBooking   = child.Clinic.Doctor.AllowHomeBooking;
-                   s.Child.AllowClinicBooking = child.Clinic.Doctor.AllowClinicBooking;
+                   schedulesDTO[i].Child.AllowHomeBooking   = child.Clinic.Doctor.AllowHomeBooking;
+                   schedulesDTO[i].Child.AllowClinicBooking = child.Clinic.Doctor.AllowClinicBooking;
                }
            }
            return new Response<IEnumerable<ScheduleDTO>>(true, null, schedulesDTO);

@@ -141,6 +141,77 @@ namespace VaccineAPI.Controllers
                             ? dto.Price
                             : ((brandAmount.PurchasedAmt * brandAmount.Count) + (dto.Price * dto.Adjustment))
                               / (brandAmount.Count + dto.Adjustment);
+
+                        // Create Stock row so FEFO batch tracking works on give/transfer/direct-sale
+                        var anchorBill = await _db.Bills
+                            .Where(b => b.ClinicId == dto.ClinicId)
+                            .OrderByDescending(b => b.BillDate)
+                            .ThenByDescending(b => b.Id)
+                            .FirstOrDefaultAsync();
+
+                        if (anchorBill == null)
+                        {
+                            await transaction.RollbackAsync();
+                            return new Response<List<AdjustStockDTO>>(false,
+                                $"No purchase bill found for clinic ID {dto.ClinicId}. Please create a purchase bill first before adjusting stock.", null);
+                        }
+
+                        // Merge into existing Stock row with same batch+expiry if present, else add new
+                        var existingStock = await _db.Stocks
+                            .Include(s => s.Bill)
+                            .Where(s => s.BrandId == dto.BrandId
+                                     && s.Bill.ClinicId == dto.ClinicId
+                                     && (string.IsNullOrWhiteSpace(dto.BatchLot)
+                                            ? string.IsNullOrWhiteSpace(s.BatchLot)
+                                            : (s.BatchLot ?? "").Trim() == dto.BatchLot.Trim())
+                                     && (dto.ExpiryDate == null
+                                            ? !s.Expiry.HasValue
+                                            : s.Expiry.HasValue && s.Expiry.Value.Date == dto.ExpiryDate.Value.Date))
+                            .FirstOrDefaultAsync();
+
+                        if (existingStock != null)
+                        {
+                            existingStock.Quantity += dto.Adjustment;
+                            _db.Entry(existingStock).State = EntityState.Modified;
+                        }
+                        else
+                        {
+                            _db.Stocks.Add(new Stock
+                            {
+                                BrandId     = dto.BrandId,
+                                BillId      = anchorBill.Id,
+                                Quantity    = dto.Adjustment,
+                                StockAmount = dto.Price,
+                                BatchLot    = string.IsNullOrWhiteSpace(dto.BatchLot) ? null : dto.BatchLot.Trim(),
+                                Expiry      = dto.ExpiryDate
+                            });
+                        }
+                    }
+                    else
+                    {
+                        // Stock Loss — deduct from Stock rows in FEFO order
+                        int lossRemaining = -dto.Adjustment;
+                        var lossLot = string.IsNullOrWhiteSpace(dto.BatchLot) ? null : dto.BatchLot.Trim();
+                        var lossStocks = await _db.Stocks
+                            .Include(s => s.Bill)
+                            .Where(s => s.BrandId == dto.BrandId
+                                     && s.Bill.ClinicId == dto.ClinicId
+                                     && s.Quantity > 0
+                                     && (lossLot == null || (s.BatchLot ?? "").Trim() == lossLot))
+                            .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                            .ThenBy(s => s.Expiry)
+                            .ThenBy(s => s.Id)
+                            .ToListAsync();
+
+                        foreach (var src in lossStocks)
+                        {
+                            if (lossRemaining <= 0) break;
+                            int deduct = System.Math.Min(src.Quantity, lossRemaining);
+                            src.Quantity -= deduct;
+                            lossRemaining -= deduct;
+                            if (src.Quantity == 0) _db.Stocks.Remove(src);
+                            else _db.Entry(src).State = EntityState.Modified;
+                        }
                     }
 
                     brandAmount.Count = newCount;

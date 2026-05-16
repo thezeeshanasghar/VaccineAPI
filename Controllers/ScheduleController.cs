@@ -996,12 +996,19 @@ namespace VaccineAPI.Controllers
                 .Where(x => x.Id == scheduleDTO.Id)
                 .FirstOrDefault();
 
+            // Bug A fix: compare date-only (strip time component) so all doses on
+            // the same visit day are found even if saved with non-midnight times.
+            var visitDate = dbSchedule.Date.Date;
+            var daysDelta = Convert.ToInt32(
+                (scheduleDTO.Date.Date - visitDate).TotalDays
+            );
+
             var dbSchedules = _db.Schedules
                 .Include(x => x.Dose)
                 .Include(x => x.Child)
                 .Where(
                     x =>
-                        x.Date == dbSchedule.Date
+                        x.Date.Date == visitDate
                         && x.ChildId == dbSchedule.ChildId
                         && x.IsDone == false
                 )
@@ -1012,8 +1019,19 @@ namespace VaccineAPI.Controllers
 
             foreach (var schedule in dbSchedules)
             {
+                // Bug B fix: each dose on this visit gets its own target date =
+                // its current date shifted by the same delta the doctor applied,
+                // NOT the single absolute date the doctor picked (which only
+                // applies to the first dose and would collapse all future doses
+                // of multi-dose vaccines onto the same wrong date).
+                var perDoseDTO = new ScheduleDTO
+                {
+                    Id   = scheduleDTO.Id,
+                    Date = schedule.Date.Date.AddDays(daysDelta)
+                };
+
                 message = ChangeDueDatesOfSchedule(
-                    scheduleDTO,
+                    perDoseDTO,
                     _db,
                     schedule,
                     "bulk",

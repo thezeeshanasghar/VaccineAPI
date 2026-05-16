@@ -506,6 +506,33 @@ namespace VaccineAPI.Controllers
             return new Response<ScheduleDTO>(true, "Schedule updated successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
         }
 
+        // Repairs a corrupted GivenDate/Date on a dose that is already marked IsDone=true.
+        // Only corrects the two date fields — nothing else is touched.
+        [HttpPatch("repair-given-date")]
+        public Response<ScheduleDTO> RepairGivenDate(
+            [FromQuery] long scheduleId,
+            [FromQuery] DateTime correctDate)
+        {
+            var dbSchedule = _db.Schedules
+                .Include(x => x.Dose)
+                .Include(x => x.Child)
+                .Where(x => x.Id == scheduleId)
+                .FirstOrDefault();
+
+            if (dbSchedule == null)
+                return new Response<ScheduleDTO>(false, "Schedule not found", null);
+
+            if (dbSchedule.IsDone != true)
+                return new Response<ScheduleDTO>(false, "Schedule is not marked as given — use the normal fill flow", null);
+
+            dbSchedule.Date = correctDate.Date;
+            dbSchedule.GivenDate = correctDate.Date;
+
+            _db.SaveChanges();
+
+            return new Response<ScheduleDTO>(true, "Date corrected successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
+        }
+
         private Stock? GetLatestStockByBrandAndClinic(long? brandId, long clinicId)
         {
             if (!brandId.HasValue || brandId.Value <= 0 || clinicId <= 0)

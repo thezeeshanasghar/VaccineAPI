@@ -199,6 +199,10 @@ namespace VaccineAPI.Controllers
 
                 if (scheduleDTO.IsDone == false)
                 {
+                    // Capture batch info from the schedule before it gets cleared
+                    var ungiveLot = dbSchedule.Lot;
+                    var ungiveExpiry = dbSchedule.Expiry;
+
                     if (inventoryEnabled && previousBrandId.HasValue)
                     {
                         rollbackClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId, onlineClinicId);
@@ -254,6 +258,46 @@ namespace VaccineAPI.Controllers
                         if (previousBrandId.HasValue)
                         {
                             dbBrandInventory2.Count += 1;
+
+                            // Restore Stock row: find matching batch or the earliest-expiry row, increment quantity
+                            var ungiveExpiryDate = ungiveExpiry.HasValue ? ungiveExpiry.Value.Date : (DateTime?)null;
+                            var restoreStock = _db.Stocks
+                                .Include(s => s.Bill)
+                                .Where(s => s.BrandId == previousBrandId.Value && s.Bill.ClinicId == rollbackClinicId)
+                                .Where(s => string.IsNullOrWhiteSpace(ungiveLot) || (s.BatchLot ?? "").Trim() == ungiveLot.Trim())
+                                .Where(s => ungiveExpiryDate == null
+                                    ? !s.Expiry.HasValue
+                                    : s.Expiry.HasValue && s.Expiry.Value.Date == ungiveExpiryDate)
+                                .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                                .ThenBy(s => s.Expiry)
+                                .ThenBy(s => s.Id)
+                                .FirstOrDefault();
+
+                            if (restoreStock != null)
+                            {
+                                restoreStock.Quantity += 1;
+                            }
+                            else
+                            {
+                                // No matching row exists (was fully depleted) — recreate it
+                                var restoreBill = _db.Bills
+                                    .Where(b => b.ClinicId == rollbackClinicId)
+                                    .OrderByDescending(b => b.BillDate)
+                                    .ThenByDescending(b => b.Id)
+                                    .FirstOrDefault();
+                                if (restoreBill != null)
+                                {
+                                    _db.Stocks.Add(new Stock
+                                    {
+                                        BrandId = (long)previousBrandId.Value,
+                                        BillId = restoreBill.Id,
+                                        Quantity = 1,
+                                        StockAmount = dbBrandInventory2.PurchasedAmt,
+                                        BatchLot = string.IsNullOrWhiteSpace(ungiveLot) ? null : ungiveLot.Trim(),
+                                        Expiry = ungiveExpiry
+                                    });
+                                }
+                            }
                         }
                     }
                     _db.SaveChanges();
@@ -292,6 +336,30 @@ namespace VaccineAPI.Controllers
                         }
 
                         dbBrandInventory.Count -= 1;
+
+                        // Deduct from Stock rows in FEFO order (mirrors DirectSale / StockTransfer logic)
+                        var giveLot = string.IsNullOrWhiteSpace(scheduleDTO.Lot) ? null : scheduleDTO.Lot.Trim();
+                        var giveExpiryDate = scheduleDTO.Expiry.HasValue ? scheduleDTO.Expiry.Value.Date : (DateTime?)null;
+                        var giveStocks = _db.Stocks
+                            .Include(s => s.Bill)
+                            .Where(s => s.BrandId == scheduleDTO.BrandId.Value
+                                     && s.Bill.ClinicId == onlineClinicId
+                                     && s.Quantity > 0
+                                     && (giveLot == null || (s.BatchLot ?? "").Trim() == giveLot))
+                            .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                            .ThenBy(s => s.Expiry)
+                            .ThenBy(s => s.Id)
+                            .ToList();
+
+                        int giveRemaining = 1;
+                        foreach (var src in giveStocks)
+                        {
+                            if (giveRemaining <= 0) break;
+                            src.Quantity -= 1;
+                            giveRemaining -= 1;
+                            if (src.Quantity == 0) _db.Stocks.Remove(src);
+                            else _db.Entry(src).State = EntityState.Modified;
+                        }
                     }
                 }
 
@@ -368,6 +436,30 @@ namespace VaccineAPI.Controllers
                         var stockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
                         ApplyStockSourceFields(dbSchedule, scheduleDTO, stockClinicId);
                         dbSchedule.Validity = scheduleDTO.Validity;
+
+                        // Deduct from Stock rows in FEFO order
+                        if (inventoryEnabled && scheduleDTO.BrandId.HasValue && scheduleDTO.BrandId.Value > 0)
+                        {
+                            var hpvLot = string.IsNullOrWhiteSpace(dbSchedule.Lot) ? null : dbSchedule.Lot.Trim();
+                            var hpvStocks = _db.Stocks
+                                .Include(s => s.Bill)
+                                .Where(s => s.BrandId == scheduleDTO.BrandId.Value
+                                         && s.Bill.ClinicId == stockClinicId
+                                         && s.Quantity > 0
+                                         && (hpvLot == null || (s.BatchLot ?? "").Trim() == hpvLot))
+                                .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                                .ThenBy(s => s.Expiry)
+                                .ThenBy(s => s.Id)
+                                .ToList();
+
+                            foreach (var src in hpvStocks)
+                            {
+                                src.Quantity -= 1;
+                                if (src.Quantity == 0) _db.Stocks.Remove(src);
+                                else _db.Entry(src).State = EntityState.Modified;
+                                break;
+                            }
+                        }
 
                         ScheduleDTO newData1 = _mapper.Map<ScheduleDTO>(dbSchedule);
                         _db.SaveChanges();

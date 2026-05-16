@@ -506,9 +506,29 @@ namespace VaccineAPI.Controllers
             return new Response<ScheduleDTO>(true, "Schedule updated successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
         }
 
-        // Repairs a corrupted GivenDate/Date on a dose that is already marked IsDone=true.
-        // Only corrects the two date fields — nothing else is touched.
-        [HttpPatch("repair-given-date")]
+        // Step 1: look up schedule IDs for a child — paste into browser to find the right ID.
+        // Example: https://myapi.vaccinationcentre.com/api/Schedule/repair-lookup?childId=16665
+        [HttpGet("repair-lookup")]
+        public Response<object> RepairLookup([FromQuery] long childId)
+        {
+            var rows = _db.Schedules
+                .Include(x => x.Dose)
+                .Where(x => x.ChildId == childId && x.IsDone == true)
+                .OrderBy(x => x.GivenDate)
+                .Select(x => new {
+                    x.Id,
+                    DoseName  = x.Dose.Name,
+                    Date      = x.Date.ToString("yyyy-MM-dd"),
+                    GivenDate = x.GivenDate.HasValue ? x.GivenDate.Value.ToString("yyyy-MM-dd") : null
+                })
+                .ToList<object>();
+
+            return new Response<object>(true, "ok", rows);
+        }
+
+        // Step 2: fix the corrupted row — paste into browser with the ID from Step 1.
+        // Example: https://myapi.vaccinationcentre.com/api/Schedule/repair-given-date?scheduleId=99999&correctDate=2026-05-16
+        [HttpGet("repair-given-date")]
         public Response<ScheduleDTO> RepairGivenDate(
             [FromQuery] long scheduleId,
             [FromQuery] DateTime correctDate)

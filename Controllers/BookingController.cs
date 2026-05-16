@@ -139,16 +139,20 @@ namespace VaccineAPI.Controllers
                 $"Login to VacDoc to confirm or cancel:\n" +
                 $"https://doctor.vaccinationcentre.com";
 
-            UserEmail.SendEmail(doctorEmail, doctorEmailBody, $"New {bookingTypeName} Booking — {booking.ChildName}");
+            try { UserEmail.SendEmail(doctorEmail, doctorEmailBody, $"New {bookingTypeName} Booking — {booking.ChildName}"); } catch { }
 
-            UserEmail.SendEmail(booking.Email,
-                $"Dear {booking.ChildName}'s parent,\n\n" +
-                $"Your {bookingTypeName.ToLower()} booking request has been received.\n" +
-                $"We will confirm your appointment shortly.\n\n" +
-                $"Vaccines: {booking.Vaccines}\n" +
-                (!string.IsNullOrWhiteSpace(booking.PreferredDate) ? $"Preferred Date: {booking.PreferredDate}\n" : "") +
-                $"\nRegards,\nVaccination Centre Team",
-                "Booking Received — vaccinationcentre.com");
+            try
+            {
+                UserEmail.SendEmail(booking.Email,
+                    $"Dear {booking.ChildName}'s parent,\n\n" +
+                    $"Your {bookingTypeName.ToLower()} booking request has been received.\n" +
+                    $"We will confirm your appointment shortly.\n\n" +
+                    $"Vaccines: {booking.Vaccines}\n" +
+                    (!string.IsNullOrWhiteSpace(booking.PreferredDate) ? $"Preferred Date: {booking.PreferredDate}\n" : "") +
+                    $"\nRegards,\nVaccination Centre Team",
+                    "Booking Received — vaccinationcentre.com");
+            }
+            catch { }
 
             // 6 — write Google Sheet
             try

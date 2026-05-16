@@ -3172,6 +3172,34 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
+        // Returns invoice info for a child+scheduleDate if doctor/PA already generated it.
+        // VacParent calls this to decide whether to show the download button and to get the fee.
+        [HttpGet("{Id}/{ScheduleDate}/invoice-info")]
+        public IActionResult GetInvoiceInfo(int Id, DateTime ScheduleDate)
+        {
+            var schedules = _db.Schedules
+                .Include(s => s.Dose)
+                .Where(s => s.ChildId == Id && s.Date.Date == ScheduleDate.Date && s.IsDone == true && s.IsSkip != true)
+                .ToList();
+
+            if (!schedules.Any())
+                return Ok(new { exists = false });
+
+            var doseIds = schedules.Select(s => (long)s.Dose.Id).ToList();
+            var invoice = _db.Invoices
+                .FirstOrDefault(i => i.ChildId == Id && doseIds.Contains(i.DoseId));
+
+            if (invoice == null)
+                return Ok(new { exists = false });
+
+            var fee = _db.Fee
+                .Where(f => f.InvoiceId == invoice.InvoiceId)
+                .Select(f => f.Amount)
+                .FirstOrDefault();
+
+            return Ok(new { exists = true, consultationFee = (int)fee });
+        }
+
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Verification-Invoice-PDF")]
         public IActionResult VerificationInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
         {

@@ -1239,58 +1239,22 @@ namespace VaccineAPI.Controllers
         //date Function
         public static DateTime calculateDate(DateTime date, int GapInDays)
         {
-            if (GapInDays == 30 || GapInDays == 31)
-                return date.AddMonths(1);
-            else if (GapInDays == 60 || GapInDays == 61)
-                return date.AddMonths(2);
-            else if (GapInDays == 84)
-                return date.AddDays(84);
-            else if (GapInDays == 91)
-                return date.AddMonths(3);
-            else if (GapInDays == 120 || GapInDays == 121)
-                return date.AddMonths(4);
-            else if (GapInDays == 150 || GapInDays == 151)
-                return date.AddMonths(5);
-            else if (GapInDays == 182)
-                return date.AddMonths(6);
-            else if (GapInDays == 3315)
-                return date.AddYears(9).AddMonths(1); // For 10 Year 6 month
-            else if (GapInDays == 3833)
-                return date.AddYears(10).AddMonths(6); // For 1 to 15 years
-            else if (
-                GapInDays == 365
-                || GapInDays == 730
-                || GapInDays == 1095
-                || GapInDays == 1460
-                || GapInDays == 1825
-                || GapInDays == 2190
-                || GapInDays == 2555
-                || GapInDays == 2920
-                || GapInDays == 3285
-                || GapInDays == 3650
-                || GapInDays == 4015
-                || GapInDays == 4380
-                || GapInDays == 4745
-                || GapInDays == 5110
-                || GapInDays == 5475
-                || GapInDays == 5840
-                || GapInDays == 6205
-                || GapInDays == 6570
-                || GapInDays == 6935
-                || GapInDays == 7300
-                || GapInDays == 7665
-                || GapInDays == 8030
-                || GapInDays == 8395
-                || GapInDays == 8760
-                || GapInDays == 9125
-            )
-                return date.AddYears((int)(GapInDays / 365)); // From 6 months to 11 months
-            else if (GapInDays >= 168 && GapInDays <= 334)
-                return date.AddMonths((int)(GapInDays / 28)); // From 13 months to 20 months
-            else if (GapInDays >= 395 && GapInDays <= 608)
-                return date.AddMonths((int)(GapInDays / 29)); // From 21 months to 11 months
-            else if (GapInDays >= 639 && GapInDays <= 1795)
-                return date.AddMonths((int)(GapInDays / 30));
+            // Months: codes 401-460 = 1-60 months
+            if (GapInDays >= 401 && GapInDays <= 460)
+                return date.AddMonths(GapInDays - 400);
+            // Extended months: 4109, 4110, 4113, 4114
+            else if (GapInDays == 4109)
+                return date.AddMonths(109);
+            else if (GapInDays == 4110)
+                return date.AddMonths(110);
+            else if (GapInDays == 4113)
+                return date.AddMonths(113);
+            else if (GapInDays == 4114)
+                return date.AddMonths(114);
+            // Years: codes 3001-3020 = 1-20 years
+            else if (GapInDays >= 3001 && GapInDays <= 3020)
+                return date.AddYears(GapInDays - 3000);
+            // Days and weeks: raw AddDays
             else
                 return date.AddDays(GapInDays);
         }

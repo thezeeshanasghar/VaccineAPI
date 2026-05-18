@@ -3391,11 +3391,15 @@ namespace VaccineAPI.Controllers
         {
             if (GapInDays == 30 || GapInDays == 31)
                 return date.AddMonths(1);
-            // For 3 months
+            else if (GapInDays == 60 || GapInDays == 61)
+                return date.AddMonths(2);
             else if (GapInDays == 84)
                 return date.AddMonths(3);
-            else  // For 9 Year 1 month`
-                if (GapInDays == 3315)
+            else if (GapInDays == 120 || GapInDays == 121)
+                return date.AddMonths(4);
+            else if (GapInDays == 150 || GapInDays == 151)
+                return date.AddMonths(5);
+            else if (GapInDays == 3315)
                 return date.AddYears(9).AddMonths(1);
             else  // For 10 Year 6 month
                 if (GapInDays == 3833)

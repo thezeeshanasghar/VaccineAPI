@@ -110,14 +110,22 @@ namespace VaccineAPI.Controllers
                 {
                     continue;
                 }
-                var count = 0;
-                var amount = 0;
+                var clinic = _db.Clinics.FirstOrDefault(c => c.DoctorId == DoctorSchedueDTO.DoctorId && c.IsOnline == true);
+                if (clinic == null)
+                {
+                    clinic = _db.Clinics.FirstOrDefault(c => c.DoctorId == DoctorSchedueDTO.DoctorId);
+                }
+                if (clinic == null)
+                {
+                    continue;
+                }
                 var brandAmount = new BrandAmount
                 {
                     BrandId = brand.Id,
-                    Count = count,
-                    Amount = amount,
+                    Count = 0,
+                    Amount = 0,
                     DoctorId = DoctorSchedueDTO.DoctorId,
+                    ClinicId = clinic.Id,
                 };
                 _db.BrandAmounts.Add(brandAmount);
                 _db.SaveChanges();

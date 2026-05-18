@@ -3,6 +3,13 @@ using System.ComponentModel.DataAnnotations;
 
 namespace VaccineAPI.ModelDTO
 {
+    public class BillPaymentDTO
+    {
+        public decimal Amount { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? Notes { get; set; }
+    }
+
     public class BillDTO
     {
         public int Id { get; set; }

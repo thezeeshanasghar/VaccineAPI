@@ -325,6 +325,66 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [HttpPost("{id}/payment")]
+        public async Task<IActionResult> MakePayment(long id, [FromBody] BillPaymentDTO dto)
+        {
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var bill = await _db.Bills
+                    .Include(b => b.Stocks)
+                    .FirstOrDefaultAsync(b => b.Id == id);
+
+                if (bill == null)
+                    return NotFound(new { message = "Bill not found." });
+
+                if (dto.Amount <= 0)
+                    return BadRequest(new { message = "Payment amount must be greater than zero." });
+
+                // Total payable = sum of stock amounts (AWT already included in StockAmount)
+                decimal totalPayable = bill.Stocks.Sum(s => s.StockAmount * s.Quantity);
+                decimal alreadyPaid  = bill.AmountPaid ?? 0m;
+                decimal newTotalPaid = alreadyPaid + dto.Amount;
+
+                bill.AmountPaid    = newTotalPaid;
+                bill.IsPaid        = newTotalPaid >= totalPayable;
+                bill.PaidDate      = bill.IsPaid ? DateTime.Now : bill.PaidDate;
+                bill.PaymentMethod = dto.PaymentMethod ?? bill.PaymentMethod ?? "Cash";
+                _db.Entry(bill).State = EntityState.Modified;
+
+                // Record supplier payment if supplier is linked
+                if (bill.SupplierId.HasValue)
+                {
+                    _db.SupplierPayments.Add(new SupplierPayment
+                    {
+                        SupplierId    = bill.SupplierId.Value,
+                        ClinicId      = bill.ClinicId,
+                        Amount        = dto.Amount,
+                        PaymentDate   = DateTime.Now,
+                        PaymentMethod = dto.PaymentMethod ?? "Cash",
+                        Notes         = dto.Notes?.Trim(),
+                        BillId        = bill.Id
+                    });
+                }
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new {
+                    message       = bill.IsPaid ? "Bill fully paid." : "Partial payment recorded.",
+                    AmountPaid    = newTotalPaid,
+                    IsPaid        = bill.IsPaid,
+                    TotalPayable  = totalPayable,
+                    Outstanding   = Math.Max(0, totalPayable - newTotalPaid)
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new { message = $"Error: {ex.Message}" });
+            }
+        }
+
         public class PdfFooter : PdfPageEventHelper
         {
             public override void OnEndPage(PdfWriter writer, Document document)

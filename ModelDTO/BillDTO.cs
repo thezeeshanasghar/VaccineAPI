@@ -3,6 +3,13 @@ using System.ComponentModel.DataAnnotations;
 
 namespace VaccineAPI.ModelDTO
 {
+    public class BatchReassignDTO
+    {
+        public long ScheduleId { get; set; }
+        public string NewBatchLot { get; set; } = "";
+        public DateTime? NewExpiry { get; set; }
+    }
+
     public class BillPaymentDTO
     {
         public decimal Amount { get; set; }

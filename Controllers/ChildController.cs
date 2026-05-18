@@ -3389,9 +3389,10 @@ namespace VaccineAPI.Controllers
         // Date Function
         protected DateTime calculateDate(DateTime date, int GapInDays)
         {
-
+            if (GapInDays == 30 || GapInDays == 31)
+                return date.AddMonths(1);
             // For 3 months
-            if (GapInDays == 84)
+            else if (GapInDays == 84)
                 return date.AddMonths(3);
             else  // For 9 Year 1 month`
                 if (GapInDays == 3315)

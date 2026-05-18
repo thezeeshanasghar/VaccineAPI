@@ -335,7 +335,7 @@ namespace VaccineAPI.Controllers
                                     )
                                     .FirstOrDefault();
                                 childschedule.IsSkip = false;
-                                childschedule.Date = calculateDate(scheduleDTO.GivenDate.Date, 30);
+                                childschedule.Date = calculateDate(scheduleDTO.GivenDate.Date, dose.MinGap ?? 30);
                             }
 
                             if (dose.DoseOrder == 3)

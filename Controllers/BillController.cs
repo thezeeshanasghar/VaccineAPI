@@ -200,6 +200,308 @@ namespace VaccineAPI.Controllers
             return new Response<BillDTO>(true, "Bill deleted successfully", null);
         }
 
+        [HttpGet("{id}/consumption")]
+        public async Task<IActionResult> GetConsumption(long id)
+        {
+            var bill = await _db.Bills
+                .Include(b => b.Stocks)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (bill == null)
+                return NotFound(new { message = "Bill not found." });
+
+            // Sum of original purchase quantities across all stock rows for this bill
+            var purchasedQty = bill.Stocks.Sum(s => s.Quantity);
+
+            // Current remaining count from BrandAmount
+            // There may be multiple brands on one bill — handle each separately
+            var brandIds = bill.Stocks.Select(s => s.BrandId).Distinct().ToList();
+
+            var consumedDoses = new List<object>();
+            int totalConsumed = 0;
+            int totalRemaining = 0;
+
+            foreach (var brandId in brandIds)
+            {
+                var brandStock = bill.Stocks.Where(s => s.BrandId == brandId).ToList();
+                var brandPurchasedQty = brandStock.Sum(s => s.Quantity);
+
+                var brandAmount = await _db.BrandAmounts
+                    .FirstOrDefaultAsync(ba => ba.BrandId == brandId && ba.ClinicId == bill.ClinicId);
+
+                var currentCount = brandAmount?.Count ?? 0;
+
+                // Consumed from this bill = what was purchased minus what remains
+                // (this is an approximation when multiple bills exist for same brand)
+                var consumed = Math.Max(0, brandPurchasedQty - currentCount);
+                var remaining = Math.Max(0, currentCount);
+
+                totalConsumed += consumed;
+                totalRemaining += remaining;
+
+                // Find schedules where IsDone = true, BrandId matches, Lot matches any stock row from this bill
+                var billLots = brandStock
+                    .Where(s => !string.IsNullOrWhiteSpace(s.BatchLot))
+                    .Select(s => s.BatchLot.Trim())
+                    .Distinct()
+                    .ToList();
+
+                if (billLots.Any())
+                {
+                    var schedules = await _db.Schedules
+                        .Include(s => s.Child)
+                        .Include(s => s.Dose)
+                            .ThenInclude(d => d.Vaccine)
+                        .Include(s => s.Brand)
+                        .Where(s => s.BrandId == brandId
+                                 && s.IsDone == true
+                                 && s.Lot != null
+                                 && billLots.Contains(s.Lot.Trim()))
+                        .OrderBy(s => s.GivenDate)
+                        .ToListAsync();
+
+                    consumedDoses.AddRange(schedules.Select(s => new
+                    {
+                        ScheduleId  = s.Id,
+                        ChildId     = s.ChildId,
+                        ChildName   = s.Child?.Name ?? "",
+                        VaccineName = s.Brand?.Name ?? "",
+                        DoseName    = s.Dose?.Vaccine?.Name ?? "",
+                        GivenDate   = s.GivenDate,
+                        CurrentLot  = s.Lot,
+                        CurrentExpiry = s.Expiry,
+                        BrandId     = s.BrandId
+                    }));
+                }
+            }
+
+            // Available replacement batches for each brand — excluding this bill's own lots
+            var replacementBatches = new List<object>();
+            foreach (var brandId in brandIds)
+            {
+                var billLots = bill.Stocks
+                    .Where(s => s.BrandId == brandId && !string.IsNullOrWhiteSpace(s.BatchLot))
+                    .Select(s => s.BatchLot.Trim())
+                    .Distinct()
+                    .ToList();
+
+                var otherBatches = await _db.Stocks
+                    .Include(s => s.Bill)
+                    .Include(s => s.Brand)
+                    .Where(s => s.BrandId == brandId
+                             && s.Bill.ClinicId == bill.ClinicId
+                             && s.BillId != id
+                             && s.Quantity > 0
+                             && !string.IsNullOrWhiteSpace(s.BatchLot)
+                             && !billLots.Contains(s.BatchLot.Trim()))
+                    .GroupBy(s => new { s.BatchLot, s.Expiry })
+                    .Select(g => new
+                    {
+                        BrandId   = brandId,
+                        BatchLot  = g.Key.BatchLot,
+                        Expiry    = g.Key.Expiry,
+                        Quantity  = g.Sum(x => x.Quantity)
+                    })
+                    .OrderBy(b => b.Expiry)
+                    .ToListAsync();
+
+                replacementBatches.AddRange(otherBatches);
+            }
+
+            return Ok(new
+            {
+                BillId           = id,
+                PurchasedQty     = purchasedQty,
+                ConsumedQty      = totalConsumed,
+                RemainingQty     = totalRemaining,
+                HasConsumption   = totalConsumed > 0,
+                ConsumedDoses    = consumedDoses,
+                ReplacementBatches = replacementBatches
+            });
+        }
+
+        [HttpPost("{id}/reassign-batches")]
+        public async Task<IActionResult> ReassignBatches(long id, [FromBody] List<BatchReassignDTO> items)
+        {
+            if (items == null || !items.Any())
+                return BadRequest(new { message = "No reassignment items provided." });
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var item in items)
+                {
+                    var schedule = await _db.Schedules.FindAsync(item.ScheduleId);
+                    if (schedule == null)
+                    {
+                        await transaction.RollbackAsync();
+                        return NotFound(new { message = $"Schedule ID {item.ScheduleId} not found." });
+                    }
+
+                    if (string.IsNullOrWhiteSpace(item.NewBatchLot))
+                    {
+                        await transaction.RollbackAsync();
+                        return BadRequest(new { message = $"Replacement batch is required for schedule ID {item.ScheduleId}." });
+                    }
+
+                    schedule.Lot    = item.NewBatchLot.Trim();
+                    schedule.Expiry = item.NewExpiry;
+                    _db.Entry(schedule).State = EntityState.Modified;
+                }
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new { message = $"{items.Count} dose(s) reassigned successfully." });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new { message = $"Error: {ex.Message}" });
+            }
+        }
+
+        [HttpDelete("{id}/delete-remaining")]
+        public async Task<IActionResult> DeleteRemaining(long id)
+        {
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var bill = await _db.Bills
+                    .Include(b => b.Stocks)
+                    .FirstOrDefaultAsync(b => b.Id == id);
+
+                if (bill == null)
+                    return NotFound(new { message = "Bill not found." });
+
+                foreach (var stock in bill.Stocks.ToList())
+                {
+                    var brandAmount = await _db.BrandAmounts
+                        .FirstOrDefaultAsync(ba => ba.BrandId == stock.BrandId && ba.ClinicId == bill.ClinicId);
+
+                    if (brandAmount == null) continue;
+
+                    // Remaining = units still in stock (not yet consumed)
+                    // consumed = stock.Quantity - brandAmount.Count (approximation)
+                    int remaining   = Math.Min(stock.Quantity, Math.Max(0, brandAmount.Count));
+                    int consumed    = stock.Quantity - remaining;
+
+                    if (remaining <= 0)
+                    {
+                        // All units already consumed — nothing to remove from stock
+                        // Just reduce the stocks.Quantity to the consumed amount (no change needed)
+                        continue;
+                    }
+
+                    // Reduce BrandAmount.Count by remaining units being deleted
+                    brandAmount.Count = Math.Max(0, brandAmount.Count - remaining);
+
+                    // Shrink stocks.Quantity to only the consumed amount
+                    if (consumed > 0)
+                    {
+                        stock.Quantity = consumed;
+                        _db.Entry(stock).State = EntityState.Modified;
+                    }
+                    else
+                    {
+                        // Zero consumed — remove the stock row entirely
+                        _db.Stocks.Remove(stock);
+                    }
+
+                    // Recalculate weighted average from all remaining stocks
+                    var allStocks = await _db.Stocks
+                        .Include(s => s.Bill)
+                        .Where(s => s.BrandId == stock.BrandId
+                                 && s.Bill.ClinicId == bill.ClinicId
+                                 && s.Id != stock.Id
+                                 && s.Quantity > 0)
+                        .ToListAsync();
+
+                    // Include the updated stock row if it still exists (consumed > 0)
+                    decimal totalCost = allStocks.Sum(s => (decimal)s.StockAmount * s.Quantity);
+                    int     totalQty  = allStocks.Sum(s => s.Quantity);
+                    if (consumed > 0)
+                    {
+                        totalCost += (decimal)stock.StockAmount * consumed;
+                        totalQty  += consumed;
+                    }
+
+                    brandAmount.PurchasedAmt = totalQty > 0
+                        ? Math.Round(totalCost / totalQty, 2)
+                        : 0;
+                    _db.Entry(brandAmount).State = EntityState.Modified;
+
+                    // Remove batch-specific adjuststocks for the deleted remaining units
+                    if (!string.IsNullOrWhiteSpace(stock.BatchLot))
+                    {
+                        var orphanedAdjs = await _db.AdjustStocks
+                            .Where(a => a.BrandId == stock.BrandId
+                                     && a.ClinicId == bill.ClinicId
+                                     && a.BatchLot != null
+                                     && a.BatchLot.Trim() == stock.BatchLot.Trim())
+                            .ToListAsync();
+                        _db.AdjustStocks.RemoveRange(orphanedAdjs);
+                    }
+                }
+
+                // Recalculate bill total based on remaining consumed stocks
+                var updatedStocks = await _db.Stocks
+                    .Where(s => s.BillId == id && s.Quantity > 0)
+                    .ToListAsync();
+
+                decimal newBillTotal = updatedStocks.Sum(s => (decimal)s.StockAmount * s.Quantity);
+
+                // Adjust supplier payment — reduce to new bill total, remove overpayment
+                var supplierPayments = await _db.SupplierPayments
+                    .Where(p => p.BillId == id)
+                    .ToListAsync();
+
+                decimal existingPaid = supplierPayments.Sum(p => p.Amount);
+
+                if (existingPaid > newBillTotal)
+                {
+                    // Overpaid — reduce the payment record to match new bill total
+                    // Doctor received cash back for returned vaccines
+                    if (supplierPayments.Any())
+                    {
+                        var pmt = supplierPayments.First();
+                        if (newBillTotal <= 0)
+                        {
+                            _db.SupplierPayments.RemoveRange(supplierPayments);
+                        }
+                        else
+                        {
+                            pmt.Amount = newBillTotal;
+                            _db.Entry(pmt).State = EntityState.Modified;
+                            // Remove any additional payment records beyond the first
+                            if (supplierPayments.Count > 1)
+                                _db.SupplierPayments.RemoveRange(supplierPayments.Skip(1));
+                        }
+                    }
+                }
+
+                // Update bill AmountPaid and IsPaid
+                bill.AmountPaid = existingPaid > 0 ? Math.Min(existingPaid, newBillTotal) : bill.AmountPaid;
+                bill.IsPaid     = bill.AmountPaid.HasValue && bill.AmountPaid.Value >= newBillTotal && newBillTotal > 0;
+                _db.Entry(bill).State = EntityState.Modified;
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new
+                {
+                    message      = "Remaining stock deleted. Bill adjusted to consumed units.",
+                    NewBillTotal = newBillTotal,
+                    IsPaid       = bill.IsPaid
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new { message = $"Error: {ex.Message}" });
+            }
+        }
+
         [HttpDelete("{id}/reverse")]
         public async Task<Response<BillDTO>> DeleteWithReversal(int id)
         {
@@ -213,7 +515,6 @@ namespace VaccineAPI.Controllers
                 if (bill == null)
                     return new Response<BillDTO>(false, "Bill not found", null);
 
-                // Reverse stock for each item in this bill
                 foreach (var stock in bill.Stocks.ToList())
                 {
                     var brandAmount = await _db.BrandAmounts
@@ -221,11 +522,54 @@ namespace VaccineAPI.Controllers
 
                     if (brandAmount != null)
                     {
-                        brandAmount.Count = Math.Max(0, brandAmount.Count - stock.Quantity);
+                        // Only reverse the remaining units — consumed doses already
+                        // decremented BrandAmount.Count when they were administered.
+                        // stock.Quantity = original purchased qty (never decremented by gives)
+                        // brandAmount.Count = current remaining after all gives
+                        // So we only reduce by what's actually still in stock (remaining qty)
+                        int remaining = Math.Min(stock.Quantity, brandAmount.Count);
+                        brandAmount.Count = Math.Max(0, brandAmount.Count - remaining);
                         _db.Entry(brandAmount).State = EntityState.Modified;
+
+                        // Recalculate weighted average from remaining stocks after deletion
+                        var otherStocks = await _db.Stocks
+                            .Include(s => s.Bill)
+                            .Where(s => s.BrandId == stock.BrandId
+                                     && s.Bill.ClinicId == bill.ClinicId
+                                     && s.Id != stock.Id
+                                     && s.Quantity > 0)
+                            .ToListAsync();
+
+                        if (otherStocks.Any())
+                        {
+                            var totalQty  = otherStocks.Sum(s => s.Quantity);
+                            var totalCost = otherStocks.Sum(s => (decimal)s.StockAmount * s.Quantity);
+                            brandAmount.PurchasedAmt = totalQty > 0
+                                ? Math.Round(totalCost / totalQty, 2)
+                                : 0;
+                        }
+                        else
+                        {
+                            brandAmount.PurchasedAmt = 0;
+                        }
                     }
+
+                    // Remove any adjuststocks records anchored to this stock row's bill+brand
+                    var orphanedAdjs = await _db.AdjustStocks
+                        .Where(a => a.BrandId == stock.BrandId && a.ClinicId == bill.ClinicId
+                                 && !string.IsNullOrWhiteSpace(a.BatchLot)
+                                 && (stock.BatchLot != null && a.BatchLot.Trim() == stock.BatchLot.Trim()))
+                        .ToListAsync();
+                    _db.AdjustStocks.RemoveRange(orphanedAdjs);
+
                     _db.Stocks.Remove(stock);
                 }
+
+                // Reverse supplier payments linked to this bill
+                var supplierPayments = await _db.SupplierPayments
+                    .Where(p => p.BillId == id)
+                    .ToListAsync();
+                _db.SupplierPayments.RemoveRange(supplierPayments);
 
                 _db.Bills.Remove(bill);
                 await _db.SaveChangesAsync();

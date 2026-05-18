@@ -142,6 +142,43 @@ namespace VaccineAPI.Controllers
                             : ((brandAmount.PurchasedAmt * brandAmount.Count) + (dto.Price * dto.Adjustment))
                               / (brandAmount.Count + dto.Adjustment);
                     }
+                    else
+                    {
+                        // Stock Loss — deduct from stocks rows in FEFO order (earliest expiry first)
+                        int lossRemaining = -dto.Adjustment;
+                        var lossLot = string.IsNullOrWhiteSpace(dto.BatchLot) ? null : dto.BatchLot.Trim();
+                        var lossStocks = await _db.Stocks
+                            .Include(s => s.Bill)
+                            .Where(s => s.BrandId == dto.BrandId
+                                     && s.Bill.ClinicId == dto.ClinicId
+                                     && s.Quantity > 0
+                                     && (lossLot == null || (s.BatchLot ?? "").Trim() == lossLot))
+                            .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                            .ThenBy(s => s.Expiry)
+                            .ThenBy(s => s.Id)
+                            .ToListAsync();
+
+                        foreach (var src in lossStocks)
+                        {
+                            if (lossRemaining <= 0) break;
+                            int deduct = Math.Min(src.Quantity, lossRemaining);
+                            src.Quantity -= deduct;
+                            lossRemaining -= deduct;
+                            if (src.Quantity == 0)
+                                _db.Stocks.Remove(src);
+                            else
+                                _db.Entry(src).State = EntityState.Modified;
+                        }
+
+                        if (lossRemaining > 0)
+                        {
+                            await transaction.RollbackAsync();
+                            return new Response<List<AdjustStockDTO>>(false,
+                                $"Could not deduct full loss quantity for '{brandAmount.Brand?.Name}'" +
+                                (lossLot != null ? $" batch '{lossLot}'" : "") +
+                                $". Stock rows only covered {-dto.Adjustment - lossRemaining} of {-dto.Adjustment} requested.", null);
+                        }
+                    }
 
                     brandAmount.Count = newCount;
                     _db.Entry(brandAmount).State = EntityState.Modified;

@@ -147,6 +147,25 @@ namespace VaccineAPI.Controllers
             return new Response<List<BillDTO>>(true, null, billDTOs);
         }
 
+        [HttpGet("clinic/{clinicId}/next-bill-number")]
+        public Response<string> GetNextBillNumber(long clinicId)
+        {
+            // Collect all used BILL-{n} numbers across ALL clinics globally.
+            // Start from 1001 and return the first unused number.
+            var used = _db.Bills
+                .Where(b => b.BillNo.StartsWith("BILL-"))
+                .Select(b => b.BillNo)
+                .AsEnumerable()
+                .Select(n => { int v; return int.TryParse(n.Replace("BILL-", ""), out v) ? v : 0; })
+                .Where(v => v > 0)
+                .ToHashSet();
+
+            int next = 1001;
+            while (used.Contains(next)) { next++; }
+
+            return new Response<string>(true, null, next.ToString());
+        }
+
         [HttpPost]
         public Response<BillDTO> Post(BillDTO billDTO)
         {

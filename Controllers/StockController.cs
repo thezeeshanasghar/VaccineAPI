@@ -712,18 +712,16 @@ namespace VaccineAPI.Controllers
                         }
 
                         // Recalculate payment status from AmountPaid.
-                        // AWT is part of the total payable to supplier so included in isPaid check.
+                        // StockAmount already includes AWT (landed cost). Do NOT add AwtAmount again.
                         if (stockDTO.AmountPaid.HasValue)
                         {
                             var allStocks = await _db.Stocks
                                 .Where(s => s.BillId == stock.BillId)
                                 .ToListAsync();
-                            decimal newTotal = allStocks.Sum(s =>
+                            decimal newTotalPayable = allStocks.Sum(s =>
                                 s.Id == stock.Id
                                     ? stockDTO.StockAmount * stockDTO.Quantity
                                     : s.StockAmount * s.Quantity);
-                            decimal billAwt       = stockDTO.AwtAmount ?? stock.Bill.AwtAmount ?? 0m;
-                            decimal newTotalPayable = newTotal + billAwt;
 
                             decimal newAmountPaid = stockDTO.AmountPaid.Value;
                             stock.Bill.AmountPaid = newAmountPaid > 0 ? newAmountPaid : null;

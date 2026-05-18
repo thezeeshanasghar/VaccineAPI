@@ -157,20 +157,6 @@ namespace VaccineAPI.Controllers
         //     return CreatedAtAction(nameof(GetSingle), new { id = BrandAmount.Id }, BrandAmount);
         // }
 
-        [HttpPut("inventory")]
-        public Response<List<BrandAmountDTO>> Putinventory([FromBody] List<BrandAmountDTO> brandAmountDTOs)
-
-        {
-            foreach (var brandAmountDTO in brandAmountDTOs)
-            {
-                var brandAmoundDB = _db.BrandAmounts.Where(b => b.Id == brandAmountDTO.Id).FirstOrDefault();
-                if (brandAmoundDB == null)
-                    continue;
-                brandAmoundDB.Count = brandAmountDTO.Count;
-                _db.SaveChanges();
-            }
-            return new Response<List<BrandAmountDTO>>(true, null, brandAmountDTOs);
-        }
 
 
         [HttpPut]

@@ -377,14 +377,21 @@ namespace VaccineAPI.Controllers
                             $"Brand with ID {stockDTO.BrandId} not found", null);
                     }
 
+                    // Calculate AWT-inclusive landed cost per unit before creating stock row.
+                    // AWT is distributed proportionally by each item's share of the total bill value.
+                    decimal itemTotal    = stockDTO.StockAmount * stockDTO.Quantity;
+                    decimal itemAwtShare = totalAmount > 0 ? (itemTotal / totalAmount) * awtAmount : 0m;
+                    decimal awtPerUnit   = stockDTO.Quantity > 0 ? itemAwtShare / stockDTO.Quantity : 0m;
+                    decimal trueUnitCost = stockDTO.StockAmount + awtPerUnit;
+
                     var stock = new Stock
                     {
-                        BrandId = stockDTO.BrandId,
-                        BillId = bill.Id,
-                        Quantity = stockDTO.Quantity,
-                        StockAmount = trueUnitCost,  // AWT-inclusive landed cost per unit
-                        BatchLot = stockDTO.BatchLot?.Trim(),
-                        Expiry = stockDTO.Expiry
+                        BrandId     = stockDTO.BrandId,
+                        BillId      = bill.Id,
+                        Quantity    = stockDTO.Quantity,
+                        StockAmount = trueUnitCost,
+                        BatchLot    = stockDTO.BatchLot?.Trim(),
+                        Expiry      = stockDTO.Expiry
                     };
 
                     _db.Stocks.Add(stock);
@@ -405,15 +412,9 @@ namespace VaccineAPI.Controllers
                     }
 
                     // Update or Create BrandAmount.
-                    // AWT is distributed proportionally across items by their share of the total bill value,
-                    // then added to the per-unit cost so PurchasedAmt reflects true landed cost.
                     var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
                         ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId
                     );
-                    decimal itemTotal     = stockDTO.StockAmount * stockDTO.Quantity;
-                    decimal itemAwtShare  = totalAmount > 0 ? (itemTotal / totalAmount) * awtAmount : 0m;
-                    decimal awtPerUnit    = stockDTO.Quantity > 0 ? itemAwtShare / stockDTO.Quantity : 0m;
-                    decimal trueUnitCost  = stockDTO.StockAmount + awtPerUnit;
 
                     decimal unitPrice = 0;
                     if (brandAmount == null || brandAmount.PurchasedAmt == 0 || brandAmount.Count == 0)

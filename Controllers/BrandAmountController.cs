@@ -71,9 +71,6 @@ namespace VaccineAPI.Controllers
                 .GroupBy(b => b.BrandId)
                 .ToDictionary(g => g.Key, g => g.Sum(b => b.Count));
 
-            // Filter stocks by Bill.ClinicId (same as expiry PDF) so only this clinic's
-            // purchased stock is used — avoids pulling in lots from other clinics that
-            // share the same BrandId.
             var stocks = _db.Stocks
                 .Include(x => x.Brand)
                 .Include(x => x.Bill)
@@ -82,6 +79,11 @@ namespace VaccineAPI.Controllers
 
             if (!stocks.Any())
                 return new Response<List<BatchBreakdownDTO>>(true, null, new List<BatchBreakdownDTO>());
+
+            // Load batch-specific adjustments so we can correct the proportional formula
+            var batchedAdjs = _db.AdjustStocks
+                .Where(a => a.ClinicId == clinicId && a.BatchLot != null && a.BatchLot != "")
+                .ToList();
 
             var batchGroups = stocks
                 .GroupBy(x => new {
@@ -103,19 +105,38 @@ namespace VaccineAPI.Controllers
                 .GroupBy(x => x.BrandId)
                 .ToDictionary(g => g.Key, g => g.Sum(x => x.PurchasedQty));
 
+            // Total batch-specific adjustments per brand — stripped from actualTotal
+            // so the proportional base only distributes unbatched inventory
+            var totalBatchedAdjByBrand = batchedAdjs
+                .GroupBy(a => a.BrandId)
+                .ToDictionary(g => g.Key, g => g.Sum(a => a.Adjustment));
+
             var result = batchGroups
                 .Select(b => {
                     int actualTotal    = actualCountByBrandId.ContainsKey(b.BrandId) ? actualCountByBrandId[b.BrandId] : 0;
                     int purchasedTotal = totalPurchasedByBrand.ContainsKey(b.BrandId) ? totalPurchasedByBrand[b.BrandId] : 0;
-                    int batchQty       = purchasedTotal > 0
-                        ? (int)Math.Round((double)b.PurchasedQty / purchasedTotal * actualTotal)
+                    int totalBatchAdj  = totalBatchedAdjByBrand.ContainsKey(b.BrandId) ? totalBatchedAdjByBrand[b.BrandId] : 0;
+
+                    int pureCount = Math.Max(0, actualTotal - totalBatchAdj);
+                    int proportionalBase = purchasedTotal > 0
+                        ? (int)Math.Round((double)b.PurchasedQty / purchasedTotal * pureCount)
                         : 0;
+
+                    // Add back this batch's specific adjustments
+                    int batchAdj = batchedAdjs
+                        .Where(a => a.BrandId == b.BrandId
+                                 && (a.BatchLot?.Trim() ?? "") == b.BatchLot
+                                 && AdjustExpiryMatches(a.ExpiryDate, b.Expiry))
+                        .Sum(a => a.Adjustment);
+
+                    int batchQty = Math.Max(0, proportionalBase + batchAdj);
+
                     return new BatchBreakdownDTO {
-                        BrandId  = b.BrandId,
+                        BrandId   = b.BrandId,
                         BrandName = b.BrandName,
-                        BatchLot = b.BatchLot,
-                        Expiry   = b.Expiry,
-                        Quantity = batchQty
+                        BatchLot  = b.BatchLot,
+                        Expiry    = b.Expiry,
+                        Quantity  = batchQty
                     };
                 })
                 .Where(x => x.Quantity > 0)
@@ -320,6 +341,11 @@ namespace VaccineAPI.Controllers
                     .GroupBy(b => b.BrandId)
                     .ToDictionary(g => g.Key, g => g.Sum(b => b.Count));
 
+                // Load batch-specific adjustments so we can correct the proportional formula
+                var batchedAdjs = _db.AdjustStocks
+                    .Where(a => a.ClinicId == clinicId && a.BatchLot != null && a.BatchLot != "")
+                    .ToList();
+
                 // Group stock records by brand + batch + expiry to get purchase proportions
                 var batchGroups = stocks
                     .GroupBy(x => new
@@ -344,19 +370,35 @@ namespace VaccineAPI.Controllers
                     .GroupBy(x => x.BrandId)
                     .ToDictionary(g => g.Key, g => g.Sum(x => x.PurchasedQty));
 
-                // Calculate actual available qty per batch by proportional distribution
+                // Total batch-specific adjustments per brand — stripped from actualTotal
+                // so the proportional base only distributes unbatched inventory
+                var totalBatchedAdjByBrand = batchedAdjs
+                    .GroupBy(a => a.BrandId)
+                    .ToDictionary(g => g.Key, g => g.Sum(a => a.Adjustment));
+
                 var reportRows = batchGroups
                     .Select(b =>
                     {
-                        int actualTotal = actualCountByBrand.ContainsKey(b.BrandId)
+                        int actualTotal    = actualCountByBrand.ContainsKey(b.BrandId)
                             ? actualCountByBrand[b.BrandId] : 0;
                         int purchasedTotal = totalPurchasedByBrand.ContainsKey(b.BrandId)
                             ? totalPurchasedByBrand[b.BrandId] : 0;
+                        int totalBatchAdj  = totalBatchedAdjByBrand.ContainsKey(b.BrandId)
+                            ? totalBatchedAdjByBrand[b.BrandId] : 0;
 
-                        // Proportional share of actual inventory for this batch
-                        int batchQty = purchasedTotal > 0
-                            ? (int)Math.Round((double)b.PurchasedQty / purchasedTotal * actualTotal)
+                        int pureCount = Math.Max(0, actualTotal - totalBatchAdj);
+                        int proportionalBase = purchasedTotal > 0
+                            ? (int)Math.Round((double)b.PurchasedQty / purchasedTotal * pureCount)
                             : 0;
+
+                        // Add back this batch's specific adjustments
+                        int batchAdj = batchedAdjs
+                            .Where(a => a.BrandId == b.BrandId
+                                     && (a.BatchLot?.Trim() ?? "") == b.BatchLot
+                                     && AdjustExpiryMatches(a.ExpiryDate, b.Expiry))
+                            .Sum(a => a.Adjustment);
+
+                        int batchQty = Math.Max(0, proportionalBase + batchAdj);
 
                         return new
                         {
@@ -458,6 +500,13 @@ namespace VaccineAPI.Controllers
             }
         }
         
+        private static bool AdjustExpiryMatches(DateTime? adjExpiry, DateTime? stockExpiry)
+        {
+            if (!adjExpiry.HasValue && !stockExpiry.HasValue) return true;
+            if (!adjExpiry.HasValue || !stockExpiry.HasValue) return false;
+            return Math.Abs((adjExpiry.Value - stockExpiry.Value).TotalHours) < 24;
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

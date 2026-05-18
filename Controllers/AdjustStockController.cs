@@ -141,6 +141,50 @@ namespace VaccineAPI.Controllers
                             ? dto.Price
                             : ((brandAmount.PurchasedAmt * brandAmount.Count) + (dto.Price * dto.Adjustment))
                               / (brandAmount.Count + dto.Adjustment);
+
+                        // Create or merge a stocks row so batch/expiry tracking stays accurate
+                        var anchorBill = await _db.Bills
+                            .Where(b => b.ClinicId == dto.ClinicId)
+                            .OrderByDescending(b => b.BillDate)
+                            .ThenByDescending(b => b.Id)
+                            .FirstOrDefaultAsync();
+
+                        if (anchorBill == null)
+                        {
+                            await transaction.RollbackAsync();
+                            return new Response<List<AdjustStockDTO>>(false,
+                                $"No purchase bill found for clinic ID {dto.ClinicId}. Please create a purchase bill first before adjusting stock.", null);
+                        }
+
+                        var existingStock = await _db.Stocks
+                            .Include(s => s.Bill)
+                            .Where(s => s.BrandId == dto.BrandId
+                                     && s.Bill.ClinicId == dto.ClinicId
+                                     && (string.IsNullOrWhiteSpace(dto.BatchLot)
+                                            ? string.IsNullOrWhiteSpace(s.BatchLot)
+                                            : (s.BatchLot ?? "").Trim() == dto.BatchLot.Trim())
+                                     && (dto.ExpiryDate == null
+                                            ? !s.Expiry.HasValue
+                                            : s.Expiry.HasValue && s.Expiry.Value.Date == dto.ExpiryDate.Value.Date))
+                            .FirstOrDefaultAsync();
+
+                        if (existingStock != null)
+                        {
+                            existingStock.Quantity += dto.Adjustment;
+                            _db.Entry(existingStock).State = EntityState.Modified;
+                        }
+                        else
+                        {
+                            _db.Stocks.Add(new Stock
+                            {
+                                BrandId     = dto.BrandId,
+                                BillId      = anchorBill.Id,
+                                Quantity    = dto.Adjustment,
+                                StockAmount = dto.Price,
+                                BatchLot    = string.IsNullOrWhiteSpace(dto.BatchLot) ? null : dto.BatchLot.Trim(),
+                                Expiry      = dto.ExpiryDate
+                            });
+                        }
                     }
                     else
                     {

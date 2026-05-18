@@ -153,7 +153,8 @@ namespace VaccineAPI.Controllers
                     {
                         decimal newAvg = destBrandAmount.Count == 0
                             ? item.CostPrice
-                            : (destBrandAmount.PurchasedAmt + item.CostPrice) / 2;
+                            : ((destBrandAmount.PurchasedAmt * destBrandAmount.Count) + (item.CostPrice * item.Quantity))
+                              / (destBrandAmount.Count + item.Quantity);
                         destBrandAmount.Count += item.Quantity;
                         destBrandAmount.PurchasedAmt = newAvg;
                         _db.Entry(destBrandAmount).State = EntityState.Modified;

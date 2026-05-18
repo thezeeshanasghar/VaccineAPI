@@ -327,10 +327,13 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                // Calculate total upfront to determine payment status
+                // Calculate total upfront to determine payment status.
+                // AWT is part of what is owed to the supplier so it is included in the payable total.
                 decimal totalAmount = stockDTOs.Sum(s => s.StockAmount * s.Quantity);
+                decimal awtAmount   = firstStock.AwtAmount ?? 0m;
+                decimal totalPayable = totalAmount + awtAmount;
                 decimal amountPaid = firstStock.AmountPaid ?? 0m;
-                bool isPaid = amountPaid > 0 && amountPaid >= totalAmount;
+                bool isPaid = amountPaid > 0 && amountPaid >= totalPayable;
                 var billDate = firstStock.BillDate != default ? firstStock.BillDate : DateTime.Now;
 
                 // Create Bill
@@ -379,7 +382,7 @@ namespace VaccineAPI.Controllers
                         BrandId = stockDTO.BrandId,
                         BillId = bill.Id,
                         Quantity = stockDTO.Quantity,
-                        StockAmount = stockDTO.StockAmount,
+                        StockAmount = trueUnitCost,  // AWT-inclusive landed cost per unit
                         BatchLot = stockDTO.BatchLot?.Trim(),
                         Expiry = stockDTO.Expiry
                     };
@@ -401,18 +404,25 @@ namespace VaccineAPI.Controllers
                             "All stocks in the same bill must have the same ClinicId.", null);
                     }
 
-                    // Update or Create BrandAmount
+                    // Update or Create BrandAmount.
+                    // AWT is distributed proportionally across items by their share of the total bill value,
+                    // then added to the per-unit cost so PurchasedAmt reflects true landed cost.
                     var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
                         ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId
                     );
+                    decimal itemTotal     = stockDTO.StockAmount * stockDTO.Quantity;
+                    decimal itemAwtShare  = totalAmount > 0 ? (itemTotal / totalAmount) * awtAmount : 0m;
+                    decimal awtPerUnit    = stockDTO.Quantity > 0 ? itemAwtShare / stockDTO.Quantity : 0m;
+                    decimal trueUnitCost  = stockDTO.StockAmount + awtPerUnit;
+
                     decimal unitPrice = 0;
                     if (brandAmount == null || brandAmount.PurchasedAmt == 0 || brandAmount.Count == 0)
                     {
-                        unitPrice = stockDTO.StockAmount;
+                        unitPrice = trueUnitCost;
                     }
                     else
                     {
-                        unitPrice = ((brandAmount.PurchasedAmt * brandAmount.Count) + (stockDTO.StockAmount * stockDTO.Quantity))
+                        unitPrice = ((brandAmount.PurchasedAmt * brandAmount.Count) + (trueUnitCost * stockDTO.Quantity))
                                     / (brandAmount.Count + stockDTO.Quantity);
                     }
 
@@ -700,7 +710,8 @@ namespace VaccineAPI.Controllers
                             stock.Bill.Supplier = stockDTO.Supplier?.Trim() ?? stock.Bill.Supplier;
                         }
 
-                        // Recalculate payment status from AmountPaid
+                        // Recalculate payment status from AmountPaid.
+                        // AWT is part of the total payable to supplier so included in isPaid check.
                         if (stockDTO.AmountPaid.HasValue)
                         {
                             var allStocks = await _db.Stocks
@@ -710,13 +721,15 @@ namespace VaccineAPI.Controllers
                                 s.Id == stock.Id
                                     ? stockDTO.StockAmount * stockDTO.Quantity
                                     : s.StockAmount * s.Quantity);
+                            decimal billAwt       = stockDTO.AwtAmount ?? stock.Bill.AwtAmount ?? 0m;
+                            decimal newTotalPayable = newTotal + billAwt;
 
                             decimal newAmountPaid = stockDTO.AmountPaid.Value;
                             stock.Bill.AmountPaid = newAmountPaid > 0 ? newAmountPaid : null;
                             stock.Bill.PaymentMethod = newAmountPaid > 0
                                 ? (stockDTO.PaymentMethod ?? stock.Bill.PaymentMethod)
                                 : null;
-                            stock.Bill.IsPaid = newAmountPaid > 0 && newAmountPaid >= newTotal;
+                            stock.Bill.IsPaid = newAmountPaid > 0 && newAmountPaid >= newTotalPayable;
                             stock.Bill.PaidDate = newAmountPaid > 0 ? stock.Bill.BillDate : null;
 
                             // Sync the linked SupplierPayment if supplier is set

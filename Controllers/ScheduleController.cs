@@ -1244,11 +1244,15 @@ namespace VaccineAPI.Controllers
             else if (GapInDays == 60 || GapInDays == 61)
                 return date.AddMonths(2);
             else if (GapInDays == 84)
+                return date.AddDays(84);
+            else if (GapInDays == 91)
                 return date.AddMonths(3);
             else if (GapInDays == 120 || GapInDays == 121)
                 return date.AddMonths(4);
             else if (GapInDays == 150 || GapInDays == 151)
                 return date.AddMonths(5);
+            else if (GapInDays == 182)
+                return date.AddMonths(6);
             else if (GapInDays == 3315)
                 return date.AddYears(9).AddMonths(1); // For 10 Year 6 month
             else if (GapInDays == 3833)

@@ -33,7 +33,7 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public Response<List<BillDTO>> Get()
         {
-            var bills = _db.Bills.ToList();
+            var bills = _db.Bills.Where(b => !b.BillNo.StartsWith("XFER-")).ToList();
             if (!bills.Any())
                 return new Response<List<BillDTO>>(false, "No bills found", null);
 
@@ -49,7 +49,7 @@ namespace VaccineAPI.Controllers
                 .ThenInclude(d => d.User)
                 .Include(b => b.Stocks)
                 .ThenInclude(s => s.Brand)
-                .Where(b => b.DoctorId == doctorId)
+                .Where(b => b.DoctorId == doctorId && !b.BillNo.StartsWith("XFER-"))
                 .ToList();
 
             if (!bills.Any())
@@ -126,7 +126,7 @@ namespace VaccineAPI.Controllers
                 .ThenInclude(d => d.User)
                 .Include(b => b.Stocks)
                 .ThenInclude(s => s.Brand)
-                .Where(b => b.ClinicId == clinicId)
+                .Where(b => b.ClinicId == clinicId && !b.BillNo.StartsWith("XFER-"))
                 .OrderByDescending(x => x.Id)
                 .ToList();
 

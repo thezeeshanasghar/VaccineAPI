@@ -143,6 +143,7 @@ namespace VaccineAPI.Controllers
                 var bill = bills.First(b => b.Id == dto.Id);
                 dto.TotalAmount = bill.Stocks.Sum(s => s.StockAmount * s.Quantity);
                 dto.TotalItems  = bill.Stocks.Count;
+                dto.DoctorName  = bill.Doctor?.FirstName ?? "";
             }
             return new Response<List<BillDTO>>(true, null, billDTOs);
         }

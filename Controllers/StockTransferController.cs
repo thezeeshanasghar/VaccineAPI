@@ -60,8 +60,9 @@ namespace VaccineAPI.Controllers
                     BillNo = $"XFER-{DateTime.UtcNow:yyyyMMddHHmmss}",
                     Supplier = $"Transfer from {fromClinic.Name}",
                     BillDate = DateTime.UtcNow,
-                    IsPaid = true,
-                    PaidDate = DateTime.UtcNow,
+                    IsPaid = false,
+                    PaidDate = null,
+                    AmountPaid = null,
                     DoctorId = request.DoctorId,
                     ClinicId = request.ToClinicId,
                     IsPAApprove = true

@@ -1457,6 +1457,22 @@ namespace VaccineAPI.Controllers
                             )
                             .FirstOrDefault();
 
+                        if (TargetSchedulePrevious != null)
+                        {
+                            DateTime previousDoseDate = TargetSchedulePrevious.IsDone && TargetSchedulePrevious.GivenDate.HasValue
+                                ? TargetSchedulePrevious.GivenDate.Value.Date
+                                : TargetSchedulePrevious.Date.Date;
+
+                            if (scheduleDTO.Date.Date <= previousDoseDate)
+                            {
+                                message =
+                                    "Cannot reschedule to your selected date: "
+                                    + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
+                                    + " because it is before or on the same date as the previous dose.";
+                                return message;
+                            }
+                        }
+
                         if (TargetSchedulePrevious != null && lastDose.MinGap.HasValue)
                         {
                             DateTime previousDoseAnchor = TargetSchedulePrevious.IsDone && TargetSchedulePrevious.GivenDate.HasValue

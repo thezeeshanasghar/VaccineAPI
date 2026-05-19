@@ -1415,6 +1415,7 @@ namespace VaccineAPI.Controllers
                     {
                         Dose d = AllDoses.ElementAt<Dose>(0);
                         var FirstDoseSchedule = db.Schedules
+                            .Include(x => x.Child)
                             .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
                             .FirstOrDefault();
 
@@ -1433,8 +1434,7 @@ namespace VaccineAPI.Controllers
                                 + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
                                 + " because Minimum Age of this vaccine from date of birth should be "
                                 + d.MinAge + ".";
-                            if (!mode.Equals("bulk")) { /* single mode — same message, no return yet */ }
-                            else return message;
+                            return message;
                         }
                         else
                             FirstDoseSchedule.Date = FirstDoseSchedule.Date.AddDays(daysDifference);

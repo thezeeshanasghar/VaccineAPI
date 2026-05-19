@@ -1017,7 +1017,7 @@ namespace VaccineAPI.Controllers
                                   isFirstRow = false;
                               }
                            
-                            PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, rangevaluefont));
+                            PdfPCell dosenameCell = new PdfPCell(new Phrase(System.Text.RegularExpressions.Regex.Replace(dbSchedule.Dose.Name, @"\s+\d+$", ""), rangevaluefont));
                             dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(dosenameCell);
@@ -1821,7 +1821,7 @@ namespace VaccineAPI.Controllers
                             ageCell.FixedHeight = 15f;
                             ageCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(ageCell);
-                            PdfPCell dosenameCell = new PdfPCell(new Phrase(dbSchedule.Dose.Name, font));
+                            PdfPCell dosenameCell = new PdfPCell(new Phrase(System.Text.RegularExpressions.Regex.Replace(dbSchedule.Dose.Name, @"\s+\d+$", ""), font));
                             dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(dosenameCell);

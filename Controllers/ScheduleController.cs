@@ -252,6 +252,21 @@ namespace VaccineAPI.Controllers
                         if (previousBrandId.HasValue)
                         {
                             dbBrandInventory2.Count += 1;
+
+                            // Restore Stock row for rolled-back brand
+                            var restoreStock = _db.Stocks
+                                .Include(s => s.Bill)
+                                .Where(s => s.BrandId == previousBrandId
+                                         && s.Bill.ClinicId == rollbackClinicId
+                                         && s.Quantity >= 0)
+                                .OrderByDescending(s => s.Expiry)
+                                .ThenByDescending(s => s.Id)
+                                .FirstOrDefault();
+                            if (restoreStock != null)
+                            {
+                                restoreStock.Quantity += 1;
+                                _db.Entry(restoreStock).State = EntityState.Modified;
+                            }
                         }
                     }
                     _db.SaveChanges();
@@ -290,6 +305,28 @@ namespace VaccineAPI.Controllers
                         }
 
                         dbBrandInventory.Count -= 1;
+
+                        // Deduct from Stock rows in FEFO order
+                        var fillStocks = _db.Stocks
+                            .Include(s => s.Bill)
+                            .Where(s => s.BrandId == scheduleDTO.BrandId
+                                     && s.Bill.ClinicId == onlineClinicId
+                                     && s.Quantity > 0)
+                            .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                            .ThenBy(s => s.Expiry)
+                            .ThenBy(s => s.Id)
+                            .ToList();
+
+                        int fillRemaining = 1;
+                        foreach (var src in fillStocks)
+                        {
+                            if (fillRemaining <= 0) break;
+                            int deduct = Math.Min(src.Quantity, fillRemaining);
+                            src.Quantity -= deduct;
+                            fillRemaining -= deduct;
+                            if (src.Quantity == 0) _db.Stocks.Remove(src);
+                            else _db.Entry(src).State = EntityState.Modified;
+                        }
                     }
                 }
 
@@ -1127,13 +1164,35 @@ namespace VaccineAPI.Controllers
                                         }
 
                                         brandInventory.Count--;
+
+                                        // Deduct from Stock rows in FEFO order
+                                        var bulkFillStocks = _db.Stocks
+                                            .Include(s => s.Bill)
+                                            .Where(s => s.BrandId == scheduleBrand.BrandId.Value
+                                                     && s.Bill.ClinicId == onlineClinicId
+                                                     && s.Quantity > 0)
+                                            .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                                            .ThenBy(s => s.Expiry)
+                                            .ThenBy(s => s.Id)
+                                            .ToList();
+
+                                        int bulkFillRemaining = 1;
+                                        foreach (var src in bulkFillStocks)
+                                        {
+                                            if (bulkFillRemaining <= 0) break;
+                                            int deduct = Math.Min(src.Quantity, bulkFillRemaining);
+                                            src.Quantity -= deduct;
+                                            bulkFillRemaining -= deduct;
+                                            if (src.Quantity == 0) _db.Stocks.Remove(src);
+                                            else _db.Entry(src).State = EntityState.Modified;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                
+
                 // Only reschedule future doses for non-infinite vaccines
                 if (!IsInfiniteDose(schedule.Dose))
                 {

@@ -192,9 +192,7 @@ namespace VaccineAPI.Controllers
                 .Where(ba => ba.BrandId == brandId && ba.ClinicId == clinicId)
                 .FirstOrDefault();
 
-            var costPrice = brandAmount?.PurchasedAmt ?? 0;
-            // BrandAmount.Count is the authoritative current inventory — Stock.Quantity is the
-            // original purchase quantity and is never decremented when vaccines are administered.
+            var costPrice   = brandAmount?.PurchasedAmt ?? 0;
             var actualTotal = brandAmount?.Count ?? 0;
 
             var brand = _db.Brands.FirstOrDefault(b => b.Id == brandId);
@@ -205,47 +203,19 @@ namespace VaccineAPI.Controllers
                 .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity > 0)
                 .ToList();
 
-            var purchasedTotal = stocks.Sum(s => s.Quantity);
-
-            // Load all adjustments that are tied to a specific batch lot for this brand+clinic.
-            // Unbatched adjustments (no BatchLot) are intentionally excluded here — they stay
-            // inside pureCount and get distributed proportionally across batches.
-            var batchedAdjRecords = _db.AdjustStocks
-                .Where(a => a.BrandId == brandId && a.ClinicId == clinicId
-                            && a.BatchLot != null && a.BatchLot != "")
-                .ToList();
-
-            var totalBatchedAdj = batchedAdjRecords.Sum(a => a.Adjustment);
-
-            // pureCount = inventory count with batch-specific adjustments removed,
-            // so the proportional formula only distributes purchases + unbatched adjustments.
-            var pureCount = Math.Max(0, actualTotal - totalBatchedAdj);
-
+            // Available quantity per batch = sum of Stock.Quantity rows directly.
+            // Stock.Quantity is now decremented by every operation (fill, transfer, adjust, sale).
             var batches = stocks
                 .GroupBy(s => new { Lot = (s.BatchLot ?? "").Trim(), s.Expiry })
                 .Where(g => !string.IsNullOrWhiteSpace(g.Key.Lot))
-                .Select(g =>
+                .Select(g => new AvailableBatchDTO
                 {
-                    var batchPurchased = g.Sum(s => s.Quantity);
-                    var proportionalBase = purchasedTotal > 0
-                        ? (int)Math.Round((double)batchPurchased / purchasedTotal * pureCount)
-                        : 0;
-                    // Match adjustments by lot + expiry using a 24-hour tolerance to absorb
-                    // any timezone shift that may have occurred when the browser serialized the date.
-                    var batchAdj = batchedAdjRecords
-                        .Where(a => (a.BatchLot?.Trim() ?? "") == g.Key.Lot
-                                    && AdjustExpiryMatches(a.ExpiryDate, g.Key.Expiry))
-                        .Sum(a => a.Adjustment);
-                    var available = Math.Max(0, proportionalBase + batchAdj);
-                    return new AvailableBatchDTO
-                    {
-                        BrandId = brandId,
-                        BrandName = brandName,
-                        BatchLot = g.Key.Lot,
-                        Expiry = g.Key.Expiry,
-                        AvailableQuantity = available,
-                        CostPrice = costPrice
-                    };
+                    BrandId           = brandId,
+                    BrandName         = brandName,
+                    BatchLot          = g.Key.Lot,
+                    Expiry            = g.Key.Expiry,
+                    AvailableQuantity = g.Sum(s => s.Quantity),
+                    CostPrice         = costPrice
                 })
                 .Where(b => b.AvailableQuantity > 0)
                 .OrderBy(b => b.Expiry.HasValue ? 0 : 1)
@@ -260,12 +230,12 @@ namespace VaccineAPI.Controllers
                 {
                     batches.Add(new AvailableBatchDTO
                     {
-                        BrandId = brandId,
-                        BrandName = brandName,
-                        BatchLot = null,
-                        Expiry = noLotStocks.OrderBy(s => s.Expiry).FirstOrDefault()?.Expiry,
+                        BrandId           = brandId,
+                        BrandName         = brandName,
+                        BatchLot          = null,
+                        Expiry            = noLotStocks.OrderBy(s => s.Expiry).FirstOrDefault()?.Expiry,
                         AvailableQuantity = actualTotal,
-                        CostPrice = costPrice
+                        CostPrice         = costPrice
                     });
                 }
             }

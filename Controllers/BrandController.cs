@@ -112,6 +112,7 @@ namespace VaccineAPI.Controllers
             }
             dbVaccineBrand.Name = vaccineBrandDTO.Name;
             dbVaccineBrand.Manufacturer = vaccineBrandDTO.Manufacturer;
+            dbVaccineBrand.MinAge = vaccineBrandDTO.MinAge;
             _db.SaveChanges();
             return new Response<BrandDTO>(true, null, vaccineBrandDTO);
         }

@@ -68,6 +68,15 @@ namespace VaccineAPI
         }
 
         
+        public static void PaForgotPassword(PersonalAssistant pa)
+        {
+            string body = ""
+                   + "Hi " + "<b>" + pa.Name + "</b>, <br />"
+                   + "Your password is <b>" + pa.User.Password + "</b>";
+
+            SendEmail(pa.Email, body);
+        }
+
         public static void PersonalAssistantLoginDetails(PersonalAssistant pa, string password)
         {
             string body = ""

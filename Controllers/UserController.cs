@@ -201,6 +201,25 @@ namespace VaccineAPI.Controllers
                         );
                     }
                 }
+                else if (dbUser.UserType.Equals("PA"))
+                {
+                    var paDb = _db.PersonalAssistant
+                        .Include(p => p.User)
+                        .FirstOrDefault(x => x.UserId == dbUser.Id);
+                    if (paDb == null)
+                    {
+                        return new Response<UserDTO>(false, "Invalid Mobile Number", null);
+                    }
+                    else
+                    {
+                        UserEmail.PaForgotPassword(paDb);
+                        return new Response<UserDTO>(
+                            true,
+                            "Your password has been sent to your email address",
+                            null
+                        );
+                    }
+                }
                 else
                 {
                     return new Response<UserDTO>(false, "Please contact with admin", null);

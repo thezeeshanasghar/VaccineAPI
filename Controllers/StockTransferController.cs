@@ -98,13 +98,15 @@ namespace VaccineAPI.Controllers
                             $"Insufficient inventory for brand '{brand.Name}'. Available: {sourceBrandAmount?.Count ?? 0}, Requested: {item.Quantity}.", null);
                     }
 
-                    // Deduct from source Stock records in FEFO order (earliest expiry first)
+                    // Deduct from source Stock records in FEFO order (earliest expiry first).
+                    // If a BatchNumber is specified it must match exactly — never fall back to all batches.
+                    var hasBatch = !string.IsNullOrWhiteSpace(item.BatchNumber);
                     var sourceStocks = await _db.Stocks
                         .Include(s => s.Bill)
                         .Where(s => s.BrandId == item.BrandId
                                  && s.Bill.ClinicId == request.FromClinicId
                                  && s.Quantity > 0
-                                 && (item.BatchNumber == null || (s.BatchLot ?? "").Trim() == item.BatchNumber.Trim()))
+                                 && (!hasBatch || (s.BatchLot ?? "").Trim() == item.BatchNumber.Trim()))
                         .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
                         .ThenBy(s => s.Expiry)
                         .ThenBy(s => s.Id)

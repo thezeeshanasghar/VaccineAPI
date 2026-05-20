@@ -271,17 +271,36 @@ namespace VaccineAPI.Controllers
                 sourceBrandAmount.Count += transfer.Quantity;
                 _db.Entry(sourceBrandAmount).State = EntityState.Modified;
 
-                // Restore source stock row
-                _db.Stocks.Add(new Stock
+                // Restore source stock row — increment existing row, never add a new one
+                var restoreStockPut = await _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => s.BrandId == transfer.BrandId
+                             && s.Bill.ClinicId == transfer.FromClinicId
+                             && (s.BatchLot ?? "").Trim() == (transfer.BatchNumber ?? "").Trim()
+                             && s.Expiry == transfer.ExpiryDate)
+                    .OrderByDescending(s => s.Id)
+                    .FirstOrDefaultAsync();
+
+                if (restoreStockPut != null)
                 {
-                    BrandId     = transfer.BrandId,
-                    BillId      = (await _db.Bills.Where(b => b.ClinicId == transfer.FromClinicId)
-                                                  .OrderByDescending(b => b.Id).FirstOrDefaultAsync())?.Id ?? 1,
-                    Quantity    = transfer.Quantity,
-                    StockAmount = transfer.CostPrice,
-                    BatchLot    = transfer.BatchNumber?.Trim(),
-                    Expiry      = transfer.ExpiryDate
-                });
+                    restoreStockPut.Quantity += transfer.Quantity;
+                    _db.Entry(restoreStockPut).State = EntityState.Modified;
+                }
+                else
+                {
+                    var fallbackBillIdPut = (await _db.Bills
+                        .Where(b => b.ClinicId == transfer.FromClinicId)
+                        .OrderByDescending(b => b.Id).FirstOrDefaultAsync())?.Id ?? 1;
+                    _db.Stocks.Add(new Stock
+                    {
+                        BrandId     = transfer.BrandId,
+                        BillId      = fallbackBillIdPut,
+                        Quantity    = transfer.Quantity,
+                        StockAmount = transfer.CostPrice,
+                        BatchLot    = transfer.BatchNumber?.Trim(),
+                        Expiry      = transfer.ExpiryDate
+                    });
+                }
 
                 await _db.SaveChangesAsync();
 
@@ -388,16 +407,36 @@ namespace VaccineAPI.Controllers
                     _db.Entry(sourceBrandAmount).State = EntityState.Modified;
                 }
 
-                _db.Stocks.Add(new Stock
+                // Restore source stock row — increment existing row, never add a new one
+                var restoreStockDel = await _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => s.BrandId == transfer.BrandId
+                             && s.Bill.ClinicId == transfer.FromClinicId
+                             && (s.BatchLot ?? "").Trim() == (transfer.BatchNumber ?? "").Trim()
+                             && s.Expiry == transfer.ExpiryDate)
+                    .OrderByDescending(s => s.Id)
+                    .FirstOrDefaultAsync();
+
+                if (restoreStockDel != null)
                 {
-                    BrandId     = transfer.BrandId,
-                    BillId      = (await _db.Bills.Where(b => b.ClinicId == transfer.FromClinicId)
-                                                  .OrderByDescending(b => b.Id).FirstOrDefaultAsync())?.Id ?? 1,
-                    Quantity    = transfer.Quantity,
-                    StockAmount = transfer.CostPrice,
-                    BatchLot    = transfer.BatchNumber?.Trim(),
-                    Expiry      = transfer.ExpiryDate
-                });
+                    restoreStockDel.Quantity += transfer.Quantity;
+                    _db.Entry(restoreStockDel).State = EntityState.Modified;
+                }
+                else
+                {
+                    var fallbackBillIdDel = (await _db.Bills
+                        .Where(b => b.ClinicId == transfer.FromClinicId)
+                        .OrderByDescending(b => b.Id).FirstOrDefaultAsync())?.Id ?? 1;
+                    _db.Stocks.Add(new Stock
+                    {
+                        BrandId     = transfer.BrandId,
+                        BillId      = fallbackBillIdDel,
+                        Quantity    = transfer.Quantity,
+                        StockAmount = transfer.CostPrice,
+                        BatchLot    = transfer.BatchNumber?.Trim(),
+                        Expiry      = transfer.ExpiryDate
+                    });
+                }
 
                 // Deduct destination
                 var destBrandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>

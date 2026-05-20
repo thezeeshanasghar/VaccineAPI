@@ -135,6 +135,19 @@ namespace VaccineAPI.Controllers
                     return new Response<ScheduleDTO>(false, "Schedule not found", null);
                 }
 
+                if (scheduleDTO.IsDone == true && scheduleDTO.BrandId.HasValue)
+                {
+                    var brand = _db.Brands.FirstOrDefault(b => b.Id == scheduleDTO.BrandId.Value);
+                    if (brand != null && brand.MinAge.HasValue)
+                    {
+                        var givenDate = scheduleDTO.GivenDate.Date;
+                        var minAllowedDate = calculateDate(dbSchedule.Child.DOB, brand.MinAge.Value).Date;
+                        if (givenDate < minAllowedDate)
+                            return new Response<ScheduleDTO>(false,
+                                brand.Name + " cannot be given before " + minAllowedDate.ToString("dd-MM-yyyy") + ".", null);
+                    }
+                }
+
                 var previousBrandId = dbSchedule.BrandId;
                 var onlineClinicId = ResolveClinicIdForStock(
                     scheduleDTO.DoctorId,

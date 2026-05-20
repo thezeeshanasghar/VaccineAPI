@@ -59,6 +59,20 @@ namespace VaccineAPI.ModelDTO
         public string TransferredByName { get; set; } = "";
     }
 
+    public class StockTransferEditDTO
+    {
+        [Required]
+        [Range(1, int.MaxValue)]
+        public int Quantity { get; set; }
+
+        [Required]
+        public decimal CostPrice { get; set; }
+
+        public string? BatchNumber { get; set; }
+
+        public DateTime? ExpiryDate { get; set; }
+    }
+
     public class AvailableBatchDTO
     {
         public long BrandId { get; set; }

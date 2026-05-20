@@ -227,6 +227,218 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [HttpPut("{id}")]
+        public async Task<Response<string>> Put(long id, [FromBody] StockTransferEditDTO dto)
+        {
+            var transfer = await _db.StockTransfers.FindAsync(id);
+            if (transfer == null)
+                return new Response<string>(false, "Transfer record not found.", null);
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // ── Reverse original from destination ──────────────────────────
+                var destBrandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
+                    ba.BrandId == transfer.BrandId && ba.ClinicId == transfer.ToClinicId);
+
+                if (destBrandAmount != null)
+                {
+                    destBrandAmount.Count = Math.Max(0, destBrandAmount.Count - transfer.Quantity);
+                    _db.Entry(destBrandAmount).State = EntityState.Modified;
+                }
+
+                // Remove the stock row that was added in destination
+                var destStock = await _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => s.BrandId == transfer.BrandId
+                             && s.Bill.ClinicId == transfer.ToClinicId
+                             && (s.BatchLot ?? "") == (transfer.BatchNumber ?? "")
+                             && s.Quantity == transfer.Quantity)
+                    .OrderByDescending(s => s.Id)
+                    .FirstOrDefaultAsync();
+                if (destStock != null) _db.Stocks.Remove(destStock);
+
+                // ── Restore original to source ─────────────────────────────────
+                var sourceBrandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
+                    ba.BrandId == transfer.BrandId && ba.ClinicId == transfer.FromClinicId);
+
+                if (sourceBrandAmount == null)
+                {
+                    await transaction.RollbackAsync();
+                    return new Response<string>(false, "Source BrandAmount not found.", null);
+                }
+
+                sourceBrandAmount.Count += transfer.Quantity;
+                _db.Entry(sourceBrandAmount).State = EntityState.Modified;
+
+                // Restore source stock row
+                _db.Stocks.Add(new Stock
+                {
+                    BrandId     = transfer.BrandId,
+                    BillId      = (await _db.Bills.Where(b => b.ClinicId == transfer.FromClinicId)
+                                                  .OrderByDescending(b => b.Id).FirstOrDefaultAsync())?.Id ?? 1,
+                    Quantity    = transfer.Quantity,
+                    StockAmount = transfer.CostPrice,
+                    BatchLot    = transfer.BatchNumber?.Trim(),
+                    Expiry      = transfer.ExpiryDate
+                });
+
+                await _db.SaveChangesAsync();
+
+                // ── Apply new values ───────────────────────────────────────────
+                var hasBatchNew = !string.IsNullOrWhiteSpace(dto.BatchNumber);
+                var newSourceStocks = await _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => s.BrandId == transfer.BrandId
+                             && s.Bill.ClinicId == transfer.FromClinicId
+                             && s.Quantity > 0
+                             && (!hasBatchNew || (s.BatchLot ?? "").Trim() == dto.BatchNumber.Trim()))
+                    .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                    .ThenBy(s => s.Expiry)
+                    .ThenBy(s => s.Id)
+                    .ToListAsync();
+
+                int remaining = dto.Quantity;
+                foreach (var src in newSourceStocks)
+                {
+                    if (remaining <= 0) break;
+                    int deduct = Math.Min(src.Quantity, remaining);
+                    src.Quantity -= deduct;
+                    remaining -= deduct;
+                    if (src.Quantity == 0) _db.Stocks.Remove(src);
+                    else _db.Entry(src).State = EntityState.Modified;
+                }
+
+                if (remaining > 0)
+                {
+                    await transaction.RollbackAsync();
+                    return new Response<string>(false, $"Insufficient stock in source clinic for new quantity.", null);
+                }
+
+                sourceBrandAmount.Count -= dto.Quantity;
+                _db.Entry(sourceBrandAmount).State = EntityState.Modified;
+
+                // Add to destination with new values
+                _db.Stocks.Add(new Stock
+                {
+                    BrandId     = transfer.BrandId,
+                    BillId      = destStock?.BillId ?? (await _db.Bills.Where(b => b.ClinicId == transfer.ToClinicId)
+                                                                       .OrderByDescending(b => b.Id).FirstOrDefaultAsync())?.Id ?? 1,
+                    Quantity    = dto.Quantity,
+                    StockAmount = dto.CostPrice,
+                    BatchLot    = dto.BatchNumber?.Trim(),
+                    Expiry      = dto.ExpiryDate
+                });
+
+                if (destBrandAmount != null)
+                {
+                    destBrandAmount.Count += dto.Quantity;
+                    _db.Entry(destBrandAmount).State = EntityState.Modified;
+                }
+                else
+                {
+                    _db.BrandAmounts.Add(new BrandAmount
+                    {
+                        BrandId      = transfer.BrandId,
+                        Count        = dto.Quantity,
+                        DoctorId     = transfer.CreatedBy,
+                        ClinicId     = transfer.ToClinicId,
+                        PurchasedAmt = dto.CostPrice
+                    });
+                }
+
+                // Update the transfer record
+                transfer.BatchNumber = dto.BatchNumber?.Trim();
+                transfer.ExpiryDate  = dto.ExpiryDate;
+                transfer.Quantity    = dto.Quantity;
+                transfer.CostPrice   = dto.CostPrice;
+                transfer.TotalValue  = dto.Quantity * dto.CostPrice;
+                _db.Entry(transfer).State = EntityState.Modified;
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return new Response<string>(true, "Transfer updated successfully.", null);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                string msg = $"Error: {ex.Message}";
+                if (ex.InnerException != null) msg += $" | {ex.InnerException.Message}";
+                return new Response<string>(false, msg, null);
+            }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<Response<string>> Delete(long id)
+        {
+            var transfer = await _db.StockTransfers.FindAsync(id);
+            if (transfer == null)
+                return new Response<string>(false, "Transfer record not found.", null);
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Restore source
+                var sourceBrandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
+                    ba.BrandId == transfer.BrandId && ba.ClinicId == transfer.FromClinicId);
+                if (sourceBrandAmount != null)
+                {
+                    sourceBrandAmount.Count += transfer.Quantity;
+                    _db.Entry(sourceBrandAmount).State = EntityState.Modified;
+                }
+
+                _db.Stocks.Add(new Stock
+                {
+                    BrandId     = transfer.BrandId,
+                    BillId      = (await _db.Bills.Where(b => b.ClinicId == transfer.FromClinicId)
+                                                  .OrderByDescending(b => b.Id).FirstOrDefaultAsync())?.Id ?? 1,
+                    Quantity    = transfer.Quantity,
+                    StockAmount = transfer.CostPrice,
+                    BatchLot    = transfer.BatchNumber?.Trim(),
+                    Expiry      = transfer.ExpiryDate
+                });
+
+                // Deduct destination
+                var destBrandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
+                    ba.BrandId == transfer.BrandId && ba.ClinicId == transfer.ToClinicId);
+                if (destBrandAmount != null)
+                {
+                    destBrandAmount.Count = Math.Max(0, destBrandAmount.Count - transfer.Quantity);
+                    _db.Entry(destBrandAmount).State = EntityState.Modified;
+                }
+
+                var destStock = await _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => s.BrandId == transfer.BrandId
+                             && s.Bill.ClinicId == transfer.ToClinicId
+                             && (s.BatchLot ?? "") == (transfer.BatchNumber ?? "")
+                             && s.Quantity >= transfer.Quantity)
+                    .OrderByDescending(s => s.Id)
+                    .FirstOrDefaultAsync();
+
+                if (destStock != null)
+                {
+                    destStock.Quantity -= transfer.Quantity;
+                    if (destStock.Quantity == 0) _db.Stocks.Remove(destStock);
+                    else _db.Entry(destStock).State = EntityState.Modified;
+                }
+
+                _db.StockTransfers.Remove(transfer);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return new Response<string>(true, "Transfer reversed and deleted.", null);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                string msg = $"Error: {ex.Message}";
+                if (ex.InnerException != null) msg += $" | {ex.InnerException.Message}";
+                return new Response<string>(false, msg, null);
+            }
+        }
+
         [HttpGet("history")]
         public Response<List<StockTransferHistoryDTO>> GetHistory(
             [FromQuery] long? fromClinicId,

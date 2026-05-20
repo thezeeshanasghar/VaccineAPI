@@ -137,6 +137,13 @@ namespace VaccineAPI.Controllers
 
                     if (dto.Adjustment > 0)
                     {
+                        if (string.IsNullOrWhiteSpace(dto.BatchLot) || dto.ExpiryDate == null)
+                        {
+                            await transaction.RollbackAsync();
+                            return new Response<List<AdjustStockDTO>>(false,
+                                "Batch/Lot and Expiry date are required for stock increase.", null);
+                        }
+
                         brandAmount.PurchasedAmt = brandAmount.PurchasedAmt == 0 || brandAmount.Count == 0
                             ? dto.Price
                             : ((brandAmount.PurchasedAmt * brandAmount.Count) + (dto.Price * dto.Adjustment))
@@ -160,12 +167,8 @@ namespace VaccineAPI.Controllers
                             .Include(s => s.Bill)
                             .Where(s => s.BrandId == dto.BrandId
                                      && s.Bill.ClinicId == dto.ClinicId
-                                     && (string.IsNullOrWhiteSpace(dto.BatchLot)
-                                            ? string.IsNullOrWhiteSpace(s.BatchLot)
-                                            : (s.BatchLot ?? "").Trim() == dto.BatchLot.Trim())
-                                     && (dto.ExpiryDate == null
-                                            ? !s.Expiry.HasValue
-                                            : s.Expiry.HasValue && s.Expiry.Value.Date == dto.ExpiryDate.Value.Date))
+                                     && (s.BatchLot ?? "").Trim() == dto.BatchLot.Trim()
+                                     && s.Expiry.HasValue && s.Expiry.Value.Date == dto.ExpiryDate.Value.Date)
                             .FirstOrDefaultAsync();
 
                         if (existingStock != null)
@@ -181,7 +184,7 @@ namespace VaccineAPI.Controllers
                                 BillId      = anchorBill.Id,
                                 Quantity    = dto.Adjustment,
                                 StockAmount = dto.Price,
-                                BatchLot    = string.IsNullOrWhiteSpace(dto.BatchLot) ? null : dto.BatchLot.Trim(),
+                                BatchLot    = dto.BatchLot.Trim(),
                                 Expiry      = dto.ExpiryDate
                             });
                         }

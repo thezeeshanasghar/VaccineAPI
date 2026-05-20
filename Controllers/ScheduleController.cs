@@ -266,14 +266,16 @@ namespace VaccineAPI.Controllers
                         {
                             dbBrandInventory2.Count += 1;
 
-                            // Restore Stock row for rolled-back brand
+                            // Restore Stock row for rolled-back brand using FEFO order
+                            // (earliest expiry first — mirrors exactly what was deducted on give)
                             var restoreStock = _db.Stocks
                                 .Include(s => s.Bill)
                                 .Where(s => s.BrandId == previousBrandId
                                          && s.Bill.ClinicId == rollbackClinicId
                                          && s.Quantity >= 0)
-                                .OrderByDescending(s => s.Expiry)
-                                .ThenByDescending(s => s.Id)
+                                .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                                .ThenBy(s => s.Expiry)
+                                .ThenBy(s => s.Id)
                                 .FirstOrDefault();
                             if (restoreStock != null)
                             {

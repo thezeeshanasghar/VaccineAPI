@@ -522,12 +522,11 @@ namespace VaccineAPI.Controllers
 
                     if (brandAmount != null)
                     {
-                        // Only reverse the remaining units — consumed doses already
-                        // decremented BrandAmount.Count when they were administered.
-                        // stock.Quantity = original purchased qty (never decremented by gives)
-                        // brandAmount.Count = current remaining after all gives
-                        // So we only reduce by what's actually still in stock (remaining qty)
-                        int remaining = Math.Min(stock.Quantity, brandAmount.Count);
+                        // Remaining units for THIS stock row = its current stocks.Quantity,
+                        // which is decremented by every operation (gives, sales, transfers, losses).
+                        // Using stock.Quantity (original purchased qty) was wrong for multi-bill
+                        // scenarios — it never reflects what was consumed from this specific row.
+                        int remaining = Math.Max(0, Math.Min(stock.Quantity, brandAmount.Count));
                         brandAmount.Count = Math.Max(0, brandAmount.Count - remaining);
                         _db.Entry(brandAmount).State = EntityState.Modified;
 

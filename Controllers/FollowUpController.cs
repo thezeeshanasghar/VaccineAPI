@@ -49,15 +49,18 @@ namespace VaccineAPI.Controllers
         {
             try{
                 var followUps = _db
-                    .FollowUps.Include(f => f.Child) 
-                    .ThenInclude(c => c.User) 
+                    .FollowUps.Include(f => f.Child)
+                    .ThenInclude(c => c.User)
                     .Where(f => f.DoctorId == doctorId)
                     .Where(f =>f.NextVisitDate.HasValue && f.NextVisitDate.Value.Date == inputDate.Date) // Handle nullable DateTime
                     .Where(f => f.Child.IsInactive == false).ToList();
 
+                foreach (var f in followUps)
+                    if (f.Disease == null) f.Disease = "";
+
                 var groupedFollowUps = followUps
-                    .GroupBy(f => f.Child.Id) 
-                    .Select(g => g.First()) 
+                    .GroupBy(f => f.Child.Id)
+                    .Select(g => g.First())
                     .OrderBy(f => f.Child.Id) .ToList();
 
                 IEnumerable<FollowUpDTO> followUpDTOs = _mapper.Map<IEnumerable<FollowUpDTO>>(groupedFollowUps);

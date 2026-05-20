@@ -169,6 +169,10 @@ namespace VaccineAPI.Controllers
                 doctorDB.ProfileImage = "";
                 // doctorDB.SignatureImage = "";
                 doctorDB.UserId = userDB.Id;
+                doctorDB.AllowInvoice = true;
+                doctorDB.AllowFollowUp = true;
+                doctorDB.AllowChart = true;
+                doctorDB.AllowInventory = true;
                 _db.Doctors.Add(doctorDB);
                 _db.SaveChanges();
                 doctorDTO.Id = doctorDB.Id;

@@ -356,12 +356,13 @@ namespace VaccineAPI.Controllers
 
                     var stock = new Stock
                     {
-                        BrandId     = stockDTO.BrandId,
-                        BillId      = bill.Id,
-                        Quantity    = stockDTO.Quantity,
-                        StockAmount = trueUnitCost,
-                        BatchLot    = stockDTO.BatchLot?.Trim(),
-                        Expiry      = stockDTO.Expiry
+                        BrandId          = stockDTO.BrandId,
+                        BillId           = bill.Id,
+                        Quantity         = stockDTO.Quantity,
+                        OriginalQuantity = stockDTO.Quantity,
+                        StockAmount      = trueUnitCost,
+                        BatchLot         = stockDTO.BatchLot?.Trim(),
+                        Expiry           = stockDTO.Expiry
                     };
 
                     _db.Stocks.Add(stock);
@@ -644,12 +645,14 @@ namespace VaccineAPI.Controllers
                         return new Response<List<StockDTO>>(false,$"Brand with ID {stockDTO.BrandId} not found",null);
                     }
 
-                    // Capture old quantity before overwriting — needed for Count delta below
-                    int oldQty = stock.Quantity;
+                    // Delta against OriginalQuantity (what was purchased), not the live-decremented Quantity.
+                    // This keeps BrandAmount.Count accurate when editing a bill line.
+                    int oldQty = stock.OriginalQuantity > 0 ? stock.OriginalQuantity : stock.Quantity;
 
                     // Update stock details
                     stock.BrandId = stockDTO.BrandId;
                     stock.Quantity = stockDTO.Quantity;
+                    stock.OriginalQuantity = stockDTO.Quantity;
                     stock.StockAmount = stockDTO.StockAmount;
                     stock.BatchLot = string.IsNullOrWhiteSpace(stockDTO.BatchLot)
                         ? stock.BatchLot

@@ -141,7 +141,7 @@ namespace VaccineAPI.Controllers
             foreach (var dto in billDTOs)
             {
                 var bill = bills.First(b => b.Id == dto.Id);
-                dto.TotalAmount = bill.Stocks.Sum(s => s.StockAmount * s.Quantity);
+                dto.TotalAmount = bill.Stocks.Sum(s => s.StockAmount * (s.OriginalQuantity > 0 ? s.OriginalQuantity : s.Quantity));
                 dto.TotalItems  = bill.Stocks.Count;
                 dto.DoctorName  = bill.Doctor?.FirstName ?? "";
             }
@@ -211,7 +211,7 @@ namespace VaccineAPI.Controllers
                 return NotFound(new { message = "Bill not found." });
 
             // Sum of original purchase quantities across all stock rows for this bill
-            var purchasedQty = bill.Stocks.Sum(s => s.Quantity);
+            var purchasedQty = bill.Stocks.Sum(s => s.OriginalQuantity > 0 ? s.OriginalQuantity : s.Quantity);
 
             // Current remaining count from BrandAmount
             // There may be multiple brands on one bill — handle each separately
@@ -224,7 +224,7 @@ namespace VaccineAPI.Controllers
             foreach (var brandId in brandIds)
             {
                 var brandStock = bill.Stocks.Where(s => s.BrandId == brandId).ToList();
-                var brandPurchasedQty = brandStock.Sum(s => s.Quantity);
+                var brandPurchasedQty = brandStock.Sum(s => s.OriginalQuantity > 0 ? s.OriginalQuantity : s.Quantity);
 
                 var brandAmount = await _db.BrandAmounts
                     .FirstOrDefaultAsync(ba => ba.BrandId == brandId && ba.ClinicId == bill.ClinicId);
@@ -449,7 +449,7 @@ namespace VaccineAPI.Controllers
                     .Where(s => s.BillId == id && s.Quantity > 0)
                     .ToListAsync();
 
-                decimal newBillTotal = updatedStocks.Sum(s => (decimal)s.StockAmount * s.Quantity);
+                decimal newBillTotal = updatedStocks.Sum(s => (decimal)s.StockAmount * (s.OriginalQuantity > 0 ? s.OriginalQuantity : s.Quantity));
 
                 // Adjust supplier payment — reduce to new bill total, remove overpayment
                 var supplierPayments = await _db.SupplierPayments
@@ -686,7 +686,7 @@ namespace VaccineAPI.Controllers
                     return BadRequest(new { message = "Payment amount must be greater than zero." });
 
                 // Total payable = sum of stock amounts (AWT already included in StockAmount)
-                decimal totalPayable = bill.Stocks.Sum(s => s.StockAmount * s.Quantity);
+                decimal totalPayable = bill.Stocks.Sum(s => s.StockAmount * (s.OriginalQuantity > 0 ? s.OriginalQuantity : s.Quantity));
                 decimal alreadyPaid  = bill.AmountPaid ?? 0m;
                 decimal newTotalPaid = alreadyPaid + dto.Amount;
 
@@ -1388,7 +1388,7 @@ namespace VaccineAPI.Controllers
                                 && !sb.bill.BillNo.StartsWith("XFER-")
                             )
                             .GroupBy(sb => sb.bill.BillDate.Date)
-                            .ToDictionary(g => g.Key, g => g.Sum(sb => sb.stock.Quantity));
+                            .ToDictionary(g => g.Key, g => g.Sum(sb => sb.stock.OriginalQuantity > 0 ? sb.stock.OriginalQuantity : sb.stock.Quantity));
 
                         var transferGroups = _db.StockTransfers
                             .Where(t =>
@@ -1759,9 +1759,9 @@ namespace VaccineAPI.Controllers
                     {
                         sb.bill.BillDate,
                         sb.bill.BillNo,
-                        sb.bill.Id, 
+                        sb.bill.Id,
                         sb.bill.Supplier,
-                        sb.stock.Quantity,
+                        Quantity = sb.stock.OriginalQuantity > 0 ? sb.stock.OriginalQuantity : sb.stock.Quantity,
                         sb.stock.StockAmount,
                     })
                     .ToList();

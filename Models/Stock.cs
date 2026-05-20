@@ -17,6 +17,8 @@ namespace VaccineAPI.Models
         [Range(1, int.MaxValue)]
         public int Quantity { get; set; }
 
+        public int OriginalQuantity { get; set; }
+
         [Required]
         [Column(TypeName = "decimal(18,2)")]
         public decimal StockAmount { get; set; }

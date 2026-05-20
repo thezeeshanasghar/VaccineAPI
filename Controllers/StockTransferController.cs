@@ -139,12 +139,13 @@ namespace VaccineAPI.Controllers
                     // Add to destination Stock
                     var destStock = new Stock
                     {
-                        BrandId = item.BrandId,
-                        BillId = transferBill.Id,
-                        Quantity = item.Quantity,
-                        StockAmount = item.CostPrice,
-                        BatchLot = item.BatchNumber?.Trim(),
-                        Expiry = item.ExpiryDate
+                        BrandId          = item.BrandId,
+                        BillId           = transferBill.Id,
+                        Quantity         = item.Quantity,
+                        OriginalQuantity = item.Quantity,
+                        StockAmount      = item.CostPrice,
+                        BatchLot         = item.BatchNumber?.Trim(),
+                        Expiry           = item.ExpiryDate
                     };
                     _db.Stocks.Add(destStock);
 

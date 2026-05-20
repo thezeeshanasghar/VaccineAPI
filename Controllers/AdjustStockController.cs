@@ -180,12 +180,13 @@ namespace VaccineAPI.Controllers
                         {
                             _db.Stocks.Add(new Stock
                             {
-                                BrandId     = dto.BrandId,
-                                BillId      = anchorBill.Id,
-                                Quantity    = dto.Adjustment,
-                                StockAmount = dto.Price,
-                                BatchLot    = dto.BatchLot.Trim(),
-                                Expiry      = dto.ExpiryDate
+                                BrandId          = dto.BrandId,
+                                BillId           = anchorBill.Id,
+                                Quantity         = dto.Adjustment,
+                                OriginalQuantity = dto.Adjustment,
+                                StockAmount      = dto.Price,
+                                BatchLot         = dto.BatchLot.Trim(),
+                                Expiry           = dto.ExpiryDate
                             });
                         }
                     }

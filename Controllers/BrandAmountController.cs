@@ -80,64 +80,20 @@ namespace VaccineAPI.Controllers
             if (!stocks.Any())
                 return new Response<List<BatchBreakdownDTO>>(true, null, new List<BatchBreakdownDTO>());
 
-            // Load batch-specific adjustments so we can correct the proportional formula
-            var batchedAdjs = _db.AdjustStocks
-                .Where(a => a.ClinicId == clinicId && a.BatchLot != null && a.BatchLot != "")
-                .ToList();
-
-            var batchGroups = stocks
+            // Batch quantities = sum of Stock.Quantity rows directly per batch.
+            var result = stocks
                 .GroupBy(x => new {
                     x.BrandId,
                     BrandName = x.Brand != null ? x.Brand.Name : "Unknown",
                     BatchLot  = string.IsNullOrWhiteSpace(x.BatchLot) ? "" : x.BatchLot.Trim(),
                     Expiry    = x.Expiry.HasValue ? x.Expiry.Value.Date : (DateTime?)null
                 })
-                .Select(g => new {
-                    g.Key.BrandId,
-                    g.Key.BrandName,
-                    g.Key.BatchLot,
-                    g.Key.Expiry,
-                    PurchasedQty = g.Sum(x => x.Quantity)
-                })
-                .ToList();
-
-            var totalPurchasedByBrand = batchGroups
-                .GroupBy(x => x.BrandId)
-                .ToDictionary(g => g.Key, g => g.Sum(x => x.PurchasedQty));
-
-            // Total batch-specific adjustments per brand — stripped from actualTotal
-            // so the proportional base only distributes unbatched inventory
-            var totalBatchedAdjByBrand = batchedAdjs
-                .GroupBy(a => a.BrandId)
-                .ToDictionary(g => g.Key, g => g.Sum(a => a.Adjustment));
-
-            var result = batchGroups
-                .Select(b => {
-                    int actualTotal    = actualCountByBrandId.ContainsKey(b.BrandId) ? actualCountByBrandId[b.BrandId] : 0;
-                    int purchasedTotal = totalPurchasedByBrand.ContainsKey(b.BrandId) ? totalPurchasedByBrand[b.BrandId] : 0;
-                    int totalBatchAdj  = totalBatchedAdjByBrand.ContainsKey(b.BrandId) ? totalBatchedAdjByBrand[b.BrandId] : 0;
-
-                    int pureCount = Math.Max(0, actualTotal - totalBatchAdj);
-                    int proportionalBase = purchasedTotal > 0
-                        ? (int)Math.Round((double)b.PurchasedQty / purchasedTotal * pureCount)
-                        : 0;
-
-                    // Add back this batch's specific adjustments
-                    int batchAdj = batchedAdjs
-                        .Where(a => a.BrandId == b.BrandId
-                                 && (a.BatchLot?.Trim() ?? "") == b.BatchLot
-                                 && AdjustExpiryMatches(a.ExpiryDate, b.Expiry))
-                        .Sum(a => a.Adjustment);
-
-                    int batchQty = Math.Max(0, proportionalBase + batchAdj);
-
-                    return new BatchBreakdownDTO {
-                        BrandId   = b.BrandId,
-                        BrandName = b.BrandName,
-                        BatchLot  = b.BatchLot,
-                        Expiry    = b.Expiry,
-                        Quantity  = batchQty
-                    };
+                .Select(g => new BatchBreakdownDTO {
+                    BrandId   = g.Key.BrandId,
+                    BrandName = g.Key.BrandName,
+                    BatchLot  = g.Key.BatchLot,
+                    Expiry    = g.Key.Expiry,
+                    Quantity  = g.Sum(x => x.Quantity)
                 })
                 .Where(x => x.Quantity > 0)
                 .OrderBy(x => x.BrandName)

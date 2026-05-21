@@ -19,6 +19,12 @@ namespace VaccineAPI.ModelDTO
         public float? OFC { get; set; }
         public float? BloodPressure { get; set; }
         public float? BloodSugar { get; set; }
+        public float? WeightMin { get; set; }
+        public float? WeightMax { get; set; }
+        public float? HeightMin { get; set; }
+        public float? HeightMax { get; set; }
+        public float? OfcMin { get; set; }
+        public float? OfcMax { get; set; }
         public long ChildId { get; set; }
         public ChildDTO Child { get; set; } = null!;
         public long DoctorId { get; set; }

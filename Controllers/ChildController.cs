@@ -2300,6 +2300,30 @@ namespace VaccineAPI.Controllers
                                       .OrderByDescending(x => x.CurrentVisitDate)
                                       .ToList();
                 List<FollowUpDTO> followUpDTOs = _mapper.Map<List<FollowUpDTO>>(dbFollowUps);
+
+                foreach (var dto in followUpDTOs)
+                {
+                    var child = dbFollowUps.FirstOrDefault(f => f.Id == dto.Id)?.Child;
+                    if (child != null && dto.CurrentVisitDate != default)
+                    {
+                        int gender = child.Gender == "Girl" ? 2 : 1;
+                        int ageInMonths = (dto.CurrentVisitDate.Year - child.DOB.Year) * 12
+                                        + dto.CurrentVisitDate.Month - child.DOB.Month
+                                        + (dto.CurrentVisitDate.Day >= child.DOB.Day ? 0 : -1);
+                        if (ageInMonths < 0) ageInMonths = 0;
+                        var nr = _db.NormalRanges.FirstOrDefault(x => x.Age == ageInMonths && x.Gender == gender);
+                        if (nr != null)
+                        {
+                            dto.WeightMin = nr.WeightMin;
+                            dto.WeightMax = nr.WeightMax;
+                            dto.HeightMin = nr.HeightMin;
+                            dto.HeightMax = nr.HeightMax;
+                            dto.OfcMin = nr.OfcMin;
+                            dto.OfcMax = nr.OfcMax;
+                        }
+                    }
+                }
+
                 return new Response<List<FollowUpDTO>>(true, null, followUpDTOs);
             }
         }

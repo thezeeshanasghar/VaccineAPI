@@ -137,14 +137,7 @@ namespace VaccineAPI.Controllers
 
                     if (dto.Adjustment > 0)
                     {
-                        if (string.IsNullOrWhiteSpace(dto.BatchLot) || dto.ExpiryDate == null)
-                        {
-                            await transaction.RollbackAsync();
-                            return new Response<List<AdjustStockDTO>>(false,
-                                "Batch/Lot and Expiry date are required for stock increase.", null);
-                        }
-
-                        brandAmount.PurchasedAmt = brandAmount.PurchasedAmt == 0 || brandAmount.Count == 0
+                        brandAmount.PurchasedAmt = brandAmount.Count == 0
                             ? dto.Price
                             : ((brandAmount.PurchasedAmt * brandAmount.Count) + (dto.Price * dto.Adjustment))
                               / (brandAmount.Count + dto.Adjustment);
@@ -163,31 +156,71 @@ namespace VaccineAPI.Controllers
                                 $"No purchase bill found for clinic ID {dto.ClinicId}. Please create a purchase bill first before adjusting stock.", null);
                         }
 
-                        var existingStock = await _db.Stocks
-                            .Include(s => s.Bill)
-                            .Where(s => s.BrandId == dto.BrandId
-                                     && s.Bill.ClinicId == dto.ClinicId
-                                     && (s.BatchLot ?? "").Trim() == dto.BatchLot.Trim()
-                                     && s.Expiry.HasValue && s.Expiry.Value.Date == dto.ExpiryDate.Value.Date)
-                            .FirstOrDefaultAsync();
+                        bool hasBatch = !string.IsNullOrWhiteSpace(dto.BatchLot) && dto.ExpiryDate != null;
 
-                        if (existingStock != null)
+                        if (hasBatch)
                         {
-                            existingStock.Quantity += dto.Adjustment;
-                            _db.Entry(existingStock).State = EntityState.Modified;
+                            string batchTrimmed = (dto.BatchLot ?? "").Trim();
+                            DateTime expiryDate  = dto.ExpiryDate.HasValue ? dto.ExpiryDate.Value.Date : DateTime.MinValue;
+
+                            // Match by batch+expiry — merge or create new row
+                            var existingStock = await _db.Stocks
+                                .Include(s => s.Bill)
+                                .Where(s => s.BrandId == dto.BrandId
+                                         && s.Bill.ClinicId == dto.ClinicId
+                                         && (s.BatchLot ?? "").Trim() == batchTrimmed
+                                         && s.Expiry.HasValue && s.Expiry.Value.Date == expiryDate)
+                                .FirstOrDefaultAsync();
+
+                            if (existingStock != null)
+                            {
+                                existingStock.Quantity += dto.Adjustment;
+                                _db.Entry(existingStock).State = EntityState.Modified;
+                            }
+                            else
+                            {
+                                _db.Stocks.Add(new Stock
+                                {
+                                    BrandId          = dto.BrandId,
+                                    BillId           = anchorBill.Id,
+                                    Quantity         = dto.Adjustment,
+                                    OriginalQuantity = dto.Adjustment,
+                                    StockAmount      = dto.Price,
+                                    BatchLot         = batchTrimmed,
+                                    Expiry           = dto.ExpiryDate
+                                });
+                            }
                         }
                         else
                         {
-                            _db.Stocks.Add(new Stock
+                            // No batch/expiry — merge into the most-recently-expiring batched row
+                            var mergeTarget = await _db.Stocks
+                                .Include(s => s.Bill)
+                                .Where(s => s.BrandId == dto.BrandId
+                                         && s.Bill.ClinicId == dto.ClinicId
+                                         && s.Expiry.HasValue)
+                                .OrderByDescending(s => s.Expiry)
+                                .FirstOrDefaultAsync();
+
+                            if (mergeTarget != null)
                             {
-                                BrandId          = dto.BrandId,
-                                BillId           = anchorBill.Id,
-                                Quantity         = dto.Adjustment,
-                                OriginalQuantity = dto.Adjustment,
-                                StockAmount      = dto.Price,
-                                BatchLot         = dto.BatchLot.Trim(),
-                                Expiry           = dto.ExpiryDate
-                            });
+                                mergeTarget.Quantity += dto.Adjustment;
+                                _db.Entry(mergeTarget).State = EntityState.Modified;
+                            }
+                            else
+                            {
+                                // No batched rows exist — create a null-batch row as last resort
+                                _db.Stocks.Add(new Stock
+                                {
+                                    BrandId          = dto.BrandId,
+                                    BillId           = anchorBill.Id,
+                                    Quantity         = dto.Adjustment,
+                                    OriginalQuantity = dto.Adjustment,
+                                    StockAmount      = dto.Price,
+                                    BatchLot         = null,
+                                    Expiry           = null
+                                });
+                            }
                         }
                     }
                     else
@@ -244,13 +277,13 @@ namespace VaccineAPI.Controllers
                         ExpiryDate = dto.ExpiryDate
                     };
                     _db.AdjustStocks.Add(adjustment);
-                    await _db.SaveChangesAsync();
 
                     var resultDto = _mapper.Map<AdjustStockDTO>(adjustment);
                     resultDto.BrandName = brandAmount.Brand?.Name ?? "";
                     results.Add(resultDto);
                 }
 
+                await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
                 return new Response<List<AdjustStockDTO>>(true,
                     $"{results.Count} item(s) adjusted successfully.", results);

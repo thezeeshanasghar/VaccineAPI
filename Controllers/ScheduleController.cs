@@ -272,7 +272,7 @@ namespace VaccineAPI.Controllers
                                 .Include(s => s.Bill)
                                 .Where(s => s.BrandId == previousBrandId
                                          && s.Bill.ClinicId == rollbackClinicId
-                                         && s.Quantity >= 0)
+                                         && s.Quantity > 0)
                                 .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
                                 .ThenBy(s => s.Expiry)
                                 .ThenBy(s => s.Id)
@@ -1201,6 +1201,9 @@ namespace VaccineAPI.Controllers
                                             if (src.Quantity == 0) _db.Stocks.Remove(src);
                                             else _db.Entry(src).State = EntityState.Modified;
                                         }
+
+                                        if (bulkFillRemaining > 0)
+                                            brandInventory.Count++;
                                     }
                                 }
                             }

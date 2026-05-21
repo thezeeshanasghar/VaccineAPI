@@ -3827,6 +3827,16 @@ namespace VaccineAPI.Controllers
                     .ToList();
 
                 var childDTOs = _mapper.Map<List<ChildDTO>>(dbChildren);
+
+                var paIds = childDTOs
+                    .Where(c => c.AddedByPaId.HasValue)
+                    .Select(c => c.AddedByPaId.Value)
+                    .Distinct()
+                    .ToList();
+                var paNames = _db.PersonalAssistant
+                    .Where(p => paIds.Contains(p.Id))
+                    .ToDictionary(p => p.Id, p => p.Name);
+
                 foreach (var childDTO in childDTOs)
                 {
                     var user = dbChildren.FirstOrDefault(c => c.Id == childDTO.Id)?.User;
@@ -3835,6 +3845,8 @@ namespace VaccineAPI.Controllers
                         childDTO.CountryCode = user.CountryCode;
                         childDTO.MobileNumber = user.MobileNumber;
                     }
+                    if (childDTO.AddedByPaId.HasValue && paNames.ContainsKey(childDTO.AddedByPaId.Value))
+                        childDTO.AddedByPaName = paNames[childDTO.AddedByPaId.Value];
                 }
                 return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
             }
@@ -3842,6 +3854,25 @@ namespace VaccineAPI.Controllers
             {
                 Console.WriteLine($"Error fetching not-approved children for clinic ID {clinicId}: {ex.Message}");
                 return new Response<IEnumerable<ChildDTO>>(false,"An error occurred while fetching not-approved children.",null);
+            }
+        }
+
+        [HttpGet("pending-count/{clinicId}")]
+        public Response<int> GetPendingApprovalCount(long clinicId)
+        {
+            try
+            {
+                var count = _db.Childs
+                    .Where(c => c.ClinicId == clinicId
+                             && (c.IsPAApprove == false
+                                 || c.Schedules.Any(s => s.IsPAApprove == false && s.IsDone == true)))
+                    .Count();
+                return new Response<int>(true, null, count);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching pending approval count for clinic ID {clinicId}: {ex.Message}");
+                return new Response<int>(false, "An error occurred while fetching pending approval count.", 0);
             }
         }
 

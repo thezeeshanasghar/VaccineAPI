@@ -388,7 +388,7 @@ namespace VaccineAPI.Controllers
                     );
 
                     decimal unitPrice = 0;
-                    if (brandAmount == null || brandAmount.PurchasedAmt == 0 || brandAmount.Count == 0)
+                    if (brandAmount == null || brandAmount.Count == 0)
                     {
                         unitPrice = trueUnitCost;
                     }
@@ -414,7 +414,7 @@ namespace VaccineAPI.Controllers
                             Count = stock.Quantity,
                             DoctorId = stockDTO.DoctorId,
                             ClinicId = effectiveClinicId,
-                            PurchasedAmt = (int)unitPrice
+                            PurchasedAmt = unitPrice
                         };
                         _db.BrandAmounts.Add(brandAmount);
                     }
@@ -582,9 +582,38 @@ namespace VaccineAPI.Controllers
         [HttpDelete("{id}")]
         public Response<StockDTO> Delete(int id)
         {
-            var stock = _db.Stocks.Find(id);
+            var stock = _db.Stocks
+                .Include(s => s.Bill)
+                .FirstOrDefault(s => s.Id == id);
             if (stock == null)
                 return new Response<StockDTO>(false, "Stock not found", null);
+
+            var clinicId = stock.Bill != null ? stock.Bill.ClinicId : 0;
+            if (clinicId > 0)
+            {
+                var brandAmount = _db.BrandAmounts
+                    .FirstOrDefault(ba => ba.BrandId == stock.BrandId && ba.ClinicId == clinicId);
+                if (brandAmount != null)
+                {
+                    brandAmount.Count = Math.Max(0, brandAmount.Count - stock.Quantity);
+                    var remaining = _db.Stocks
+                        .Include(s => s.Bill)
+                        .Where(s => s.BrandId == stock.BrandId && s.Bill.ClinicId == clinicId
+                                 && s.Id != stock.Id && s.Quantity > 0)
+                        .ToList();
+                    if (remaining.Any())
+                    {
+                        var totalQty  = remaining.Sum(s => s.Quantity);
+                        var totalCost = remaining.Sum(s => (decimal)s.StockAmount * s.Quantity);
+                        brandAmount.PurchasedAmt = totalQty > 0 ? Math.Round(totalCost / totalQty, 2) : 0;
+                    }
+                    else
+                    {
+                        brandAmount.PurchasedAmt = 0;
+                    }
+                    _db.Entry(brandAmount).State = EntityState.Modified;
+                }
+            }
 
             _db.Stocks.Remove(stock);
             _db.SaveChanges();

@@ -210,13 +210,13 @@ namespace VaccineAPI.Controllers
                         SaleDate             = request.SaleDate != default ? request.SaleDate : System.DateTime.UtcNow
                     };
                     _db.DirectSales.Add(sale);
-                    await _db.SaveChangesAsync();
 
                     sale.Brand  = brand;
                     sale.Clinic = clinic;
                     results.Add(sale);
                 }
 
+                await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
                 var dtos = _mapper.Map<List<DirectSaleDTO>>(results);

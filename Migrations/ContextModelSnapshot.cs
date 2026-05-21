@@ -327,6 +327,30 @@ namespace VaccineAPI.Migrations
                     b.Property<bool>("AllowInvoice")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("AllowAgent")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("AllowSupplier")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("AllowFinancial")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("AllowTravel")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("AllowAdult")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("AllowDevelopmentalAssessment")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("AllowHomeBooking")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("AllowClinicBooking")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("longtext");

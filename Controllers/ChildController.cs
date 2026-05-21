@@ -572,7 +572,22 @@ namespace VaccineAPI.Controllers
         { 3018, "18 Years" },
         { 3019, "19 Years" },
         { 3020, "20 Years" },
-        { 30000, "Life Time" }
+        { 30000, "Life Time" },
+        { 212, "7 Months" }, { 243, "8 Months" }, { 274, "9 Months" },
+        { 304, "10 Months" }, { 334, "11 Months" }, { 365, "1 Year" },
+        { 395, "13 Months" }, { 486, "16 Months" }, { 517, "17 Months" },
+        { 547, "18 Months" }, { 578, "19 Months" }, { 608, "20 Months" },
+        { 639, "21 Months" }, { 669, "22 Months" }, { 699, "23 Months" },
+        { 730, "2 Years" }, { 760, "25 Months" }, { 791, "26 Months" },
+        { 821, "27 Months" }, { 851, "28 Months" }, { 882, "29 Months" },
+        { 912, "30 Months" }, { 943, "31 Months" }, { 973, "32 Months" },
+        { 1004, "33 Months" }, { 1034, "34 Months" }, { 1064, "35 Months" },
+        { 1095, "3 Years" }, { 1460, "4 Years" }, { 1825, "5 Years" },
+        { 2190, "6 Years" }, { 2555, "7 Years" }, { 2920, "8 Years" },
+        { 3285, "9 Years" }, { 3650, "10 Years" }, { 4015, "11 Years" },
+        { 4380, "12 Years" }, { 4745, "13 Years" }, { 5110, "14 Years" },
+        { 5475, "15 Years" }, { 5840, "16 Years" }, { 6205, "17 Years" },
+        { 6570, "18 Years" }, { 6935, "19 Years" }, { 7300, "20 Years" },
           };
           if (ageMap.ContainsKey(days))
               return ageMap[days];
@@ -884,9 +899,11 @@ namespace VaccineAPI.Controllers
                         }
                         return true;
                     })
-                    .OrderBy(s => calculateDate(child1.DOB,
-                        child1?.Clinic?.Doctor?.DoctorSchedules
-                            ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge))
+                    .OrderBy(s => {
+                        var ds = child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(x => x.DoseId == s.DoseId);
+                        return ds != null ? calculateDate(child1.DOB, ds.GapInDays) : s.Date;
+                    })
                     .ToList();
 
                 var lastGivenInfiniteDoses = dbSchedules
@@ -952,16 +969,20 @@ namespace VaccineAPI.Controllers
                 }
 
                 var groupedSchedules = orderedDbSchedules
-                    .GroupBy(s =>
-                        GetYearOrMonthFromDaysSchedule(
-                            child1?.Clinic?.Doctor?.DoctorSchedules
-                                ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
-                        )
-                    )
-                    .OrderBy(g => calculateDate(child1.DOB,
-                        child1?.Clinic?.Doctor?.DoctorSchedules
-                            ?.FirstOrDefault(ds => ds.DoseId == g.First().DoseId)?.GapInDays ?? g.First().Dose.MinAge
-                    ));
+                    .GroupBy(s => {
+                        var ds = child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(x => x.DoseId == s.DoseId);
+                        if (ds != null)
+                            return GetYearOrMonthFromDaysSchedule(ds.GapInDays);
+                        var ageDays = (s.Date - child1.DOB).Days;
+                        return GetYearOrMonthFromDaysSchedule(ageDays);
+                    })
+                    .OrderBy(g => {
+                        var first = g.First();
+                        var ds = child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(x => x.DoseId == first.DoseId);
+                        return ds != null ? calculateDate(child1.DOB, ds.GapInDays) : first.Date;
+                    });
                  Console.WriteLine($"Dose Name: {groupedSchedules.Select(g => g.Key).FirstOrDefault()}");
                 
                 string GetStatus(Schedule dbSchedule)

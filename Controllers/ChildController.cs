@@ -884,8 +884,9 @@ namespace VaccineAPI.Controllers
                         }
                         return true;
                     })
-                    .OrderBy(s => child1?.Clinic?.Doctor?.DoctorSchedules
-                        ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge)
+                    .OrderBy(s => calculateDate(child1.DOB,
+                        child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge))
                     .ToList();
 
                 var lastGivenInfiniteDoses = dbSchedules
@@ -950,12 +951,17 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                var groupedSchedules = orderedDbSchedules.GroupBy(s =>
-                    GetYearOrMonthFromDaysSchedule(
-                        child1?.Clinic?.Doctor?.DoctorSchedules
-                            ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
+                var groupedSchedules = orderedDbSchedules
+                    .GroupBy(s =>
+                        GetYearOrMonthFromDaysSchedule(
+                            child1?.Clinic?.Doctor?.DoctorSchedules
+                                ?.FirstOrDefault(ds => ds.DoseId == s.DoseId)?.GapInDays ?? s.Dose.MinAge
+                        )
                     )
-                );
+                    .OrderBy(g => calculateDate(child1.DOB,
+                        child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(ds => ds.DoseId == g.First().DoseId)?.GapInDays ?? g.First().Dose.MinAge
+                    ));
                  Console.WriteLine($"Dose Name: {groupedSchedules.Select(g => g.Key).FirstOrDefault()}");
                 
                 string GetStatus(Schedule dbSchedule)

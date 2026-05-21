@@ -19,11 +19,13 @@ namespace VaccineAPI.Controllers
     {
         private readonly Context _db;
         private readonly IMapper _mapper;
+        private readonly IWebHostEnvironment _host;
 
-        public FollowUpController(Context context, IMapper mapper)
+        public FollowUpController(Context context, IMapper mapper, IWebHostEnvironment host)
         {
             _db = context;
             _mapper = mapper;
+            _host = host;
         }
 
         [HttpGet]
@@ -532,16 +534,14 @@ namespace VaccineAPI.Controllers
             headerTable.AddCell(headerCell);
 
             PdfPCell childDetailsCell = new PdfPCell();
-            string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "ClinicTeeka.png");
-            if (System.IO.File.Exists(logoPath))
+            string logoPath = childDetails.Clinic?.MonogramImage != null
+                ? Path.Combine(_host.ContentRootPath, childDetails.Clinic.MonogramImage)
+                : null;
+            if (logoPath != null && System.IO.File.Exists(logoPath))
             {
                 Image logo = Image.GetInstance(logoPath);
                 logo.ScaleAbsolute(150f, 150f);
                 childDetailsCell.AddElement(logo);
-            }
-            else
-            {
-                childDetailsCell.AddElement(new Paragraph("Logo not found", FontFactory.GetFont(FontFactory.HELVETICA, 10)));
             }
             childDetailsCell.Border = PdfPCell.NO_BORDER;
             childDetailsCell.AddElement(new Paragraph($"   {childName}", FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10)));

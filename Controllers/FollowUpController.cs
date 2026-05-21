@@ -581,10 +581,11 @@ namespace VaccineAPI.Controllers
             foreach (var followUpDetails in followUpDetailsList)
             {
                 DateTime currentVisitDate = followUpDetails.CurrentVisitDate ?? DateTime.MinValue;
-                string disease = followUpDetails.Disease;
-                float weight = followUpDetails.Weight ?? 0;
+                string disease = followUpDetails.Disease ?? "";
+                string weightStr = (followUpDetails.Weight.HasValue && followUpDetails.Weight.Value > 0) ? $"{followUpDetails.Weight.Value} kg" : "-";
+                string heightStr = (followUpDetails.Height.HasValue && followUpDetails.Height.Value > 0) ? $"{followUpDetails.Height.Value} cm" : "-";
+                string ofcStr    = (followUpDetails.OFC.HasValue    && followUpDetails.OFC.Value    > 0) ? $"{followUpDetails.OFC.Value} cm"    : "-";
                 float height = followUpDetails.Height ?? 0;
-                float ofc = followUpDetails.OFC ?? 0;
 
                 // Add current record to the table
                 followUpHeaderTable.AddCell(new PdfPCell(new Phrase(srNo.ToString(), FontFactory.GetFont(FontFactory.HELVETICA, 10)))
@@ -605,19 +606,19 @@ namespace VaccineAPI.Controllers
                     BorderColor = BaseColor.LightGray,
                     HorizontalAlignment = Element.ALIGN_CENTER
                 });
-                followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{weight} kg", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(weightStr, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
                     BackgroundColor = BaseColor.White,
                     BorderColor = BaseColor.LightGray,
                     HorizontalAlignment = Element.ALIGN_CENTER
                 });
-                followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{height} cm", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(heightStr, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
                     BackgroundColor = BaseColor.White,
                     BorderColor = BaseColor.LightGray,
                     HorizontalAlignment = Element.ALIGN_CENTER
                 });
-                followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{ofc} cm", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(ofcStr, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
                     BackgroundColor = BaseColor.White,
                     BorderColor = BaseColor.LightGray,

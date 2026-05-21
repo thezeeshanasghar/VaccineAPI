@@ -4766,8 +4766,9 @@ int rowCount = 0;
             SRow("12-15 Months",  "Chickenpox, Hepatitis A, MenACWY, MMR, PCV");
             SRow("18-21 Months",  "Hepatitis A, IPV, DPT, HBV, Hib",            true);
             SRow("3-4 Years",     "MMR, Chickenpox, Typhoid");
-            SRow("5 Years",       "DTaP, PPSV, Covid19",                         true);
-            SRow("9 Years",       "HPV");
+            SRow("5 Years",       "PPSV, Covid19",                               true);
+            SRow("7 Years",       "Tdap");
+            SRow("9 Years",       "HPV",                                         true);
             schedTable.SpacingAfter = 0f;
             doc.Add(schedTable);
 

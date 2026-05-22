@@ -215,6 +215,172 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // PUT /api/bill/{id} — full edit: reverse old stock, re-create with new lines
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(int id, [FromBody] BillUpdateDTO dto)
+        {
+            if (dto == null || dto.Lines == null || dto.Lines.Count == 0)
+                return Ok(new { IsSuccess = false, Message = "At least one line item is required" });
+
+            var bill = await _db.Bills
+                .Include(b => b.Stocks)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (bill == null)
+                return Ok(new { IsSuccess = false, Message = "Bill not found" });
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Reverse old stock rows
+                foreach (var stock in bill.Stocks)
+                {
+                    var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
+                        x.BrandId == stock.BrandId &&
+                        x.DoctorId == bill.DoctorId &&
+                        x.ClinicId == bill.ClinicId);
+                    if (ba != null)
+                        ba.Count = Math.Max(0, ba.Count - stock.Quantity);
+                    _db.Stocks.Remove(stock);
+                }
+                await _db.SaveChangesAsync();
+
+                // Update bill header
+                string supplierName = "";
+                if (!string.IsNullOrWhiteSpace(dto.SupplierName))
+                    supplierName = dto.SupplierName;
+                else if (dto.SupplierId.HasValue)
+                {
+                    var sup = await _db.Suppliers.FindAsync(dto.SupplierId.Value);
+                    if (sup != null) supplierName = sup.Name;
+                }
+
+                decimal totalAmount = dto.Lines.Sum(l => l.Quantity * l.UnitPrice);
+                decimal awtAmount = Math.Round(totalAmount * dto.AwtPercent / 100, 2);
+                decimal totalPayable = totalAmount + awtAmount;
+
+                bill.BillNo = string.IsNullOrWhiteSpace(dto.BillNo) ? bill.BillNo : dto.BillNo;
+                bill.BillDate = dto.BillDate;
+                bill.Supplier = supplierName;
+                bill.SupplierId = dto.SupplierId;
+                bill.AwtPercent = dto.AwtPercent;
+                bill.AwtAmount = awtAmount;
+                // Recalculate IsPaid based on existing AmountPaid vs new total
+                decimal paid = bill.AmountPaid ?? 0;
+                bill.IsPaid = paid >= totalPayable && totalPayable > 0;
+                bill.PaidDate = bill.IsPaid && bill.PaidDate == null ? (DateTime?)DateTime.Now : bill.PaidDate;
+
+                // Create new stock rows
+                foreach (var line in dto.Lines)
+                {
+                    var stock = new Stock
+                    {
+                        BrandId = line.BrandId,
+                        BillId = bill.Id,
+                        Quantity = line.Quantity,
+                        OriginalQuantity = line.Quantity,
+                        StockAmount = line.UnitPrice,
+                        BatchLot = line.BatchLot,
+                        Expiry = line.Expiry
+                    };
+                    _db.Stocks.Add(stock);
+
+                    var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
+                        x.BrandId == line.BrandId &&
+                        x.DoctorId == bill.DoctorId &&
+                        x.ClinicId == bill.ClinicId);
+                    if (ba != null)
+                        ba.Count += line.Quantity;
+                }
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Ok(new { IsSuccess = true, Message = "Bill updated", ResponseData = new { bill.Id, bill.BillNo } });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return Ok(new { IsSuccess = false, Message = ex.Message });
+            }
+        }
+
+        // POST /api/bill/{id}/payment — record a payment instalment
+        [HttpPost("{id}/payment")]
+        public async Task<IActionResult> AddPayment(int id, [FromBody] SupplierPaymentCreateDTO dto)
+        {
+            var bill = await _db.Bills
+                .Include(b => b.Stocks)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (bill == null)
+                return Ok(new { IsSuccess = false, Message = "Bill not found" });
+
+            if (dto.Amount <= 0)
+                return Ok(new { IsSuccess = false, Message = "Payment amount must be greater than 0" });
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Calculate total payable
+                decimal totalAmount = bill.Stocks.Sum(s => s.Quantity * s.StockAmount);
+                decimal awtAmount = bill.AwtAmount ?? 0;
+                decimal totalPayable = totalAmount + awtAmount;
+
+                // Add payment record
+                var payment = new SupplierPayment
+                {
+                    BillId = id,
+                    SupplierId = bill.SupplierId ?? dto.SupplierId ?? 0,
+                    ClinicId = bill.ClinicId,
+                    Amount = dto.Amount,
+                    PaymentMethod = dto.PaymentMethod,
+                    Notes = dto.Notes,
+                    PaymentDate = dto.PaymentDate
+                };
+                _db.SupplierPayments.Add(payment);
+
+                // Update bill AmountPaid
+                decimal newPaid = (bill.AmountPaid ?? 0) + dto.Amount;
+                if (newPaid > totalPayable) newPaid = totalPayable;
+                bill.AmountPaid = newPaid;
+                bill.PaymentMethod = dto.PaymentMethod;
+                bill.IsPaid = newPaid >= totalPayable && totalPayable > 0;
+                if (bill.IsPaid && bill.PaidDate == null)
+                    bill.PaidDate = DateTime.Now;
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Ok(new { IsSuccess = true, Message = "Payment recorded", ResponseData = new { AmountPaid = newPaid, IsPaid = bill.IsPaid } });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return Ok(new { IsSuccess = false, Message = ex.Message });
+            }
+        }
+
+        // GET /api/bill/{id}/payments — payment history for a bill
+        [HttpGet("{id}/payments")]
+        public async Task<IActionResult> GetPayments(int id)
+        {
+            var payments = await _db.SupplierPayments
+                .Where(p => p.BillId == id)
+                .OrderBy(p => p.PaymentDate)
+                .Select(p => new SupplierPaymentDTO
+                {
+                    Id = p.Id,
+                    Amount = p.Amount,
+                    PaymentMethod = p.PaymentMethod,
+                    PaymentDate = p.PaymentDate,
+                    Notes = p.Notes
+                })
+                .ToListAsync();
+
+            return Ok(new { IsSuccess = true, ResponseData = payments });
+        }
+
         // DELETE /api/bill/{id}/reverse
         [HttpDelete("{id}/reverse")]
         public async Task<IActionResult> Reverse(int id)

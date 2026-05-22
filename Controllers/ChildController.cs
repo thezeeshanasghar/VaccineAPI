@@ -3012,7 +3012,7 @@ namespace VaccineAPI.Controllers
                     count++;
                     vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
                     vaccinetable.AddCell(CreateCell(" ", " ", 1, "left", "invoiceRecords"));
-                    vaccinetable.AddCell(CreateCell("Consultation / Visit Charges", "left", 1, "left", "invoiceRecords"));
+                    vaccinetable.AddCell(CreateCell("Vaccination Charges", "left", 1, "left", "invoiceRecords"));
                     vaccinetable.AddCell(CreateCell("1", " ", 1, "right", "invoiceRecords"));
                     vaccinetable.AddCell(CreateCell("", " ", 1, "right", "invoiceRecords"));
                     vaccinetable.AddCell(CreateCell(consultaionFee.ToString("F2"), " ", 1, "right", "invoiceRecords"));

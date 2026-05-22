@@ -677,10 +677,12 @@ namespace VaccineAPI.Controllers
                     // Delta against OriginalQuantity (what was purchased), not the live-decremented Quantity.
                     // This keeps BrandAmount.Count accurate when editing a bill line.
                     int oldQty = stock.OriginalQuantity > 0 ? stock.OriginalQuantity : stock.Quantity;
+                    int qtyEditDelta = stockDTO.Quantity - oldQty;
 
                     // Update stock details
                     stock.BrandId = stockDTO.BrandId;
-                    stock.Quantity = stockDTO.Quantity;
+                    // Apply the delta to live Quantity (not reset to full new value — some units may already be consumed)
+                    stock.Quantity = Math.Max(0, stock.Quantity + qtyEditDelta);
                     stock.OriginalQuantity = stockDTO.Quantity;
                     stock.StockAmount = stockDTO.StockAmount;
                     stock.BatchLot = string.IsNullOrWhiteSpace(stockDTO.BatchLot)
@@ -796,17 +798,12 @@ namespace VaccineAPI.Controllers
                         ? Math.Round(totalCost / totalPurchased, 2)
                         : Math.Round(stockDTO.StockAmount, 2);
 
-                    // Count delta: BrandAmount.Count is the live administered-adjusted inventory.
-                    // Stock.Quantity is never decremented by sales — only Count is.
-                    // So we adjust Count by the quantity difference, not reset it entirely.
-                    int qtyDelta = stockDTO.Quantity - oldQty;
-
                     var brandAmount = await _db.BrandAmounts.FirstOrDefaultAsync(ba =>
                         ba.BrandId == stockDTO.BrandId && ba.ClinicId == effectiveClinicId);
 
                     if (brandAmount != null)
                     {
-                        brandAmount.Count        = Math.Max(0, brandAmount.Count + qtyDelta);
+                        brandAmount.Count        = Math.Max(0, brandAmount.Count + qtyEditDelta);
                         brandAmount.PurchasedAmt = avgPrice;
                         brandAmount.ClinicId     = effectiveClinicId;
                         _db.Entry(brandAmount).State = EntityState.Modified;

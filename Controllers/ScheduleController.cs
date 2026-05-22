@@ -1125,6 +1125,22 @@ namespace VaccineAPI.Controllers
                          && x.IsSkip != true)
                 .ToList();
 
+            // PA bulk-ungive guard: check all schedules before mutating any
+            if (scheduleDTO.PaId.HasValue && scheduleDTO.IsDone == false)
+            {
+                foreach (var checkSchedule in dbChildSchedules)
+                {
+                    if (checkSchedule.IsDone == true)
+                    {
+                        if (checkSchedule.GivenByPaId == null || checkSchedule.GivenByPaId != scheduleDTO.PaId)
+                            return new Response<ScheduleDTO>(false, "You can only bulk-ungive doses you gave yourself.", null);
+                        var givenDayCheck = checkSchedule.DoneAt.HasValue ? checkSchedule.DoneAt.Value.Date : (DateTime?)null;
+                        if (givenDayCheck == null || givenDayCheck.Value != DateTime.UtcNow.Date)
+                            return new Response<ScheduleDTO>(false, "You can only bulk-ungive doses on the same day they were given.", null);
+                    }
+                }
+            }
+
             foreach (var schedule in dbChildSchedules)
             {
                 schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
@@ -1137,6 +1153,11 @@ namespace VaccineAPI.Controllers
                 schedule.OnlineService = scheduleDTO.OnlineService;
                 schedule.IsPaymentApproved = false;
                 schedule.IsPAApprove= scheduleDTO.IsPAApprove;
+                // Track which PA gave/ungave this dose
+                if (scheduleDTO.IsDone)
+                    schedule.GivenByPaId = scheduleDTO.PaId;
+                else
+                    schedule.GivenByPaId = null;
 
                 if (scheduleDTO.ScheduleBrands.Count > 0)
                 {

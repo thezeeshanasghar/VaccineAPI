@@ -36,6 +36,9 @@ namespace VaccineAPI.ModelDTO
         public int? Validity { get; set; }
         public List<ScheduleBrandDTO> ScheduleBrands { get; set; } = new List<ScheduleBrandDTO>();
         public long DoctorId { get; set; }
+        public long? PaId { get; set; }
+        public long? GivenByPaId { get; set; }
+        public long? SkippedByPaId { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public System.DateTime GivenDate { get; set; }
         public DateTime? DoneAt { get; set; }

@@ -30,6 +30,8 @@ namespace VaccineAPI.Models
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }
         public int? Validity { get; set; }
+        public long? GivenByPaId { get; set; }
+        public long? SkippedByPaId { get; set; }
         public long ChildId { get; set; }
         public virtual Child Child { get; set; } = null!;
         public long DoseId { get; set; }

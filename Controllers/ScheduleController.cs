@@ -210,6 +210,24 @@ namespace VaccineAPI.Controllers
 
                 if (scheduleDTO.IsDone == false)
                 {
+                    // PA ungive guard: only own action, same day
+                    if (scheduleDTO.PaId.HasValue && dbSchedule.IsDone == true)
+                    {
+                        if (dbSchedule.GivenByPaId == null || dbSchedule.GivenByPaId != scheduleDTO.PaId)
+                            return new Response<ScheduleDTO>(false, "You can only ungive a dose you gave yourself.", null);
+                        var givenDay = dbSchedule.DoneAt.HasValue ? dbSchedule.DoneAt.Value.Date : (DateTime?)null;
+                        if (givenDay == null || givenDay.Value != DateTime.UtcNow.Date)
+                            return new Response<ScheduleDTO>(false, "You can only ungive a dose on the same day it was given.", null);
+                    }
+
+                    // PA unskip guard: only own action, same day
+                    if (scheduleDTO.PaId.HasValue && scheduleDTO.IsSkip == false && dbSchedule.IsSkip == true)
+                    {
+                        if (dbSchedule.SkippedByPaId == null || dbSchedule.SkippedByPaId != scheduleDTO.PaId)
+                            return new Response<ScheduleDTO>(false, "You can only unskip a vaccine you skipped yourself.", null);
+                        // No date guard for unskip — skips don't have a timestamp; same-day is tracked only for gives
+                    }
+
                     if (inventoryEnabled && previousBrandId.HasValue)
                     {
                         rollbackClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId, onlineClinicId);
@@ -253,11 +271,17 @@ namespace VaccineAPI.Controllers
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
                     dbSchedule.DoneAt = null;
+                    dbSchedule.GivenByPaId = null;
                     dbSchedule.PaymentMode = "Cash";
                     dbSchedule.OnlineService = null;
                     dbSchedule.IsPaymentApproved = false;
                     dbSchedule.BrandId = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
+                    // Track who skipped (for unskip guard)
+                    if (scheduleDTO.IsSkip == true)
+                        dbSchedule.SkippedByPaId = scheduleDTO.PaId;
+                    else
+                        dbSchedule.SkippedByPaId = null;
 
                     ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
                     if (inventoryEnabled && dbBrandInventory2 != null)
@@ -268,11 +292,12 @@ namespace VaccineAPI.Controllers
 
                             // Restore Stock row for rolled-back brand using FEFO order
                             // (earliest expiry first — mirrors exactly what was deducted on give)
+                            // s.Quantity >= 0 so a row at zero (fully consumed but not deleted) is still a valid target
                             var restoreStock = _db.Stocks
                                 .Include(s => s.Bill)
                                 .Where(s => s.BrandId == previousBrandId
                                          && s.Bill.ClinicId == rollbackClinicId
-                                         && s.Quantity > 0)
+                                         && s.Quantity >= 0)
                                 .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
                                 .ThenBy(s => s.Expiry)
                                 .ThenBy(s => s.Id)
@@ -281,6 +306,27 @@ namespace VaccineAPI.Controllers
                             {
                                 restoreStock.Quantity += 1;
                                 _db.Entry(restoreStock).State = EntityState.Modified;
+                            }
+                            else
+                            {
+                                // No stock row exists at all — batch row was hard-deleted after hitting 0.
+                                // Anchor to the most recent non-transfer bill for this clinic and recreate a restore row.
+                                var anchorBill = _db.Bills
+                                    .Where(b => b.ClinicId == rollbackClinicId && !b.BillNo.StartsWith("XFER-"))
+                                    .OrderByDescending(b => b.BillDate)
+                                    .ThenByDescending(b => b.Id)
+                                    .FirstOrDefault();
+                                if (anchorBill != null)
+                                {
+                                    _db.Stocks.Add(new Stock
+                                    {
+                                        BrandId          = previousBrandId.Value,
+                                        BillId           = anchorBill.Id,
+                                        Quantity         = 1,
+                                        OriginalQuantity = 0,
+                                        StockAmount      = dbBrandInventory2.PurchasedAmt
+                                    });
+                                }
                             }
                         }
                     }
@@ -517,6 +563,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.IsDone = scheduleDTO.IsDone;
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
+                dbSchedule.GivenByPaId = scheduleDTO.IsDone ? scheduleDTO.PaId : null;
                 dbSchedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
                 dbSchedule.OnlineService = scheduleDTO.OnlineService;
                 dbSchedule.IsPaymentApproved = false;
@@ -1103,9 +1150,59 @@ namespace VaccineAPI.Controllers
                         if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                         {
                             // Null brand means OHF/external source; do not consume inventory.
+                            // But if a brand was previously given (previousBrandId) and we are now
+                            // ungiving (IsDone=false), restore inventory for that dose.
                             if (!scheduleBrand.BrandId.HasValue || scheduleBrand.BrandId.Value <= 0)
                             {
-                                // Keep schedule update flow; only skip inventory consumption.
+                                if (previousBrandId.HasValue && scheduleDTO.IsDone == false)
+                                {
+                                    var ungiveClinicId = ResolveClinicIdForStock(
+                                        scheduleDTO.DoctorId,
+                                        dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0
+                                    );
+
+                                    if (ungiveClinicId > 0)
+                                    {
+                                        var ungiveInventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, ungiveClinicId);
+                                        if (ungiveInventoryEnabled)
+                                        {
+                                            var ungiveDoctorId = _db.Clinics
+                                                .Where(c => c.Id == ungiveClinicId)
+                                                .Select(c => c.DoctorId)
+                                                .FirstOrDefault();
+
+                                            if (ungiveDoctorId > 0)
+                                            {
+                                                var ungiveInventory = _db.BrandAmounts
+                                                    .Where(b => b.BrandId == previousBrandId
+                                                             && b.DoctorId == ungiveDoctorId
+                                                             && b.ClinicId == ungiveClinicId)
+                                                    .FirstOrDefault();
+
+                                                if (ungiveInventory != null)
+                                                {
+                                                    ungiveInventory.Count++;
+
+                                                    var bulkRestoreStock = _db.Stocks
+                                                        .Include(s => s.Bill)
+                                                        .Where(s => s.BrandId == previousBrandId
+                                                                 && s.Bill.ClinicId == ungiveClinicId
+                                                                 && s.Quantity >= 0)
+                                                        .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                                                        .ThenBy(s => s.Expiry)
+                                                        .ThenBy(s => s.Id)
+                                                        .FirstOrDefault();
+
+                                                    if (bulkRestoreStock != null)
+                                                    {
+                                                        bulkRestoreStock.Quantity++;
+                                                        _db.Entry(bulkRestoreStock).State = EntityState.Modified;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             if (scheduleBrand.BrandId.HasValue && scheduleBrand.BrandId.Value > 0)

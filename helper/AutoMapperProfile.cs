@@ -19,22 +19,7 @@ namespace VaccineAPI
             CreateMap<ClinicTiming, ClinicTimingDTO>().ReverseMap();
             CreateMap<Clinic, ClinicDTO>().ReverseMap();
             CreateMap<Child, ChildDTO>().ReverseMap();
-            // CreateMap<BrandInventory, BrandInventoryDTO>().ReverseMap();
             CreateMap<Brand, BrandDTO>().ReverseMap();
-            CreateMap<BrandAmount, BrandAmountDTO>().ReverseMap();
-            CreateMap<Bill, BillDTO>().ReverseMap();
-            CreateMap<Supplier, SupplierDTO>().ReverseMap();
-            CreateMap<SupplierPayment, SupplierPaymentDTO>().ReverseMap();
-            CreateMap<Stock, StockDTO>().ReverseMap();
-            CreateMap<AdjustStock, AdjustStockDTO>().ReverseMap();
-            CreateMap<DirectSale, DirectSaleDTO>()
-                .ForMember(d => d.BrandName,  o => o.MapFrom(s => s.Brand != null  ? s.Brand.Name  : ""))
-                .ForMember(d => d.ClinicName, o => o.MapFrom(s => s.Clinic != null ? s.Clinic.Name : ""));
-            CreateMap<StockTransfer, StockTransferHistoryDTO>()
-                .ForMember(d => d.FromClinicName, o => o.MapFrom(s => s.FromClinic != null ? s.FromClinic.Name : ""))
-                .ForMember(d => d.ToClinicName, o => o.MapFrom(s => s.ToClinic != null ? s.ToClinic.Name : ""))
-                .ForMember(d => d.BrandName, o => o.MapFrom(s => s.Brand != null ? s.Brand.Name : ""))
-                .ForMember(d => d.TransferredByName, o => o.Ignore());
         }
     }
 }

@@ -307,28 +307,6 @@ namespace VaccineAPI.Controllers
             }
             dbDoctor.ValidUpto = doctorDTO.ValidUpto;
             _db.SaveChanges();
-            var brands = _db.Brands.ToList();
-            bool brandamount = _db.BrandAmounts.Any(x => x.DoctorId == Id);
-            if (brandamount == false)
-            {
-                foreach (var brand in brands)
-                {
-                    BrandAmount ba = new BrandAmount();
-                    ba.Amount = 0;
-                    ba.DoctorId = dbDoctor.Id;
-                    ba.Count = 0;
-                    ba.BrandId = brand.Id;
-                    _db.BrandAmounts.Add(ba);
-
-                    // BrandInventory bi = new BrandInventory();
-                    // bi.Count = 0;
-                    // bi.DoctorId = dbDoctor.Id;
-                    // bi.BrandId = brand.Id;
-                    // _db.BrandInventorys.Add(bi);
-                    _db.SaveChanges();
-                }
-            }
-
 
             DoctorDTO doctorDTOs = _mapper.Map<DoctorDTO>(dbDoctor);
             return new Response<DoctorDTO>(true, null, doctorDTOs);

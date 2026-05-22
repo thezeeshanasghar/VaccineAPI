@@ -11,5 +11,6 @@ namespace VaccineAPI.Models
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }
         public long DoseId { get; set; }
+        public string? PdfPath { get; set; }
     }
 }

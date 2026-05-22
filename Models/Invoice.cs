@@ -12,5 +12,8 @@ namespace VaccineAPI.Models
         public long ClinicId { get; set; }
         public long DoseId { get; set; }
         public string? PdfPath { get; set; }
+        public bool IsVoided { get; set; } = false;
+        public string? SupersededBy { get; set; }
+        public DateTime? ParentDownloadedAt { get; set; }
     }
 }

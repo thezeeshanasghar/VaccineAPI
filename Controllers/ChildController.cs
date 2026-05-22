@@ -2641,6 +2641,26 @@ namespace VaccineAPI.Controllers
         public IActionResult GetInvoiceFileById(string invoiceId)
         {
             var invoice = _db.Invoices.FirstOrDefault(i => i.InvoiceId == invoiceId);
+            if (invoice == null)
+                return NotFound(new { message = "Invoice not found." });
+
+            if (invoice.IsVoided)
+            {
+                var html = $@"<!DOCTYPE html>
+<html>
+<head><meta charset='UTF-8'><title>Invoice Cancelled</title></head>
+<body style='font-family:Arial,sans-serif;text-align:center;padding:60px;background:#f9f9f9'>
+  <div style='max-width:500px;margin:auto;background:#fff;padding:40px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)'>
+    <h2 style='color:#d32f2f'>&#9888; INVOICE CANCELLED</h2>
+    <p>Invoice <strong>{invoiceId}</strong> has been cancelled and is no longer valid.</p>
+    <p>Replaced by Invoice: <strong>{invoice.SupersededBy ?? "N/A"}</strong></p>
+    <p style='color:#666;font-size:14px'>Please request the updated invoice from the clinic.</p>
+  </div>
+</body>
+</html>";
+                return new ContentResult { Content = html, ContentType = "text/html", StatusCode = 200 };
+            }
+
             return ServeInvoiceFile(invoice);
         }
 
@@ -2652,8 +2672,34 @@ namespace VaccineAPI.Controllers
                 .Where(s => s.ChildId == childId && s.Date.Date == scheduleDate.Date && s.IsDone == true)
                 .Select(s => s.DoseId)
                 .ToList();
-            var invoice = _db.Invoices.FirstOrDefault(i => i.ChildId == childId && doseIds.Contains(i.DoseId));
+            var invoice = _db.Invoices
+                .FirstOrDefault(i => i.ChildId == childId && doseIds.Contains(i.DoseId) && i.IsVoided == false);
+
+            if (invoice != null && invoice.ParentDownloadedAt == null)
+            {
+                invoice.ParentDownloadedAt = DateTime.UtcNow;
+                _db.Entry(invoice).State = EntityState.Modified;
+                _db.SaveChanges();
+            }
+
             return ServeInvoiceFile(invoice);
+        }
+
+        // Returns warning info so VacDoc can alert the doctor before editing
+        [HttpGet("{childId}/{scheduleDate}/invoice-warning")]
+        public IActionResult GetInvoiceWarning(long childId, DateTime scheduleDate)
+        {
+            var doseIds = _db.Schedules
+                .Where(s => s.ChildId == childId && s.Date.Date == scheduleDate.Date && s.IsDone == true)
+                .Select(s => s.DoseId)
+                .ToList();
+            var invoice = _db.Invoices
+                .FirstOrDefault(i => i.ChildId == childId && doseIds.Contains(i.DoseId) && i.IsVoided == false);
+
+            if (invoice == null)
+                return Ok(new { parentDownloaded = false, invoiceId = (string)null });
+
+            return Ok(new { parentDownloaded = invoice.ParentDownloadedAt != null, invoiceId = invoice.InvoiceId });
         }
 
         private IActionResult ServeInvoiceFile(Invoice invoice)
@@ -2671,36 +2717,17 @@ namespace VaccineAPI.Controllers
             return File(bytes, "application/pdf", fileName);
         }
 
-        private string GenerateSequentialInvoiceNumber(long doseId, long childId)
+        private string GenerateSequentialInvoiceNumber()
         {
-            // Get the last two digits of the current year
-            var currentYear = DateTime.UtcNow.Year;
-            var yearPrefix = currentYear.ToString().Substring(2); // "25" for 2025
-
-            // Check if an invoice already exists for the given doseId and childId
-            var existingInvoice = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == childId);
-            if (existingInvoice != null)
-            {
-                return existingInvoice.InvoiceId;
-            }
-
-            // Get all valid invoice numbers for the current year
+            var yearPrefix = DateTime.UtcNow.Year.ToString().Substring(2);
             var validInvoiceNumbers = _db.Invoices
                 .AsEnumerable()
                 .Select(i => i.InvoiceId)
                 .Where(id => !string.IsNullOrEmpty(id) && id.StartsWith(yearPrefix) && long.TryParse(id.Substring(2), out _))
-                .Select(id => long.Parse(id.Substring(2))) // Extract the numeric part after the year prefix
+                .Select(id => long.Parse(id.Substring(2)))
                 .ToList();
-
-            // Determine the next invoice number
-            var nextInvoiceNumber = validInvoiceNumbers.Any()
-                ? validInvoiceNumbers.Max() + 1
-                : 1; // Start from 1 if no invoices exist for the current year
-
-            // Format the invoice number as "YY000001"
-            string invoiceNumber = $"{yearPrefix}{nextInvoiceNumber:D6}";
-
-            return invoiceNumber;
+            var next = validInvoiceNumbers.Any() ? validInvoiceNumbers.Max() + 1 : 1;
+            return $"{yearPrefix}{next:D6}";
         }
 
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Verify-Invoice-PDF")]
@@ -2809,12 +2836,7 @@ namespace VaccineAPI.Controllers
             {
                 throw new Exception("Dose ID not found for generating invoice number.");
             }
-            string invoiceNumber = GenerateSequentialInvoiceNumber(doseId, Id);
-
-            if (string.IsNullOrEmpty(invoiceNumber))
-            {
-                throw new Exception("Invoice number already exists for the given Dose ID.");
-            }
+            string invoiceNumber = GenerateSequentialInvoiceNumber();
 
             // Table 1 for description above amounts table
             PdfPTable upperTable = new PdfPTable(2);
@@ -2948,46 +2970,38 @@ namespace VaccineAPI.Controllers
                         var brandAmount = _db.BrandAmounts
                             .FirstOrDefault(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId && x.Clinic.IsOnline == true);
 
-                        // Check if the invoice already exists
-                        var existingInvoice = _db.Invoices
+                        // Find active (non-voided) invoice row for this dose+child
+                        var activeInvoice = _db.Invoices
                             .FirstOrDefault(i => i.DoseId == schedule.Dose.Id
                                                 && i.ChildId == schedule.ChildId
                                                 && i.DoctorId == doctorId
-                                                && i.ClinicId == schedule.Child.ClinicId);
+                                                && i.ClinicId == schedule.Child.ClinicId
+                                                && i.IsVoided == false);
 
-                        // If the invoice doesn't exist, create a new one
-                        if (existingInvoice == null)
+                        if (activeInvoice != null)
                         {
-                            existingInvoice = new Invoice
-                            {
-                                InvoiceId = invoiceNumber,
-                                DoseId = schedule.Dose.Id,
-                                ChildId = schedule.ChildId,
-                                DoctorId = doctorId,
-                                ClinicId = schedule.Child.ClinicId
-                            };
-                            _db.Invoices.Add(existingInvoice);
-                        }
-                          var existingFee = _db.Fee
-                            .FirstOrDefault(f => f.InvoiceId == invoiceNumber); 
-
-                        if (existingFee == null)
-                        {
-                              if(consultaionFee != 0)
-                            {
-                                var fee = new Fee
-                                {
-                                     InvoiceId = invoiceNumber,
-                                     Amount = consultaionFee,
-                                };
-                                _db.Fee.Add(fee);
-                            }
-                        }
-                        if (existingFee != null)
-                        {
-                            existingFee.Amount = consultaionFee;
-                            _db.Entry(existingFee).State = EntityState.Modified;
+                            // Void the old invoice row and issue a new number
+                            activeInvoice.IsVoided = true;
+                            activeInvoice.SupersededBy = invoiceNumber;
+                            _db.Entry(activeInvoice).State = EntityState.Modified;
                             _db.SaveChanges();
+                        }
+
+                        // Always create a fresh Invoice row with the new sequential number
+                        var existingInvoice = new Invoice
+                        {
+                            InvoiceId = invoiceNumber,
+                            DoseId = schedule.Dose.Id,
+                            ChildId = schedule.ChildId,
+                            DoctorId = doctorId,
+                            ClinicId = schedule.Child.ClinicId
+                        };
+                        _db.Invoices.Add(existingInvoice);
+
+                        // Fee record: always create fresh for the new invoice number
+                        if (consultaionFee != 0)
+                        {
+                            _db.Fee.Add(new Fee { InvoiceId = invoiceNumber, Amount = consultaionFee });
                         }
 
                         bool isAmountEmptyOrZero = schedule.Amount == null || schedule.Amount == 0 || schedule.Amount.ToString().Trim() == string.Empty;
@@ -3170,7 +3184,7 @@ namespace VaccineAPI.Controllers
 
             // Autosave PDF to disk — always overwrites so edits replace the previous version
             output.Seek(0, SeekOrigin.Begin);
-            var invoiceForPath = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == Id);
+            var invoiceForPath = _db.Invoices.FirstOrDefault(i => i.DoseId == doseId && i.ChildId == Id && i.IsVoided == false);
             if (invoiceForPath != null)
             {
                 var invoicesFolder = Path.Combine(_host.ContentRootPath, "Resources", "Invoices");

@@ -12,6 +12,8 @@ namespace VaccineAPI.ModelDTO
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }
         public decimal AwtPercent { get; set; }
+        public decimal AmountPaid { get; set; }
+        public string? PaymentMethod { get; set; }
         public List<BillLineDTO> Lines { get; set; } = new List<BillLineDTO>();
     }
 
@@ -34,6 +36,9 @@ namespace VaccineAPI.ModelDTO
         public decimal AwtPercent { get; set; }
         public decimal AwtAmount { get; set; }
         public decimal TotalPayable { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal PendingAmount { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
         public bool IsPaid { get; set; }
         public int LineCount { get; set; }
     }

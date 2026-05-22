@@ -35,6 +35,13 @@ namespace VaccineAPI.Controllers
                 decimal totalPayable = totalAmount + awtAmount;
                 string supplierName = b.SupplierRef != null ? b.SupplierRef.Name : (b.Supplier ?? "");
 
+                decimal paid = b.AmountPaid ?? 0;
+                decimal pending = Math.Round(totalPayable - paid, 2);
+                if (pending < 0) pending = 0;
+                string status = paid >= totalPayable && totalPayable > 0 ? "Paid"
+                              : paid > 0 ? "Partial"
+                              : "Unpaid";
+
                 return new BillListDTO
                 {
                     Id = b.Id,
@@ -45,6 +52,9 @@ namespace VaccineAPI.Controllers
                     AwtPercent = awtPercent,
                     AwtAmount = awtAmount,
                     TotalPayable = Math.Round(totalPayable, 2),
+                    AmountPaid = Math.Round(paid, 2),
+                    PendingAmount = pending,
+                    PaymentStatus = status,
                     IsPaid = b.IsPaid,
                     LineCount = b.Stocks.Count
                 };
@@ -121,12 +131,18 @@ namespace VaccineAPI.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Auto-generate BillNo if blank
+                // Auto-generate BillNo if blank — doctor-wide uniqueness across all clinics
                 string billNo = dto.BillNo;
                 if (string.IsNullOrWhiteSpace(billNo))
                 {
-                    int seq = await _db.Bills.Where(b => b.DoctorId == dto.DoctorId).CountAsync() + 1;
-                    billNo = $"BILL-{dto.BillDate.Year}-{seq:D4}";
+                    string prefix = $"BILL-{dto.BillDate.Year}-";
+                    var usedNos = await _db.Bills
+                        .Where(b => b.DoctorId == dto.DoctorId && b.BillNo.StartsWith(prefix))
+                        .Select(b => b.BillNo)
+                        .ToListAsync();
+                    int seq = 1;
+                    while (usedNos.Contains($"{prefix}{seq:D4}")) seq++;
+                    billNo = $"{prefix}{seq:D4}";
                 }
 
                 decimal totalAmount = dto.Lines.Sum(l => l.Quantity * l.UnitPrice);
@@ -141,6 +157,10 @@ namespace VaccineAPI.Controllers
                     if (sup != null) supplierName = sup.Name;
                 }
 
+                decimal amountPaid = dto.AmountPaid < 0 ? 0 : dto.AmountPaid;
+                decimal totalPayable = totalAmount + awtAmount;
+                bool isPaid = amountPaid >= totalPayable && totalPayable > 0;
+
                 var bill = new Bill
                 {
                     BillNo = billNo,
@@ -151,7 +171,10 @@ namespace VaccineAPI.Controllers
                     ClinicId = dto.ClinicId,
                     AwtPercent = dto.AwtPercent,
                     AwtAmount = awtAmount,
-                    IsPaid = false,
+                    AmountPaid = amountPaid,
+                    PaymentMethod = amountPaid > 0 ? dto.PaymentMethod : null,
+                    IsPaid = isPaid,
+                    PaidDate = isPaid ? (DateTime?)DateTime.Now : null,
                     IsPAApprove = false
                 };
                 _db.Bills.Add(bill);
@@ -202,9 +225,6 @@ namespace VaccineAPI.Controllers
 
             if (bill == null)
                 return Ok(new { IsSuccess = false, Message = "Bill not found" });
-
-            if (bill.IsPaid)
-                return Ok(new { IsSuccess = false, Message = "Cannot reverse a paid bill" });
 
             using var tx = await _db.Database.BeginTransactionAsync();
             try

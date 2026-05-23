@@ -39,7 +39,7 @@ namespace VaccineAPI.Controllers
             // Stock is clinic-scoped via Bill.ClinicId
             var stockRows = await _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => brandIds.Contains(s.BrandId) && s.Bill.ClinicId == clinicId && s.Quantity > 0)
+                .Where(s => brandIds.Contains(s.BrandId) && s.Quantity > 0 && s.BillId != null && s.Bill.ClinicId == clinicId)
                 .OrderBy(s => s.Expiry == null ? 1 : 0)
                 .ThenBy(s => s.Expiry)
                 .ThenBy(s => s.Id)
@@ -101,7 +101,7 @@ namespace VaccineAPI.Controllers
 
             var stockRows = await _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => brandIds.Contains(s.BrandId) && s.Bill.ClinicId == clinicId && s.Quantity > 0)
+                .Where(s => brandIds.Contains(s.BrandId) && s.Quantity > 0 && s.BillId != null && s.Bill.ClinicId == clinicId)
                 .OrderBy(s => s.Expiry == null ? 1 : 0)
                 .ThenBy(s => s.Expiry)
                 .ThenBy(s => s.Id)

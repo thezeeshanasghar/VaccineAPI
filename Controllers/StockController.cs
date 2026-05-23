@@ -20,7 +20,7 @@ namespace VaccineAPI.Controllers
         {
             var stocks = await _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity > 0)
+                .Where(s => s.BrandId == brandId && s.Quantity > 0 && s.BillId != null && s.Bill.ClinicId == clinicId)
                 .OrderBy(s => s.Expiry)
                 .Select(s => new
                 {

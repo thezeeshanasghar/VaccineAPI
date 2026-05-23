@@ -30,6 +30,20 @@ namespace VaccineAPI.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal UnitPrice { get; set; }
+
+        [Column(TypeName = "decimal(5,2)")]
+        public decimal AwtPercent { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal AwtAmount { get; set; }
+
+        public int? BillId { get; set; }
+
+        [ForeignKey("BillId")]
+        public virtual Bill? Bill { get; set; }
+
         [ForeignKey("BrandId")]
         public virtual Brand Brand { get; set; } = null!;
 

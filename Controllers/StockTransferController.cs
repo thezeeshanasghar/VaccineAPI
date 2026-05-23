@@ -196,10 +196,16 @@ namespace VaccineAPI.Controllers
                 .Include(t => t.Brand)
                 .Include(t => t.FromClinic)
                 .Include(t => t.ToClinic)
-                .Include(t => t.Bill)
                 .Where(t => t.DoctorId == doctorId && (t.FromClinicId == clinicId || t.ToClinicId == clinicId))
                 .OrderByDescending(t => t.TransferDate)
                 .ThenByDescending(t => t.Id)
+                .ToListAsync();
+
+            // Fetch BillNo separately to avoid EF loading Bill.Stocks via navigation fixup
+            var billIds = rows.Where(t => t.BillId.HasValue).Select(t => t.BillId.Value).Distinct().ToList();
+            var billNos = await _db.Bills
+                .Where(b => billIds.Contains(b.Id))
+                .Select(b => new { b.Id, b.BillNo })
                 .ToListAsync();
 
             var brandIds = rows.Select(t => t.BrandId).Distinct().ToList();
@@ -211,11 +217,12 @@ namespace VaccineAPI.Controllers
             var result = rows.Select(t =>
             {
                 var vb = vaccineBrands.FirstOrDefault(x => x.BrandId == t.BrandId);
+                var billEntry = billNos.FirstOrDefault(b => t.BillId.HasValue && b.Id == t.BillId.Value);
                 return new StockTransferListDTO
                 {
                     Id = t.Id,
                     BillId = t.BillId,
-                    BillNo = t.Bill != null ? t.Bill.BillNo : "",
+                    BillNo = billEntry != null ? billEntry.BillNo : "",
                     BrandName = t.Brand != null ? t.Brand.Name : "",
                     VaccineName = vb != null && vb.Vaccine != null ? vb.Vaccine.Name : "",
                     FromClinicName = t.FromClinic != null ? t.FromClinic.Name : "",
@@ -335,13 +342,19 @@ namespace VaccineAPI.Controllers
                 .Include(t => t.Brand)
                 .Include(t => t.FromClinic)
                 .Include(t => t.ToClinic)
-                .Include(t => t.Bill)
                 .Where(t => t.BillId == billId)
                 .OrderBy(t => t.Id)
                 .ToListAsync();
 
             if (transfers.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "No transfer found for this bill" });
+
+            // Fetch bill number without triggering Bill.Stocks navigation load
+            var billEntry = await _db.Bills
+                .Where(b => b.Id == billId)
+                .Select(b => new { b.BillNo })
+                .FirstOrDefaultAsync();
+            string billNo = billEntry != null ? billEntry.BillNo : "";
 
             var first = transfers[0];
             var brandIds = transfers.Select(t => t.BrandId).Distinct().ToList();
@@ -367,7 +380,7 @@ namespace VaccineAPI.Controllers
                 var greenFont   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11, new BaseColor(46, 125, 50));
 
                 doc.Add(new Paragraph("Stock Transfer", titleFont) { Alignment = Element.ALIGN_CENTER });
-                doc.Add(new Paragraph(first.Bill != null ? first.Bill.BillNo : "", subFont) { Alignment = Element.ALIGN_CENTER });
+                doc.Add(new Paragraph(billNo, subFont) { Alignment = Element.ALIGN_CENTER });
                 doc.Add(new Paragraph(
                     (first.FromClinic != null ? first.FromClinic.Name : $"Clinic {first.FromClinicId}")
                     + "  →  "
@@ -466,7 +479,7 @@ namespace VaccineAPI.Controllers
                 doc.Close();
                 writer.Close();
 
-                string fileName = $"Transfer-{(first.Bill != null ? first.Bill.BillNo : billId.ToString())}.pdf";
+                string fileName = $"Transfer-{(string.IsNullOrEmpty(billNo) ? billId.ToString() : billNo)}.pdf";
                 return File(ms.ToArray(), "application/pdf", fileName);
             }
         }

@@ -157,8 +157,8 @@ namespace VaccineAPI.Controllers
                     if (sup != null) supplierName = sup.Name;
                 }
 
-                decimal amountPaid = dto.AmountPaid < 0 ? 0 : dto.AmountPaid;
                 decimal totalPayable = totalAmount + awtAmount;
+                decimal amountPaid = dto.AmountPaid < 0 ? 0 : (dto.AmountPaid > totalPayable ? totalPayable : dto.AmountPaid);
                 bool isPaid = amountPaid >= totalPayable && totalPayable > 0;
 
                 var bill = new Bill
@@ -327,6 +327,13 @@ namespace VaccineAPI.Controllers
                 decimal awtAmount = bill.AwtAmount ?? 0;
                 decimal totalPayable = totalAmount + awtAmount;
 
+                decimal alreadyPaid = bill.AmountPaid ?? 0;
+                decimal remaining = totalPayable - alreadyPaid;
+                if (remaining <= 0)
+                    return Ok(new { IsSuccess = false, Message = "Bill is already fully paid" });
+                if (dto.Amount > remaining)
+                    return Ok(new { IsSuccess = false, Message = $"Payment of Rs {dto.Amount:N2} exceeds remaining balance of Rs {remaining:N2}" });
+
                 // Add payment record
                 var payment = new SupplierPayment
                 {
@@ -341,8 +348,7 @@ namespace VaccineAPI.Controllers
                 _db.SupplierPayments.Add(payment);
 
                 // Update bill AmountPaid
-                decimal newPaid = (bill.AmountPaid ?? 0) + dto.Amount;
-                if (newPaid > totalPayable) newPaid = totalPayable;
+                decimal newPaid = alreadyPaid + dto.Amount;
                 bill.AmountPaid = newPaid;
                 bill.PaymentMethod = dto.PaymentMethod;
                 bill.IsPaid = newPaid >= totalPayable && totalPayable > 0;

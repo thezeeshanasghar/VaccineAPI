@@ -27,7 +27,8 @@ namespace VaccineAPI.Controllers
                     s.BatchLot,
                     s.Expiry,
                     s.Quantity,
-                    s.BrandId
+                    s.BrandId,
+                    s.StockAmount
                 })
                 .ToListAsync();
 

@@ -284,7 +284,7 @@ namespace VaccineAPI.Controllers
             dbDoctor.AllowFollowUp = doctorDTO.AllowFollowUp;
             dbDoctor.AllowChart = doctorDTO.AllowChart;
             dbDoctor.AllowInventory = doctorDTO.AllowInventory;
-            dbDoctor.AllowSupplier  = doctorDTO.AllowSupplier;
+            dbDoctor.AllowSupplier  = doctorDTO.AllowInventory;
             dbDoctor.AllowFinancial = doctorDTO.AllowFinancial;
             dbDoctor.AllowAgent     = doctorDTO.AllowAgent;
             dbDoctor.AllowTravel    = doctorDTO.AllowTravel;

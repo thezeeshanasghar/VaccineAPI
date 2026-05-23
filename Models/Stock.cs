@@ -23,8 +23,7 @@ namespace VaccineAPI.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal StockAmount { get; set; }
 
-        [Required]
-        public int BillId { get; set; }
+        public int? BillId { get; set; }
 
         public string? BatchLot { get; set; }
 
@@ -34,6 +33,6 @@ namespace VaccineAPI.Models
         public virtual Brand Brand { get; set; } = null!;
 
         [ForeignKey("BillId")]
-        public virtual Bill Bill { get; set; } = null!;
+        public virtual Bill? Bill { get; set; }
     }
 }

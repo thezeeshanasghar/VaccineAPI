@@ -45,6 +45,8 @@ namespace VaccineAPI.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal TotalValue { get; set; } = 0;
 
+        public long CreatedBy { get; set; } = 0;
+
         public int? BillId { get; set; }
 
         [ForeignKey("BillId")]

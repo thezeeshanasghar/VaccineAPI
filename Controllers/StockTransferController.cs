@@ -185,7 +185,8 @@ namespace VaccineAPI.Controllers
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return Ok(new { IsSuccess = false, Message = "Failed to save transfer: " + ex.Message });
+                var detail = ex.Message + (ex.InnerException != null ? " | INNER: " + ex.InnerException.Message : "");
+                return Ok(new { IsSuccess = false, Message = "Failed to save transfer: " + detail });
             }
         }
 

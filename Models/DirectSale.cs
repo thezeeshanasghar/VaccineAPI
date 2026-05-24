@@ -53,6 +53,8 @@ namespace VaccineAPI.Models
 
         public string? Notes { get; set; }
 
+        public string? SaleBillNo { get; set; }
+
         public DateTime SaleDate { get; set; } = DateTime.UtcNow;
 
         [ForeignKey("BrandId")]

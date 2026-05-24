@@ -180,12 +180,12 @@ namespace VaccineAPI.Controllers
                         continue;
                     }
 
-                    // Batch detail table: Batch | Expiry | Qty | Unit Price
-                    var tbl = new PdfPTable(4) { WidthPercentage = 100 };
-                    tbl.SetWidths(new float[] { 2.2f, 2f, 1f, 1.5f });
+                    // Batch detail table: Batch | Expiry | Units
+                    var tbl = new PdfPTable(3) { WidthPercentage = 100 };
+                    tbl.SetWidths(new float[] { 2.5f, 2.5f, 1f });
 
                     BaseColor headerBg = new BaseColor(21, 101, 192);
-                    string[] headers = { "Batch / Lot", "Expiry", "Qty", "Unit Price" };
+                    string[] headers = { "Batch / Lot", "Expiry", "Units" };
                     foreach (var h in headers)
                     {
                         tbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
@@ -193,11 +193,12 @@ namespace VaccineAPI.Controllers
                             BackgroundColor = headerBg,
                             Border = Rectangle.NO_BORDER,
                             Padding = 5,
-                            HorizontalAlignment = h == "Qty" || h == "Unit Price" ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
+                            HorizontalAlignment = h == "Units" ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
                         });
                     }
 
                     bool alt = false;
+                    int brandTotal = 0;
                     foreach (var s in brand.Batches)
                     {
                         BaseColor rowBg = alt ? new BaseColor(250, 250, 255) : new BaseColor(255, 255, 255);
@@ -214,9 +215,15 @@ namespace VaccineAPI.Controllers
                         tbl.AddCell(new PdfPCell(new Phrase(batchLot, cellFont)) { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4, PaddingLeft = 8 });
                         tbl.AddCell(new PdfPCell(new Phrase(expiryLabel, expiryFont)) { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4 });
                         tbl.AddCell(new PdfPCell(new Phrase(s.Quantity.ToString(), cellFont)) { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                        tbl.AddCell(new PdfPCell(new Phrase("Rs " + s.StockAmount.ToString("N2"), cellFont)) { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
+                        brandTotal += s.Quantity;
                         alt = !alt;
                     }
+
+                    // Total row
+                    var totalFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(26, 26, 46));
+                    BaseColor totalBg = new BaseColor(232, 240, 254);
+                    tbl.AddCell(new PdfPCell(new Phrase("Total", totalFont)) { BackgroundColor = totalBg, Border = Rectangle.NO_BORDER, Padding = 5, PaddingLeft = 8, Colspan = 2 });
+                    tbl.AddCell(new PdfPCell(new Phrase(brandTotal.ToString(), totalFont)) { BackgroundColor = totalBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = Element.ALIGN_RIGHT });
 
                     doc.Add(tbl);
                 }

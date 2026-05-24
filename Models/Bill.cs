@@ -23,6 +23,8 @@ namespace VaccineAPI.Models
         public decimal? AwtAmount { get; set; }
         public decimal? AmountPaid { get; set; }
         public string? PaymentMethod { get; set; }
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal CostPrice { get; set; } = 0;
         public virtual ICollection<Stock> Stocks { get; set; } = new HashSet<Stock>();
     }
 }

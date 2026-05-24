@@ -23,9 +23,6 @@ namespace VaccineAPI.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal StockAmount { get; set; }
 
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal CostPrice { get; set; } = 0;
-
         public int? BillId { get; set; }
 
         public string? BatchLot { get; set; }

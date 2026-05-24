@@ -158,7 +158,7 @@ namespace VaccineAPI.Controllers
                 {
                     // Brand name row spanning full width
                     var brandTable = new PdfPTable(1) { WidthPercentage = 100, SpacingBefore = 8 };
-                    var brandCell = new PdfPCell(new Phrase(brand.VaccineName + " — " + brand.BrandName + "   (" + brand.TotalCount + " units)", brandFont))
+                    var brandCell = new PdfPCell(new Phrase(brand.BrandName + "   (" + brand.TotalCount + " units)", brandFont))
                     {
                         BackgroundColor = new BaseColor(238, 242, 247),
                         Border = Rectangle.NO_BORDER,
@@ -198,7 +198,6 @@ namespace VaccineAPI.Controllers
                     }
 
                     bool alt = false;
-                    int brandTotal = 0;
                     foreach (var s in brand.Batches)
                     {
                         BaseColor rowBg = alt ? new BaseColor(250, 250, 255) : new BaseColor(255, 255, 255);
@@ -215,15 +214,8 @@ namespace VaccineAPI.Controllers
                         tbl.AddCell(new PdfPCell(new Phrase(batchLot, cellFont)) { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4, PaddingLeft = 8 });
                         tbl.AddCell(new PdfPCell(new Phrase(expiryLabel, expiryFont)) { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4 });
                         tbl.AddCell(new PdfPCell(new Phrase(s.Quantity.ToString(), cellFont)) { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                        brandTotal += s.Quantity;
                         alt = !alt;
                     }
-
-                    // Total row
-                    var totalFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(26, 26, 46));
-                    BaseColor totalBg = new BaseColor(232, 240, 254);
-                    tbl.AddCell(new PdfPCell(new Phrase("Total", totalFont)) { BackgroundColor = totalBg, Border = Rectangle.NO_BORDER, Padding = 5, PaddingLeft = 8, Colspan = 2 });
-                    tbl.AddCell(new PdfPCell(new Phrase(brandTotal.ToString(), totalFont)) { BackgroundColor = totalBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = Element.ALIGN_RIGHT });
 
                     doc.Add(tbl);
                 }

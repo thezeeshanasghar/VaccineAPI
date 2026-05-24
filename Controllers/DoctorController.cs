@@ -292,6 +292,7 @@ namespace VaccineAPI.Controllers
             dbDoctor.AllowDevelopmentalAssessment = doctorDTO.AllowDevelopmentalAssessment;
             dbDoctor.AllowHomeBooking  = doctorDTO.AllowHomeBooking;
             dbDoctor.AllowClinicBooking = doctorDTO.AllowClinicBooking;
+            dbDoctor.AllowAnalytics     = doctorDTO.AllowAnalytics;
             _db.SaveChanges();
             //  dbDoctor = _mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
             return new Response<DoctorDTO>(true, null, doctorDTO);

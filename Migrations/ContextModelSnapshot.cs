@@ -351,6 +351,9 @@ namespace VaccineAPI.Migrations
                     b.Property<bool>("AllowClinicBooking")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("AllowAnalytics")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("longtext");

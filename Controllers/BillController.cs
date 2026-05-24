@@ -188,7 +188,7 @@ namespace VaccineAPI.Controllers
                         BillId = bill.Id,
                         Quantity = line.Quantity,
                         OriginalQuantity = line.Quantity,
-                        StockAmount = line.UnitPrice,
+                        StockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4),
                         BatchLot = line.BatchLot,
                         Expiry = line.Expiry
                     };
@@ -279,7 +279,7 @@ namespace VaccineAPI.Controllers
                         BillId = bill.Id,
                         Quantity = line.Quantity,
                         OriginalQuantity = line.Quantity,
-                        StockAmount = line.UnitPrice,
+                        StockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4),
                         BatchLot = line.BatchLot,
                         Expiry = line.Expiry
                     };

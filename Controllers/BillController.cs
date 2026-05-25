@@ -211,7 +211,8 @@ namespace VaccineAPI.Controllers
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return Ok(new { IsSuccess = false, Message = ex.Message });
+                var inner = ex.InnerException != null ? ex.InnerException.Message : "";
+                return Ok(new { IsSuccess = false, Message = ex.Message + " | INNER: " + inner });
             }
         }
 

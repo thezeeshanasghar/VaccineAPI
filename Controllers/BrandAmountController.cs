@@ -21,40 +21,51 @@ namespace VaccineAPI.Controllers
             [FromQuery] long doctorId,
             [FromQuery] long clinicId)
         {
-            var result = await _db.BrandAmounts
+            // Ensure every brand has a BrandAmount row for this doctor+clinic
+            var allBrands = await _db.Brands.ToListAsync();
+            var existingBas = await _db.BrandAmounts
                 .Where(ba => ba.DoctorId == doctorId && ba.ClinicId == clinicId)
-                .Join(_db.Brands,
-                    ba => ba.BrandId,
-                    b => b.Id,
-                    (ba, b) => new { ba, b })
-                .GroupJoin(_db.VaccineBrands,
-                    x => x.b.Id,
-                    vb => vb.BrandId,
-                    (x, vbs) => new { x.ba, x.b, vbs })
-                .SelectMany(
-                    x => x.vbs.DefaultIfEmpty(),
-                    (x, vb) => new { x.ba, x.b, vb })
-                .GroupJoin(_db.Vaccines,
-                    x => x.vb != null ? x.vb.VaccineId : (long?)null,
-                    v => v.Id,
-                    (x, vs) => new { x.ba, x.b, vs })
-                .SelectMany(
-                    x => x.vs.DefaultIfEmpty(),
-                    (x, v) => new BrandAmountDTO
-                    {
-                        Id = x.ba.Id,
-                        BrandId = x.ba.BrandId,
-                        BrandName = x.b.Name,
-                        VaccineName = v != null ? v.Name : x.b.Name,
-                        Amount = x.ba.Amount
-                    })
-                .OrderBy(d => d.VaccineName)
-                .ThenBy(d => d.BrandName)
+                .ToListAsync();
+            var existingBrandIds = new HashSet<long>(existingBas.Select(ba => ba.BrandId));
+
+            var toAdd = allBrands
+                .Where(b => !existingBrandIds.Contains(b.Id))
+                .Select(b => new BrandAmount
+                {
+                    BrandId = b.Id,
+                    DoctorId = doctorId,
+                    ClinicId = clinicId,
+                    Amount = 0,
+                    Count = 0,
+                    PurchasedAmt = 0
+                })
+                .ToList();
+
+            if (toAdd.Count > 0)
+            {
+                _db.BrandAmounts.AddRange(toAdd);
+                await _db.SaveChangesAsync();
+                existingBas.AddRange(toAdd);
+            }
+
+            var vaccineBrands = await _db.VaccineBrands
+                .Include(vb => vb.Vaccine)
                 .ToListAsync();
 
-            // Remove duplicates — a brand linked to multiple vaccines produces multiple rows; keep one per brand
-            var seen = new HashSet<long>();
-            result = result.Where(r => seen.Add(r.BrandId)).ToList();
+            var result = existingBas
+                .Join(allBrands,
+                    ba => ba.BrandId,
+                    b => b.Id,
+                    (ba, b) => new BrandAmountDTO
+                    {
+                        Id = ba.Id,
+                        BrandId = ba.BrandId,
+                        BrandName = b.Name,
+                        VaccineName = "",
+                        Amount = ba.Amount
+                    })
+                .OrderBy(d => d.BrandName)
+                .ToList();
 
             return new Response<List<BrandAmountDTO>>(true, null, result);
         }

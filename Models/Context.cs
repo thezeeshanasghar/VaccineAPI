@@ -43,6 +43,7 @@ namespace VaccineAPI.Models
         public DbSet<DirectSale> DirectSales { get; set; }
         public DbSet<Supplier> Suppliers { get; set; }
         public DbSet<SupplierPayment> SupplierPayments { get; set; }
+        public DbSet<PaCashHandover> PaCashHandovers { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

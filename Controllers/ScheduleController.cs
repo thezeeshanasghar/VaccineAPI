@@ -210,22 +210,28 @@ namespace VaccineAPI.Controllers
 
                 if (scheduleDTO.IsDone == false)
                 {
-                    // PA ungive guard: only own action, same day
+                    // PA ungive counter: max 2 per dose
                     if (scheduleDTO.PaId.HasValue && dbSchedule.IsDone == true)
                     {
-                        if (dbSchedule.GivenByPaId == null || dbSchedule.GivenByPaId != scheduleDTO.PaId)
-                            return new Response<ScheduleDTO>(false, "You can only ungive a dose you gave yourself.", null);
-                        var givenDay = dbSchedule.DoneAt.HasValue ? dbSchedule.DoneAt.Value.Date : (DateTime?)null;
-                        if (givenDay == null || givenDay.Value != DateTime.UtcNow.Date)
-                            return new Response<ScheduleDTO>(false, "You can only ungive a dose on the same day it was given.", null);
+                        if (dbSchedule.UngiveCount >= 2)
+                            return new Response<ScheduleDTO>(false, "This vaccine has already been ungiven twice. Contact the doctor.", null);
+                        dbSchedule.UngiveCount++;
                     }
 
-                    // PA unskip guard: only own action, same day
+                    // PA unskip counter: max 2 per dose
                     if (scheduleDTO.PaId.HasValue && scheduleDTO.IsSkip == false && dbSchedule.IsSkip == true)
                     {
-                        if (dbSchedule.SkippedByPaId == null || dbSchedule.SkippedByPaId != scheduleDTO.PaId)
-                            return new Response<ScheduleDTO>(false, "You can only unskip a vaccine you skipped yourself.", null);
-                        // No date guard for unskip — skips don't have a timestamp; same-day is tracked only for gives
+                        if (dbSchedule.UnskipCount >= 2)
+                            return new Response<ScheduleDTO>(false, "This vaccine has already been unskipped twice. Contact the doctor.", null);
+                        dbSchedule.UnskipCount++;
+                    }
+
+                    // PA skip counter: max 2 per dose (when ungive also sets IsSkip=true)
+                    if (scheduleDTO.PaId.HasValue && scheduleDTO.IsSkip == true && dbSchedule.IsSkip != true)
+                    {
+                        if (dbSchedule.SkipCount >= 2)
+                            return new Response<ScheduleDTO>(false, "This vaccine has already been skipped twice. Contact the doctor.", null);
+                        dbSchedule.SkipCount++;
                     }
 
                     if (inventoryEnabled && previousBrandId.HasValue)
@@ -554,6 +560,22 @@ namespace VaccineAPI.Controllers
                                 null
                             );
                     }
+                }
+
+                // PA give counter: max 2 per dose
+                if (scheduleDTO.PaId.HasValue && scheduleDTO.IsDone == true)
+                {
+                    if (dbSchedule.GiveCount >= 2)
+                        return new Response<ScheduleDTO>(false, "This vaccine has already been given twice. Contact the doctor.", null);
+                    dbSchedule.GiveCount++;
+                }
+
+                // PA skip counter (standalone skip, not from ungive path): max 2 per dose
+                if (scheduleDTO.PaId.HasValue && scheduleDTO.IsSkip == true && dbSchedule.IsDone == false && dbSchedule.IsSkip != true)
+                {
+                    if (dbSchedule.SkipCount >= 2)
+                        return new Response<ScheduleDTO>(false, "This vaccine has already been skipped twice. Contact the doctor.", null);
+                    dbSchedule.SkipCount++;
                 }
 
                 dbSchedule.BrandId = scheduleDTO.BrandId;
@@ -1126,24 +1148,21 @@ namespace VaccineAPI.Controllers
                          && x.IsSkip != true)
                 .ToList();
 
-            // PA bulk-ungive guard: check all schedules before mutating any
-            if (scheduleDTO.PaId.HasValue && scheduleDTO.IsDone == false)
+            // PA bulk counter pre-check: verify no counter limits exceeded before mutating any row
+            if (scheduleDTO.PaId.HasValue)
             {
                 foreach (var checkSchedule in dbChildSchedules)
                 {
-                    if (checkSchedule.IsDone == true)
-                    {
-                        if (checkSchedule.GivenByPaId == null || checkSchedule.GivenByPaId != scheduleDTO.PaId)
-                            return new Response<ScheduleDTO>(false, "You can only bulk-ungive doses you gave yourself.", null);
-                        var givenDayCheck = checkSchedule.DoneAt.HasValue ? checkSchedule.DoneAt.Value.Date : (DateTime?)null;
-                        if (givenDayCheck == null || givenDayCheck.Value != DateTime.UtcNow.Date)
-                            return new Response<ScheduleDTO>(false, "You can only bulk-ungive doses on the same day they were given.", null);
-                    }
+                    if (scheduleDTO.IsDone == false && checkSchedule.IsDone == true && checkSchedule.UngiveCount >= 2)
+                        return new Response<ScheduleDTO>(false, "One or more vaccines have already been ungiven twice. Contact the doctor.", null);
+                    if (scheduleDTO.IsDone == true && checkSchedule.IsDone == false && checkSchedule.GiveCount >= 2)
+                        return new Response<ScheduleDTO>(false, "One or more vaccines have already been given twice. Contact the doctor.", null);
                 }
             }
 
             foreach (var schedule in dbChildSchedules)
             {
+                var wasIsDone = schedule.IsDone;
                 schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
                 schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
                 schedule.Circle =(scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
@@ -1159,6 +1178,15 @@ namespace VaccineAPI.Controllers
                     schedule.GivenByPaId = scheduleDTO.PaId;
                 else
                     schedule.GivenByPaId = null;
+
+                // PA audit counters
+                if (scheduleDTO.PaId.HasValue)
+                {
+                    if (scheduleDTO.IsDone == true && wasIsDone == false)
+                        schedule.GiveCount++;
+                    else if (scheduleDTO.IsDone == false && wasIsDone == true)
+                        schedule.UngiveCount++;
+                }
 
                 if (scheduleDTO.ScheduleBrands.Count > 0)
                 {

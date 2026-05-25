@@ -39,6 +39,10 @@ namespace VaccineAPI.ModelDTO
         public long? PaId { get; set; }
         public long? GivenByPaId { get; set; }
         public long? SkippedByPaId { get; set; }
+        public int GiveCount { get; set; }
+        public int UngiveCount { get; set; }
+        public int SkipCount { get; set; }
+        public int UnskipCount { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public System.DateTime GivenDate { get; set; }
         public DateTime? DoneAt { get; set; }

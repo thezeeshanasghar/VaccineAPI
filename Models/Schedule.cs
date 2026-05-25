@@ -32,6 +32,10 @@ namespace VaccineAPI.Models
         public int? Validity { get; set; }
         public long? GivenByPaId { get; set; }
         public long? SkippedByPaId { get; set; }
+        public int GiveCount { get; set; }
+        public int UngiveCount { get; set; }
+        public int SkipCount { get; set; }
+        public int UnskipCount { get; set; }
         public long ChildId { get; set; }
         public virtual Child Child { get; set; } = null!;
         public long DoseId { get; set; }

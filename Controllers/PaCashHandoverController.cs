@@ -19,7 +19,7 @@ namespace VaccineAPI.Controllers
         {
             var totalCollected = _db.Schedules
                 .Include(s => s.Child)
-                .Where(s => s.GivenByPaId == paId
+                .Where(s => (s.GivenByPaId == paId || (s.PaymentCollectorPaId == paId && s.IsPaymentCollected == true))
                          && s.IsDone == true
                          && s.PaymentMode == "Cash"
                          && s.Child.ClinicId == clinicId

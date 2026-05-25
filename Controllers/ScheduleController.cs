@@ -586,6 +586,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
                 dbSchedule.GivenByPaId = scheduleDTO.IsDone ? scheduleDTO.PaId : null;
+                dbSchedule.PaymentCollectorPaId = scheduleDTO.PaymentCollectorPaId;
                 dbSchedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
                 dbSchedule.OnlineService = scheduleDTO.OnlineService;
                 dbSchedule.IsPaymentApproved = false;
@@ -3017,6 +3018,77 @@ namespace VaccineAPI.Controllers
             {
                 return BadRequest($"Error generating PDF: {ex.Message}");
             }
+        }
+
+        [HttpGet("pa-collection-tasks/{paId}")]
+        public IActionResult GetPaCollectionTasks(long paId)
+        {
+            var tasks = _db.Schedules
+                .Include(s => s.Child)
+                .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
+                .Include(s => s.Brand)
+                .Where(s => s.PaymentCollectorPaId == paId
+                         && s.IsDone == true
+                         && s.IsPaymentCollected == false)
+                .OrderBy(s => s.GivenDate)
+                .ToList();
+            var dtos = _mapper.Map<List<ScheduleDTO>>(tasks);
+            return Ok(new Response<List<ScheduleDTO>>(true, "OK", dtos));
+        }
+
+        [HttpPatch("{id}/mark-payment-collected")]
+        public IActionResult MarkPaymentCollected(long id, [FromBody] ScheduleDTO dto)
+        {
+            var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
+            if (schedule == null) return Ok(new Response<ScheduleDTO>(false, "Not found", null));
+            if (schedule.PaymentCollectorPaId == null)
+                return Ok(new Response<ScheduleDTO>(false, "No PA assigned for this payment.", null));
+
+            schedule.IsPaymentCollected = true;
+            schedule.PaymentMode = dto.PaymentMode ?? schedule.PaymentMode;
+            if (dto.Weight > 0) schedule.Weight = dto.Weight;
+            if (dto.Height > 0) schedule.Height = dto.Height;
+            if (dto.Circle > 0) schedule.Circle = dto.Circle;
+            _db.SaveChanges();
+            return Ok(new Response<ScheduleDTO>(true, "Payment marked as collected.", null));
+        }
+
+        [HttpGet("day-log/{doctorId}/{date}")]
+        public IActionResult GetDayLog(long doctorId, DateTime date)
+        {
+            var clinicIds = _db.Clinics.Where(c => c.DoctorId == doctorId).Select(c => c.Id).ToList();
+            var schedules = _db.Schedules
+                .Include(s => s.Child)
+                .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
+                .Include(s => s.Brand)
+                .Where(s => clinicIds.Contains(s.Child.ClinicId)
+                         && s.IsDone == true
+                         && s.GivenDate != null
+                         && s.GivenDate.Value.Date == date.Date)
+                .ToList();
+            var paIds = schedules
+                .Where(s => s.PaymentCollectorPaId.HasValue)
+                .Select(s => s.PaymentCollectorPaId.Value).Distinct().ToList();
+            var paNames = _db.PersonalAssistant
+                .Where(p => paIds.Contains(p.Id))
+                .ToDictionary(p => p.Id, p => p.Name);
+            var dtos = _mapper.Map<List<ScheduleDTO>>(schedules);
+            foreach (var d in dtos)
+            {
+                if (d.PaymentCollectorPaId.HasValue && paNames.ContainsKey(d.PaymentCollectorPaId.Value))
+                    d.PaymentCollectorPaName = paNames[d.PaymentCollectorPaId.Value];
+            }
+            return Ok(new Response<List<ScheduleDTO>>(true, "OK", dtos));
+        }
+
+        [HttpPatch("{id}/approve-payment")]
+        public IActionResult ApprovePayment(long id)
+        {
+            var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
+            if (schedule == null) return Ok(new Response<ScheduleDTO>(false, "Not found", null));
+            schedule.IsPAApprove = true;
+            _db.SaveChanges();
+            return Ok(new Response<ScheduleDTO>(true, "Payment approved.", null));
         }
     }
 }

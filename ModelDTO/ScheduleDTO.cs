@@ -39,6 +39,9 @@ namespace VaccineAPI.ModelDTO
         public long? PaId { get; set; }
         public long? GivenByPaId { get; set; }
         public long? SkippedByPaId { get; set; }
+        public long? PaymentCollectorPaId { get; set; }
+        public string PaymentCollectorPaName { get; set; } = "";
+        public bool IsPaymentCollected { get; set; }
         public int GiveCount { get; set; }
         public int UngiveCount { get; set; }
         public int SkipCount { get; set; }

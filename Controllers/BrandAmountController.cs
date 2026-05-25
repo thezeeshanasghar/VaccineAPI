@@ -52,6 +52,10 @@ namespace VaccineAPI.Controllers
                 .ThenBy(d => d.BrandName)
                 .ToListAsync();
 
+            // Remove duplicates — a brand linked to multiple vaccines produces multiple rows; keep one per brand
+            var seen = new HashSet<long>();
+            result = result.Where(r => seen.Add(r.BrandId)).ToList();
+
             return new Response<List<BrandAmountDTO>>(true, null, result);
         }
 

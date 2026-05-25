@@ -72,3 +72,31 @@ ALTER TABLE `schedules`
 ADD COLUMN `IsPAApprove` tinyint(1) NOT NULL DEFAULT 0;
 
 -- Rollback: ALTER TABLE `schedules` DROP COLUMN `IsPAApprove`;
+
+-- =====================================================
+-- Create expenses Table (Financial Module — Phase 1)
+-- =====================================================
+CREATE TABLE `expenses` (
+  `Id`               BIGINT        NOT NULL AUTO_INCREMENT,
+  `DoctorId`         BIGINT        NOT NULL,
+  `ClinicId`         BIGINT        NULL,
+  `IsShared`         TINYINT(1)    NOT NULL DEFAULT 0,
+  `ExpenseDate`      DATE          NOT NULL,
+  `Amount`           DECIMAL(12,2) NOT NULL,
+  `Description`      VARCHAR(500)  NOT NULL,
+  `Category`         VARCHAR(50)   NOT NULL,
+  `ExpenseType`      VARCHAR(20)   NOT NULL DEFAULT 'Recurring',
+  `PaymentMode`      VARCHAR(30)   NOT NULL DEFAULT 'Cash',
+  `Notes`            TEXT          NULL,
+  `AssetName`        VARCHAR(200)  NULL,
+  `ExpectedLifeYrs`  DECIMAL(4,1)  NULL,
+  `WarrantyExpiry`   DATE          NULL,
+  `ReceiptImagePath` VARCHAR(500)  NULL,
+  `WarrantyImagePath` VARCHAR(500) NULL,
+  `CreatedAt`        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`Id`),
+  INDEX `IX_expenses_DoctorId` (`DoctorId`),
+  INDEX `IX_expenses_Date`     (`ExpenseDate`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Rollback: DROP TABLE `expenses`;

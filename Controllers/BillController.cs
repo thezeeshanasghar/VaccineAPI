@@ -182,17 +182,34 @@ namespace VaccineAPI.Controllers
 
                 foreach (var line in dto.Lines)
                 {
-                    var stock = new Stock
+                    var existingStock = await _db.Stocks
+                        .Include(s => s.Bill)
+                        .Where(s => s.BrandId == line.BrandId
+                                 && s.BillId != null
+                                 && s.Bill.ClinicId == dto.ClinicId
+                                 && s.BatchLot == line.BatchLot
+                                 && s.Expiry == line.Expiry)
+                        .FirstOrDefaultAsync();
+
+                    if (existingStock != null)
                     {
-                        BrandId = line.BrandId,
-                        BillId = bill.Id,
-                        Quantity = line.Quantity,
-                        OriginalQuantity = line.Quantity,
-                        StockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4),
-                        BatchLot = line.BatchLot,
-                        Expiry = line.Expiry
-                    };
-                    _db.Stocks.Add(stock);
+                        existingStock.Quantity += line.Quantity;
+                        existingStock.OriginalQuantity += line.Quantity;
+                    }
+                    else
+                    {
+                        var stock = new Stock
+                        {
+                            BrandId = line.BrandId,
+                            BillId = bill.Id,
+                            Quantity = line.Quantity,
+                            OriginalQuantity = line.Quantity,
+                            StockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4),
+                            BatchLot = line.BatchLot,
+                            Expiry = line.Expiry
+                        };
+                        _db.Stocks.Add(stock);
+                    }
 
                     // Increment BrandAmount.Count only — no weighted avg
                     var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
@@ -271,20 +288,37 @@ namespace VaccineAPI.Controllers
                 bill.IsPaid = paid >= totalPayable && totalPayable > 0;
                 bill.PaidDate = bill.IsPaid && bill.PaidDate == null ? (DateTime?)DateTime.Now : bill.PaidDate;
 
-                // Create new stock rows
+                // Create new stock rows (consolidate if same brand+batch+expiry already exists)
                 foreach (var line in dto.Lines)
                 {
-                    var stock = new Stock
+                    var existingStock = await _db.Stocks
+                        .Include(s => s.Bill)
+                        .Where(s => s.BrandId == line.BrandId
+                                 && s.BillId != null
+                                 && s.Bill.ClinicId == bill.ClinicId
+                                 && s.BatchLot == line.BatchLot
+                                 && s.Expiry == line.Expiry)
+                        .FirstOrDefaultAsync();
+
+                    if (existingStock != null)
                     {
-                        BrandId = line.BrandId,
-                        BillId = bill.Id,
-                        Quantity = line.Quantity,
-                        OriginalQuantity = line.Quantity,
-                        StockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4),
-                        BatchLot = line.BatchLot,
-                        Expiry = line.Expiry
-                    };
-                    _db.Stocks.Add(stock);
+                        existingStock.Quantity += line.Quantity;
+                        existingStock.OriginalQuantity += line.Quantity;
+                    }
+                    else
+                    {
+                        var stock = new Stock
+                        {
+                            BrandId = line.BrandId,
+                            BillId = bill.Id,
+                            Quantity = line.Quantity,
+                            OriginalQuantity = line.Quantity,
+                            StockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4),
+                            BatchLot = line.BatchLot,
+                            Expiry = line.Expiry
+                        };
+                        _db.Stocks.Add(stock);
+                    }
 
                     var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
                         x.BrandId == line.BrandId &&

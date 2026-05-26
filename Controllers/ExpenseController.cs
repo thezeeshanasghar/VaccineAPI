@@ -75,7 +75,7 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Amount must be greater than 0" });
             if (string.IsNullOrWhiteSpace(dto.Description))
                 return Ok(new { IsSuccess = false, Message = "Description is required" });
-            if (string.IsNullOrWhiteSpace(dto.Category))
+            if ((dto.ExpenseType ?? "Recurring") == "Recurring" && string.IsNullOrWhiteSpace(dto.Category))
                 return Ok(new { IsSuccess = false, Message = "Category is required" });
 
             var expense = new Expense
@@ -86,7 +86,7 @@ namespace VaccineAPI.Controllers
                 ExpenseDate = dto.ExpenseDate == default ? DateTime.Today : dto.ExpenseDate,
                 Amount      = dto.Amount,
                 Description = dto.Description.Trim(),
-                Category    = dto.Category,
+                Category    = (dto.ExpenseType == "Capital") ? "Capital" : (dto.Category ?? ""),
                 ExpenseType = dto.ExpenseType ?? "Recurring",
                 PaymentMode = dto.PaymentMode ?? "Cash",
                 Notes       = dto.Notes?.Trim(),

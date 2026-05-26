@@ -100,3 +100,22 @@ CREATE TABLE `expenses` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Rollback: DROP TABLE `expenses`;
+
+-- PA Assignments
+CREATE TABLE `paassignment` (
+  `Id`                  BIGINT        NOT NULL AUTO_INCREMENT,
+  `DoctorId`            BIGINT        NOT NULL,
+  `ClinicId`            BIGINT        NULL,
+  `PersonalAssistantId` BIGINT        NOT NULL,
+  `ChildId`             BIGINT        NOT NULL,
+  `AssignedAt`          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `IsCompleted`         TINYINT(1)    NOT NULL DEFAULT 0,
+  `CompletedAt`         DATETIME      NULL,
+  `Notes`               VARCHAR(500)  NULL,
+  PRIMARY KEY (`Id`),
+  INDEX `IX_paassignment_PA`    (`PersonalAssistantId`),
+  INDEX `IX_paassignment_Child` (`ChildId`),
+  INDEX `IX_paassignment_Doctor`(`DoctorId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Rollback: DROP TABLE `paassignment`;

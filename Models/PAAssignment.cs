@@ -1,0 +1,17 @@
+using System;
+
+namespace VaccineAPI.Models
+{
+    public class PAAssignment
+    {
+        public long Id { get; set; }
+        public long DoctorId { get; set; }
+        public long? ClinicId { get; set; }
+        public long PersonalAssistantId { get; set; }
+        public long ChildId { get; set; }
+        public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
+        public bool IsCompleted { get; set; } = false;
+        public DateTime? CompletedAt { get; set; }
+        public string Notes { get; set; }
+    }
+}

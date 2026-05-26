@@ -101,7 +101,11 @@ namespace VaccineAPI.Controllers
             }
 
             _db.Expenses.Add(expense);
-            await _db.SaveChangesAsync();
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
 
             // Save images after we have the Id
             if (expense.ExpenseType == "Capital")
@@ -124,7 +128,7 @@ namespace VaccineAPI.Controllers
                 if (expense.ReceiptImagePath != null || expense.WarrantyImagePath != null)
                 {
                     _db.Entry(expense).State = EntityState.Modified;
-                    await _db.SaveChangesAsync();
+                    try { await _db.SaveChangesAsync(); } catch { }
                 }
             }
 
@@ -168,7 +172,11 @@ namespace VaccineAPI.Controllers
             }
 
             _db.Entry(expense).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
 
             return Ok(new { IsSuccess = true, Message = "Expense updated", ResponseData = ToDto(expense) });
         }
@@ -182,7 +190,11 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Expense not found" });
 
             _db.Expenses.Remove(expense);
-            await _db.SaveChangesAsync();
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
 
             return Ok(new { IsSuccess = true, Message = "Expense deleted" });
         }

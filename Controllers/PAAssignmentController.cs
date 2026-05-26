@@ -63,10 +63,37 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true });
         }
 
+        // GET /api/PAAssignment/clinic/{clinicId}
+        [HttpGet("clinic/{clinicId}")]
+        public async Task<IActionResult> GetPAsForClinic(long clinicId)
+        {
+            var pas = await _db.PaAccess
+                .Where(a => a.ClinicId == clinicId)
+                .Join(_db.PersonalAssistant,
+                    a => a.PersonalAssistantId,
+                    p => p.Id,
+                    (a, p) => new { p.Id, p.Name, p.Email, p.IsActive })
+                .Where(p => p.IsActive)
+                .Distinct()
+                .ToListAsync();
+
+            return Ok(new { IsSuccess = true, ResponseData = pas });
+        }
+
         // POST /api/PAAssignment
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] PAAssignment dto)
         {
+            var today = DateTime.UtcNow.Date;
+            var exists = await _db.PAAssignments.AnyAsync(a =>
+                a.ChildId == dto.ChildId &&
+                a.PersonalAssistantId == dto.PersonalAssistantId &&
+                !a.IsCompleted &&
+                a.AssignedAt >= today && a.AssignedAt < today.AddDays(1));
+
+            if (exists)
+                return Ok(new { IsSuccess = false, Message = "Already assigned to this PA today" });
+
             dto.AssignedAt   = DateTime.UtcNow;
             dto.IsCompleted  = false;
             dto.CompletedAt  = null;
@@ -77,6 +104,16 @@ namespace VaccineAPI.Controllers
             catch (Exception ex)
             {
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
+            if (pa != null && !string.IsNullOrEmpty(pa.Email))
+            {
+                UserEmail.SendEmail(
+                    pa.Email,
+                    "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
+                    "New Patient Assignment"
+                );
             }
 
             return Ok(new { IsSuccess = true, ResponseData = dto });

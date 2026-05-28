@@ -168,6 +168,64 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, Message = "Handover confirmed." });
         }
 
+        // GET /api/PaCashHandover/daily-summary/{doctorId}?date=YYYY-MM-DD
+        [HttpGet("daily-summary/{doctorId}")]
+        public IActionResult GetDailySummary(long doctorId, [FromQuery] string date = null)
+        {
+            DateTime targetDate;
+            try { targetDate = date != null ? DateTime.Parse(date).Date : DateTime.UtcNow.Date; }
+            catch { targetDate = DateTime.UtcNow.Date; }
+
+            var clinicIds = _db.Clinics
+                .Where(c => c.DoctorId == doctorId)
+                .Select(c => c.Id)
+                .ToList();
+
+            var rows = _db.Schedules
+                .Include(s => s.Child)
+                .Where(s => s.IsDone
+                    && s.DoneAt.HasValue
+                    && s.DoneAt.Value.Date == targetDate
+                    && clinicIds.Contains(s.Child.ClinicId)
+                    && s.PaymentCollectorPaId.HasValue)
+                .ToList();
+
+            var paIds = rows.Select(s => s.PaymentCollectorPaId.Value).Distinct().ToList();
+            var paNames = _db.PersonalAssistant
+                .Where(p => paIds.Contains(p.Id))
+                .ToDictionary(p => p.Id, p => p.Name);
+
+            var summary = paIds.Select(paId =>
+            {
+                var cashTotal = rows
+                    .Where(s => s.PaymentCollectorPaId == paId && s.PaymentMode == "Cash")
+                    .Sum(s => (decimal?)s.Amount) ?? 0m;
+                var onlineTotal = rows
+                    .Where(s => s.PaymentCollectorPaId == paId && s.PaymentMode != "Cash")
+                    .Sum(s => (decimal?)s.Amount) ?? 0m;
+                var handedOver = _db.PaCashHandovers
+                    .Where(h => h.PaId == paId && clinicIds.Contains(h.ClinicId) && h.Status == "Confirmed")
+                    .Sum(h => (decimal?)h.Amount) ?? 0m;
+                return new {
+                    PaId = paId,
+                    PaName = paNames.ContainsKey(paId) ? paNames[paId] : "",
+                    CashTotal = cashTotal,
+                    OnlineTotal = onlineTotal,
+                    HandedOver = handedOver,
+                    PendingCash = cashTotal - handedOver
+                };
+            }).ToList();
+
+            var pending = _db.PaCashHandovers
+                .Where(h => clinicIds.Contains(h.ClinicId) && h.Status == "Pending")
+                .Select(h => new {
+                    h.Id, h.PaId, h.ClinicId, h.Amount, h.Status, h.CreatedAt
+                })
+                .ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = new { Summary = summary, PendingHandovers = pending } });
+        }
+
         // PATCH /api/PaCashHandover/{id}/reject
         [HttpPatch("{id}/reject")]
         public IActionResult Reject(long id, [FromBody] PaCashHandoverDTO dto)

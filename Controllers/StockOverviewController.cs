@@ -147,15 +147,15 @@ namespace VaccineAPI.Controllers
                     .Where(x => x.TotalCount > 0 || x.Batches.Count > 0)
                     .ToList();
 
-                // Single unified table: Brand | Batch/Lot | Expiry | Units | Total
-                var tbl = new PdfPTable(5) { WidthPercentage = 100, SpacingBefore = 4 };
-                tbl.SetWidths(new float[] { 2.2f, 2.4f, 2.0f, 1.0f, 1.0f });
+                // Single unified table: Brand | Batch/Lot | Expiry | Units
+                var tbl = new PdfPTable(4) { WidthPercentage = 100, SpacingBefore = 4 };
+                tbl.SetWidths(new float[] { 2.2f, 2.4f, 2.0f, 1.0f });
 
                 BaseColor headerBg = new BaseColor(21, 101, 192);
-                string[] headers = { "Brand", "Batch / Lot", "Expiry", "Units", "Total" };
+                string[] headers = { "Brand", "Batch / Lot", "Expiry", "Units" };
                 foreach (var h in headers)
                 {
-                    bool right = h == "Units" || h == "Total";
+                    bool right = h == "Units";
                     tbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
                     {
                         BackgroundColor      = headerBg,
@@ -184,8 +184,6 @@ namespace VaccineAPI.Controllers
                             { BackgroundColor = brandRowBg, Border = Rectangle.NO_BORDER, Padding = 4 });
                         tbl.AddCell(new PdfPCell(new Phrase("0", cellFont))
                             { BackgroundColor = brandRowBg, Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                        tbl.AddCell(new PdfPCell(new Phrase("0", cellFont))
-                            { BackgroundColor = brandRowBg, Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
                         continue;
                     }
 
@@ -202,7 +200,6 @@ namespace VaccineAPI.Controllers
                         string expiryStr  = s.Expiry.HasValue ? s.Expiry.Value.ToString("dd MMM yyyy") : "—";
                         string expiryLabel = expiryStr + (expired ? " [Exp]" : soon ? " [Soon]" : "");
                         Font expiryFont   = expired ? redFont : soon ? orangeFont : cellFont;
-                        int lineTotal     = s.Quantity;
 
                         // Brand name only on first batch row of this brand
                         if (i == 0)
@@ -218,14 +215,12 @@ namespace VaccineAPI.Controllers
                             { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4 });
                         tbl.AddCell(new PdfPCell(new Phrase(s.Quantity.ToString(), cellFont))
                             { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                        tbl.AddCell(new PdfPCell(new Phrase(lineTotal.ToString(), cellFont))
-                            { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
 
                         alt = !alt;
                     }
 
                     // Thin separator row between brands
-                    for (int col = 0; col < 5; col++)
+                    for (int col = 0; col < 4; col++)
                         tbl.AddCell(new PdfPCell(new Phrase(""))
                             { BackgroundColor = new BaseColor(210, 220, 240), Border = Rectangle.NO_BORDER, FixedHeight = 1f, Padding = 0 });
                 }

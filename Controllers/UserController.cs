@@ -145,6 +145,7 @@ namespace VaccineAPI.Controllers
                     userDTO.PAId = paDb.Id;
                 userDTO.DoctorId = paDb.DoctorId;
                 userDTO.IsVerified = paDb.IsVerified;
+                userDTO.AllowInventory = true;
             }
 
             return new Response<UserDTO>(true, null, userDTO);

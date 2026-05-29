@@ -613,7 +613,10 @@ namespace VaccineAPI.Controllers
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
                 dbSchedule.GivenByPaId = scheduleDTO.IsDone ? scheduleDTO.PaId : null;
-                dbSchedule.PaymentCollectorPaId = scheduleDTO.PaymentCollectorPaId;
+                if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue)
+                    dbSchedule.PaymentCollectorPaId = scheduleDTO.PaId;
+                else if (!scheduleDTO.IsDone)
+                    dbSchedule.PaymentCollectorPaId = null;
                 dbSchedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
                 dbSchedule.OnlineService = scheduleDTO.OnlineService;
                 dbSchedule.IsPaymentApproved = false;
@@ -1209,11 +1212,18 @@ namespace VaccineAPI.Controllers
                 schedule.OnlineService = scheduleDTO.OnlineService;
                 schedule.IsPaymentApproved = false;
                 schedule.IsPAApprove= scheduleDTO.IsPAApprove;
-                // Track which PA gave/ungave this dose
+                // Track which PA gave/ungave this dose; same PA is the payment collector
                 if (scheduleDTO.IsDone)
+                {
                     schedule.GivenByPaId = scheduleDTO.PaId;
+                    if (scheduleDTO.PaId.HasValue)
+                        schedule.PaymentCollectorPaId = scheduleDTO.PaId;
+                }
                 else
+                {
                     schedule.GivenByPaId = null;
+                    schedule.PaymentCollectorPaId = null;
+                }
 
                 // PA audit counters
                 if (scheduleDTO.PaId.HasValue)

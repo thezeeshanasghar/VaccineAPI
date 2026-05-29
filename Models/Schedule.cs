@@ -32,6 +32,7 @@ namespace VaccineAPI.Models
         public int? Validity { get; set; }
         public long? GivenByPaId { get; set; }
         public long? SkippedByPaId { get; set; }
+        public DateTime? SkippedAt { get; set; }
         public long? PaymentCollectorPaId { get; set; }
         public bool IsPaymentCollected { get; set; } = false;
         public int GiveCount { get; set; }

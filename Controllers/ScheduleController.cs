@@ -210,6 +210,28 @@ namespace VaccineAPI.Controllers
 
                 if (scheduleDTO.IsDone == false)
                 {
+                    // PA-only: own actions today only
+                    if (scheduleDTO.PaId.HasValue)
+                    {
+                        var today = DateTime.UtcNow.AddHours(5).Date;
+
+                        if (dbSchedule.IsDone == true)
+                        {
+                            if (dbSchedule.GivenByPaId != scheduleDTO.PaId)
+                                return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
+                            if (!dbSchedule.DoneAt.HasValue || dbSchedule.DoneAt.Value.AddHours(5).Date != today)
+                                return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
+                        }
+
+                        if (dbSchedule.IsSkip == true && scheduleDTO.IsSkip == false)
+                        {
+                            if (dbSchedule.SkippedByPaId != scheduleDTO.PaId)
+                                return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
+                            if (!dbSchedule.SkippedAt.HasValue || dbSchedule.SkippedAt.Value.AddHours(5).Date != today)
+                                return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
+                        }
+                    }
+
                     // PA ungive counter: max 2 per dose
                     if (scheduleDTO.PaId.HasValue && dbSchedule.IsDone == true)
                     {
@@ -283,11 +305,16 @@ namespace VaccineAPI.Controllers
                     dbSchedule.IsPaymentApproved = false;
                     dbSchedule.BrandId = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
-                    // Track who skipped (for unskip guard)
                     if (scheduleDTO.IsSkip == true)
+                    {
                         dbSchedule.SkippedByPaId = scheduleDTO.PaId;
+                        dbSchedule.SkippedAt = scheduleDTO.PaId.HasValue ? DateTime.UtcNow : (DateTime?)null;
+                    }
                     else
+                    {
                         dbSchedule.SkippedByPaId = null;
+                        dbSchedule.SkippedAt = null;
+                    }
 
                     ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
                     if (inventoryEnabled && dbBrandInventory2 != null)
@@ -1149,13 +1176,21 @@ namespace VaccineAPI.Controllers
                          && x.IsSkip != true)
                 .ToList();
 
-            // PA bulk counter pre-check: verify no counter limits exceeded before mutating any row
+            // PA bulk counter + ownership pre-check: verify before mutating any row
             if (scheduleDTO.PaId.HasValue)
             {
+                var today = DateTime.UtcNow.AddHours(5).Date;
                 foreach (var checkSchedule in dbChildSchedules)
                 {
-                    if (scheduleDTO.IsDone == false && checkSchedule.IsDone == true && checkSchedule.UngiveCount >= 2)
-                        return new Response<ScheduleDTO>(false, "One or more vaccines have already been ungiven twice. Contact the doctor.", null);
+                    if (scheduleDTO.IsDone == false && checkSchedule.IsDone == true)
+                    {
+                        if (checkSchedule.UngiveCount >= 2)
+                            return new Response<ScheduleDTO>(false, "One or more vaccines have already been ungiven twice. Contact the doctor.", null);
+                        if (checkSchedule.GivenByPaId != scheduleDTO.PaId)
+                            return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
+                        if (!checkSchedule.DoneAt.HasValue || checkSchedule.DoneAt.Value.AddHours(5).Date != today)
+                            return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
+                    }
                     if (scheduleDTO.IsDone == true && checkSchedule.IsDone == false && checkSchedule.GiveCount >= 2)
                         return new Response<ScheduleDTO>(false, "One or more vaccines have already been given twice. Contact the doctor.", null);
                 }

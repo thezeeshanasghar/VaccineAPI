@@ -2126,9 +2126,9 @@ namespace VaccineAPI.Controllers
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
             {
                 Child childDB = _mapper.Map<Child>(childDTO);
-                childDB.IsPAApprove = childDTO.IsPAApprove;
-                childDB.CreatedAt = DateTime.UtcNow;
                 childDB.AddedByPaId = childDTO.AddedByPaId;
+                childDB.IsPAApprove = childDTO.AddedByPaId == null ? true : childDTO.IsPAApprove;
+                childDB.CreatedAt = DateTime.UtcNow;
                 User user = _db.Users.Where(x => x.MobileNumber == childDTO.MobileNumber && x.UserType == "PARENT").FirstOrDefault();
                 if (user == null)
                 {
@@ -3447,7 +3447,7 @@ namespace VaccineAPI.Controllers
                 dbChild.IsEPIDone = childDTO.IsEPIDone;
                 dbChild.IsVerified = childDTO.IsVerified;
                 dbChild.IsInactive = childDTO.IsInactive;
-                dbChild.IsPAApprove = childDTO.IsPAApprove;
+                dbChild.IsPAApprove = dbChild.AddedByPaId == null ? true : childDTO.IsPAApprove;
                 dbChild.Nationality = childDTO.Nationality;
                 dbChild.Agent = childDTO.Agent;
                 dbChild.CNIC = childDTO.CNIC;

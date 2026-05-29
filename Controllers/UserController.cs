@@ -145,7 +145,9 @@ namespace VaccineAPI.Controllers
                     userDTO.PAId = paDb.Id;
                 userDTO.DoctorId = paDb.DoctorId;
                 userDTO.IsVerified = paDb.IsVerified;
-                userDTO.AllowInventory = true;
+
+                var doctorDb = _db.Doctors.Where(x => x.Id == paDb.DoctorId).FirstOrDefault();
+                userDTO.AllowInventory = doctorDb != null && doctorDb.AllowInventory;
             }
 
             return new Response<UserDTO>(true, null, userDTO);

@@ -119,3 +119,15 @@ CREATE TABLE `paassignment` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Rollback: DROP TABLE `paassignment`;
+
+-- =====================================================
+-- Add Payment Verification Audit Trail to Schedules
+-- Tracks who verified a payment and when
+-- =====================================================
+ALTER TABLE `schedules`
+  ADD COLUMN `PaymentApprovedAt`          DATETIME NULL,
+  ADD COLUMN `PaymentApprovedByDoctorId`  BIGINT   NULL;
+
+-- Rollback:
+-- ALTER TABLE `schedules` DROP COLUMN `PaymentApprovedAt`;
+-- ALTER TABLE `schedules` DROP COLUMN `PaymentApprovedByDoctorId`;

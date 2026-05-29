@@ -169,6 +169,9 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/PaCashHandover/daily-summary/{doctorId}?date=YYYY-MM-DD
+        // Shows activity for a specific date with per-schedule breakdown per PA.
+        // Totals (CashTotal, OnlineTotal) reflect that date only.
+        // HandedOver and PendingCash reflect cumulative lifetime balance (correct for running ledger).
         [HttpGet("daily-summary/{doctorId}")]
         public IActionResult GetDailySummary(long doctorId, [FromQuery] string date = null)
         {
@@ -183,38 +186,81 @@ namespace VaccineAPI.Controllers
 
             var rows = _db.Schedules
                 .Include(s => s.Child)
+                .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
                 .Where(s => s.IsDone
                     && s.DoneAt.HasValue
                     && s.DoneAt.Value.Date == targetDate
-                    && clinicIds.Contains(s.Child.ClinicId)
-                    && s.PaymentCollectorPaId.HasValue)
+                    && clinicIds.Contains(s.Child.ClinicId))
                 .ToList();
 
-            var paIds = rows.Select(s => s.PaymentCollectorPaId.Value).Distinct().ToList();
+            // PA-collected rows
+            var paRows = rows.Where(s => s.PaymentCollectorPaId.HasValue).ToList();
+            var paIds = paRows.Select(s => s.PaymentCollectorPaId.Value).Distinct().ToList();
             var paNames = _db.PersonalAssistant
                 .Where(p => paIds.Contains(p.Id))
                 .ToDictionary(p => p.Id, p => p.Name);
 
             var summary = paIds.Select(paId =>
             {
-                var cashTotal = rows
-                    .Where(s => s.PaymentCollectorPaId == paId && s.PaymentMode == "Cash")
+                var paSchedules = paRows.Where(s => s.PaymentCollectorPaId == paId).ToList();
+                var cashTotal = paSchedules
+                    .Where(s => s.PaymentMode == "Cash")
                     .Sum(s => (decimal?)s.Amount) ?? 0m;
-                var onlineTotal = rows
-                    .Where(s => s.PaymentCollectorPaId == paId && s.PaymentMode != "Cash")
+                var onlineTotal = paSchedules
+                    .Where(s => s.PaymentMode != "Cash")
                     .Sum(s => (decimal?)s.Amount) ?? 0m;
+                // Lifetime cumulative handovers — intentionally not date-filtered
                 var handedOver = _db.PaCashHandovers
                     .Where(h => h.PaId == paId && clinicIds.Contains(h.ClinicId) && h.Status == "Confirmed")
                     .Sum(h => (decimal?)h.Amount) ?? 0m;
+                var breakdown = paSchedules.Select(s => new {
+                    ScheduleId = s.Id,
+                    ChildName = s.Child?.Name ?? "",
+                    VaccineName = s.Dose?.Vaccine?.Name ?? s.Dose?.Name ?? "",
+                    Amount = s.Amount ?? 0m,
+                    PaymentMode = s.PaymentMode,
+                    OnlineService = s.OnlineService,
+                    IsPaymentApproved = s.IsPaymentApproved,
+                    IsPaymentCollected = s.IsPaymentCollected,
+                    PaymentApprovedAt = s.PaymentApprovedAt
+                }).ToList();
                 return new {
                     PaId = paId,
                     PaName = paNames.ContainsKey(paId) ? paNames[paId] : "",
                     CashTotal = cashTotal,
                     OnlineTotal = onlineTotal,
                     HandedOver = handedOver,
-                    PendingCash = cashTotal - handedOver
+                    PendingCash = ComputeCashInHand(paId, paRows.FirstOrDefault(s => s.PaymentCollectorPaId == paId)?.Child?.ClinicId ?? 0),
+                    Schedules = breakdown
                 };
             }).ToList();
+
+            // Doctor self-collected rows (PaymentCollectorPaId is null but payment collected)
+            var doctorRows = rows.Where(s => !s.PaymentCollectorPaId.HasValue && s.IsPaymentCollected).ToList();
+            object doctorEntry = null;
+            if (doctorRows.Any())
+            {
+                var doctorBreakdown = doctorRows.Select(s => new {
+                    ScheduleId = s.Id,
+                    ChildName = s.Child?.Name ?? "",
+                    VaccineName = s.Dose?.Vaccine?.Name ?? s.Dose?.Name ?? "",
+                    Amount = s.Amount ?? 0m,
+                    PaymentMode = s.PaymentMode,
+                    OnlineService = s.OnlineService,
+                    IsPaymentApproved = s.IsPaymentApproved,
+                    IsPaymentCollected = s.IsPaymentCollected,
+                    PaymentApprovedAt = s.PaymentApprovedAt
+                }).ToList();
+                doctorEntry = new {
+                    PaId = (long?)null,
+                    PaName = "Doctor",
+                    CashTotal = doctorRows.Where(s => s.PaymentMode == "Cash").Sum(s => (decimal?)s.Amount) ?? 0m,
+                    OnlineTotal = doctorRows.Where(s => s.PaymentMode != "Cash").Sum(s => (decimal?)s.Amount) ?? 0m,
+                    HandedOver = 0m,
+                    PendingCash = 0m,
+                    Schedules = doctorBreakdown
+                };
+            }
 
             var pending = _db.PaCashHandovers
                 .Where(h => clinicIds.Contains(h.ClinicId) && h.Status == "Pending")
@@ -223,7 +269,53 @@ namespace VaccineAPI.Controllers
                 })
                 .ToList();
 
-            return Ok(new { IsSuccess = true, ResponseData = new { Summary = summary, PendingHandovers = pending } });
+            return Ok(new { IsSuccess = true, ResponseData = new { Summary = summary, DoctorEntry = doctorEntry, PendingHandovers = pending } });
+        }
+
+        // GET /api/PaCashHandover/outstanding/{doctorId}
+        // All PAs with uncleared cash balance (any date). The doctor's weekly cleanup view.
+        [HttpGet("outstanding/{doctorId}")]
+        public IActionResult GetOutstanding(long doctorId)
+        {
+            var clinics = _db.Clinics
+                .Where(c => c.DoctorId == doctorId)
+                .ToList();
+            var clinicIds = clinics.Select(c => c.Id).ToList();
+
+            // Find all PA+clinic combos that have ever had a schedule payment under this doctor
+            var paClinics = _db.Schedules
+                .Include(s => s.Child)
+                .Where(s => s.IsDone
+                    && s.PaymentCollectorPaId.HasValue
+                    && clinicIds.Contains(s.Child.ClinicId))
+                .Select(s => new { PaId = s.PaymentCollectorPaId.Value, s.Child.ClinicId })
+                .Distinct()
+                .ToList();
+
+            var paIds = paClinics.Select(x => x.PaId).Distinct().ToList();
+            var paNames = _db.PersonalAssistant
+                .Where(p => paIds.Contains(p.Id))
+                .ToDictionary(p => p.Id, p => p.Name);
+            var clinicMap = clinics.ToDictionary(c => c.Id, c => c.Name ?? "");
+
+            var result = paClinics
+                .Select(pc => new {
+                    PaId = pc.PaId,
+                    PaName = paNames.ContainsKey(pc.PaId) ? paNames[pc.PaId] : "",
+                    ClinicId = pc.ClinicId,
+                    ClinicName = clinicMap.ContainsKey(pc.ClinicId) ? clinicMap[pc.ClinicId] : "",
+                    PendingCash = ComputeCashInHand(pc.PaId, pc.ClinicId)
+                })
+                .Where(x => x.PendingCash > 0)
+                .OrderByDescending(x => x.PendingCash)
+                .ToList();
+
+            var pendingHandovers = _db.PaCashHandovers
+                .Where(h => clinicIds.Contains(h.ClinicId) && h.Status == "Pending")
+                .Select(h => new { h.Id, h.PaId, h.ClinicId, h.Amount, h.CreatedAt })
+                .ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = new { Outstanding = result, PendingHandovers = pendingHandovers } });
         }
 
         // PATCH /api/PaCashHandover/{id}/reject

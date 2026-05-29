@@ -3125,5 +3125,24 @@ namespace VaccineAPI.Controllers
             _db.SaveChanges();
             return Ok(new Response<ScheduleDTO>(true, "Payment approved.", null));
         }
+
+        // PATCH /api/Schedule/{id}/verify-payment?doctorId=X
+        // Doctor verifies a payment (cash or online). Sets IsPaymentApproved + audit trail.
+        [HttpPatch("{id}/verify-payment")]
+        public IActionResult VerifyPayment(long id, [FromQuery] long doctorId)
+        {
+            var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
+            if (schedule == null)
+                return Ok(new { IsSuccess = false, Message = "Schedule not found." });
+            if (schedule.IsPaymentApproved)
+                return Ok(new { IsSuccess = false, Message = "Payment already verified." });
+
+            schedule.IsPaymentApproved = true;
+            schedule.IsPAApprove = true;
+            schedule.PaymentApprovedAt = DateTime.UtcNow;
+            schedule.PaymentApprovedByDoctorId = doctorId;
+            _db.SaveChanges();
+            return Ok(new { IsSuccess = true, Message = "Payment verified." });
+        }
     }
 }

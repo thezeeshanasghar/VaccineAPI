@@ -14,4 +14,24 @@ namespace VaccineAPI.ModelDTO
         public int GivenDosesCount { get; set; }
         public decimal TotalRevenue { get; set; }
     }
+
+    public class AnalyticsDTO
+    {
+        public List<MonthlyStatDTO> MonthlyRevenue { get; set; }
+        public List<MonthlyStatDTO> MonthlyDoses { get; set; }
+        public List<MonthlyStatDTO> MonthlyNewPatients { get; set; }
+        public List<BrandStatDTO> TopVaccines { get; set; }
+    }
+
+    public class MonthlyStatDTO
+    {
+        public string Month { get; set; }
+        public decimal Value { get; set; }
+    }
+
+    public class BrandStatDTO
+    {
+        public string BrandName { get; set; }
+        public int Count { get; set; }
+    }
 }

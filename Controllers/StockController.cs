@@ -403,129 +403,218 @@ namespace VaccineAPI.Controllers
             var clinic = await _db.Clinics.FindAsync(clinicId);
             string clinicName = clinic != null ? clinic.Name : $"Clinic {clinicId}";
 
-            // Purchased (from purchase bills, not XFER)
-            var purchaseQuery = _db.Stocks
-                .Include(s => s.Bill)
-                .Include(s => s.Brand)
-                .Where(s => s.BillId != null
-                         && s.Bill.ClinicId == clinicId
-                         && !s.Bill.BillNo.StartsWith("XFER-")
-                         && s.Bill.BillDate.Date >= from.Date
-                         && s.Bill.BillDate.Date <= to.Date);
-            if (brandId > 0) purchaseQuery = purchaseQuery.Where(s => s.BrandId == brandId);
-            var purchases = await purchaseQuery.ToListAsync();
+            // All brands in scope
+            List<long> brandIds;
+            if (brandId > 0)
+            {
+                brandIds = new List<long> { brandId };
+            }
+            else
+            {
+                var soldBrands = await _db.Schedules
+                    .Include(s => s.Child)
+                    .Where(s => s.Child.ClinicId == clinicId && s.IsDone == true && s.BrandId != null)
+                    .Select(s => s.BrandId.Value).Distinct().ToListAsync();
+                var purchBrands = await _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId && !s.Bill.BillNo.StartsWith("XFER-"))
+                    .Select(s => s.BrandId).Distinct().ToListAsync();
+                var xferBrands = await _db.StockTransfers
+                    .Where(t => t.ToClinicId == clinicId || t.FromClinicId == clinicId)
+                    .Select(t => t.BrandId).Distinct().ToListAsync();
+                var adjBrands = await _db.AdjustStocks
+                    .Where(a => a.ClinicId == clinicId)
+                    .Select(a => a.BrandId).Distinct().ToListAsync();
+                brandIds = soldBrands.Concat(purchBrands).Concat(xferBrands).Concat(adjBrands).Distinct().ToList();
+            }
 
-            // Given to patients
-            var scheduleQuery = _db.Schedules
-                .Include(s => s.Brand)
-                .Include(s => s.Child)
-                .Where(s => s.Child.ClinicId == clinicId
-                         && s.IsDone == true
-                         && s.BrandId != null
-                         && s.GivenDate.HasValue
-                         && s.GivenDate.Value.Date >= from.Date
-                         && s.GivenDate.Value.Date <= to.Date);
-            if (brandId > 0) scheduleQuery = scheduleQuery.Where(s => s.BrandId == brandId);
-            var given = await scheduleQuery.ToListAsync();
-
-            // Transferred in
-            var xferInQuery = _db.StockTransfers
-                .Include(t => t.Brand)
-                .Where(t => t.ToClinicId == clinicId
-                         && t.TransferDate.Date >= from.Date
-                         && t.TransferDate.Date <= to.Date);
-            if (brandId > 0) xferInQuery = xferInQuery.Where(t => t.BrandId == brandId);
-            var xferIn = await xferInQuery.ToListAsync();
-
-            // Transferred out
-            var xferOutQuery = _db.StockTransfers
-                .Include(t => t.Brand)
-                .Where(t => t.FromClinicId == clinicId
-                         && t.TransferDate.Date >= from.Date
-                         && t.TransferDate.Date <= to.Date);
-            if (brandId > 0) xferOutQuery = xferOutQuery.Where(t => t.BrandId == brandId);
-            var xferOut = await xferOutQuery.ToListAsync();
-
-            // Losses (negative adjustments)
-            var lossQuery = _db.AdjustStocks
-                .Include(a => a.Brand)
-                .Where(a => a.ClinicId == clinicId
-                         && a.Adjustment < 0
-                         && a.Date.Date >= from.Date
-                         && a.Date.Date <= to.Date);
-            if (brandId > 0) lossQuery = lossQuery.Where(a => a.BrandId == brandId);
-            var losses = await lossQuery.ToListAsync();
-
-            // Collect all brand IDs involved
-            var allBrandIds = purchases.Select(p => p.BrandId)
-                .Concat(given.Where(s => s.BrandId.HasValue).Select(s => s.BrandId.Value))
-                .Concat(xferIn.Select(t => t.BrandId))
-                .Concat(xferOut.Select(t => t.BrandId))
-                .Concat(losses.Select(a => a.BrandId))
-                .Distinct().ToList();
-
-            if (allBrandIds.Count == 0)
+            if (brandIds.Count == 0)
                 return NotFound(new { IsSuccess = false, Message = "No stock movement data for the selected period" });
 
-            var brands = await _db.Brands.Where(b => allBrandIds.Contains(b.Id)).ToListAsync();
+            var brandsLookup = await _db.Brands.Where(b => brandIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.Name);
 
             using (var ms = new MemoryStream())
             {
-                var doc = new Document(PageSize.A4.Rotate(), 30, 30, 40, 30);
+                var doc = new Document(PageSize.A4, 30, 30, 40, 30);
                 var writer = PdfWriter.GetInstance(doc, ms);
                 doc.Open();
 
-                var titleFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
-                var subFont    = FontFactory.GetFont(FontFactory.HELVETICA, 9, new BaseColor(84, 110, 122));
-                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8, new BaseColor(255, 255, 255));
-                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 8, new BaseColor(26, 26, 46));
-                var boldCell   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8, new BaseColor(26, 26, 46));
+                var titleFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13, new BaseColor(21, 101, 192));
+                var subFont    = FontFactory.GetFont(FontFactory.HELVETICA, 10, new BaseColor(50, 50, 50));
+                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(255, 255, 255));
+                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 9, new BaseColor(26, 26, 46));
+                var boldCell   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(26, 26, 46));
+                var footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8, new BaseColor(120, 120, 120));
+                BaseColor headerBg  = new BaseColor(21, 101, 192);
+                BaseColor totalsBg  = new BaseColor(230, 240, 255);
+                BaseColor altBg     = new BaseColor(245, 248, 255);
+                BaseColor whiteBg   = new BaseColor(255, 255, 255);
+                BaseColor borderClr = new BaseColor(200, 200, 200);
 
-                doc.Add(new Paragraph("Item Movement Report", titleFont) { Alignment = Element.ALIGN_CENTER });
-                doc.Add(new Paragraph(clinicName, subFont) { Alignment = Element.ALIGN_CENTER });
-                doc.Add(new Paragraph($"{from:dd MMM yyyy}  –  {to:dd MMM yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 12 });
-
-                var tbl = new PdfPTable(7) { WidthPercentage = 100, SpacingBefore = 4 };
-                tbl.SetWidths(new float[] { 2.5f, 1.2f, 1.2f, 1.4f, 1.4f, 1.2f, 1.2f });
-                BaseColor headerBg = new BaseColor(21, 101, 192);
-                string[] headers = { "Brand", "Purchased", "Given", "Transferred In", "Transferred Out", "Lost", "Net Movement" };
-                foreach (var h in headers)
+                foreach (var bid in brandIds)
                 {
-                    bool right = h != "Brand";
-                    tbl.AddCell(new PdfPCell(new Phrase(h, headerFont)) { BackgroundColor = headerBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT });
+                    string itemName = brandsLookup.TryGetValue(bid, out var n) ? n : $"Brand {bid}";
+
+                    // Opening stock = all movement before `from` date
+                    int openingStock = await ComputeStockUpTo(_db, clinicId, bid, from.Date.AddDays(-1));
+
+                    // Fetch all events in range for this brand
+                    var soldRows = await _db.Schedules
+                        .Include(s => s.Child)
+                        .Where(s => s.Child.ClinicId == clinicId && s.IsDone == true
+                                 && s.BrandId == bid && s.GivenDate.HasValue
+                                 && s.GivenDate.Value.Date >= from.Date && s.GivenDate.Value.Date <= to.Date)
+                        .ToListAsync();
+
+                    var purchRows = await _db.Stocks
+                        .Include(s => s.Bill)
+                        .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId
+                                 && !s.Bill.BillNo.StartsWith("XFER-")
+                                 && s.BrandId == bid
+                                 && s.Bill.BillDate.Date >= from.Date && s.Bill.BillDate.Date <= to.Date)
+                        .ToListAsync();
+
+                    var xferInRows = await _db.StockTransfers
+                        .Where(t => t.ToClinicId == clinicId && t.BrandId == bid
+                                 && t.TransferDate.Date >= from.Date && t.TransferDate.Date <= to.Date)
+                        .ToListAsync();
+
+                    var xferOutRows = await _db.StockTransfers
+                        .Where(t => t.FromClinicId == clinicId && t.BrandId == bid
+                                 && t.TransferDate.Date >= from.Date && t.TransferDate.Date <= to.Date)
+                        .ToListAsync();
+
+                    var adjRows = await _db.AdjustStocks
+                        .Where(a => a.ClinicId == clinicId && a.BrandId == bid
+                                 && a.Date.Date >= from.Date && a.Date.Date <= to.Date)
+                        .ToListAsync();
+
+                    // Collect all active dates
+                    var activeDates = soldRows.Select(s => s.GivenDate.Value.Date)
+                        .Concat(purchRows.Select(p => p.Bill.BillDate.Date))
+                        .Concat(xferInRows.Select(t => t.TransferDate.Date))
+                        .Concat(xferOutRows.Select(t => t.TransferDate.Date))
+                        .Concat(adjRows.Select(a => a.Date.Date))
+                        .Distinct().OrderBy(d => d).ToList();
+
+                    if (activeDates.Count == 0) continue;
+
+                    // Title block
+                    doc.Add(new Paragraph("ITEM REPORT", titleFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 6 });
+                    doc.Add(new Paragraph($"ITEM: {itemName}", subFont) { Alignment = Element.ALIGN_CENTER });
+                    doc.Add(new Paragraph(clinicName, subFont) { Alignment = Element.ALIGN_CENTER });
+                    doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
+
+                    // Table: Date | Opening Stock | Sold | Direct Sale | Transfer | Purchased | Adjusted | Stock In Hand
+                    var tbl = new PdfPTable(8) { WidthPercentage = 100, SpacingBefore = 4 };
+                    tbl.SetWidths(new float[] { 1.8f, 1.4f, 1f, 1.2f, 1.2f, 1.3f, 1.2f, 1.5f });
+
+                    string[] colHeaders = { "Date", "Opening Stock", "Sold", "Direct Sale", "Transfer", "Purchased", "Adjusted", "Stock In Hand" };
+                    foreach (var h in colHeaders)
+                    {
+                        bool right = h != "Date";
+                        tbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
+                        {
+                            BackgroundColor = headerBg, Border = Rectangle.NO_BORDER,
+                            Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
+                        });
+                    }
+
+                    int running = openingStock;
+                    int totSold = 0, totDirectSale = 0, totTransfer = 0, totPurchased = 0, totAdjusted = 0;
+                    bool alt = false;
+
+                    foreach (var d in activeDates)
+                    {
+                        int dayOpening   = running;
+                        int sold         = soldRows.Count(s => s.GivenDate.Value.Date == d);
+                        int directSale   = 0; // placeholder — direct sale not yet in model
+                        int purchased    = purchRows.Where(p => p.Bill.BillDate.Date == d).Sum(p => p.Quantity);
+                        int xferNet      = xferInRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity)
+                                         - xferOutRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity);
+                        int adjusted     = adjRows.Where(a => a.Date.Date == d).Sum(a => a.Adjustment);
+                        int closing      = dayOpening - sold - directSale + xferNet + purchased + adjusted;
+
+                        totSold       += sold;
+                        totDirectSale += directSale;
+                        totTransfer   += xferNet;
+                        totPurchased  += purchased;
+                        totAdjusted   += adjusted;
+                        running        = closing;
+
+                        var bg = alt ? altBg : whiteBg;
+                        alt = !alt;
+
+                        tbl.AddCell(Cell(d.ToString("dd-MM-yyyy"), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(dayOpening.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(sold.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(directSale.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(xferNet.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(purchased.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(adjusted.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(closing.ToString(), boldCell, bg, borderClr));
+                    }
+
+                    // Totals row
+                    tbl.AddCell(new PdfPCell(new Phrase("Totals", boldCell)) { BackgroundColor = totalsBg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4 });
+                    tbl.AddCell(CellR(openingStock.ToString(), boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(totSold.ToString(), boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(totDirectSale.ToString(), boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(totTransfer.ToString(), boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(totPurchased.ToString(), boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(totAdjusted.ToString(), boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(running.ToString(), boldCell, totalsBg, borderClr));
+
+                    doc.Add(tbl);
+                    doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8 });
+
+                    if (bid != brandIds.Last()) doc.NewPage();
                 }
 
-                bool alt = false;
-                foreach (var bid in allBrandIds)
-                {
-                    var br = brands.FirstOrDefault(b => b.Id == bid);
-                    string bName = br != null ? br.Name : $"Brand {bid}";
-                    int purchased = purchases.Where(p => p.BrandId == bid).Sum(p => p.Quantity);
-                    int givenQty  = given.Where(s => s.BrandId == bid).Count();
-                    int tIn       = xferIn.Where(t => t.BrandId == bid).Sum(t => t.Quantity);
-                    int tOut      = xferOut.Where(t => t.BrandId == bid).Sum(t => t.Quantity);
-                    int lost      = Math.Abs(losses.Where(a => a.BrandId == bid).Sum(a => a.Adjustment));
-                    int net       = purchased + tIn - givenQty - tOut - lost;
-
-                    var bg = alt ? new BaseColor(240, 245, 255) : new BaseColor(255, 255, 255);
-                    alt = !alt;
-
-                    Font netFont = net < 0 ? FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8, new BaseColor(198, 40, 40)) : boldCell;
-
-                    tbl.AddCell(new PdfPCell(new Phrase(bName, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4 });
-                    tbl.AddCell(new PdfPCell(new Phrase(purchased.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    tbl.AddCell(new PdfPCell(new Phrase(givenQty.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    tbl.AddCell(new PdfPCell(new Phrase(tIn.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    tbl.AddCell(new PdfPCell(new Phrase(tOut.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    tbl.AddCell(new PdfPCell(new Phrase(lost.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    tbl.AddCell(new PdfPCell(new Phrase((net >= 0 ? "+" : "") + net.ToString(), netFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                }
-                doc.Add(tbl);
                 doc.Close();
                 writer.Close();
-                string fname = brandId > 0 ? $"ItemReport-Brand{brandId}-{from:yyyyMMdd}-{to:yyyyMMdd}.pdf" : $"ItemReport-All-{from:yyyyMMdd}-{to:yyyyMMdd}.pdf";
+                string fname = brandId > 0
+                    ? $"ItemsReport_{clinicId}_{brandId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf"
+                    : $"ItemsReport_{clinicId}_All_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf";
                 return File(ms.ToArray(), "application/pdf", fname);
             }
+        }
+
+        private static PdfPCell Cell(string text, Font font, BaseColor bg, BaseColor border) =>
+            new PdfPCell(new Phrase(text, font)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = border, Padding = 4, HorizontalAlignment = Element.ALIGN_LEFT };
+
+        private static PdfPCell CellR(string text, Font font, BaseColor bg, BaseColor border) =>
+            new PdfPCell(new Phrase(text, font)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = border, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT };
+
+        private static async Task<int> ComputeStockUpTo(Context db, long clinicId, long brandId, DateTime upTo)
+        {
+            int purchased = await db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId
+                         && !s.Bill.BillNo.StartsWith("XFER-")
+                         && s.BrandId == brandId && s.Bill.BillDate.Date <= upTo.Date)
+                .SumAsync(s => (int?)s.Quantity) ?? 0;
+
+            int sold = await db.Schedules
+                .Include(s => s.Child)
+                .Where(s => s.Child.ClinicId == clinicId && s.IsDone == true
+                         && s.BrandId == brandId && s.GivenDate.HasValue
+                         && s.GivenDate.Value.Date <= upTo.Date)
+                .CountAsync();
+
+            int xferIn = await db.StockTransfers
+                .Where(t => t.ToClinicId == clinicId && t.BrandId == brandId && t.TransferDate.Date <= upTo.Date)
+                .SumAsync(t => (int?)t.Quantity) ?? 0;
+
+            int xferOut = await db.StockTransfers
+                .Where(t => t.FromClinicId == clinicId && t.BrandId == brandId && t.TransferDate.Date <= upTo.Date)
+                .SumAsync(t => (int?)t.Quantity) ?? 0;
+
+            int adjusted = await db.AdjustStocks
+                .Where(a => a.ClinicId == clinicId && a.BrandId == brandId && a.Date.Date <= upTo.Date)
+                .SumAsync(a => (int?)a.Adjustment) ?? 0;
+
+            return purchased + xferIn - sold - xferOut + adjusted;
         }
 
         // GET /api/stock/items-purchase-report?clinicId=X&brandId=X&from=DATE&to=DATE

@@ -683,7 +683,7 @@ namespace VaccineAPI.Controllers
             [FromQuery] DateTime from,
             [FromQuery] DateTime to)
         {
-            var clinic = await _db.Clinics.FindAsync(clinicId);
+            var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == clinicId);
             string clinicName = clinic != null ? clinic.Name : $"Clinic {clinicId}";
 
             var query = _db.Stocks
@@ -700,56 +700,107 @@ namespace VaccineAPI.Controllers
             if (lines.Count == 0)
                 return NotFound(new { IsSuccess = false, Message = "No purchase data for the selected period" });
 
+            // When a single brand is selected, use its name as subtitle
+            string itemName = brandId > 0 && lines.Count > 0 && lines[0].Brand != null
+                ? lines[0].Brand.Name.ToUpper()
+                : "ALL ITEMS";
+
+            bool singleBrand = brandId > 0;
+
             using (var ms = new MemoryStream())
             {
                 var doc = new Document(PageSize.A4, 30, 30, 40, 30);
                 var writer = PdfWriter.GetInstance(doc, ms);
                 doc.Open();
 
-                var titleFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
-                var subFont    = FontFactory.GetFont(FontFactory.HELVETICA, 9, new BaseColor(84, 110, 122));
+                var titleFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13, new BaseColor(21, 101, 192));
+                var itemFont   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11, new BaseColor(26, 26, 46));
+                var subFont    = FontFactory.GetFont(FontFactory.HELVETICA, 9,  new BaseColor(84, 110, 122));
                 var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(255, 255, 255));
-                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 9, new BaseColor(26, 26, 46));
+                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 9,  new BaseColor(26, 26, 46));
                 var boldCell   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(26, 26, 46));
+                var footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(120, 120, 120));
 
-                doc.Add(new Paragraph("Item Purchase Report", titleFont) { Alignment = Element.ALIGN_CENTER });
-                doc.Add(new Paragraph(clinicName, subFont) { Alignment = Element.ALIGN_CENTER });
-                doc.Add(new Paragraph($"{from:dd MMM yyyy}  –  {to:dd MMM yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 12 });
+                // Clinic header block
+                doc.Add(new Paragraph(clinicName, titleFont) { Alignment = Element.ALIGN_CENTER });
+                if (!string.IsNullOrWhiteSpace(clinic?.Address))
+                    doc.Add(new Paragraph(clinic.Address, subFont) { Alignment = Element.ALIGN_CENTER });
+                if (!string.IsNullOrWhiteSpace(clinic?.PhoneNumber))
+                    doc.Add(new Paragraph(clinic.PhoneNumber, subFont) { Alignment = Element.ALIGN_CENTER });
 
-                var tbl = new PdfPTable(7) { WidthPercentage = 100, SpacingBefore = 4 };
-                tbl.SetWidths(new float[] { 1.8f, 1.4f, 2f, 2f, 1f, 1.4f, 1.4f });
+                doc.Add(new Paragraph(" ") { SpacingAfter = 4 });
+                doc.Add(new Paragraph("PURCHASE REPORT (ITEM WISE)", titleFont) { Alignment = Element.ALIGN_CENTER });
+                doc.Add(new Paragraph(itemName, itemFont) { Alignment = Element.ALIGN_CENTER });
+                doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy} TO {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 12 });
+
+                // Columns: Date | Invoice | Supplier | [Brand if all-items] | Quantity | Rate | Total Amount
+                int colCount = singleBrand ? 6 : 7;
+                float[] widths = singleBrand
+                    ? new float[] { 1.6f, 1.8f, 2.4f, 1f, 1.4f, 1.6f }
+                    : new float[] { 1.4f, 1.6f, 2f, 1.8f, 0.9f, 1.3f, 1.4f };
+
+                var tbl = new PdfPTable(colCount) { WidthPercentage = 100, SpacingBefore = 4 };
+                tbl.SetWidths(widths);
                 BaseColor headerBg = new BaseColor(21, 101, 192);
-                string[] headers = { "Bill No", "Date", "Supplier", "Brand", "Qty", "Unit Price", "Total" };
+                BaseColor borderClr = new BaseColor(220, 220, 220);
+
+                var headers = singleBrand
+                    ? new[] { "Date", "Invoice", "Supplier", "Quantity", "Rate", "Total Amount" }
+                    : new[] { "Date", "Invoice", "Supplier", "Brand", "Quantity", "Rate", "Total Amount" };
+
                 foreach (var h in headers)
                 {
-                    bool right = h == "Qty" || h == "Unit Price" || h == "Total";
-                    tbl.AddCell(new PdfPCell(new Phrase(h, headerFont)) { BackgroundColor = headerBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT });
+                    bool right = h == "Quantity" || h == "Rate" || h == "Total Amount";
+                    tbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
+                    {
+                        BackgroundColor = headerBg, Border = Rectangle.NO_BORDER,
+                        Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
+                    });
                 }
 
                 bool alt = false;
                 decimal grandTotal = 0;
+                int totalQty = 0;
+
                 foreach (var s in lines)
                 {
                     var bg = alt ? new BaseColor(240, 245, 255) : new BaseColor(255, 255, 255);
                     alt = !alt;
                     decimal lineTotal = s.StockAmount * s.OriginalQuantity;
                     grandTotal += lineTotal;
+                    totalQty   += s.OriginalQuantity;
 
-                    tbl.AddCell(new PdfPCell(new Phrase(s.Bill.BillNo, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4 });
-                    tbl.AddCell(new PdfPCell(new Phrase(s.Bill.BillDate.ToString("dd MMM yyyy"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4 });
-                    tbl.AddCell(new PdfPCell(new Phrase(s.Bill.Supplier ?? "", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4 });
-                    tbl.AddCell(new PdfPCell(new Phrase(s.Brand != null ? s.Brand.Name : "", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4 });
-                    tbl.AddCell(new PdfPCell(new Phrase(s.OriginalQuantity.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    tbl.AddCell(new PdfPCell(new Phrase(s.StockAmount.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    tbl.AddCell(new PdfPCell(new Phrase(lineTotal.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
+                    tbl.AddCell(new PdfPCell(new Phrase(s.Bill.BillDate.ToString("dd-MM-yyyy"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4 });
+                    tbl.AddCell(new PdfPCell(new Phrase(s.Bill.BillNo, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4 });
+                    tbl.AddCell(new PdfPCell(new Phrase(s.Bill.Supplier ?? "", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4 });
+                    if (!singleBrand)
+                        tbl.AddCell(new PdfPCell(new Phrase(s.Brand != null ? s.Brand.Name : "", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4 });
+                    tbl.AddCell(new PdfPCell(new Phrase(s.OriginalQuantity.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
+                    tbl.AddCell(new PdfPCell(new Phrase(s.StockAmount.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
+                    tbl.AddCell(new PdfPCell(new Phrase(lineTotal.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
                 }
 
-                tbl.AddCell(new PdfPCell(new Phrase("Grand Total", boldCell)) { Colspan = 6, Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
-                tbl.AddCell(new PdfPCell(new Phrase(grandTotal.ToString("N2"), boldCell)) { Border = Rectangle.NO_BORDER, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
                 doc.Add(tbl);
+
+                // Footer: Total Amount | Average Rate
+                decimal avgRate = totalQty > 0 ? Math.Round(grandTotal / totalQty, 2) : 0;
+                var footerTbl = new PdfPTable(1) { WidthPercentage = 100, SpacingBefore = 6 };
+                footerTbl.AddCell(new PdfPCell(new Phrase(
+                    $"Total Amount: {grandTotal:N2} | Average Rate: {avgRate:N2}", boldCell))
+                {
+                    Border = Rectangle.NO_BORDER, Padding = 4,
+                    HorizontalAlignment = Element.ALIGN_RIGHT
+                });
+                doc.Add(footerTbl);
+
+                doc.Add(new Paragraph($"Printed on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
+
                 doc.Close();
                 writer.Close();
-                return File(ms.ToArray(), "application/pdf", $"PurchaseReport-{from:yyyyMMdd}-{to:yyyyMMdd}.pdf");
+                string fname = singleBrand
+                    ? $"ItemsWisePurchaseReport_{clinicId}_{brandId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf"
+                    : $"PurchaseReport_{clinicId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf";
+                return File(ms.ToArray(), "application/pdf", fname);
             }
         }
 

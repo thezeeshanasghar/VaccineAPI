@@ -41,6 +41,7 @@ namespace VaccineAPI.Models
         public bool AllowHomeBooking { get; set; }
         public bool AllowClinicBooking { get; set; }
         public bool AllowAnalytics { get; set; }
+        public bool AllowAssistant { get; set; }
         public int SMSLimit { get; set; }
         public string DoctorType { get; set; } = "";
         public string? Qualification { get; set; }

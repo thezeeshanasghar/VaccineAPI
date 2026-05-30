@@ -211,9 +211,7 @@ namespace VaccineAPI.Controllers
             [FromQuery] DateTime from,
             [FromQuery] DateTime to)
         {
-            var clinic = await _db.Clinics
-                .Include(c => c.Doctor)
-                .FirstOrDefaultAsync(c => c.Id == clinicId);
+            var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == clinicId);
             if (clinic == null)
                 return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
 
@@ -263,31 +261,14 @@ namespace VaccineAPI.Controllers
                 var writer = PdfWriter.GetInstance(doc, ms);
                 doc.Open();
 
-                var titleFont   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
-                var subFont     = FontFactory.GetFont(FontFactory.HELVETICA, 9,  new BaseColor(84, 110, 122));
-                var headerFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(255, 255, 255));
-                var cellFont    = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(26, 26, 46));
-                var boldCell    = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(26, 26, 46));
-                var smallBold   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9,  new BaseColor(26, 26, 46));
-                var smallNormal = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(84, 110, 122));
-
-                // Doctor + clinic header (right-aligned block)
-                var doctor = clinic.Doctor;
-                if (doctor != null)
-                {
-                    doc.Add(new Paragraph(!string.IsNullOrWhiteSpace(doctor.DisplayName) ? doctor.DisplayName : doctor.FirstName, smallBold) { Alignment = Element.ALIGN_RIGHT });
-                    if (!string.IsNullOrWhiteSpace(doctor.Qualification))
-                        doc.Add(new Paragraph(doctor.Qualification, smallNormal) { Alignment = Element.ALIGN_RIGHT });
-                    if (!string.IsNullOrWhiteSpace(doctor.AdditionalInfo))
-                        doc.Add(new Paragraph(doctor.AdditionalInfo, smallNormal) { Alignment = Element.ALIGN_RIGHT });
-                }
-                doc.Add(new Paragraph(clinic.Name, smallBold) { Alignment = Element.ALIGN_RIGHT });
-                if (!string.IsNullOrWhiteSpace(clinic.Address))
-                    doc.Add(new Paragraph(clinic.Address, smallNormal) { Alignment = Element.ALIGN_RIGHT });
-                if (!string.IsNullOrWhiteSpace(clinic.PhoneNumber))
-                    doc.Add(new Paragraph(clinic.PhoneNumber, smallNormal) { Alignment = Element.ALIGN_RIGHT, SpacingAfter = 8 });
+                var titleFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
+                var subFont    = FontFactory.GetFont(FontFactory.HELVETICA, 9,  new BaseColor(84, 110, 122));
+                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(255, 255, 255));
+                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(26, 26, 46));
+                var boldCell   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(26, 26, 46));
 
                 doc.Add(new Paragraph("Sales Report", titleFont) { Alignment = Element.ALIGN_CENTER });
+                doc.Add(new Paragraph(clinic.Name, subFont) { Alignment = Element.ALIGN_CENTER });
                 doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy} TO {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 6 });
 
                 // Pre-calculate totals for summary header
@@ -395,11 +376,6 @@ namespace VaccineAPI.Controllers
 
                 doc.Add(mainTbl);
 
-                // Footer summary
-                doc.Add(new Paragraph($"\nTotal Patients: {totalPatients}", boldCell));
-                doc.Add(new Paragraph($"Total Vaccination Fee: {totalVaxFee:N2}", boldCell));
-                doc.Add(new Paragraph($"Total Items Price: {totalItemsPrice:N2}", boldCell));
-                doc.Add(new Paragraph($"Grand Total Cash: {grandTotal:N2}", boldCell));
                 doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", subFont));
 
                 doc.Close();

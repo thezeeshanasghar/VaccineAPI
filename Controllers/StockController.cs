@@ -237,15 +237,27 @@ namespace VaccineAPI.Controllers
                 .Where(b => b.ClinicId == clinicId && brandIds.Contains(b.BrandId))
                 .ToListAsync();
 
-            // Consultation fees from InvoiceSubmissions (actual invoiced fee per patient per day)
-            // Match on DoctorId+ChildId — ClinicId may be null on older rows written before the fix
+            // Vaccination fees — primary: InvoiceSubmissions; fallback: Fee table via Invoice
             var childIds = schedules.Select(s => s.ChildId).Distinct().ToList();
             long doctorId = clinic.DoctorId;
+
             var invoiceSubs = await _db.InvoiceSubmissions
                 .Where(x => x.DoctorId == doctorId
                           && childIds.Contains(x.ChildId)
                           && x.InvoiceDate.Date >= from.Date
                           && x.InvoiceDate.Date <= to.Date)
+                .ToListAsync();
+
+            // Fee table fallback: join Invoice → Fee to get vaccination charge per patient per day
+            // This covers doctor-generated invoices where InvoiceSubmission may not exist yet
+            var invoiceRecords = await _db.Invoices
+                .Where(i => i.ClinicId == clinicId
+                          && childIds.Contains(i.ChildId)
+                          && !i.IsVoided)
+                .ToListAsync();
+            var invoiceIds = invoiceRecords.Select(i => i.InvoiceId).Distinct().ToList();
+            var feeRecords = await _db.Fee
+                .Where(f => invoiceIds.Contains(f.InvoiceId))
                 .ToListAsync();
 
             // Group by patient+day
@@ -278,9 +290,7 @@ namespace VaccineAPI.Controllers
 
                 foreach (var visit in patientVisits)
                 {
-                    var sub = invoiceSubs.FirstOrDefault(x =>
-                        x.ChildId == visit.Key.ChildId && x.InvoiceDate.Date == visit.Key.Date);
-                    decimal consFee = sub != null ? sub.ConsultationFee : 0;
+                    decimal consFee = ResolveVaccinationFee(visit.Key.ChildId, visit.Key.Date, invoiceSubs, invoiceRecords, feeRecords);
                     totalVaxFee += consFee;
                     foreach (var s in visit)
                     {
@@ -326,9 +336,7 @@ namespace VaccineAPI.Controllers
                 foreach (var visit in patientVisits)
                 {
                     var scheduleRows = visit.OrderBy(s => s.Brand != null ? s.Brand.Name : "").ToList();
-                    var sub = invoiceSubs.FirstOrDefault(x =>
-                        x.ChildId == visit.Key.ChildId && x.InvoiceDate.Date == visit.Key.Date);
-                    decimal consFee = sub != null ? sub.ConsultationFee : 0;
+                    decimal consFee = ResolveVaccinationFee(visit.Key.ChildId, visit.Key.Date, invoiceSubs, invoiceRecords, feeRecords);
                     string patientName = scheduleRows.Count > 0 && scheduleRows[0].Child != null ? scheduleRows[0].Child.Name : "";
                     string visitDate = visit.Key.Date.ToString("dd-MM-yyyy");
 
@@ -696,5 +704,27 @@ namespace VaccineAPI.Controllers
                 return File(ms.ToArray(), "application/pdf", $"SupplierReport-{from:yyyyMMdd}-{to:yyyyMMdd}.pdf");
             }
         }
+    // Returns the vaccination fee for a patient visit.
+    // Primary: InvoiceSubmission (written after the 2026-05-30 fix)
+    // Fallback: Fee table (written when any invoice PDF is generated — works for all historical invoices)
+    private static decimal ResolveVaccinationFee(
+        long childId, DateTime visitDate,
+        List<InvoiceSubmission> invoiceSubs,
+        List<Invoice> invoiceRecords,
+        List<Fee> feeRecords)
+    {
+        var sub = invoiceSubs.FirstOrDefault(x =>
+            x.ChildId == childId && x.InvoiceDate.Date == visitDate.Date);
+        if (sub != null && sub.ConsultationFee != 0)
+            return sub.ConsultationFee;
+
+        // Fallback: find Invoice rows for this child, get their Fee records
+        var childInvoiceIds = invoiceRecords
+            .Where(i => i.ChildId == childId)
+            .Select(i => i.InvoiceId)
+            .ToList();
+        var fee = feeRecords.FirstOrDefault(f => childInvoiceIds.Contains(f.InvoiceId));
+        return fee != null ? fee.Amount : 0;
+    }
     }
 }

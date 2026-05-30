@@ -354,6 +354,9 @@ namespace VaccineAPI.Migrations
                     b.Property<bool>("AllowAnalytics")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("AllowAssistant")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("longtext");

@@ -1417,14 +1417,17 @@ namespace VaccineAPI.Controllers
         [HttpPut("update-bulk-invoice")]
         public Response<object> updateInvoice([FromBody] BulkInvoiceSubmitDTO dto)
         {
-            if (dto.PaId.HasValue)
-            {
-                var existing = _db.InvoiceSubmissions.FirstOrDefault(x =>
-                    x.ChildId == dto.ChildId &&
-                    x.DoctorId == dto.DoctorId &&
-                    x.InvoiceDate.Date == dto.InvoiceDate.Date);
+            // Always upsert the InvoiceSubmission so vaccination fee is recorded
+            // regardless of whether caller is a PA or doctor (PaId may be null for doctor)
+            var existing = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                x.ChildId == dto.ChildId &&
+                x.DoctorId == dto.DoctorId &&
+                x.InvoiceDate.Date == dto.InvoiceDate.Date);
 
-                if (existing != null)
+            if (existing != null)
+            {
+                // PA-specific edit restrictions
+                if (dto.PaId.HasValue)
                 {
                     if (existing.EditCount >= 1)
                         return new Response<object>(false, "Invoice has already been edited once. Further changes are not allowed.", null);
@@ -1436,9 +1439,6 @@ namespace VaccineAPI.Controllers
                         return new Response<object>(false, "Only the PA who submitted this invoice can edit it.", null);
 
                     existing.EditCount++;
-                    existing.ConsultationFee = dto.ConsultationFee;
-                    _db.Entry(existing).State = EntityState.Modified;
-
                     _db.PaActivityLogs.Add(new PaActivityLog
                     {
                         PaId = dto.PaId.Value,
@@ -1452,20 +1452,28 @@ namespace VaccineAPI.Controllers
                         ActionDate = DateTime.UtcNow
                     });
                 }
-                else
-                {
-                    _db.InvoiceSubmissions.Add(new InvoiceSubmission
-                    {
-                        ChildId = dto.ChildId,
-                        DoctorId = dto.DoctorId,
-                        PaId = dto.PaId,
-                        ClinicId = dto.ClinicId,
-                        InvoiceDate = dto.InvoiceDate.Date,
-                        SubmittedAt = DateTime.UtcNow,
-                        ConsultationFee = dto.ConsultationFee,
-                        EditCount = 0
-                    });
 
+                existing.ConsultationFee = dto.ConsultationFee;
+                if (dto.ClinicId.HasValue && existing.ClinicId == null)
+                    existing.ClinicId = dto.ClinicId;
+                _db.Entry(existing).State = EntityState.Modified;
+            }
+            else
+            {
+                _db.InvoiceSubmissions.Add(new InvoiceSubmission
+                {
+                    ChildId = dto.ChildId,
+                    DoctorId = dto.DoctorId,
+                    PaId = dto.PaId,
+                    ClinicId = dto.ClinicId,
+                    InvoiceDate = dto.InvoiceDate.Date,
+                    SubmittedAt = DateTime.UtcNow,
+                    ConsultationFee = dto.ConsultationFee,
+                    EditCount = 0
+                });
+
+                if (dto.PaId.HasValue)
+                {
                     _db.PaActivityLogs.Add(new PaActivityLog
                     {
                         PaId = dto.PaId.Value,

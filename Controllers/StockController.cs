@@ -240,9 +240,11 @@ namespace VaccineAPI.Controllers
                 .ToListAsync();
 
             // Consultation fees from InvoiceSubmissions (actual invoiced fee per patient per day)
+            // Match on DoctorId+ChildId — ClinicId may be null on older rows written before the fix
             var childIds = schedules.Select(s => s.ChildId).Distinct().ToList();
+            long doctorId = clinic.DoctorId;
             var invoiceSubs = await _db.InvoiceSubmissions
-                .Where(x => x.ClinicId == clinicId
+                .Where(x => x.DoctorId == doctorId
                           && childIds.Contains(x.ChildId)
                           && x.InvoiceDate.Date >= from.Date
                           && x.InvoiceDate.Date <= to.Date)
@@ -325,7 +327,7 @@ namespace VaccineAPI.Controllers
                 // Per-patient detail table
                 BaseColor headerBg = new BaseColor(21, 101, 192);
                 float[] colWidths = { 1.4f, 2.2f, 1.4f, 2.2f, 0.6f, 1.2f };
-                string[] colHeaders = { "Date", "Patient", "Consult. Fee", "Item", "Qty", "Price" };
+                string[] colHeaders = { "Date", "Patient", "Vaccination Fee", "Item", "Qty", "Price" };
 
                 var mainTbl = new PdfPTable(6) { WidthPercentage = 100, SpacingBefore = 4 };
                 mainTbl.SetWidths(colWidths);

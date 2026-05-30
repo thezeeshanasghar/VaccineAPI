@@ -228,9 +228,6 @@ namespace VaccineAPI.Controllers
                 .ThenBy(s => s.Child.Name)
                 .ToListAsync();
 
-            if (schedules.Count == 0)
-                return NotFound(new { IsSuccess = false, Message = "No sales data for the selected period" });
-
             // Fallback prices from BrandAmounts
             var brandIds = schedules.Where(s => s.BrandId.HasValue).Select(s => s.BrandId.Value).Distinct().ToList();
             var brandAmounts = await _db.BrandAmounts
@@ -260,6 +257,19 @@ namespace VaccineAPI.Controllers
                 .Where(f => invoiceIds.Contains(f.InvoiceId))
                 .ToListAsync();
 
+            // Direct (walk-in) sales
+            var directSales = await _db.DirectSales
+                .Include(d => d.Brand)
+                .Where(d => d.ClinicId == clinicId
+                         && d.SaleDate.Date >= from.Date
+                         && d.SaleDate.Date <= to.Date)
+                .OrderBy(d => d.SaleDate)
+                .ThenBy(d => d.ClientName)
+                .ToListAsync();
+
+            if (schedules.Count == 0 && directSales.Count == 0)
+                return NotFound(new { IsSuccess = false, Message = "No sales data for the selected period" });
+
             // Group by patient+day
             var patientVisits = schedules
                 .GroupBy(s => new { s.ChildId, Date = s.GivenDate!.Value.Date })
@@ -273,17 +283,18 @@ namespace VaccineAPI.Controllers
                 var writer = PdfWriter.GetInstance(doc, ms);
                 doc.Open();
 
-                var titleFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
-                var subFont    = FontFactory.GetFont(FontFactory.HELVETICA, 9,  new BaseColor(84, 110, 122));
-                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(255, 255, 255));
-                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(26, 26, 46));
-                var boldCell   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(26, 26, 46));
+                var titleFont   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
+                var subFont     = FontFactory.GetFont(FontFactory.HELVETICA, 9,  new BaseColor(84, 110, 122));
+                var headerFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(255, 255, 255));
+                var cellFont    = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(26, 26, 46));
+                var boldCell    = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(26, 26, 46));
+                var sectionFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9,  new BaseColor(21, 101, 192));
 
                 doc.Add(new Paragraph("Sales Report", titleFont) { Alignment = Element.ALIGN_CENTER });
                 doc.Add(new Paragraph(clinic.Name, subFont) { Alignment = Element.ALIGN_CENTER });
                 doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy} TO {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 6 });
 
-                // Pre-calculate totals for summary header
+                // Pre-calculate totals
                 decimal totalVaxFee = 0;
                 decimal totalItemsPrice = 0;
                 int totalPatients = patientVisits.Count;
@@ -300,6 +311,9 @@ namespace VaccineAPI.Controllers
                         totalItemsPrice += price;
                     }
                 }
+                foreach (var ds in directSales)
+                    totalItemsPrice += ds.TotalSaleValue;
+
                 decimal grandTotal = totalVaxFee + totalItemsPrice;
 
                 // Summary block
@@ -315,20 +329,29 @@ namespace VaccineAPI.Controllers
                     sumTbl.AddCell(new PdfPCell(new Phrase(v, boldCell)) { BackgroundColor = sumValBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = Element.ALIGN_CENTER });
                 doc.Add(sumTbl);
 
-                // Per-patient detail table
                 BaseColor headerBg = new BaseColor(21, 101, 192);
                 float[] colWidths = { 1.4f, 2.2f, 1.4f, 2.2f, 0.6f, 1.2f };
-                string[] colHeaders = { "Date", "Patient", "Vaccination Fee", "Item", "Qty", "Price" };
+                string[] colHeaders = { "Date", "Patient / Client", "Vaccination Fee", "Item", "Qty", "Price" };
 
                 var mainTbl = new PdfPTable(6) { WidthPercentage = 100, SpacingBefore = 4 };
                 mainTbl.SetWidths(colWidths);
                 foreach (var h in colHeaders)
                 {
-                    bool right = h == "Consult. Fee" || h == "Qty" || h == "Price";
+                    bool right = h == "Vaccination Fee" || h == "Qty" || h == "Price";
                     mainTbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
                     {
                         BackgroundColor = headerBg, Border = Rectangle.NO_BORDER,
                         Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
+                    });
+                }
+
+                // --- Patient vaccination rows ---
+                if (patientVisits.Count > 0)
+                {
+                    mainTbl.AddCell(new PdfPCell(new Phrase("Patient Vaccinations", sectionFont))
+                    {
+                        Colspan = 6, BackgroundColor = new BaseColor(232, 240, 254),
+                        Border = Rectangle.NO_BORDER, Padding = 4
                     });
                 }
 
@@ -372,11 +395,46 @@ namespace VaccineAPI.Controllers
                         mainTbl.AddCell(new PdfPCell(new Phrase(price == 0 ? "-" : price.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
                     }
 
-                    // Per-patient subtotal row
                     var subtotalBg = new BaseColor(224, 235, 252);
                     mainTbl.AddCell(new PdfPCell(new Phrase($"Total for {patientName}: {patientTotal:N2}", boldCell))
                     {
                         Colspan = 6, BackgroundColor = subtotalBg,
+                        Border = Rectangle.NO_BORDER, Padding = 4,
+                        HorizontalAlignment = Element.ALIGN_RIGHT
+                    });
+                }
+
+                // --- Direct (walk-in) sales rows ---
+                if (directSales.Count > 0)
+                {
+                    mainTbl.AddCell(new PdfPCell(new Phrase("Direct / Walk-in Sales", sectionFont))
+                    {
+                        Colspan = 6, BackgroundColor = new BaseColor(232, 240, 254),
+                        Border = Rectangle.NO_BORDER, Padding = 4, PaddingTop = 10
+                    });
+
+                    bool altDs = false;
+                    foreach (var ds in directSales)
+                    {
+                        var bg = altDs ? new BaseColor(240, 245, 255) : new BaseColor(255, 255, 255);
+                        altDs = !altDs;
+                        string dsDate  = ds.SaleDate.ToString("dd-MM-yyyy");
+                        string dsName  = !string.IsNullOrWhiteSpace(ds.ClientName) ? ds.ClientName : "Walk-in";
+                        string dsBrand = ds.Brand != null ? ds.Brand.Name : "";
+
+                        mainTbl.AddCell(new PdfPCell(new Phrase(dsDate, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                        mainTbl.AddCell(new PdfPCell(new Phrase(dsName, boldCell)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                        mainTbl.AddCell(new PdfPCell(new Phrase("-", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                        mainTbl.AddCell(new PdfPCell(new Phrase(dsBrand, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                        mainTbl.AddCell(new PdfPCell(new Phrase(ds.Quantity.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                        mainTbl.AddCell(new PdfPCell(new Phrase(ds.TotalSaleValue.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                    }
+
+                    var dsTotalBg = new BaseColor(224, 235, 252);
+                    decimal dsTotalAmt = directSales.Sum(d => d.TotalSaleValue);
+                    mainTbl.AddCell(new PdfPCell(new Phrase($"Total Direct Sales: {dsTotalAmt:N2}", boldCell))
+                    {
+                        Colspan = 6, BackgroundColor = dsTotalBg,
                         Border = Rectangle.NO_BORDER, Padding = 4,
                         HorizontalAlignment = Element.ALIGN_RIGHT
                     });

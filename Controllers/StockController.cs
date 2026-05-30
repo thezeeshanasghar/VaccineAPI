@@ -255,153 +255,155 @@ namespace VaccineAPI.Controllers
                 .ThenBy(g => g.First().Child?.Name)
                 .ToList();
 
-            using var ms = new MemoryStream();
-            var doc = new Document(PageSize.A4, 36, 36, 50, 36);
-            var writer = PdfWriter.GetInstance(doc, ms);
-            doc.Open();
-
-            var titleFont    = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
-            var subFont      = FontFactory.GetFont(FontFactory.HELVETICA, 9,  new BaseColor(84, 110, 122));
-            var headerFont   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(255, 255, 255));
-            var cellFont     = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(26, 26, 46));
-            var boldCell     = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(26, 26, 46));
-            var smallBold    = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9,  new BaseColor(26, 26, 46));
-            var smallNormal  = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(84, 110, 122));
-
-            // Doctor + clinic header (right-aligned block)
-            var doctor = clinic.Doctor;
-            if (doctor != null)
+            using (var ms = new MemoryStream())
             {
-                doc.Add(new Paragraph(doctor.DisplayName ?? doctor.FirstName, smallBold) { Alignment = Element.ALIGN_RIGHT });
-                if (!string.IsNullOrWhiteSpace(doctor.Qualification))
-                    doc.Add(new Paragraph(doctor.Qualification, smallNormal) { Alignment = Element.ALIGN_RIGHT });
-                if (!string.IsNullOrWhiteSpace(doctor.AdditionalInfo))
-                    doc.Add(new Paragraph(doctor.AdditionalInfo, smallNormal) { Alignment = Element.ALIGN_RIGHT });
-            }
-            doc.Add(new Paragraph(clinic.Name, smallBold) { Alignment = Element.ALIGN_RIGHT });
-            if (!string.IsNullOrWhiteSpace(clinic.Address))
-                doc.Add(new Paragraph(clinic.Address, smallNormal) { Alignment = Element.ALIGN_RIGHT });
-            if (!string.IsNullOrWhiteSpace(clinic.PhoneNumber))
-                doc.Add(new Paragraph(clinic.PhoneNumber, smallNormal) { Alignment = Element.ALIGN_RIGHT, SpacingAfter = 8 });
+                var doc = new Document(PageSize.A4, 36, 36, 50, 36);
+                var writer = PdfWriter.GetInstance(doc, ms);
+                doc.Open();
 
-            doc.Add(new Paragraph("Sales Report", titleFont) { Alignment = Element.ALIGN_CENTER });
-            doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy} TO {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 6 });
+                var titleFont   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
+                var subFont     = FontFactory.GetFont(FontFactory.HELVETICA, 9,  new BaseColor(84, 110, 122));
+                var headerFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(255, 255, 255));
+                var cellFont    = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(26, 26, 46));
+                var boldCell    = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8,  new BaseColor(26, 26, 46));
+                var smallBold   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9,  new BaseColor(26, 26, 46));
+                var smallNormal = FontFactory.GetFont(FontFactory.HELVETICA, 8,  new BaseColor(84, 110, 122));
 
-            // Pre-calculate totals for summary header
-            decimal totalVaxFee = 0;
-            decimal totalItemsPrice = 0;
-            int totalPatients = patientVisits.Count;
-
-            foreach (var visit in patientVisits)
-            {
-                var sub = invoiceSubs.FirstOrDefault(x =>
-                    x.ChildId == visit.Key.ChildId && x.InvoiceDate.Date == visit.Key.Date);
-                decimal consFee = sub?.ConsultationFee ?? 0;
-                totalVaxFee += consFee;
-                foreach (var s in visit)
+                // Doctor + clinic header (right-aligned block)
+                var doctor = clinic.Doctor;
+                if (doctor != null)
                 {
-                    bool hasAmount = s.Amount.HasValue && s.Amount.Value != 0;
-                    decimal price = hasAmount ? s.Amount.Value
-                        : (brandAmounts.FirstOrDefault(b => b.BrandId == s.BrandId!.Value)?.Amount ?? 0);
-                    totalItemsPrice += price;
+                    doc.Add(new Paragraph(!string.IsNullOrWhiteSpace(doctor.DisplayName) ? doctor.DisplayName : doctor.FirstName, smallBold) { Alignment = Element.ALIGN_RIGHT });
+                    if (!string.IsNullOrWhiteSpace(doctor.Qualification))
+                        doc.Add(new Paragraph(doctor.Qualification, smallNormal) { Alignment = Element.ALIGN_RIGHT });
+                    if (!string.IsNullOrWhiteSpace(doctor.AdditionalInfo))
+                        doc.Add(new Paragraph(doctor.AdditionalInfo, smallNormal) { Alignment = Element.ALIGN_RIGHT });
                 }
-            }
-            decimal grandTotal = totalVaxFee + totalItemsPrice;
+                doc.Add(new Paragraph(clinic.Name, smallBold) { Alignment = Element.ALIGN_RIGHT });
+                if (!string.IsNullOrWhiteSpace(clinic.Address))
+                    doc.Add(new Paragraph(clinic.Address, smallNormal) { Alignment = Element.ALIGN_RIGHT });
+                if (!string.IsNullOrWhiteSpace(clinic.PhoneNumber))
+                    doc.Add(new Paragraph(clinic.PhoneNumber, smallNormal) { Alignment = Element.ALIGN_RIGHT, SpacingAfter = 8 });
 
-            // Summary block
-            var sumTbl = new PdfPTable(4) { WidthPercentage = 100, SpacingAfter = 10 };
-            sumTbl.SetWidths(new float[] { 1.5f, 1.5f, 1.5f, 1.5f });
-            string[] sumHeaders = { "Total Patients", "Total Vaccination Fee", "Total Items Price", "Grand Total Cash" };
-            string[] sumValues  = { totalPatients.ToString(), totalVaxFee.ToString("N2"), totalItemsPrice.ToString("N2"), grandTotal.ToString("N2") };
-            var sumHdrBg = new BaseColor(21, 101, 192);
-            foreach (var h in sumHeaders)
-                sumTbl.AddCell(new PdfPCell(new Phrase(h, headerFont)) { BackgroundColor = sumHdrBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = Element.ALIGN_CENTER });
-            var sumValBg = new BaseColor(232, 240, 254);
-            foreach (var v in sumValues)
-                sumTbl.AddCell(new PdfPCell(new Phrase(v, boldCell)) { BackgroundColor = sumValBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = Element.ALIGN_CENTER });
-            doc.Add(sumTbl);
+                doc.Add(new Paragraph("Sales Report", titleFont) { Alignment = Element.ALIGN_CENTER });
+                doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy} TO {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 6 });
 
-            // Per-patient detail table
-            BaseColor headerBg = new BaseColor(21, 101, 192);
-            float[] colWidths = { 1.4f, 2.2f, 1.4f, 2.2f, 0.6f, 1.2f };
-            string[] colHeaders = { "Date", "Patient", "Consult. Fee", "Item", "Qty", "Price" };
+                // Pre-calculate totals for summary header
+                decimal totalVaxFee = 0;
+                decimal totalItemsPrice = 0;
+                int totalPatients = patientVisits.Count;
 
-            var mainTbl = new PdfPTable(6) { WidthPercentage = 100, SpacingBefore = 4 };
-            mainTbl.SetWidths(colWidths);
-            foreach (var h in colHeaders)
-            {
-                bool right = h == "Consult. Fee" || h == "Qty" || h == "Price";
-                mainTbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
+                foreach (var visit in patientVisits)
                 {
-                    BackgroundColor = headerBg, Border = Rectangle.NO_BORDER,
-                    Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
-                });
-            }
+                    var sub = invoiceSubs.FirstOrDefault(x =>
+                        x.ChildId == visit.Key.ChildId && x.InvoiceDate.Date == visit.Key.Date);
+                    decimal consFee = sub != null ? sub.ConsultationFee : 0;
+                    totalVaxFee += consFee;
+                    foreach (var s in visit)
+                    {
+                        bool hasAmount = s.Amount.HasValue && s.Amount.Value != 0;
+                        var ba = brandAmounts.FirstOrDefault(b => s.BrandId.HasValue && b.BrandId == s.BrandId.Value);
+                        decimal price = hasAmount ? s.Amount.Value : (ba != null ? ba.Amount : 0);
+                        totalItemsPrice += price;
+                    }
+                }
+                decimal grandTotal = totalVaxFee + totalItemsPrice;
 
-            bool alt = false;
-            foreach (var visit in patientVisits)
-            {
-                var scheduleRows = visit.OrderBy(s => s.Brand?.Name).ToList();
-                var sub = invoiceSubs.FirstOrDefault(x =>
-                    x.ChildId == visit.Key.ChildId && x.InvoiceDate.Date == visit.Key.Date);
-                decimal consFee = sub?.ConsultationFee ?? 0;
-                string patientName = scheduleRows.First().Child?.Name ?? "";
-                string visitDate = visit.Key.Date.ToString("dd-MM-yyyy");
+                // Summary block
+                var sumTbl = new PdfPTable(4) { WidthPercentage = 100, SpacingAfter = 10 };
+                sumTbl.SetWidths(new float[] { 1.5f, 1.5f, 1.5f, 1.5f });
+                string[] sumHeaders = { "Total Patients", "Total Vaccination Fee", "Total Items Price", "Grand Total Cash" };
+                string[] sumValues  = { totalPatients.ToString(), totalVaxFee.ToString("N2"), totalItemsPrice.ToString("N2"), grandTotal.ToString("N2") };
+                var sumHdrBg = new BaseColor(21, 101, 192);
+                foreach (var h in sumHeaders)
+                    sumTbl.AddCell(new PdfPCell(new Phrase(h, headerFont)) { BackgroundColor = sumHdrBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = Element.ALIGN_CENTER });
+                var sumValBg = new BaseColor(232, 240, 254);
+                foreach (var v in sumValues)
+                    sumTbl.AddCell(new PdfPCell(new Phrase(v, boldCell)) { BackgroundColor = sumValBg, Border = Rectangle.NO_BORDER, Padding = 5, HorizontalAlignment = Element.ALIGN_CENTER });
+                doc.Add(sumTbl);
 
-                var bg = alt ? new BaseColor(240, 245, 255) : new BaseColor(255, 255, 255);
-                alt = !alt;
+                // Per-patient detail table
+                BaseColor headerBg = new BaseColor(21, 101, 192);
+                float[] colWidths = { 1.4f, 2.2f, 1.4f, 2.2f, 0.6f, 1.2f };
+                string[] colHeaders = { "Date", "Patient", "Consult. Fee", "Item", "Qty", "Price" };
 
-                decimal patientTotal = consFee;
-                bool firstRow = true;
-
-                foreach (var s in scheduleRows)
+                var mainTbl = new PdfPTable(6) { WidthPercentage = 100, SpacingBefore = 4 };
+                mainTbl.SetWidths(colWidths);
+                foreach (var h in colHeaders)
                 {
-                    bool hasAmount = s.Amount.HasValue && s.Amount.Value != 0;
-                    decimal price = hasAmount ? s.Amount.Value
-                        : (brandAmounts.FirstOrDefault(b => b.BrandId == s.BrandId!.Value)?.Amount ?? 0);
-                    patientTotal += price;
-                    string brandName = s.Brand?.Name ?? "";
-
-                    if (firstRow)
+                    bool right = h == "Consult. Fee" || h == "Qty" || h == "Price";
+                    mainTbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
                     {
-                        mainTbl.AddCell(new PdfPCell(new Phrase(visitDate, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
-                        mainTbl.AddCell(new PdfPCell(new Phrase(patientName, boldCell)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
-                        mainTbl.AddCell(new PdfPCell(new Phrase(consFee == 0 ? "-" : consFee.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
-                        firstRow = false;
-                    }
-                    else
-                    {
-                        mainTbl.AddCell(new PdfPCell(new Phrase("", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
-                        mainTbl.AddCell(new PdfPCell(new Phrase("", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
-                        mainTbl.AddCell(new PdfPCell(new Phrase("", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
-                    }
-                    mainTbl.AddCell(new PdfPCell(new Phrase(brandName, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
-                    mainTbl.AddCell(new PdfPCell(new Phrase("1", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    mainTbl.AddCell(new PdfPCell(new Phrase(price == 0 ? "-" : price.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                        BackgroundColor = headerBg, Border = Rectangle.NO_BORDER,
+                        Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
+                    });
                 }
 
-                // Per-patient subtotal row
-                var subtotalBg = new BaseColor(224, 235, 252);
-                mainTbl.AddCell(new PdfPCell(new Phrase($"Total for {patientName}: {patientTotal:N2}", boldCell))
+                bool alt = false;
+                foreach (var visit in patientVisits)
                 {
-                    Colspan = 6, BackgroundColor = subtotalBg,
-                    Border = Rectangle.NO_BORDER, Padding = 4,
-                    HorizontalAlignment = Element.ALIGN_RIGHT
-                });
+                    var scheduleRows = visit.OrderBy(s => s.Brand != null ? s.Brand.Name : "").ToList();
+                    var sub = invoiceSubs.FirstOrDefault(x =>
+                        x.ChildId == visit.Key.ChildId && x.InvoiceDate.Date == visit.Key.Date);
+                    decimal consFee = sub != null ? sub.ConsultationFee : 0;
+                    string patientName = scheduleRows.Count > 0 && scheduleRows[0].Child != null ? scheduleRows[0].Child.Name : "";
+                    string visitDate = visit.Key.Date.ToString("dd-MM-yyyy");
+
+                    var bg = alt ? new BaseColor(240, 245, 255) : new BaseColor(255, 255, 255);
+                    alt = !alt;
+
+                    decimal patientTotal = consFee;
+                    bool firstRow = true;
+
+                    foreach (var s in scheduleRows)
+                    {
+                        bool hasAmount = s.Amount.HasValue && s.Amount.Value != 0;
+                        var ba = brandAmounts.FirstOrDefault(b => s.BrandId.HasValue && b.BrandId == s.BrandId.Value);
+                        decimal price = hasAmount ? s.Amount.Value : (ba != null ? ba.Amount : 0);
+                        patientTotal += price;
+                        string brandName = s.Brand != null ? s.Brand.Name : "";
+
+                        if (firstRow)
+                        {
+                            mainTbl.AddCell(new PdfPCell(new Phrase(visitDate, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                            mainTbl.AddCell(new PdfPCell(new Phrase(patientName, boldCell)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                            mainTbl.AddCell(new PdfPCell(new Phrase(consFee == 0 ? "-" : consFee.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                            firstRow = false;
+                        }
+                        else
+                        {
+                            mainTbl.AddCell(new PdfPCell(new Phrase("", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                            mainTbl.AddCell(new PdfPCell(new Phrase("", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                            mainTbl.AddCell(new PdfPCell(new Phrase("", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                        }
+                        mainTbl.AddCell(new PdfPCell(new Phrase(brandName, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
+                        mainTbl.AddCell(new PdfPCell(new Phrase("1", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                        mainTbl.AddCell(new PdfPCell(new Phrase(price == 0 ? "-" : price.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                    }
+
+                    // Per-patient subtotal row
+                    var subtotalBg = new BaseColor(224, 235, 252);
+                    mainTbl.AddCell(new PdfPCell(new Phrase($"Total for {patientName}: {patientTotal:N2}", boldCell))
+                    {
+                        Colspan = 6, BackgroundColor = subtotalBg,
+                        Border = Rectangle.NO_BORDER, Padding = 4,
+                        HorizontalAlignment = Element.ALIGN_RIGHT
+                    });
+                }
+
+                doc.Add(mainTbl);
+
+                // Footer summary
+                doc.Add(new Paragraph($"\nTotal Patients: {totalPatients}", boldCell));
+                doc.Add(new Paragraph($"Total Vaccination Fee: {totalVaxFee:N2}", boldCell));
+                doc.Add(new Paragraph($"Total Items Price: {totalItemsPrice:N2}", boldCell));
+                doc.Add(new Paragraph($"Grand Total Cash: {grandTotal:N2}", boldCell));
+                doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", subFont));
+
+                doc.Close();
+                writer.Close();
+                return File(ms.ToArray(), "application/pdf", $"SalesReport_{clinicId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf");
             }
-
-            doc.Add(mainTbl);
-
-            // Footer summary
-            doc.Add(new Paragraph($"\nTotal Patients: {totalPatients}", boldCell));
-            doc.Add(new Paragraph($"Total Vaccination Fee: {totalVaxFee:N2}", boldCell));
-            doc.Add(new Paragraph($"Total Items Price: {totalItemsPrice:N2}", boldCell));
-            doc.Add(new Paragraph($"Grand Total Cash: {grandTotal:N2}", boldCell));
-            doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", subFont));
-
-            doc.Close();
-            writer.Close();
-            return File(ms.ToArray(), "application/pdf", $"SalesReport_{clinicId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf");
         }
 
         // GET /api/stock/items-report?clinicId=X&brandId=X&from=DATE&to=DATE

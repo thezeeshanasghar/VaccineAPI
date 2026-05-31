@@ -205,5 +205,325 @@ namespace VaccineAPI.Controllers
                 return StatusCode(500, "Error fetching analytics data.");
             }
         }
+
+        // GET /api/dashboard/advanced?doctorId=X&clinicId=Y&from=DATE&to=DATE&compareFrom=DATE&compareTo=DATE
+        // clinicId = 0 means all clinics
+        [HttpGet("advanced")]
+        public async Task<IActionResult> GetAdvanced(
+            [FromQuery] long     doctorId,
+            [FromQuery] long     clinicId    = 0,
+            [FromQuery] DateTime? from       = null,
+            [FromQuery] DateTime? to         = null,
+            [FromQuery] DateTime? compareFrom = null,
+            [FromQuery] DateTime? compareTo   = null)
+        {
+            try
+            {
+                var now   = DateTime.Now;
+                var curFrom = from        ?? new DateTime(now.Year, now.Month, 1);
+                var curTo   = to          ?? now;
+                var preFrom = compareFrom ?? curFrom.AddYears(-1);
+                var preTo   = compareTo   ?? curTo.AddYears(-1);
+
+                var clinics = await _db.Clinics
+                    .Where(c => c.DoctorId == doctorId && (clinicId == 0 || c.Id == clinicId))
+                    .ToListAsync();
+                var clinicIds = clinics.Select(c => c.Id).ToList();
+
+                // ── Helper lambdas ───────────────────────────────────────────
+                async Task<PeriodSummaryDTO> BuildSummary(DateTime f, DateTime t)
+                {
+                    var ids = clinicId == 0 ? clinicIds : clinicIds.Where(x => x == clinicId).ToList();
+
+                    // Patients registered (use CreatedAt if available, else DOB)
+                    int patients = await _db.Childs
+                        .CountAsync(c => ids.Contains(c.ClinicId)
+                            && (c.CreatedAt.HasValue
+                                ? c.CreatedAt.Value.Date >= f.Date && c.CreatedAt.Value.Date <= t.Date
+                                : c.DOB.Date >= f.Date && c.DOB.Date <= t.Date));
+
+                    // Doses given
+                    int doses = await _db.Schedules
+                        .CountAsync(s => ids.Contains(s.Child.ClinicId)
+                            && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date >= f.Date
+                            && s.GivenDate.Value.Date <= t.Date);
+
+                    // Revenue: vaccination amounts
+                    decimal vaxRev = await _db.Schedules
+                        .Where(s => ids.Contains(s.Child.ClinicId)
+                            && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date >= f.Date
+                            && s.GivenDate.Value.Date <= t.Date)
+                        .SumAsync(s => (decimal?)(s.Amount ?? 0)) ?? 0;
+
+                    // Revenue: direct sales
+                    decimal dsRev = await _db.DirectSales
+                        .Where(d => ids.Contains(d.ClinicId)
+                            && d.SaleDate.Date >= f.Date && d.SaleDate.Date <= t.Date)
+                        .SumAsync(d => (decimal?)d.TotalSaleValue) ?? 0;
+
+                    // Revenue: consultation fees
+                    decimal consultRev = await _db.InvoiceSubmissions
+                        .Where(x => x.DoctorId == doctorId
+                            && (clinicId == 0 || x.ClinicId == clinicId)
+                            && x.InvoiceDate.Date >= f.Date && x.InvoiceDate.Date <= t.Date)
+                        .SumAsync(x => (decimal?)x.ConsultationFee) ?? 0;
+
+                    decimal revenue = vaxRev + dsRev + consultRev;
+
+                    // Expense: purchase bills
+                    decimal purchaseExp = await _db.Stocks
+                        .Where(s => s.BillId != null
+                            && ids.Contains(s.Bill.ClinicId)
+                            && !s.Bill.BillNo.StartsWith("XFER-")
+                            && s.Bill.BillDate.Date >= f.Date && s.Bill.BillDate.Date <= t.Date)
+                        .SumAsync(s => (decimal?)(s.StockAmount * s.OriginalQuantity)) ?? 0;
+
+                    // Expense: operating expenses
+                    decimal opExp = await _db.Expenses
+                        .Where(e => e.DoctorId == doctorId
+                            && (clinicId == 0 || e.ClinicId == clinicId || e.IsShared)
+                            && e.ExpenseDate.Date >= f.Date && e.ExpenseDate.Date <= t.Date)
+                        .SumAsync(e => (decimal?)e.Amount) ?? 0;
+
+                    decimal expense = purchaseExp + opExp;
+
+                    return new PeriodSummaryDTO
+                    {
+                        Patients  = patients,
+                        Doses     = doses,
+                        Revenue   = revenue,
+                        Expense   = expense,
+                        NetProfit = revenue - expense
+                    };
+                }
+
+                // ── Section 1: Current vs Previous Summary ───────────────────
+                var current  = await BuildSummary(curFrom, curTo);
+                var previous = await BuildSummary(preFrom, preTo);
+
+                // ── Section 2: By Clinic ─────────────────────────────────────
+                var byClinic = new List<ClinicSummaryDTO>();
+                foreach (var c in clinics)
+                {
+                    decimal cVaxRev = await _db.Schedules
+                        .Where(s => s.Child.ClinicId == c.Id && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date >= curFrom.Date && s.GivenDate.Value.Date <= curTo.Date)
+                        .SumAsync(s => (decimal?)(s.Amount ?? 0)) ?? 0;
+
+                    decimal cDsRev = await _db.DirectSales
+                        .Where(d => d.ClinicId == c.Id
+                            && d.SaleDate.Date >= curFrom.Date && d.SaleDate.Date <= curTo.Date)
+                        .SumAsync(d => (decimal?)d.TotalSaleValue) ?? 0;
+
+                    decimal cConsult = await _db.InvoiceSubmissions
+                        .Where(x => x.ClinicId == c.Id
+                            && x.InvoiceDate.Date >= curFrom.Date && x.InvoiceDate.Date <= curTo.Date)
+                        .SumAsync(x => (decimal?)x.ConsultationFee) ?? 0;
+
+                    decimal cRev = cVaxRev + cDsRev + cConsult;
+
+                    decimal cPurchase = await _db.Stocks
+                        .Where(s => s.BillId != null && s.Bill.ClinicId == c.Id
+                            && !s.Bill.BillNo.StartsWith("XFER-")
+                            && s.Bill.BillDate.Date >= curFrom.Date && s.Bill.BillDate.Date <= curTo.Date)
+                        .SumAsync(s => (decimal?)(s.StockAmount * s.OriginalQuantity)) ?? 0;
+
+                    decimal cOp = await _db.Expenses
+                        .Where(e => e.DoctorId == doctorId && (e.ClinicId == c.Id || e.IsShared)
+                            && e.ExpenseDate.Date >= curFrom.Date && e.ExpenseDate.Date <= curTo.Date)
+                        .SumAsync(e => (decimal?)e.Amount) ?? 0;
+
+                    decimal cExp = cPurchase + cOp;
+
+                    int cDoses = await _db.Schedules
+                        .CountAsync(s => s.Child.ClinicId == c.Id && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date >= curFrom.Date && s.GivenDate.Value.Date <= curTo.Date);
+
+                    int cPatients = await _db.Childs
+                        .CountAsync(ch => ch.ClinicId == c.Id
+                            && (ch.CreatedAt.HasValue
+                                ? ch.CreatedAt.Value.Date >= curFrom.Date && ch.CreatedAt.Value.Date <= curTo.Date
+                                : ch.DOB.Date >= curFrom.Date && ch.DOB.Date <= curTo.Date));
+
+                    byClinic.Add(new ClinicSummaryDTO
+                    {
+                        ClinicId   = c.Id,
+                        ClinicName = c.Name,
+                        Revenue    = cRev,
+                        Expense    = cExp,
+                        Net        = cRev - cExp,
+                        Doses      = cDoses,
+                        Patients   = cPatients
+                    });
+                }
+
+                // ── Section 3: Vaccine Performance ───────────────────────────
+                var vaxGroups = await _db.Schedules
+                    .Include(s => s.Brand)
+                    .Where(s => clinicIds.Contains(s.Child.ClinicId)
+                        && s.IsDone == true && s.BrandId != null
+                        && s.GivenDate.HasValue
+                        && s.GivenDate.Value.Date >= curFrom.Date && s.GivenDate.Value.Date <= curTo.Date)
+                    .GroupBy(s => new { s.BrandId, BrandName = s.Brand.Name })
+                    .Select(g => new VaccinePerfDTO
+                    {
+                        BrandId  = g.Key.BrandId.Value,
+                        Name     = g.Key.BrandName,
+                        Doses    = g.Count(),
+                        Revenue  = g.Sum(s => s.Amount ?? 0),
+                        AvgPrice = g.Count() > 0 ? g.Sum(s => s.Amount ?? 0) / g.Count() : 0
+                    })
+                    .OrderByDescending(x => x.Doses)
+                    .Take(15)
+                    .ToListAsync();
+
+                // ── Section 4: Monthly Trend (current period) ────────────────
+                var allMonths = Enumerable.Range(0,
+                    ((curTo.Year - curFrom.Year) * 12 + curTo.Month - curFrom.Month) + 1)
+                    .Select(i => new DateTime(curFrom.Year, curFrom.Month, 1).AddMonths(i))
+                    .ToList();
+
+                var monthlyTrend = new List<MonthlyTrendDTO>();
+                foreach (var m in allMonths)
+                {
+                    var mEnd = new DateTime(m.Year, m.Month, DateTime.DaysInMonth(m.Year, m.Month));
+                    var mFrom = m > curFrom ? m : curFrom;
+                    var mTo   = mEnd < curTo ? mEnd : curTo;
+
+                    decimal mVax = await _db.Schedules
+                        .Where(s => clinicIds.Contains(s.Child.ClinicId) && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date >= mFrom.Date && s.GivenDate.Value.Date <= mTo.Date)
+                        .SumAsync(s => (decimal?)(s.Amount ?? 0)) ?? 0;
+
+                    decimal mDs = await _db.DirectSales
+                        .Where(d => clinicIds.Contains(d.ClinicId)
+                            && d.SaleDate.Date >= mFrom.Date && d.SaleDate.Date <= mTo.Date)
+                        .SumAsync(d => (decimal?)d.TotalSaleValue) ?? 0;
+
+                    decimal mConsult = await _db.InvoiceSubmissions
+                        .Where(x => x.DoctorId == doctorId
+                            && (clinicId == 0 || x.ClinicId == clinicId)
+                            && x.InvoiceDate.Date >= mFrom.Date && x.InvoiceDate.Date <= mTo.Date)
+                        .SumAsync(x => (decimal?)x.ConsultationFee) ?? 0;
+
+                    decimal mPurchase = await _db.Stocks
+                        .Where(s => s.BillId != null && clinicIds.Contains(s.Bill.ClinicId)
+                            && !s.Bill.BillNo.StartsWith("XFER-")
+                            && s.Bill.BillDate.Date >= mFrom.Date && s.Bill.BillDate.Date <= mTo.Date)
+                        .SumAsync(s => (decimal?)(s.StockAmount * s.OriginalQuantity)) ?? 0;
+
+                    decimal mOp = await _db.Expenses
+                        .Where(e => e.DoctorId == doctorId
+                            && (clinicId == 0 || e.ClinicId == clinicId || e.IsShared)
+                            && e.ExpenseDate.Date >= mFrom.Date && e.ExpenseDate.Date <= mTo.Date)
+                        .SumAsync(e => (decimal?)e.Amount) ?? 0;
+
+                    int mDoses = await _db.Schedules
+                        .CountAsync(s => clinicIds.Contains(s.Child.ClinicId) && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date >= mFrom.Date && s.GivenDate.Value.Date <= mTo.Date);
+
+                    int mPatients = await _db.Childs
+                        .CountAsync(c => clinicIds.Contains(c.ClinicId)
+                            && (c.CreatedAt.HasValue
+                                ? c.CreatedAt.Value.Date >= mFrom.Date && c.CreatedAt.Value.Date <= mTo.Date
+                                : c.DOB.Date >= mFrom.Date && c.DOB.Date <= mTo.Date));
+
+                    monthlyTrend.Add(new MonthlyTrendDTO
+                    {
+                        Month    = m.ToString("MMM yy"),
+                        Revenue  = mVax + mDs + mConsult,
+                        Expense  = mPurchase + mOp,
+                        Doses    = mDoses,
+                        Patients = mPatients
+                    });
+                }
+
+                // ── Section 4: Monthly Trend (previous period) ────────────────
+                var prevMonths = Enumerable.Range(0,
+                    ((preTo.Year - preFrom.Year) * 12 + preTo.Month - preFrom.Month) + 1)
+                    .Select(i => new DateTime(preFrom.Year, preFrom.Month, 1).AddMonths(i))
+                    .ToList();
+
+                var monthlyPrev = new List<MonthlyTrendDTO>();
+                foreach (var m in prevMonths)
+                {
+                    var mEnd  = new DateTime(m.Year, m.Month, DateTime.DaysInMonth(m.Year, m.Month));
+                    var mFrom = m > preFrom ? m : preFrom;
+                    var mTo   = mEnd < preTo ? mEnd : preTo;
+
+                    decimal mVax = await _db.Schedules
+                        .Where(s => clinicIds.Contains(s.Child.ClinicId) && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date >= mFrom.Date && s.GivenDate.Value.Date <= mTo.Date)
+                        .SumAsync(s => (decimal?)(s.Amount ?? 0)) ?? 0;
+
+                    decimal mDs = await _db.DirectSales
+                        .Where(d => clinicIds.Contains(d.ClinicId)
+                            && d.SaleDate.Date >= mFrom.Date && d.SaleDate.Date <= mTo.Date)
+                        .SumAsync(d => (decimal?)d.TotalSaleValue) ?? 0;
+
+                    decimal mConsult = await _db.InvoiceSubmissions
+                        .Where(x => x.DoctorId == doctorId
+                            && (clinicId == 0 || x.ClinicId == clinicId)
+                            && x.InvoiceDate.Date >= mFrom.Date && x.InvoiceDate.Date <= mTo.Date)
+                        .SumAsync(x => (decimal?)x.ConsultationFee) ?? 0;
+
+                    decimal mPurchase = await _db.Stocks
+                        .Where(s => s.BillId != null && clinicIds.Contains(s.Bill.ClinicId)
+                            && !s.Bill.BillNo.StartsWith("XFER-")
+                            && s.Bill.BillDate.Date >= mFrom.Date && s.Bill.BillDate.Date <= mTo.Date)
+                        .SumAsync(s => (decimal?)(s.StockAmount * s.OriginalQuantity)) ?? 0;
+
+                    decimal mOp = await _db.Expenses
+                        .Where(e => e.DoctorId == doctorId
+                            && (clinicId == 0 || e.ClinicId == clinicId || e.IsShared)
+                            && e.ExpenseDate.Date >= mFrom.Date && e.ExpenseDate.Date <= mTo.Date)
+                        .SumAsync(e => (decimal?)e.Amount) ?? 0;
+
+                    int mDoses = await _db.Schedules
+                        .CountAsync(s => clinicIds.Contains(s.Child.ClinicId) && s.IsDone == true
+                            && s.GivenDate.HasValue
+                            && s.GivenDate.Value.Date >= mFrom.Date && s.GivenDate.Value.Date <= mTo.Date);
+
+                    int mPatients = await _db.Childs
+                        .CountAsync(c => clinicIds.Contains(c.ClinicId)
+                            && (c.CreatedAt.HasValue
+                                ? c.CreatedAt.Value.Date >= mFrom.Date && c.CreatedAt.Value.Date <= mTo.Date
+                                : c.DOB.Date >= mFrom.Date && c.DOB.Date <= mTo.Date));
+
+                    monthlyPrev.Add(new MonthlyTrendDTO
+                    {
+                        Month    = m.ToString("MMM yy"),
+                        Revenue  = mVax + mDs + mConsult,
+                        Expense  = mPurchase + mOp,
+                        Doses    = mDoses,
+                        Patients = mPatients
+                    });
+                }
+
+                return Ok(new AdvancedAnalyticsDTO
+                {
+                    Current     = current,
+                    Previous    = previous,
+                    ByClinic    = byClinic,
+                    ByVaccine   = vaxGroups,
+                    Monthly     = monthlyTrend,
+                    MonthlyPrev = monthlyPrev
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Advanced analytics error: {ex.Message}\n{ex.StackTrace}");
+                return StatusCode(500, "Error fetching advanced analytics.");
+            }
+        }
     }
 }

@@ -13,5 +13,6 @@ namespace VaccineAPI.Models
         public DateTime SubmittedAt { get; set; }
         public int EditCount { get; set; } = 0;
         public decimal ConsultationFee { get; set; }
+        public decimal TotalAmount { get; set; } = 0;
     }
 }

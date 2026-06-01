@@ -121,6 +121,22 @@ CREATE TABLE `paassignment` (
 -- Rollback: DROP TABLE `paassignment`;
 
 -- =====================================================
+-- Add Cancel + Reassign columns to paassignment
+-- =====================================================
+ALTER TABLE `paassignment`
+  ADD COLUMN `IsCancelled`                tinyint(1)   NOT NULL DEFAULT 0,
+  ADD COLUMN `CancelledAt`                datetime     NULL,
+  ADD COLUMN `CancelReason`               varchar(500) NULL,
+  ADD COLUMN `ReassignedFromAssignmentId` bigint       NULL;
+
+-- Rollback:
+-- ALTER TABLE `paassignment`
+--   DROP COLUMN `IsCancelled`,
+--   DROP COLUMN `CancelledAt`,
+--   DROP COLUMN `CancelReason`,
+--   DROP COLUMN `ReassignedFromAssignmentId`;
+
+-- =====================================================
 -- Add Payment Verification Audit Trail to Schedules
 -- Tracks who verified a payment and when
 -- =====================================================
@@ -167,3 +183,15 @@ ALTER TABLE `schedules`
 --   DROP COLUMN `UngiveCount`,
 --   DROP COLUMN `SkipCount`,
 --   DROP COLUMN `UnskipCount`;
+
+-- Store the exact invoice total (vaccines + consultation fee) so the payment popup
+-- always shows the same number the PDF shows.
+ALTER TABLE `invoicesubmissions`
+  ADD COLUMN `TotalAmount` decimal(18,2) NOT NULL DEFAULT 0;
+
+-- PA Assignment cancel/reassign support
+ALTER TABLE `paassignment`
+  ADD COLUMN `IsCancelled`                tinyint(1)   NOT NULL DEFAULT 0,
+  ADD COLUMN `CancelledAt`                datetime     NULL,
+  ADD COLUMN `CancelReason`               varchar(500) NULL,
+  ADD COLUMN `ReassignedFromAssignmentId` bigint       NULL;

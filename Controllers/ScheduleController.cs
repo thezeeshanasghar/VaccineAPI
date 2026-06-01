@@ -1510,6 +1510,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 existing.ConsultationFee = dto.ConsultationFee;
+                existing.TotalAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
                 if (dto.ClinicId.HasValue && existing.ClinicId == null)
                     existing.ClinicId = dto.ClinicId;
                 _db.Entry(existing).State = EntityState.Modified;
@@ -1525,6 +1526,7 @@ namespace VaccineAPI.Controllers
                     InvoiceDate = dto.InvoiceDate.Date,
                     SubmittedAt = DateTime.UtcNow,
                     ConsultationFee = dto.ConsultationFee,
+                    TotalAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee,
                     EditCount = 0
                 });
 

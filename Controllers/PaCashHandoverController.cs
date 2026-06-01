@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
 
@@ -14,6 +15,45 @@ namespace VaccineAPI.Controllers
     {
         private readonly Context _db;
         public PaCashHandoverController(Context db) { _db = db; }
+
+        // Batch version: returns a dictionary keyed by (PaId, ClinicId)
+        // One query for collections, one for handovers — no N+1.
+        private Dictionary<(long PaId, long ClinicId), decimal> BatchCashInHand(
+            IEnumerable<(long PaId, long ClinicId)> pairs,
+            List<long> clinicIds)
+        {
+            var paIds = pairs.Select(p => p.PaId).Distinct().ToList();
+
+            var collected = _db.Schedules
+                .Include(s => s.Child)
+                .Where(s => (paIds.Contains(s.GivenByPaId ?? 0) || paIds.Contains(s.PaymentCollectorPaId ?? 0))
+                         && s.IsDone == true
+                         && s.PaymentMode == "Cash"
+                         && clinicIds.Contains(s.Child.ClinicId)
+                         && s.Amount != null)
+                .GroupBy(s => new
+                {
+                    PaId     = s.PaymentCollectorPaId.HasValue ? s.PaymentCollectorPaId.Value : s.GivenByPaId.Value,
+                    ClinicId = s.Child.ClinicId
+                })
+                .Select(g => new { g.Key.PaId, g.Key.ClinicId, Total = g.Sum(s => (decimal?)s.Amount) ?? 0m })
+                .ToList();
+
+            var handedOver = _db.PaCashHandovers
+                .Where(h => paIds.Contains(h.PaId) && clinicIds.Contains(h.ClinicId) && h.Status == "Confirmed")
+                .GroupBy(h => new { h.PaId, h.ClinicId })
+                .Select(g => new { g.Key.PaId, g.Key.ClinicId, Total = g.Sum(h => (decimal?)h.Amount) ?? 0m })
+                .ToList();
+
+            var result = new Dictionary<(long, long), decimal>();
+            foreach (var pair in pairs)
+            {
+                var c = collected.FirstOrDefault(x => x.PaId == pair.PaId && x.ClinicId == pair.ClinicId);
+                var h = handedOver.FirstOrDefault(x => x.PaId == pair.PaId && x.ClinicId == pair.ClinicId);
+                result[(pair.PaId, pair.ClinicId)] = (c?.Total ?? 0m) - (h?.Total ?? 0m);
+            }
+            return result;
+        }
 
         private decimal ComputeCashInHand(long paId, long clinicId)
         {
@@ -103,6 +143,10 @@ namespace VaccineAPI.Controllers
             var pas = _db.PersonalAssistant.Where(p => paIds.Contains(p.Id)).ToDictionary(p => p.Id, p => p.Name);
             var clinicMap = _db.Clinics.Where(c => clinicIds.Contains(c.Id)).ToDictionary(c => c.Id, c => c.Name);
 
+            // Batch cash-in-hand computation
+            var pairs = handovers.Select(h => (h.PaId, h.ClinicId)).Distinct().ToList();
+            var cashInHandMap = BatchCashInHand(pairs, clinicIds);
+
             var result = handovers.Select(h => new PaCashHandoverDTO
             {
                 Id = h.Id,
@@ -115,7 +159,7 @@ namespace VaccineAPI.Controllers
                 Status = h.Status,
                 CreatedAt = h.CreatedAt,
                 ConfirmedAt = h.ConfirmedAt,
-                CashInHand = ComputeCashInHand(h.PaId, h.ClinicId)
+                CashInHand = cashInHandMap.ContainsKey((h.PaId, h.ClinicId)) ? cashInHandMap[(h.PaId, h.ClinicId)] : 0m
             }).ToList();
 
             return Ok(new { IsSuccess = true, Message = "OK", ResponseData = result });
@@ -168,10 +212,38 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, Message = "Handover confirmed." });
         }
 
+        // PATCH /api/PaCashHandover/{id}/reject
+        [HttpPatch("{id}/reject")]
+        public IActionResult Reject(long id, [FromBody] PaCashHandoverDTO dto)
+        {
+            var handover = _db.PaCashHandovers.FirstOrDefault(h => h.Id == id);
+            if (handover == null)
+                return Ok(new { IsSuccess = false, Message = "Handover not found." });
+            if (handover.Status != "Pending")
+                return Ok(new { IsSuccess = false, Message = "Handover is not pending." });
+
+            handover.Status = "Rejected";
+            handover.RejectionNote = dto.RejectionNote;
+            _db.SaveChanges();
+
+            // Notify PA by email (fire-and-forget)
+            var pa = _db.PersonalAssistant.FirstOrDefault(p => p.Id == handover.PaId);
+            if (pa != null && !string.IsNullOrEmpty(pa.Email))
+            {
+                var reason = !string.IsNullOrEmpty(dto.RejectionNote) ? dto.RejectionNote : "No reason given";
+                _ = Task.Run(() => UserEmail.SendEmail(
+                    pa.Email,
+                    $"Hi {pa.Name},<br><br>Your cash handover of <b>Rs. {handover.Amount:N0}</b> has been <b>rejected</b>.<br>Reason: {reason}<br><br>Please re-submit the handover after resolving the issue.",
+                    "Cash Handover Rejected"
+                ));
+            }
+
+            return Ok(new { IsSuccess = true, Message = "Handover rejected." });
+        }
+
         // GET /api/PaCashHandover/daily-summary/{doctorId}?date=YYYY-MM-DD
-        // Shows activity for a specific date with per-schedule breakdown per PA.
-        // Totals (CashTotal, OnlineTotal) reflect that date only.
-        // HandedOver and PendingCash reflect cumulative lifetime balance (correct for running ledger).
+        // CashTotal / OnlineTotal reflect that date only.
+        // LifetimeHandedOver and PendingCash reflect cumulative lifetime balance (correct for running ledger).
         [HttpGet("daily-summary/{doctorId}")]
         public IActionResult GetDailySummary(long doctorId, [FromQuery] string date = null)
         {
@@ -193,26 +265,35 @@ namespace VaccineAPI.Controllers
                     && clinicIds.Contains(s.Child.ClinicId))
                 .ToList();
 
-            // PA-collected rows
             var paRows = rows.Where(s => s.PaymentCollectorPaId.HasValue).ToList();
             var paIds = paRows.Select(s => s.PaymentCollectorPaId.Value).Distinct().ToList();
             var paNames = _db.PersonalAssistant
                 .Where(p => paIds.Contains(p.Id))
                 .ToDictionary(p => p.Id, p => p.Name);
 
+            // Batch lifetime handover totals for all PA-clinic pairs
+            var paClinics = paRows
+                .Select(s => (PaId: s.PaymentCollectorPaId.Value, ClinicId: s.Child.ClinicId))
+                .Distinct().ToList();
+            var cashInHandMap = BatchCashInHand(paClinics, clinicIds);
+
+            // Batch lifetime confirmed handovers per PA across all their clinics
+            var lifetimeHandedOver = _db.PaCashHandovers
+                .Where(h => paIds.Contains(h.PaId) && clinicIds.Contains(h.ClinicId) && h.Status == "Confirmed")
+                .GroupBy(h => h.PaId)
+                .Select(g => new { PaId = g.Key, Total = g.Sum(h => (decimal?)h.Amount) ?? 0m })
+                .ToDictionary(x => x.PaId, x => x.Total);
+
             var summary = paIds.Select(paId =>
             {
                 var paSchedules = paRows.Where(s => s.PaymentCollectorPaId == paId).ToList();
+                var firstClinicId = paSchedules.FirstOrDefault()?.Child?.ClinicId ?? 0;
                 var cashTotal = paSchedules
                     .Where(s => s.PaymentMode == "Cash")
                     .Sum(s => (decimal?)s.Amount) ?? 0m;
                 var onlineTotal = paSchedules
                     .Where(s => s.PaymentMode != "Cash")
                     .Sum(s => (decimal?)s.Amount) ?? 0m;
-                // Lifetime cumulative handovers — intentionally not date-filtered
-                var handedOver = _db.PaCashHandovers
-                    .Where(h => h.PaId == paId && clinicIds.Contains(h.ClinicId) && h.Status == "Confirmed")
-                    .Sum(h => (decimal?)h.Amount) ?? 0m;
                 var breakdown = paSchedules.Select(s => new {
                     ScheduleId = s.Id,
                     ChildName = s.Child?.Name ?? "",
@@ -229,13 +310,13 @@ namespace VaccineAPI.Controllers
                     PaName = paNames.ContainsKey(paId) ? paNames[paId] : "",
                     CashTotal = cashTotal,
                     OnlineTotal = onlineTotal,
-                    HandedOver = handedOver,
-                    PendingCash = ComputeCashInHand(paId, paRows.FirstOrDefault(s => s.PaymentCollectorPaId == paId)?.Child?.ClinicId ?? 0),
+                    // Labelled "Lifetime" so callers know this is not today-only
+                    LifetimeHandedOver = lifetimeHandedOver.ContainsKey(paId) ? lifetimeHandedOver[paId] : 0m,
+                    PendingCash = cashInHandMap.ContainsKey((paId, firstClinicId)) ? cashInHandMap[(paId, firstClinicId)] : 0m,
                     Schedules = breakdown
                 };
             }).ToList();
 
-            // Doctor self-collected rows (PaymentCollectorPaId is null but payment collected)
             var doctorRows = rows.Where(s => !s.PaymentCollectorPaId.HasValue && s.IsPaymentCollected).ToList();
             object doctorEntry = null;
             if (doctorRows.Any())
@@ -256,7 +337,7 @@ namespace VaccineAPI.Controllers
                     PaName = "Doctor",
                     CashTotal = doctorRows.Where(s => s.PaymentMode == "Cash").Sum(s => (decimal?)s.Amount) ?? 0m,
                     OnlineTotal = doctorRows.Where(s => s.PaymentMode != "Cash").Sum(s => (decimal?)s.Amount) ?? 0m,
-                    HandedOver = 0m,
+                    LifetimeHandedOver = 0m,
                     PendingCash = 0m,
                     Schedules = doctorBreakdown
                 };
@@ -273,7 +354,6 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/PaCashHandover/outstanding/{doctorId}
-        // All PAs with uncleared cash balance (any date). The doctor's weekly cleanup view.
         [HttpGet("outstanding/{doctorId}")]
         public IActionResult GetOutstanding(long doctorId)
         {
@@ -282,7 +362,6 @@ namespace VaccineAPI.Controllers
                 .ToList();
             var clinicIds = clinics.Select(c => c.Id).ToList();
 
-            // Find all PA+clinic combos that have ever had a schedule payment under this doctor
             var paClinics = _db.Schedules
                 .Include(s => s.Child)
                 .Where(s => s.IsDone
@@ -298,13 +377,17 @@ namespace VaccineAPI.Controllers
                 .ToDictionary(p => p.Id, p => p.Name);
             var clinicMap = clinics.ToDictionary(c => c.Id, c => c.Name ?? "");
 
+            // Batch cash-in-hand for all pairs
+            var pairs = paClinics.Select(x => (x.PaId, x.ClinicId)).Distinct().ToList();
+            var cashInHandMap = BatchCashInHand(pairs, clinicIds);
+
             var result = paClinics
                 .Select(pc => new {
                     PaId = pc.PaId,
                     PaName = paNames.ContainsKey(pc.PaId) ? paNames[pc.PaId] : "",
                     ClinicId = pc.ClinicId,
                     ClinicName = clinicMap.ContainsKey(pc.ClinicId) ? clinicMap[pc.ClinicId] : "",
-                    PendingCash = ComputeCashInHand(pc.PaId, pc.ClinicId)
+                    PendingCash = cashInHandMap.ContainsKey((pc.PaId, pc.ClinicId)) ? cashInHandMap[(pc.PaId, pc.ClinicId)] : 0m
                 })
                 .Where(x => x.PendingCash > 0)
                 .OrderByDescending(x => x.PendingCash)
@@ -316,22 +399,6 @@ namespace VaccineAPI.Controllers
                 .ToList();
 
             return Ok(new { IsSuccess = true, ResponseData = new { Outstanding = result, PendingHandovers = pendingHandovers } });
-        }
-
-        // PATCH /api/PaCashHandover/{id}/reject
-        [HttpPatch("{id}/reject")]
-        public IActionResult Reject(long id, [FromBody] PaCashHandoverDTO dto)
-        {
-            var handover = _db.PaCashHandovers.FirstOrDefault(h => h.Id == id);
-            if (handover == null)
-                return Ok(new { IsSuccess = false, Message = "Handover not found." });
-            if (handover.Status != "Pending")
-                return Ok(new { IsSuccess = false, Message = "Handover is not pending." });
-
-            handover.Status = "Rejected";
-            handover.RejectionNote = dto.RejectionNote;
-            _db.SaveChanges();
-            return Ok(new { IsSuccess = true, Message = "Handover rejected." });
         }
     }
 }

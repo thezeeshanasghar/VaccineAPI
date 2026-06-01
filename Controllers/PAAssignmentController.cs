@@ -250,16 +250,17 @@ namespace VaccineAPI.Controllers
 
                 if (exists)
                 {
-                    var existing = await _db.PAAssignments
+                    var existingRow = await _db.PAAssignments
                         .Where(a => a.ChildId == dto.ChildId && !a.IsCompleted && !a.IsCancelled
                                     && a.AssignedAt >= today && a.AssignedAt < today.AddDays(1))
-                        .Join(_db.PersonalAssistant,
-                            a => a.PersonalAssistantId,
-                            p => p.Id,
-                            (a, p) => new { a.Id, PaName = p.Name })
                         .FirstOrDefaultAsync();
 
-                    var paName = existing?.PaName ?? "another PA";
+                    var paName = "another PA";
+                    if (existingRow != null)
+                    {
+                        var pa = await _db.PersonalAssistant.FindAsync(existingRow.PersonalAssistantId);
+                        paName = pa?.Name ?? "another PA";
+                    }
                     return Ok(new { IsSuccess = false, Message = $"This patient is already assigned to {paName} today. Cancel that assignment first or use Reassign." });
                 }
 

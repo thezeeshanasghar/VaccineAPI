@@ -728,6 +728,17 @@ namespace VaccineAPI.Controllers
 
         private void EnsurePAAssignment(long childId, long paId, long doctorId, long? clinicId)
         {
+            // Validate doctorId is a real doctor — if caller passed a PA ID by mistake, resolve from child's clinic
+            var isRealDoctor = _db.Doctors.Any(d => d.Id == doctorId);
+            if (!isRealDoctor)
+            {
+                doctorId = _db.Clinics
+                    .Where(c => c.Id == (clinicId ?? 0))
+                    .Select(c => c.DoctorId)
+                    .FirstOrDefault();
+                if (doctorId <= 0) return;
+            }
+
             var today = DateTime.UtcNow.Date;
             var exists = _db.PAAssignments.Any(a =>
                 a.ChildId == childId &&
@@ -3304,6 +3315,23 @@ namespace VaccineAPI.Controllers
             schedule.PaymentApprovedByDoctorId = doctorId;
             _db.SaveChanges();
             return Ok(new { IsSuccess = true, Message = "Payment verified." });
+        }
+
+        // PATCH /api/Schedule/confirm-invoice/{id}?doctorId=X
+        // Doctor confirms receipt of a full invoice (InvoiceSubmission row).
+        [HttpPatch("confirm-invoice/{id}")]
+        public IActionResult ConfirmInvoice(long id, [FromQuery] long doctorId)
+        {
+            var inv = _db.InvoiceSubmissions.FirstOrDefault(i => i.Id == id);
+            if (inv == null)
+                return Ok(new { IsSuccess = false, Message = "Invoice not found." });
+            if (inv.IsConfirmedByDoctor)
+                return Ok(new { IsSuccess = false, Message = "Invoice already confirmed." });
+
+            inv.IsConfirmedByDoctor = true;
+            inv.ConfirmedAt = DateTime.UtcNow;
+            _db.SaveChanges();
+            return Ok(new { IsSuccess = true, Message = "Invoice confirmed." });
         }
     }
 }

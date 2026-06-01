@@ -236,58 +236,66 @@ namespace VaccineAPI.Controllers
 
         // POST /api/PAAssignment
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] PAAssignment dto)
+        public async Task<IActionResult> Create([FromBody] CreateAssignmentDto dto)
         {
-            var today = DateTime.UtcNow.Date;
-
-            // Block if ANY PA already has an active assignment for this child today
-            var exists = await _db.PAAssignments.AnyAsync(a =>
-                a.ChildId == dto.ChildId &&
-                !a.IsCompleted &&
-                !a.IsCancelled &&
-                a.AssignedAt >= today && a.AssignedAt < today.AddDays(1));
-
-            if (exists)
+            try
             {
-                // Find which PA has it to give a helpful message
-                var existing = await _db.PAAssignments
-                    .Where(a => a.ChildId == dto.ChildId && !a.IsCompleted && !a.IsCancelled
-                                && a.AssignedAt >= today && a.AssignedAt < today.AddDays(1))
-                    .Join(_db.PersonalAssistant,
-                        a => a.PersonalAssistantId,
-                        p => p.Id,
-                        (a, p) => new { a.Id, PaName = p.Name })
-                    .FirstOrDefaultAsync();
+                var today = DateTime.UtcNow.Date;
 
-                var paName = existing?.PaName ?? "another PA";
-                return Ok(new { IsSuccess = false, Message = $"This patient is already assigned to {paName} today. Cancel that assignment first or use Reassign." });
+                var exists = await _db.PAAssignments.AnyAsync(a =>
+                    a.ChildId == dto.ChildId &&
+                    !a.IsCompleted &&
+                    !a.IsCancelled &&
+                    a.AssignedAt >= today && a.AssignedAt < today.AddDays(1));
+
+                if (exists)
+                {
+                    var existing = await _db.PAAssignments
+                        .Where(a => a.ChildId == dto.ChildId && !a.IsCompleted && !a.IsCancelled
+                                    && a.AssignedAt >= today && a.AssignedAt < today.AddDays(1))
+                        .Join(_db.PersonalAssistant,
+                            a => a.PersonalAssistantId,
+                            p => p.Id,
+                            (a, p) => new { a.Id, PaName = p.Name })
+                        .FirstOrDefaultAsync();
+
+                    var paName = existing?.PaName ?? "another PA";
+                    return Ok(new { IsSuccess = false, Message = $"This patient is already assigned to {paName} today. Cancel that assignment first or use Reassign." });
+                }
+
+                var assignment = new PAAssignment
+                {
+                    DoctorId            = dto.DoctorId,
+                    ClinicId            = dto.ClinicId,
+                    PersonalAssistantId = dto.PersonalAssistantId,
+                    ChildId             = dto.ChildId,
+                    Notes               = dto.Notes ?? "",
+                    AssignedAt          = DateTime.UtcNow,
+                    IsCompleted         = false,
+                    IsCancelled         = false,
+                    IsAutoCreated       = false
+                };
+
+                _db.PAAssignments.Add(assignment);
+                await _db.SaveChangesAsync();
+
+                // Fire-and-forget email
+                var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
+                if (pa != null && !string.IsNullOrEmpty(pa.Email))
+                {
+                    _ = Task.Run(() => UserEmail.SendEmail(
+                        pa.Email,
+                        "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
+                        "New Patient Assignment"
+                    ));
+                }
+
+                return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id } });
             }
-
-            dto.AssignedAt   = DateTime.UtcNow;
-            dto.IsCompleted  = false;
-            dto.IsCancelled  = false;
-            dto.CompletedAt  = null;
-
-            _db.PAAssignments.Add(dto);
-
-            try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
             {
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
-
-            // Fire-and-forget email so email failure does not fail the create
-            var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
-            if (pa != null && !string.IsNullOrEmpty(pa.Email))
-            {
-                _ = Task.Run(() => UserEmail.SendEmail(
-                    pa.Email,
-                    "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
-                    "New Patient Assignment"
-                ));
-            }
-
-            return Ok(new { IsSuccess = true, ResponseData = dto });
         }
 
         // GET /api/PAAssignment/active/{doctorId}
@@ -342,5 +350,14 @@ namespace VaccineAPI.Controllers
     public class ReassignDto
     {
         public long NewPaId { get; set; }
+    }
+
+    public class CreateAssignmentDto
+    {
+        public long DoctorId { get; set; }
+        public long? ClinicId { get; set; }
+        public long PersonalAssistantId { get; set; }
+        public long ChildId { get; set; }
+        public string? Notes { get; set; }
     }
 }

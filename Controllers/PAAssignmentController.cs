@@ -22,29 +22,22 @@ namespace VaccineAPI.Controllers
         [HttpGet("pa/{paId}")]
         public async Task<IActionResult> GetByPA(long paId)
         {
+            // Fetch raw assignments first — avoid EF Join+Where MySQL column misattribution bug
             var rawAssignments = await _db.PAAssignments
                 .Where(a => a.PersonalAssistantId == paId && !a.IsCompleted && !a.IsCancelled)
-                .Join(_db.Childs,
-                    a => a.ChildId,
-                    c => c.Id,
-                    (a, c) => new
-                    {
-                        AssignmentId    = a.Id,
-                        AssignedAt      = a.AssignedAt,
-                        Notes           = a.Notes,
-                        ChildId         = c.Id,
-                        c.Name,
-                        c.Gender,
-                        c.DOB,
-                        c.FatherName,
-                        IsAutoCreated   = a.IsAutoCreated
-                    })
                 .ToListAsync();
 
-            // Enrich each assignment with today's schedules this PA gave
+            var childIds = rawAssignments.Select(a => a.ChildId).Distinct().ToList();
+            var children = await _db.Childs
+                .Where(c => childIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id);
+
+            // Enrich each assignment with child info, schedules, and invoice
             var result = rawAssignments.Select(a =>
             {
+                var child      = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
                 var assignDate = a.AssignedAt.Date;
+
                 var schedules = _db.Schedules
                     .Where(s => s.ChildId == a.ChildId
                              && s.PaymentCollectorPaId == paId
@@ -71,17 +64,17 @@ namespace VaccineAPI.Controllers
 
                 return new
                 {
-                    a.AssignmentId,
+                    AssignmentId  = a.Id,
                     a.AssignedAt,
                     a.Notes,
-                    a.ChildId,
-                    a.Name,
-                    a.Gender,
-                    a.DOB,
-                    a.FatherName,
+                    ChildId       = a.ChildId,
+                    Name          = child != null ? child.Name      : "",
+                    Gender        = child != null ? child.Gender    : "",
+                    DOB           = child != null ? child.DOB       : (DateTime?)null,
+                    FatherName    = child != null ? child.FatherName: "",
                     a.IsAutoCreated,
                     InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
-                    Schedules = schedules
+                    Schedules     = schedules
                 };
             }).ToList();
 

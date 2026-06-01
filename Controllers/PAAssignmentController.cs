@@ -233,14 +233,16 @@ namespace VaccineAPI.Controllers
         [HttpGet("clinic/{clinicId}")]
         public async Task<IActionResult> GetPAsForClinic(long clinicId)
         {
-            var pas = await _db.PaAccess
+            // Fetch PaAccess rows first, then look up PAs in memory — avoids EF Join+Where MySQL alias bug
+            var paIds = await _db.PaAccess
                 .Where(a => a.ClinicId == clinicId)
-                .Join(_db.PersonalAssistant,
-                    a => a.PersonalAssistantId,
-                    p => p.Id,
-                    (a, p) => new { p.Id, p.Name, p.Email, p.IsActive })
-                .Where(p => p.IsActive)
+                .Select(a => a.PersonalAssistantId)
                 .Distinct()
+                .ToListAsync();
+
+            var pas = await _db.PersonalAssistant
+                .Where(p => paIds.Contains(p.Id) && p.IsActive)
+                .Select(p => new { p.Id, p.Name, p.Email, p.IsActive })
                 .ToListAsync();
 
             return Ok(new { IsSuccess = true, ResponseData = pas });

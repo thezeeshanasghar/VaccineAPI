@@ -299,42 +299,43 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/PAAssignment/active/{doctorId}
-        // Returns all active (non-completed, non-cancelled) assignments for a doctor's clinics today
+        // Returns all active (non-completed, non-cancelled) assignments for a doctor today
         [HttpGet("active/{doctorId}")]
         public async Task<IActionResult> GetActiveForDoctor(long doctorId)
         {
             var today = DateTime.UtcNow.Date;
-            var clinicIds = await _db.Clinics
-                .Where(c => c.DoctorId == doctorId)
-                .Select(c => c.Id)
-                .ToListAsync();
 
-            var assignments = await _db.PAAssignments
+            // Fetch raw assignment rows first, then enrich in memory to avoid EF join translation issues
+            var raw = await _db.PAAssignments
                 .Where(a => a.DoctorId == doctorId
                          && !a.IsCompleted
                          && !a.IsCancelled
                          && a.AssignedAt >= today && a.AssignedAt < today.AddDays(1))
-                .Join(_db.Childs,
-                    a => a.ChildId,
-                    c => c.Id,
-                    (a, c) => new { a, c })
-                .Join(_db.PersonalAssistant,
-                    x => x.a.PersonalAssistantId,
-                    p => p.Id,
-                    (x, p) => new
-                    {
-                        AssignmentId          = x.a.Id,
-                        x.a.AssignedAt,
-                        x.a.Notes,
-                        ChildId               = x.c.Id,
-                        ChildName             = x.c.Name,
-                        x.c.Gender,
-                        x.c.DOB,
-                        x.c.FatherName,
-                        PaId                  = p.Id,
-                        PaName                = p.Name
-                    })
                 .ToListAsync();
+
+            var childIds = raw.Select(a => a.ChildId).Distinct().ToList();
+            var paIds    = raw.Select(a => a.PersonalAssistantId).Distinct().ToList();
+
+            var children = await _db.Childs
+                .Where(c => childIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id);
+
+            var pas = await _db.PersonalAssistant
+                .Where(p => paIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+            var assignments = raw.Select(a => new {
+                AssignmentId = a.Id,
+                a.AssignedAt,
+                a.Notes,
+                ChildId      = a.ChildId,
+                ChildName    = children.ContainsKey(a.ChildId)             ? children[a.ChildId].Name       : "",
+                Gender       = children.ContainsKey(a.ChildId)             ? children[a.ChildId].Gender     : "",
+                DOB          = children.ContainsKey(a.ChildId)             ? children[a.ChildId].DOB        : (DateTime?)null,
+                FatherName   = children.ContainsKey(a.ChildId)             ? children[a.ChildId].FatherName : "",
+                PaId         = a.PersonalAssistantId,
+                PaName       = pas.ContainsKey(a.PersonalAssistantId)      ? pas[a.PersonalAssistantId].Name : ""
+            }).ToList();
 
             return Ok(new { IsSuccess = true, ResponseData = assignments });
         }

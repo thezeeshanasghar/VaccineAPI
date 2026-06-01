@@ -64,6 +64,11 @@ namespace VaccineAPI.Controllers
                         })
                     .ToList();
 
+                var invoice = _db.InvoiceSubmissions
+                    .Where(i => i.ChildId == a.ChildId && i.PaId == paId)
+                    .OrderByDescending(i => i.SubmittedAt)
+                    .FirstOrDefault();
+
                 return new
                 {
                     a.AssignmentId,
@@ -75,6 +80,7 @@ namespace VaccineAPI.Controllers
                     a.DOB,
                     a.FatherName,
                     a.IsAutoCreated,
+                    InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
                     Schedules = schedules
                 };
             }).ToList();

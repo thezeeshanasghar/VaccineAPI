@@ -473,18 +473,18 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
-        // GET /api/PaCashHandover/my-reconciliation/{paId}/{clinicId}
-        // PA's own view: total invoiced, confirmed by doctor, still pending.
-        [HttpGet("my-reconciliation/{paId}/{clinicId}")]
-        public IActionResult GetMyReconciliation(long paId, long clinicId)
+        // GET /api/PaCashHandover/my-reconciliation/{paId}?clinicId=X
+        // PA's own view across all clinics (or one clinic if clinicId provided).
+        [HttpGet("my-reconciliation/{paId}")]
+        public IActionResult GetMyReconciliation(long paId, [FromQuery] long? clinicId = null)
         {
-            var invoices = _db.InvoiceSubmissions
-                .Where(i =>
-                    i.PaId == paId &&
-                    i.ClinicId == clinicId &&
-                    i.TotalAmount > 0)
-                .OrderByDescending(i => i.InvoiceDate)
-                .ToList();
+            var query = _db.InvoiceSubmissions
+                .Where(i => i.PaId == paId && i.TotalAmount > 0);
+
+            if (clinicId.HasValue)
+                query = query.Where(i => i.ClinicId == clinicId.Value);
+
+            var invoices = query.OrderByDescending(i => i.InvoiceDate).ToList();
 
             var childIds = invoices.Select(i => i.ChildId).Distinct().ToList();
             var childNames = _db.Childs
@@ -493,6 +493,7 @@ namespace VaccineAPI.Controllers
 
             var rows = invoices.Select(i => new {
                 InvoiceSubmissionId = i.Id,
+                ChildId             = i.ChildId,
                 Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
                 Amount              = i.TotalAmount,
@@ -512,5 +513,10 @@ namespace VaccineAPI.Controllers
                 }
             });
         }
+
+        // Keep old route for backward compat with any existing callers
+        [HttpGet("my-reconciliation/{paId}/{clinicId}")]
+        public IActionResult GetMyReconciliationByClinic(long paId, long clinicId)
+            => GetMyReconciliation(paId, clinicId);
     }
 }

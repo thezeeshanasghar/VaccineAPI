@@ -106,6 +106,34 @@ namespace VaccineAPI.Controllers
             }
         }
        
+       [HttpGet("invoice-total")]
+        public ActionResult<Response<decimal>> GetInvoiceTotal([FromQuery] long childId, [FromQuery] string scheduleDate)
+        {
+            if (!DateTime.TryParse(scheduleDate, out var date))
+                return Ok(new Response<decimal>(false, "Invalid date.", 0));
+
+            // Find all invoice IDs for this child on this visit date via the Schedule table
+            var invoiceIds = _db.Invoices
+                .Where(i => i.ChildId == childId && !i.IsVoided)
+                .Join(_db.Schedules.Where(s => s.ChildId == childId && s.GivenDate.HasValue && s.GivenDate.Value.Date == date.Date),
+                      inv => inv.DoseId, sch => sch.DoseId, (inv, sch) => inv.InvoiceId)
+                .Distinct()
+                .ToList();
+
+            if (!invoiceIds.Any())
+                return Ok(new Response<decimal>(false, "No invoice found for this visit.", 0));
+
+            var vaccineTotal = _db.Invoices
+                .Where(i => invoiceIds.Contains(i.InvoiceId) && !i.IsVoided)
+                .Sum(i => i.Amount);
+
+            var feeTotal = _db.Fee
+                .Where(f => invoiceIds.Contains(f.InvoiceId))
+                .Sum(f => f.Amount);
+
+            return Ok(new Response<decimal>(true, "Total found.", vaccineTotal + feeTotal));
+        }
+
        [HttpGet("consultation-fee/{invoiceId}")]
         public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
         {

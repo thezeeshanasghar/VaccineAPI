@@ -258,8 +258,8 @@ namespace VaccineAPI.Controllers
                     var paName = "another PA";
                     if (existingRow != null)
                     {
-                        var pa = await _db.PersonalAssistant.FindAsync(existingRow.PersonalAssistantId);
-                        paName = pa?.Name ?? "another PA";
+                        var existingPa = await _db.PersonalAssistant.FindAsync(existingRow.PersonalAssistantId);
+                        paName = existingPa?.Name ?? "another PA";
                     }
                     return Ok(new { IsSuccess = false, Message = $"This patient is already assigned to {paName} today. Cancel that assignment first or use Reassign." });
                 }

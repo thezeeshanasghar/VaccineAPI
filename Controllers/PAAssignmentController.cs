@@ -160,6 +160,25 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
 
+            // Notify doctor by email (fire-and-forget)
+            if (dto.CallerType == "PA")
+            {
+                var doctor = await _db.Doctors.FindAsync(assignment.DoctorId);
+                if (doctor != null && !string.IsNullOrEmpty(doctor.Email))
+                {
+                    var paUser = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
+                    var paNameStr    = paUser?.Name ?? "Your PA";
+                    var child        = await _db.Childs.FindAsync(assignment.ChildId);
+                    var childNameStr = child?.Name ?? "a patient";
+                    var reasonStr    = dto.Reason ?? "No reason given";
+                    _ = Task.Run(() => UserEmail.SendEmail(
+                        doctor.Email,
+                        $"{paNameStr} has cancelled the assignment for patient {childNameStr}. Reason: {reasonStr}. Please reassign or reschedule.",
+                        "PA Assignment Cancelled"
+                    ));
+                }
+            }
+
             return Ok(new { IsSuccess = true });
         }
 
@@ -281,11 +300,11 @@ namespace VaccineAPI.Controllers
                 await _db.SaveChangesAsync();
 
                 // Fire-and-forget email
-                var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
-                if (pa != null && !string.IsNullOrEmpty(pa.Email))
+                var newPa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
+                if (newPa != null && !string.IsNullOrEmpty(newPa.Email))
                 {
                     _ = Task.Run(() => UserEmail.SendEmail(
-                        pa.Email,
+                        newPa.Email,
                         "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
                         "New Patient Assignment"
                     ));

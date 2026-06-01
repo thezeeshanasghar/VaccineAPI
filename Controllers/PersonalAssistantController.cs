@@ -202,6 +202,21 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<PersonalAssistant>(true, $"Personal Assistant {status} successfully.", pa));
         }
 
+        [HttpPut("{id:long}/toggle-verify")]
+        public ActionResult ToggleVerify(long id)
+        {
+            var pa = _db.PersonalAssistant.Find(id);
+            if (pa == null)
+                return NotFound(new { message = "Personal Assistant not found." });
+
+            pa.IsVerified = !pa.IsVerified;
+            _db.Entry(pa).State = EntityState.Modified;
+            _db.SaveChanges();
+
+            string status = pa.IsVerified ? "approved" : "unapproved";
+            return Ok(new Response<PersonalAssistant>(true, $"Personal Assistant {status} successfully.", pa));
+        }
+
         [HttpPost("signup")]
         public ActionResult<Response<PersonalAssistantDTO>> Signup([FromBody] PersonalAssistantDTO personalAssistantDTO)
         {
@@ -240,7 +255,7 @@ namespace VaccineAPI.Controllers
                 AllowVacation = false,
                 AllowAnalytics = false,
                 AllowChild = false,
-                IsVerified = false
+                IsVerified = true
             };
             _db.PersonalAssistant.Add(personalAssistant);
             _db.SaveChanges();

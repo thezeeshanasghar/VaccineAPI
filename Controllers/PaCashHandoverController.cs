@@ -400,5 +400,126 @@ namespace VaccineAPI.Controllers
 
             return Ok(new { IsSuccess = true, ResponseData = new { Outstanding = result, PendingHandovers = pendingHandovers } });
         }
+
+        // GET /api/PaCashHandover/reconciliation/{doctorId}
+        // Returns one row per schedule line where a PA collected payment — doctor view.
+        [HttpGet("reconciliation/{doctorId}")]
+        public IActionResult GetReconciliation(
+            long doctorId,
+            [FromQuery] long? clinicId = null,
+            [FromQuery] long? paId = null,
+            [FromQuery] string fromDate = null,
+            [FromQuery] string toDate = null)
+        {
+            DateTime? from = null;
+            DateTime? to = null;
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd)) from = fd.Date;
+            if (!string.IsNullOrEmpty(toDate)   && DateTime.TryParse(toDate,   out var td)) to   = td.Date.AddDays(1);
+
+            var clinicIds = _db.Clinics
+                .Where(c => c.DoctorId == doctorId)
+                .Select(c => c.Id)
+                .ToList();
+
+            var paIds = _db.PersonalAssistant
+                .Select(p => new { p.Id, p.Name })
+                .ToList()
+                .ToDictionary(p => p.Id, p => p.Name);
+
+            var query = _db.Schedules
+                .Include(s => s.Child).ThenInclude(c => c.Clinic)
+                .Include(s => s.Dose)
+                .Where(s =>
+                    s.PaymentCollectorPaId.HasValue &&
+                    s.IsDone == true &&
+                    s.Amount != null && s.Amount > 0 &&
+                    s.Child != null &&
+                    clinicIds.Contains(s.Child.ClinicId));
+
+            if (clinicId.HasValue)
+                query = query.Where(s => s.Child.ClinicId == clinicId.Value);
+            if (paId.HasValue)
+                query = query.Where(s => s.PaymentCollectorPaId == paId.Value);
+            if (from.HasValue)
+                query = query.Where(s => s.GivenDate.HasValue && s.GivenDate.Value.Date >= from.Value);
+            if (to.HasValue)
+                query = query.Where(s => s.GivenDate.HasValue && s.GivenDate.Value.Date < to.Value);
+
+            var rows = query
+                .OrderByDescending(s => s.GivenDate)
+                .Select(s => new {
+                    ScheduleId  = s.Id,
+                    Date        = s.GivenDate.HasValue ? s.GivenDate.Value.ToString("yyyy-MM-dd") : "",
+                    PatientName = s.Child != null ? s.Child.Name : "",
+                    Vaccines    = s.Dose != null ? s.Dose.Name : "",
+                    Amount      = s.Amount ?? 0m,
+                    PaymentMode = s.PaymentMode ?? "Cash",
+                    IsConfirmed = s.IsPaymentApproved,
+                    ConfirmedAt = (string)null,
+                    PaId        = s.PaymentCollectorPaId.Value,
+                    ClinicId    = s.Child != null ? s.Child.ClinicId : 0L,
+                    ClinicName  = s.Child != null && s.Child.Clinic != null ? s.Child.Clinic.Name : ""
+                })
+                .ToList();
+
+            var result = rows.Select(r => new {
+                r.ScheduleId,
+                r.Date,
+                r.PatientName,
+                r.Vaccines,
+                r.Amount,
+                r.PaymentMode,
+                r.IsConfirmed,
+                r.ConfirmedAt,
+                r.PaId,
+                PaName    = paIds.ContainsKey(r.PaId) ? paIds[r.PaId] : "",
+                r.ClinicId,
+                r.ClinicName
+            }).ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
+        }
+
+        // GET /api/PaCashHandover/my-reconciliation/{paId}/{clinicId}
+        // PA's own view: how much they collected, confirmed, still pending.
+        [HttpGet("my-reconciliation/{paId}/{clinicId}")]
+        public IActionResult GetMyReconciliation(long paId, long clinicId)
+        {
+            var rows = _db.Schedules
+                .Include(s => s.Child).ThenInclude(c => c.Clinic)
+                .Include(s => s.Dose)
+                .Where(s =>
+                    s.PaymentCollectorPaId == paId &&
+                    s.IsDone == true &&
+                    s.Amount != null && s.Amount > 0 &&
+                    s.Child != null &&
+                    s.Child.ClinicId == clinicId)
+                .OrderByDescending(s => s.GivenDate)
+                .Select(s => new {
+                    ScheduleId  = s.Id,
+                    Date        = s.GivenDate.HasValue ? s.GivenDate.Value.ToString("yyyy-MM-dd") : "",
+                    PatientName = s.Child != null ? s.Child.Name : "",
+                    Vaccines    = s.Dose != null ? s.Dose.Name : "",
+                    Amount      = s.Amount ?? 0m,
+                    PaymentMode = s.PaymentMode ?? "Cash",
+                    IsConfirmed = s.IsPaymentApproved,
+                    PaId        = paId,
+                    ClinicId    = clinicId
+                })
+                .ToList();
+
+            var totalCollected = rows.Sum(r => r.Amount);
+            var totalConfirmed = rows.Where(r => r.IsConfirmed).Sum(r => r.Amount);
+
+            return Ok(new {
+                IsSuccess = true,
+                ResponseData = new {
+                    TotalCollected = totalCollected,
+                    TotalConfirmed = totalConfirmed,
+                    TotalPending   = totalCollected - totalConfirmed,
+                    Rows           = rows
+                }
+            });
+        }
     }
 }

@@ -1,7 +1,9 @@
 using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace VaccineAPI.Models
 {
+    [Table("pacashhandovers")]
     public class PaCashHandover
     {
         public long Id { get; set; }

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace VaccineAPI.Models
 {
+    [Table("papermissions")]
     public class PaPermission
     {
         public long Id { get; set; }

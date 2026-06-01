@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace VaccineAPI.Models
 {
+    [Table("paactivitylogs")]
     public class PaActivityLog
     {
         public long Id { get; set; }

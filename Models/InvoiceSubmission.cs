@@ -1,7 +1,9 @@
 using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace VaccineAPI.Models
 {
+    [Table("invoicesubmissions")]
     public class InvoiceSubmission
     {
         public long Id { get; set; }

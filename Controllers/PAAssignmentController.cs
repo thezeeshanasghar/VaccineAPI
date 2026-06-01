@@ -28,9 +28,9 @@ namespace VaccineAPI.Controllers
                 .ToListAsync();
 
             var childIds = rawAssignments.Select(a => a.ChildId).Distinct().ToList();
-            var children = await _db.Childs
-                .Where(c => childIds.Contains(c.Id))
-                .ToDictionaryAsync(c => c.Id);
+            var children = childIds.Any()
+                ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
+                : new Dictionary<long, VaccineAPI.Models.Child>();
 
             // Enrich each assignment with child info, schedules, and invoice
             var result = rawAssignments.Select(a =>
@@ -331,13 +331,13 @@ namespace VaccineAPI.Controllers
             var childIds = raw.Select(a => a.ChildId).Distinct().ToList();
             var paIds    = raw.Select(a => a.PersonalAssistantId).Distinct().ToList();
 
-            var children = await _db.Childs
-                .Where(c => childIds.Contains(c.Id))
-                .ToDictionaryAsync(c => c.Id);
+            var children = childIds.Any()
+                ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
+                : new Dictionary<long, VaccineAPI.Models.Child>();
 
-            var pas = await _db.PersonalAssistant
-                .Where(p => paIds.Contains(p.Id))
-                .ToDictionaryAsync(p => p.Id);
+            var pas = paIds.Any()
+                ? await _db.PersonalAssistant.Where(p => paIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id)
+                : new Dictionary<long, VaccineAPI.Models.PersonalAssistant>();
 
             var assignments = raw.Select(a => new {
                 AssignmentId = a.Id,

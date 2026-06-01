@@ -402,7 +402,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/PaCashHandover/reconciliation/{doctorId}
-        // Returns one row per schedule line where a PA collected payment — doctor view.
+        // One row per downloaded invoice (InvoiceSubmission) where a PA submitted it.
         [HttpGet("reconciliation/{doctorId}")]
         public IActionResult GetReconciliation(
             long doctorId,
@@ -412,7 +412,7 @@ namespace VaccineAPI.Controllers
             [FromQuery] string toDate = null)
         {
             DateTime? from = null;
-            DateTime? to = null;
+            DateTime? to   = null;
             if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd)) from = fd.Date;
             if (!string.IsNullOrEmpty(toDate)   && DateTime.TryParse(toDate,   out var td)) to   = td.Date.AddDays(1);
 
@@ -421,98 +421,89 @@ namespace VaccineAPI.Controllers
                 .Select(c => c.Id)
                 .ToList();
 
-            var paIds = _db.PersonalAssistant
+            var paNames = _db.PersonalAssistant
                 .Select(p => new { p.Id, p.Name })
                 .ToList()
                 .ToDictionary(p => p.Id, p => p.Name);
 
-            var query = _db.Schedules
-                .Include(s => s.Child).ThenInclude(c => c.Clinic)
-                .Include(s => s.Dose)
-                .Where(s =>
-                    s.PaymentCollectorPaId.HasValue &&
-                    s.IsDone == true &&
-                    s.Amount != null && s.Amount > 0 &&
-                    s.Child != null &&
-                    clinicIds.Contains(s.Child.ClinicId));
+            var clinicNames = _db.Clinics
+                .Where(c => clinicIds.Contains(c.Id))
+                .ToDictionary(c => c.Id, c => c.Name ?? "");
+
+            // Source of truth: InvoiceSubmission — created when PA downloads invoice
+            var invQuery = _db.InvoiceSubmissions
+                .Where(i =>
+                    i.PaId.HasValue &&
+                    i.TotalAmount > 0 &&
+                    i.ClinicId.HasValue &&
+                    clinicIds.Contains(i.ClinicId.Value));
 
             if (clinicId.HasValue)
-                query = query.Where(s => s.Child.ClinicId == clinicId.Value);
+                invQuery = invQuery.Where(i => i.ClinicId == clinicId.Value);
             if (paId.HasValue)
-                query = query.Where(s => s.PaymentCollectorPaId == paId.Value);
+                invQuery = invQuery.Where(i => i.PaId == paId.Value);
             if (from.HasValue)
-                query = query.Where(s => s.GivenDate.HasValue && s.GivenDate.Value.Date >= from.Value);
+                invQuery = invQuery.Where(i => i.InvoiceDate.Date >= from.Value);
             if (to.HasValue)
-                query = query.Where(s => s.GivenDate.HasValue && s.GivenDate.Value.Date < to.Value);
+                invQuery = invQuery.Where(i => i.InvoiceDate.Date < to.Value);
 
-            var rows = query
-                .OrderByDescending(s => s.GivenDate)
-                .Select(s => new {
-                    ScheduleId  = s.Id,
-                    Date        = s.GivenDate.HasValue ? s.GivenDate.Value.ToString("yyyy-MM-dd") : "",
-                    PatientName = s.Child != null ? s.Child.Name : "",
-                    Vaccines    = s.Dose != null ? s.Dose.Name : "",
-                    Amount      = s.Amount ?? 0m,
-                    PaymentMode = s.PaymentMode ?? "Cash",
-                    IsConfirmed = s.IsPaymentApproved,
-                    ConfirmedAt = (string)null,
-                    PaId        = s.PaymentCollectorPaId.Value,
-                    ClinicId    = s.Child != null ? s.Child.ClinicId : 0L,
-                    ClinicName  = s.Child != null && s.Child.Clinic != null ? s.Child.Clinic.Name : ""
-                })
-                .ToList();
+            var invoices = invQuery.OrderByDescending(i => i.InvoiceDate).ToList();
 
-            var result = rows.Select(r => new {
-                r.ScheduleId,
-                r.Date,
-                r.PatientName,
-                r.Vaccines,
-                r.Amount,
-                r.PaymentMode,
-                r.IsConfirmed,
-                r.ConfirmedAt,
-                r.PaId,
-                PaName    = paIds.ContainsKey(r.PaId) ? paIds[r.PaId] : "",
-                r.ClinicId,
-                r.ClinicName
+            var childIds = invoices.Select(i => i.ChildId).Distinct().ToList();
+            var childNames = _db.Childs
+                .Where(c => childIds.Contains(c.Id))
+                .ToDictionary(c => c.Id, c => c.Name ?? "");
+
+            var result = invoices.Select(i => new {
+                InvoiceSubmissionId = i.Id,
+                ScheduleId          = i.Id,          // keep alias so existing frontend key works
+                Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
+                PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
+                Vaccines            = "Invoice",
+                Amount              = i.TotalAmount,
+                PaymentMode         = "Cash",         // invoice-level; mode detail is on schedule rows
+                IsConfirmed         = i.IsConfirmedByDoctor,
+                ConfirmedAt         = i.ConfirmedAt.HasValue ? i.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                PaId                = i.PaId.Value,
+                PaName              = paNames.ContainsKey(i.PaId.Value) ? paNames[i.PaId.Value] : "",
+                ClinicId            = i.ClinicId.Value,
+                ClinicName          = clinicNames.ContainsKey(i.ClinicId.Value) ? clinicNames[i.ClinicId.Value] : ""
             }).ToList();
 
             return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
         // GET /api/PaCashHandover/my-reconciliation/{paId}/{clinicId}
-        // PA's own view: how much they collected, confirmed, still pending.
+        // PA's own view: total invoiced, confirmed by doctor, still pending.
         [HttpGet("my-reconciliation/{paId}/{clinicId}")]
         public IActionResult GetMyReconciliation(long paId, long clinicId)
         {
-            var rows = _db.Schedules
-                .Include(s => s.Child).ThenInclude(c => c.Clinic)
-                .Include(s => s.Dose)
-                .Where(s =>
-                    s.PaymentCollectorPaId == paId &&
-                    s.IsDone == true &&
-                    s.Amount != null && s.Amount > 0 &&
-                    s.Child != null &&
-                    s.Child.ClinicId == clinicId)
-                .OrderByDescending(s => s.GivenDate)
-                .Select(s => new {
-                    ScheduleId  = s.Id,
-                    Date        = s.GivenDate.HasValue ? s.GivenDate.Value.ToString("yyyy-MM-dd") : "",
-                    PatientName = s.Child != null ? s.Child.Name : "",
-                    Vaccines    = s.Dose != null ? s.Dose.Name : "",
-                    Amount      = s.Amount ?? 0m,
-                    PaymentMode = s.PaymentMode ?? "Cash",
-                    IsConfirmed = s.IsPaymentApproved,
-                    PaId        = paId,
-                    ClinicId    = clinicId
-                })
+            var invoices = _db.InvoiceSubmissions
+                .Where(i =>
+                    i.PaId == paId &&
+                    i.ClinicId == clinicId &&
+                    i.TotalAmount > 0)
+                .OrderByDescending(i => i.InvoiceDate)
                 .ToList();
 
-            var totalCollected = rows.Sum(r => r.Amount);
-            var totalConfirmed = rows.Where(r => r.IsConfirmed).Sum(r => r.Amount);
+            var childIds = invoices.Select(i => i.ChildId).Distinct().ToList();
+            var childNames = _db.Childs
+                .Where(c => childIds.Contains(c.Id))
+                .ToDictionary(c => c.Id, c => c.Name ?? "");
+
+            var rows = invoices.Select(i => new {
+                InvoiceSubmissionId = i.Id,
+                Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
+                PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
+                Amount              = i.TotalAmount,
+                IsConfirmed         = i.IsConfirmedByDoctor
+            }).ToList();
+
+            var totalCollected = invoices.Sum(i => i.TotalAmount);
+            var totalConfirmed = invoices.Where(i => i.IsConfirmedByDoctor).Sum(i => i.TotalAmount);
 
             return Ok(new {
-                IsSuccess = true,
+                IsSuccess    = true,
                 ResponseData = new {
                     TotalCollected = totalCollected,
                     TotalConfirmed = totalConfirmed,

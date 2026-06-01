@@ -14,5 +14,7 @@ namespace VaccineAPI.Models
         public int EditCount { get; set; } = 0;
         public decimal ConsultationFee { get; set; }
         public decimal TotalAmount { get; set; } = 0;
+        public bool IsConfirmedByDoctor { get; set; } = false;
+        public DateTime? ConfirmedAt { get; set; }
     }
 }

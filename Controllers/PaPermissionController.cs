@@ -99,21 +99,13 @@ namespace VaccineAPI.Controllers
                 existing.SetVacationDates = incoming.SetVacationDates;
                 existing.ApplySessionTimings = incoming.ApplySessionTimings;
 
-                existing.ViewStock = incoming.ViewStock;
-                existing.UpdateSalePrice = incoming.UpdateSalePrice;
-                existing.AddBrand = incoming.AddBrand;
-                existing.EditBrand = incoming.EditBrand;
-                existing.AddPurchaseBill = incoming.AddPurchaseBill;
-                existing.EditPurchaseBill = incoming.EditPurchaseBill;
-                existing.DeletePurchaseBill = incoming.DeletePurchaseBill;
-                existing.ApprovePurchaseBill = incoming.ApprovePurchaseBill;
-                existing.AdjustStock = incoming.AdjustStock;
-                existing.ViewAdjustHistory = incoming.ViewAdjustHistory;
-                existing.TransferStock = incoming.TransferStock;
-                existing.ViewTransferHistory = incoming.ViewTransferHistory;
-                existing.AddDirectSale = incoming.AddDirectSale;
-                existing.ViewDirectSaleHistory = incoming.ViewDirectSaleHistory;
-                existing.DownloadStockReport = incoming.DownloadStockReport;
+                existing.StockSuppliers = incoming.StockSuppliers;
+                existing.StockPurchaseBills = incoming.StockPurchaseBills;
+                existing.StockOverview = incoming.StockOverview;
+                existing.StockAdjust = incoming.StockAdjust;
+                existing.StockTransfer = incoming.StockTransfer;
+                existing.StockDirectSale = incoming.StockDirectSale;
+                existing.StockReports = incoming.StockReports;
 
                 existing.ViewAnalytics = incoming.ViewAnalytics;
 

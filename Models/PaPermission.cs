@@ -75,21 +75,13 @@ namespace VaccineAPI.Models
         public bool ApplySessionTimings { get; set; }
 
         // Stock Management
-        public bool ViewStock { get; set; }
-        public bool UpdateSalePrice { get; set; }
-        public bool AddBrand { get; set; }
-        public bool EditBrand { get; set; }
-        public bool AddPurchaseBill { get; set; }
-        public bool EditPurchaseBill { get; set; }
-        public bool DeletePurchaseBill { get; set; }
-        public bool ApprovePurchaseBill { get; set; }
-        public bool AdjustStock { get; set; }
-        public bool ViewAdjustHistory { get; set; }
-        public bool TransferStock { get; set; }
-        public bool ViewTransferHistory { get; set; }
-        public bool AddDirectSale { get; set; }
-        public bool ViewDirectSaleHistory { get; set; }
-        public bool DownloadStockReport { get; set; }
+        public bool StockSuppliers { get; set; }
+        public bool StockPurchaseBills { get; set; }
+        public bool StockOverview { get; set; }
+        public bool StockAdjust { get; set; }
+        public bool StockTransfer { get; set; }
+        public bool StockDirectSale { get; set; }
+        public bool StockReports { get; set; }
 
         // Analytics
         public bool ViewAnalytics { get; set; }

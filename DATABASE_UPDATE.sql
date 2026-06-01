@@ -199,3 +199,56 @@ ALTER TABLE `paassignment`
 -- PA Assignment Flow A: auto-created when PA gives vaccine
 ALTER TABLE `paassignment`
   ADD COLUMN `IsAutoCreated` tinyint(1) NOT NULL DEFAULT 0;
+
+-- =====================================================
+-- Refactor Stock Permissions in papermissions table
+-- Replace 15 granular flags with 7 card-level flags
+-- =====================================================
+ALTER TABLE `papermissions`
+  DROP COLUMN `ViewStock`,
+  DROP COLUMN `UpdateSalePrice`,
+  DROP COLUMN `AddBrand`,
+  DROP COLUMN `EditBrand`,
+  DROP COLUMN `AddPurchaseBill`,
+  DROP COLUMN `EditPurchaseBill`,
+  DROP COLUMN `DeletePurchaseBill`,
+  DROP COLUMN `ApprovePurchaseBill`,
+  DROP COLUMN `AdjustStock`,
+  DROP COLUMN `ViewAdjustHistory`,
+  DROP COLUMN `TransferStock`,
+  DROP COLUMN `ViewTransferHistory`,
+  DROP COLUMN `AddDirectSale`,
+  DROP COLUMN `ViewDirectSaleHistory`,
+  DROP COLUMN `DownloadStockReport`,
+  ADD COLUMN `StockSuppliers`     tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `StockPurchaseBills` tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `StockOverview`      tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `StockAdjust`        tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `StockTransfer`      tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `StockDirectSale`    tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `StockReports`       tinyint(1) NOT NULL DEFAULT 0;
+
+-- Rollback:
+-- ALTER TABLE `papermissions`
+--   DROP COLUMN `StockSuppliers`,
+--   DROP COLUMN `StockPurchaseBills`,
+--   DROP COLUMN `StockOverview`,
+--   DROP COLUMN `StockAdjust`,
+--   DROP COLUMN `StockTransfer`,
+--   DROP COLUMN `StockDirectSale`,
+--   DROP COLUMN `StockReports`,
+--   ADD COLUMN `ViewStock`            tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `UpdateSalePrice`      tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `AddBrand`             tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `EditBrand`            tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `AddPurchaseBill`      tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `EditPurchaseBill`     tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `DeletePurchaseBill`   tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `ApprovePurchaseBill`  tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `AdjustStock`          tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `ViewAdjustHistory`    tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `TransferStock`        tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `ViewTransferHistory`  tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `AddDirectSale`        tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `ViewDirectSaleHistory` tinyint(1) NOT NULL DEFAULT 0,
+--   ADD COLUMN `DownloadStockReport`  tinyint(1) NOT NULL DEFAULT 0;

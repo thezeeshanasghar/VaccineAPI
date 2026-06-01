@@ -131,3 +131,39 @@ ALTER TABLE `schedules`
 -- Rollback:
 -- ALTER TABLE `schedules` DROP COLUMN `PaymentApprovedAt`;
 -- ALTER TABLE `schedules` DROP COLUMN `PaymentApprovedByDoctorId`;
+
+-- =====================================================
+-- Add Payment Collection Columns to Schedules Table
+-- PaymentMode, OnlineService, IsPaymentCollected,
+-- IsPaymentApproved, PaymentCollectorPaId,
+-- GivenByPaId, SkippedByPaId, SkippedAt,
+-- and audit counters GiveCount/UngiveCount/SkipCount/UnskipCount
+-- =====================================================
+ALTER TABLE `schedules`
+  ADD COLUMN `PaymentMode`           VARCHAR(30)  NOT NULL DEFAULT 'Cash',
+  ADD COLUMN `OnlineService`         VARCHAR(100) NULL,
+  ADD COLUMN `IsPaymentApproved`     TINYINT(1)   NOT NULL DEFAULT 0,
+  ADD COLUMN `IsPaymentCollected`    TINYINT(1)   NOT NULL DEFAULT 0,
+  ADD COLUMN `PaymentCollectorPaId`  BIGINT       NULL,
+  ADD COLUMN `GivenByPaId`           BIGINT       NULL,
+  ADD COLUMN `SkippedByPaId`         BIGINT       NULL,
+  ADD COLUMN `SkippedAt`             DATETIME     NULL,
+  ADD COLUMN `GiveCount`             INT          NOT NULL DEFAULT 0,
+  ADD COLUMN `UngiveCount`           INT          NOT NULL DEFAULT 0,
+  ADD COLUMN `SkipCount`             INT          NOT NULL DEFAULT 0,
+  ADD COLUMN `UnskipCount`           INT          NOT NULL DEFAULT 0;
+
+-- Rollback:
+-- ALTER TABLE `schedules`
+--   DROP COLUMN `PaymentMode`,
+--   DROP COLUMN `OnlineService`,
+--   DROP COLUMN `IsPaymentApproved`,
+--   DROP COLUMN `IsPaymentCollected`,
+--   DROP COLUMN `PaymentCollectorPaId`,
+--   DROP COLUMN `GivenByPaId`,
+--   DROP COLUMN `SkippedByPaId`,
+--   DROP COLUMN `SkippedAt`,
+--   DROP COLUMN `GiveCount`,
+--   DROP COLUMN `UngiveCount`,
+--   DROP COLUMN `SkipCount`,
+--   DROP COLUMN `UnskipCount`;

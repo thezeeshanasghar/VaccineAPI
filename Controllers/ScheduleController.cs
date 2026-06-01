@@ -84,6 +84,14 @@ namespace VaccineAPI.Controllers
         [HttpPost("add-schedule")]
         public Response<ScheduleDTO> Insert([FromBody] ScheduleDTO scheduleDTO)
         {
+            // PA permission check
+            if (scheduleDTO.PaId.HasValue)
+            {
+                var paPerm = _db.PaPermissions.FirstOrDefault(p => p.PaId == scheduleDTO.PaId.Value);
+                if (paPerm == null || !paPerm.AddSpecialDoses)
+                    return new Response<ScheduleDTO>(false, "You do not have permission to add vaccines to the schedule.", null);
+            }
+
             // Check if DoseId is 131 and child is 5 years or older
             if (scheduleDTO.DoseId == 131)
             {
@@ -99,7 +107,7 @@ namespace VaccineAPI.Controllers
                 {
                     var childAgeInDays = (DateTime.UtcNow.AddHours(5).Date - child.DOB.Date).TotalDays;
                     var childAgeInYears = childAgeInDays / 365.25;
-                    
+
                     if (childAgeInYears >= 5)
                     {
                         return new Response<ScheduleDTO>(
@@ -110,10 +118,29 @@ namespace VaccineAPI.Controllers
                     }
                 }
             }
-            
+
             Schedule scheduleDb = _mapper.Map<Schedule>(scheduleDTO);
             scheduleDb.BrandId = null;
             _db.Schedules.Add(scheduleDb);
+
+            if (scheduleDTO.PaId.HasValue)
+            {
+                var addedDose = _db.Doses.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
+                var addedDoseName = addedDose?.Name ?? addedDose?.Vaccine?.Name ?? $"Dose {scheduleDTO.DoseId}";
+                _db.PaActivityLogs.Add(new PaActivityLog
+                {
+                    PaId = scheduleDTO.PaId.Value,
+                    DoctorId = scheduleDTO.DoctorId,
+                    ClinicId = null,
+                    PatientId = scheduleDTO.ChildId,
+                    ActionCode = "SCHEDULE_ADD_VACCINE",
+                    Description = $"Added {addedDoseName} to schedule for patient {scheduleDTO.ChildId}",
+                    Notes = "",
+                    IsReversal = false,
+                    ActionDate = DateTime.UtcNow
+                });
+            }
+
             _db.SaveChanges();
             return new Response<ScheduleDTO>(true, null, scheduleDTO);
         }
@@ -950,13 +977,24 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<IEnumerable<ScheduleDTO>> Post(IEnumerable<ScheduleDTO> dsDTOS)
         {
-            foreach (var scheduleDTO in dsDTOS)
+            var dtoList = dsDTOS.ToList();
+
+            // PA permission check — read PaId from first item (all items share the same caller)
+            var firstPaId = dtoList.FirstOrDefault(x => x.PaId.HasValue)?.PaId;
+            if (firstPaId.HasValue)
+            {
+                var paPerm = _db.PaPermissions.FirstOrDefault(p => p.PaId == firstPaId.Value);
+                if (paPerm == null || !paPerm.AddSpecialDoses)
+                    return new Response<IEnumerable<ScheduleDTO>>(false, "You do not have permission to add vaccines to the schedule.", null);
+            }
+
+            foreach (var scheduleDTO in dtoList)
             {
                 if (String.IsNullOrEmpty(scheduleDTO.DiseaseYear))
                     scheduleDTO.DiseaseYear = "";
 
                 var dbChild = _db.Childs.FirstOrDefault(x => x.Id == scheduleDTO.ChildId);
-                var dbDose = _db.Doses.FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
+                var dbDose = _db.Doses.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
                 scheduleDTO.Date = calculateDate(dbChild.DOB, dbDose.MinAge);
                 if (string.IsNullOrEmpty(scheduleDTO.Expiry?.ToString()))
                 {
@@ -964,10 +1002,28 @@ namespace VaccineAPI.Controllers
                 }
                 Schedule scheduleDB = _mapper.Map<Schedule>(scheduleDTO);
                 _db.Schedules.Add(scheduleDB);
+
+                if (scheduleDTO.PaId.HasValue)
+                {
+                    var doseName = dbDose?.Name ?? dbDose?.Vaccine?.Name ?? $"Dose {scheduleDTO.DoseId}";
+                    _db.PaActivityLogs.Add(new PaActivityLog
+                    {
+                        PaId = scheduleDTO.PaId.Value,
+                        DoctorId = scheduleDTO.DoctorId,
+                        ClinicId = null,
+                        PatientId = scheduleDTO.ChildId,
+                        ActionCode = "SCHEDULE_ADD_VACCINE",
+                        Description = $"Added {doseName} to schedule for patient {scheduleDTO.ChildId}",
+                        Notes = "",
+                        IsReversal = false,
+                        ActionDate = DateTime.UtcNow
+                    });
+                }
+
                 _db.SaveChanges();
                 scheduleDTO.Id = scheduleDB.Id;
             }
-            return new Response<IEnumerable<ScheduleDTO>>(true, null, dsDTOS);
+            return new Response<IEnumerable<ScheduleDTO>>(true, null, dtoList);
         }
         [HttpPost("regular")]
         public IActionResult AddSchedule(long DoctorId, long ChildId)
@@ -1813,10 +1869,18 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpDelete("{ChildId}/{DoseId}/{Date}")]
-        public async Task<Response<List<Schedule>>> Delete(long ChildId, long DoseId, string date)
+        public async Task<Response<List<Schedule>>> Delete(long ChildId, long DoseId, string date, [FromQuery] long? paId = null, [FromQuery] long? doctorId = null)
         {
+            // PA permission check
+            if (paId.HasValue)
+            {
+                var paPerm = _db.PaPermissions.FirstOrDefault(p => p.PaId == paId.Value);
+                if (paPerm == null || !paPerm.EditVaccineSchedule)
+                    return new Response<List<Schedule>>(false, "You do not have permission to remove vaccines from the schedule.", null);
+            }
+
             DateTime dateOfInjection = DateTime.ParseExact(date, "dd-MM-yyyy", null);
-            var dose = await _db.Doses.FirstOrDefaultAsync(d => d.Id == DoseId);
+            var dose = await _db.Doses.Include(x => x.Vaccine).FirstOrDefaultAsync(d => d.Id == DoseId);
             if (dose == null)
                 return new Response<List<Schedule>>(false, "Dose not found.", null);
             var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A" };
@@ -1845,8 +1909,26 @@ namespace VaccineAPI.Controllers
                 {
                     _db.Schedules.RemoveRange(schedulesToDelete);
                 }
+
+                if (paId.HasValue && doctorId.HasValue)
+                {
+                    var doseName = dose.Name ?? dose.Vaccine?.Name ?? $"Dose {DoseId}";
+                    _db.PaActivityLogs.Add(new PaActivityLog
+                    {
+                        PaId = paId.Value,
+                        DoctorId = doctorId.Value,
+                        ClinicId = null,
+                        PatientId = ChildId,
+                        ActionCode = "SCHEDULE_REMOVE_VACCINE",
+                        Description = $"Removed {doseName} from schedule for patient {ChildId}",
+                        Notes = "",
+                        IsReversal = false,
+                        ActionDate = DateTime.UtcNow
+                    });
+                }
+
                 await _db.SaveChangesAsync();
-                return new Response<List<Schedule>>(true, "Only one infinite dose left as undone.",null);
+                return new Response<List<Schedule>>(true, "Only one infinite dose left as undone.", null);
             }
             else
             {
@@ -1858,12 +1940,30 @@ namespace VaccineAPI.Controllers
                     .ToListAsync();
 
                 var futureDoses = objList.Where(x => x.Date > dateOfInjection).ToList();
-        
+
                 if (!futureDoses.Any())
                 {
                     return new Response<List<Schedule>>(false, "No future doses found to delete.", null);
                 }
                 _db.Schedules.RemoveRange(futureDoses);
+
+                if (paId.HasValue && doctorId.HasValue)
+                {
+                    var doseName = dose.Name ?? dose.Vaccine?.Name ?? $"Dose {DoseId}";
+                    _db.PaActivityLogs.Add(new PaActivityLog
+                    {
+                        PaId = paId.Value,
+                        DoctorId = doctorId.Value,
+                        ClinicId = null,
+                        PatientId = ChildId,
+                        ActionCode = "SCHEDULE_REMOVE_VACCINE",
+                        Description = $"Removed {doseName} from schedule for patient {ChildId}",
+                        Notes = "",
+                        IsReversal = false,
+                        ActionDate = DateTime.UtcNow
+                    });
+                }
+
                 await _db.SaveChangesAsync();
                 return new Response<List<Schedule>>(true, null, futureDoses);
             }

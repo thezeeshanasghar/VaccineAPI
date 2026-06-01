@@ -22,25 +22,64 @@ namespace VaccineAPI.Controllers
         [HttpGet("pa/{paId}")]
         public async Task<IActionResult> GetByPA(long paId)
         {
-            var assignments = await _db.PAAssignments
+            var rawAssignments = await _db.PAAssignments
                 .Where(a => a.PersonalAssistantId == paId && !a.IsCompleted && !a.IsCancelled)
                 .Join(_db.Childs,
                     a => a.ChildId,
                     c => c.Id,
                     (a, c) => new
                     {
-                        AssignmentId = a.Id,
-                        AssignedAt   = a.AssignedAt,
-                        Notes        = a.Notes,
-                        ChildId      = c.Id,
+                        AssignmentId    = a.Id,
+                        AssignedAt      = a.AssignedAt,
+                        Notes           = a.Notes,
+                        ChildId         = c.Id,
                         c.Name,
                         c.Gender,
                         c.DOB,
-                        c.FatherName
+                        c.FatherName,
+                        IsAutoCreated   = a.IsAutoCreated
                     })
                 .ToListAsync();
 
-            return Ok(new { IsSuccess = true, ResponseData = assignments });
+            // Enrich each assignment with today's schedules this PA gave
+            var result = rawAssignments.Select(a =>
+            {
+                var assignDate = a.AssignedAt.Date;
+                var schedules = _db.Schedules
+                    .Where(s => s.ChildId == a.ChildId
+                             && s.PaymentCollectorPaId == paId
+                             && s.GivenDate.HasValue
+                             && s.GivenDate.Value.Date == assignDate)
+                    .Join(_db.Doses,
+                        s => s.DoseId,
+                        d => d.Id,
+                        (s, d) => new
+                        {
+                            s.Id,
+                            DoseName           = d.Name,
+                            s.IsPaymentCollected,
+                            s.Weight,
+                            s.Height,
+                            s.Circle
+                        })
+                    .ToList();
+
+                return new
+                {
+                    a.AssignmentId,
+                    a.AssignedAt,
+                    a.Notes,
+                    a.ChildId,
+                    a.Name,
+                    a.Gender,
+                    a.DOB,
+                    a.FatherName,
+                    a.IsAutoCreated,
+                    Schedules = schedules
+                };
+            }).ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
         // POST /api/PAAssignment/{id}/complete
@@ -57,6 +96,20 @@ namespace VaccineAPI.Controllers
             // Ownership check: PA can only complete their own assignment
             if (paId.HasValue && assignment.PersonalAssistantId != paId.Value)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to complete this assignment" });
+
+            // Payment gate: all schedules this PA collected must have payment mode recorded
+            var assignDate = assignment.AssignedAt.Date;
+            var unpaid = _db.Schedules
+                .Where(s => s.ChildId == assignment.ChildId
+                         && s.PaymentCollectorPaId == assignment.PersonalAssistantId
+                         && s.GivenDate.HasValue
+                         && s.GivenDate.Value.Date == assignDate
+                         && !s.IsPaymentCollected)
+                .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => d.Name)
+                .ToList();
+
+            if (unpaid.Any())
+                return Ok(new { IsSuccess = false, Message = "Please record payment mode before completing. Unpaid vaccines: " + string.Join(", ", unpaid) });
 
             assignment.IsCompleted  = true;
             assignment.CompletedAt  = DateTime.UtcNow;

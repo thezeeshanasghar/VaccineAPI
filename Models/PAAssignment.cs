@@ -17,5 +17,6 @@ namespace VaccineAPI.Models
         public DateTime? CancelledAt { get; set; }
         public string? CancelReason { get; set; }
         public long? ReassignedFromAssignmentId { get; set; }
+        public bool IsAutoCreated { get; set; } = false;
     }
 }

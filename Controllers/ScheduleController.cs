@@ -655,6 +655,9 @@ namespace VaccineAPI.Controllers
                 dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
                 ScheduleDTO newData = _mapper.Map<ScheduleDTO>(dbSchedule);
+                // Auto-create assignment when PA gives a vaccine with no prior assignment today
+                if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
+                    EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null);
                 _db.SaveChanges();
                 return new Response<ScheduleDTO>(true, "congratulations", newData);
             }
@@ -721,6 +724,29 @@ namespace VaccineAPI.Controllers
                 .FirstOrDefault();
 
             return stockSelection;
+        }
+
+        private void EnsurePAAssignment(long childId, long paId, long doctorId, long? clinicId)
+        {
+            var today = DateTime.UtcNow.Date;
+            var exists = _db.PAAssignments.Any(a =>
+                a.ChildId == childId &&
+                a.PersonalAssistantId == paId &&
+                a.AssignedAt >= today && a.AssignedAt < today.AddDays(1) &&
+                !a.IsCancelled);
+            if (!exists)
+            {
+                _db.PAAssignments.Add(new PAAssignment
+                {
+                    ChildId = childId,
+                    PersonalAssistantId = paId,
+                    DoctorId = doctorId,
+                    ClinicId = clinicId,
+                    AssignedAt = DateTime.UtcNow,
+                    IsCompleted = false,
+                    IsAutoCreated = true
+                });
+            }
         }
 
         private void ApplyStockSourceFields(Schedule dbSchedule, ScheduleDTO scheduleDTO, long clinicId)
@@ -1466,6 +1492,9 @@ namespace VaccineAPI.Controllers
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
                 }
             }
+            // Auto-create assignment when PA bulk-gives vaccines with no prior assignment today
+            if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
+                EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null);
             _db.SaveChanges();
             return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
         }

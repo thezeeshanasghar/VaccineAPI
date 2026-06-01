@@ -195,3 +195,7 @@ ALTER TABLE `paassignment`
   ADD COLUMN `CancelledAt`                datetime     NULL,
   ADD COLUMN `CancelReason`               varchar(500) NULL,
   ADD COLUMN `ReassignedFromAssignmentId` bigint       NULL;
+
+-- PA Assignment Flow A: auto-created when PA gives vaccine
+ALTER TABLE `paassignment`
+  ADD COLUMN `IsAutoCreated` tinyint(1) NOT NULL DEFAULT 0;

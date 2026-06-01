@@ -3206,6 +3206,18 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<ScheduleDTO>(true, "Payment marked as collected.", null));
         }
 
+        [HttpPatch("{id}/record-payment-mode")]
+        public IActionResult RecordPaymentMode(long id, [FromBody] ScheduleDTO dto)
+        {
+            var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
+            if (schedule == null) return Ok(new Response<ScheduleDTO>(false, "Not found", null));
+            schedule.PaymentMode = dto.PaymentMode ?? schedule.PaymentMode;
+            schedule.OnlineService = dto.OnlineService ?? schedule.OnlineService;
+            schedule.IsPaymentCollected = true;
+            _db.SaveChanges();
+            return Ok(new Response<ScheduleDTO>(true, "Payment recorded.", null));
+        }
+
         [HttpGet("day-log/{doctorId}/{date}")]
         public IActionResult GetDayLog(long doctorId, DateTime date)
         {

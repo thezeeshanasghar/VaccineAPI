@@ -38,11 +38,13 @@ namespace VaccineAPI.Controllers
                 var child      = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
                 var assignDate = a.AssignedAt.Date;
 
+                var assignDateEnd = assignDate.AddDays(1);
                 var schedules = _db.Schedules
                     .Where(s => s.ChildId == a.ChildId
                              && s.PaymentCollectorPaId == paId
                              && s.GivenDate.HasValue
-                             && s.GivenDate.Value.Date == assignDate)
+                             && s.GivenDate.Value >= assignDate
+                             && s.GivenDate.Value < assignDateEnd)
                     .Join(_db.Doses,
                         s => s.DoseId,
                         d => d.Id,
@@ -98,12 +100,14 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to complete this assignment" });
 
             // Payment gate: all schedules this PA collected with a non-zero amount must have payment recorded
-            var assignDate = assignment.AssignedAt.Date;
+            var assignDate    = assignment.AssignedAt.Date;
+            var assignDateEnd = assignDate.AddDays(1);
             var unpaid = _db.Schedules
                 .Where(s => s.ChildId == assignment.ChildId
                          && s.PaymentCollectorPaId == assignment.PersonalAssistantId
                          && s.GivenDate.HasValue
-                         && s.GivenDate.Value.Date == assignDate
+                         && s.GivenDate.Value >= assignDate
+                         && s.GivenDate.Value < assignDateEnd
                          && !s.IsPaymentCollected
                          && s.Amount > 0)
                 .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => d.Name)

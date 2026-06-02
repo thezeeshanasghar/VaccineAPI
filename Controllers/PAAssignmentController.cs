@@ -230,6 +230,8 @@ namespace VaccineAPI.Controllers
             if (invoiceToMove != null)
             {
                 invoiceToMove.PaId = dto.NewPaId;
+                if (invoiceToMove.ClinicId == null && old.ClinicId.HasValue)
+                    invoiceToMove.ClinicId = old.ClinicId;
                 _db.Entry(invoiceToMove).State = EntityState.Modified;
                 await _db.SaveChangesAsync();
             }
@@ -322,6 +324,8 @@ namespace VaccineAPI.Controllers
                 if (todayInvoice != null)
                 {
                     todayInvoice.PaId = dto.PersonalAssistantId;
+                    if (todayInvoice.ClinicId == null && dto.ClinicId.HasValue)
+                        todayInvoice.ClinicId = dto.ClinicId;
                     _db.Entry(todayInvoice).State = EntityState.Modified;
                     await _db.SaveChangesAsync();
                 }

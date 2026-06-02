@@ -431,12 +431,13 @@ namespace VaccineAPI.Controllers
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
             // Source of truth: InvoiceSubmission — created when PA downloads invoice
+            // Include rows with null ClinicId (doctor-downloaded) as long as DoctorId matches
             var invQuery = _db.InvoiceSubmissions
                 .Where(i =>
                     i.PaId.HasValue &&
                     i.TotalAmount > 0 &&
-                    i.ClinicId.HasValue &&
-                    clinicIds.Contains(i.ClinicId.Value));
+                    i.DoctorId == doctorId &&
+                    (i.ClinicId == null || clinicIds.Contains(i.ClinicId.Value)));
 
             if (clinicId.HasValue)
                 invQuery = invQuery.Where(i => i.ClinicId == clinicId.Value);

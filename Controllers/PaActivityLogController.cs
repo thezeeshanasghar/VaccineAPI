@@ -94,5 +94,83 @@ namespace VaccineAPI.Controllers
 
             return Ok(new { total, page, pageSize, logs });
         }
+
+        // GET /api/PaActivityLog/pending-reversals/{doctorId}
+        // Doctor fetches all ungive-after-payment events awaiting their approval
+        [HttpGet("pending-reversals/{doctorId:long}")]
+        public ActionResult GetPendingReversals(long doctorId)
+        {
+            var logs = _db.PaActivityLogs
+                .Include(l => l.PersonalAssistant)
+                .Where(l => l.DoctorId == doctorId
+                         && l.ActionCode == "UngiveAfterPayment"
+                         && l.IsReversal == true
+                         && l.IsReversalApproved == false)
+                .OrderByDescending(l => l.ActionDate)
+                .Select(l => new {
+                    l.Id,
+                    l.PaId,
+                    PaName      = l.PersonalAssistant != null ? l.PersonalAssistant.Name : "",
+                    l.PatientId,
+                    l.Notes,
+                    l.Description,
+                    l.ActionDate
+                })
+                .ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = logs });
+        }
+
+        // PATCH /api/PaActivityLog/{id}/approve-reversal
+        // Doctor approves: invoice is adjusted and IsPaymentCollected reset on the schedule
+        [HttpPatch("{id:long}/approve-reversal")]
+        public ActionResult ApproveReversal(long id)
+        {
+            var log = _db.PaActivityLogs.FirstOrDefault(l => l.Id == id);
+            if (log == null)
+                return Ok(new { IsSuccess = false, Message = "Log entry not found." });
+
+            if (log.ActionCode != "UngiveAfterPayment" || !log.IsReversal)
+                return Ok(new { IsSuccess = false, Message = "This entry is not a pending reversal." });
+
+            if (log.IsReversalApproved)
+                return Ok(new { IsSuccess = false, Message = "Already approved." });
+
+            // Parse ScheduleId from Notes field ("Amount pending reversal: X | ScheduleId: Y")
+            long scheduleId = 0;
+            var notesParts = log.Notes ?? "";
+            var sidIndex = notesParts.IndexOf("ScheduleId: ");
+            if (sidIndex >= 0)
+                long.TryParse(notesParts.Substring(sidIndex + 12).Trim(), out scheduleId);
+
+            if (scheduleId > 0)
+            {
+                var schedule = _db.Schedules.FirstOrDefault(s => s.Id == scheduleId);
+                if (schedule != null)
+                {
+                    var invoiceDate = schedule.GivenDate.HasValue ? schedule.GivenDate.Value.Date : log.ActionDate.Date;
+                    var inv = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                        x.ChildId == schedule.ChildId &&
+                        x.DoctorId == log.DoctorId &&
+                        x.InvoiceDate.Date == invoiceDate);
+                    if (inv != null)
+                    {
+                        inv.TotalAmount = Math.Max(0, inv.TotalAmount - (schedule.Amount ?? 0));
+                        _db.Entry(inv).State = EntityState.Modified;
+                    }
+                    schedule.IsPaymentCollected = false;
+                }
+            }
+
+            log.IsReversalApproved = true;
+
+            try { _db.SaveChanges(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            return Ok(new { IsSuccess = true });
+        }
     }
 }

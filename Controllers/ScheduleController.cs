@@ -637,20 +637,9 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Height = scheduleDTO.Height;
                 dbSchedule.Circle = scheduleDTO.Circle;
 
-                // Ungive-after-payment reversal: subtract vaccine amount from invoice and reset payment flag
+                // Ungive-after-payment: log a pending reversal — doctor must approve before invoice is adjusted
                 if (scheduleDTO.IsDone == false && dbSchedule.IsDone == true && dbSchedule.IsPaymentCollected)
                 {
-                    var invoiceDate = dbSchedule.GivenDate.HasValue ? dbSchedule.GivenDate.Value.Date : DateTime.UtcNow.Date;
-                    var inv = _db.InvoiceSubmissions.FirstOrDefault(x =>
-                        x.ChildId == dbSchedule.ChildId &&
-                        x.DoctorId == scheduleDTO.DoctorId &&
-                        x.InvoiceDate.Date == invoiceDate);
-                    if (inv != null)
-                    {
-                        inv.TotalAmount = Math.Max(0, inv.TotalAmount - (dbSchedule.Amount ?? 0));
-                        _db.Entry(inv).State = EntityState.Modified;
-                    }
-                    dbSchedule.IsPaymentCollected = false;
                     if (scheduleDTO.PaId.HasValue)
                     {
                         _db.PaActivityLogs.Add(new PaActivityLog {
@@ -658,9 +647,10 @@ namespace VaccineAPI.Controllers
                             DoctorId = scheduleDTO.DoctorId,
                             PatientId = dbSchedule.ChildId,
                             ActionCode = "UngiveAfterPayment",
-                            Description = "PA ungave a vaccine after payment was collected. Invoice adjusted.",
-                            Notes = "Amount reversed: " + (dbSchedule.Amount ?? 0).ToString(),
+                            Description = "PA ungave a vaccine after payment was collected. Awaiting doctor approval to reverse invoice.",
+                            Notes = "Amount pending reversal: " + (dbSchedule.Amount ?? 0).ToString() + " | ScheduleId: " + dbSchedule.Id.ToString(),
                             IsReversal = true,
+                            IsReversalApproved = false,
                             ActionDate = DateTime.UtcNow
                         });
                     }
@@ -1357,20 +1347,9 @@ namespace VaccineAPI.Controllers
                         schedule.UngiveCount++;
                 }
 
-                // Ungive-after-payment reversal: subtract vaccine amount from invoice and reset payment flag
+                // Ungive-after-payment: log a pending reversal — doctor must approve before invoice is adjusted
                 if (scheduleDTO.IsDone == false && wasIsDone == true && schedule.IsPaymentCollected)
                 {
-                    var invoiceDate = schedule.GivenDate.HasValue ? schedule.GivenDate.Value.Date : DateTime.UtcNow.Date;
-                    var inv = _db.InvoiceSubmissions.FirstOrDefault(x =>
-                        x.ChildId == schedule.ChildId &&
-                        x.DoctorId == scheduleDTO.DoctorId &&
-                        x.InvoiceDate.Date == invoiceDate);
-                    if (inv != null)
-                    {
-                        inv.TotalAmount = Math.Max(0, inv.TotalAmount - (schedule.Amount ?? 0));
-                        _db.Entry(inv).State = EntityState.Modified;
-                    }
-                    schedule.IsPaymentCollected = false;
                     if (scheduleDTO.PaId.HasValue)
                     {
                         _db.PaActivityLogs.Add(new PaActivityLog {
@@ -1378,9 +1357,10 @@ namespace VaccineAPI.Controllers
                             DoctorId = scheduleDTO.DoctorId,
                             PatientId = schedule.ChildId,
                             ActionCode = "UngiveAfterPayment",
-                            Description = "PA ungave a vaccine after payment was collected. Invoice adjusted.",
-                            Notes = "Amount reversed: " + (schedule.Amount ?? 0).ToString(),
+                            Description = "PA ungave a vaccine after payment was collected. Awaiting doctor approval to reverse invoice.",
+                            Notes = "Amount pending reversal: " + (schedule.Amount ?? 0).ToString() + " | ScheduleId: " + schedule.Id.ToString(),
                             IsReversal = true,
+                            IsReversalApproved = false,
                             ActionDate = DateTime.UtcNow
                         });
                     }

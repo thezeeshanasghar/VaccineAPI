@@ -15,6 +15,7 @@ namespace VaccineAPI.Models
         public string Description { get; set; } = "";
         public string Notes { get; set; } = "";
         public bool IsReversal { get; set; }
+        public bool IsReversalApproved { get; set; } = false;
         public long? ReversalOfLogId { get; set; }
         public DateTime ActionDate { get; set; } = DateTime.UtcNow;
         [ForeignKey("PaId")]

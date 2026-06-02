@@ -102,7 +102,7 @@ CREATE TABLE `expenses` (
 -- Rollback: DROP TABLE `expenses`;
 
 -- PA Assignments
-CREATE TABLE `paassignment` (
+CREATE TABLE `paassignments` (
   `Id`                  BIGINT        NOT NULL AUTO_INCREMENT,
   `DoctorId`            BIGINT        NOT NULL,
   `ClinicId`            BIGINT        NULL,
@@ -113,24 +113,24 @@ CREATE TABLE `paassignment` (
   `CompletedAt`         DATETIME      NULL,
   `Notes`               VARCHAR(500)  NULL,
   PRIMARY KEY (`Id`),
-  INDEX `IX_paassignment_PA`    (`PersonalAssistantId`),
-  INDEX `IX_paassignment_Child` (`ChildId`),
-  INDEX `IX_paassignment_Doctor`(`DoctorId`)
+  INDEX `IX_paassignments_PA`    (`PersonalAssistantId`),
+  INDEX `IX_paassignments_Child` (`ChildId`),
+  INDEX `IX_paassignments_Doctor`(`DoctorId`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Rollback: DROP TABLE `paassignment`;
+-- Rollback: DROP TABLE `paassignments`;
 
 -- =====================================================
--- Add Cancel + Reassign columns to paassignment
+-- Add Cancel + Reassign columns to paassignments
 -- =====================================================
-ALTER TABLE `paassignment`
+ALTER TABLE `paassignments`
   ADD COLUMN `IsCancelled`                tinyint(1)   NOT NULL DEFAULT 0,
   ADD COLUMN `CancelledAt`                datetime     NULL,
   ADD COLUMN `CancelReason`               varchar(500) NULL,
   ADD COLUMN `ReassignedFromAssignmentId` bigint       NULL;
 
 -- Rollback:
--- ALTER TABLE `paassignment`
+-- ALTER TABLE `paassignments`
 --   DROP COLUMN `IsCancelled`,
 --   DROP COLUMN `CancelledAt`,
 --   DROP COLUMN `CancelReason`,
@@ -189,15 +189,8 @@ ALTER TABLE `schedules`
 ALTER TABLE `invoicesubmissions`
   ADD COLUMN `TotalAmount` decimal(18,2) NOT NULL DEFAULT 0;
 
--- PA Assignment cancel/reassign support
-ALTER TABLE `paassignment`
-  ADD COLUMN `IsCancelled`                tinyint(1)   NOT NULL DEFAULT 0,
-  ADD COLUMN `CancelledAt`                datetime     NULL,
-  ADD COLUMN `CancelReason`               varchar(500) NULL,
-  ADD COLUMN `ReassignedFromAssignmentId` bigint       NULL;
-
 -- PA Assignment Flow A: auto-created when PA gives vaccine
-ALTER TABLE `paassignment`
+ALTER TABLE `paassignments`
   ADD COLUMN `IsAutoCreated` tinyint(1) NOT NULL DEFAULT 0;
 
 -- =====================================================

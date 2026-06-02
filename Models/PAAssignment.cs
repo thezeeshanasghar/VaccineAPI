@@ -14,7 +14,7 @@ namespace VaccineAPI.Models
         public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
         public bool IsCompleted { get; set; } = false;
         public DateTime? CompletedAt { get; set; }
-        public string Notes { get; set; }
+        public string? Notes { get; set; }
         public bool IsCancelled { get; set; } = false;
         public DateTime? CancelledAt { get; set; }
         public string? CancelReason { get; set; }

@@ -502,13 +502,16 @@ namespace VaccineAPI.Controllers
 
             var totalCollected = invoices.Sum(i => i.TotalAmount);
             var totalConfirmed = invoices.Where(i => i.IsConfirmedByDoctor).Sum(i => i.TotalAmount);
+            var adjustments    = _db.PaPayableAdjustments
+                .Where(a => a.PaId == paId)
+                .Sum(a => (decimal?)a.Amount) ?? 0;
 
             return Ok(new {
                 IsSuccess    = true,
                 ResponseData = new {
                     TotalCollected = totalCollected,
                     TotalConfirmed = totalConfirmed,
-                    TotalPending   = totalCollected - totalConfirmed,
+                    TotalPending   = totalCollected - totalConfirmed + adjustments,
                     Rows           = rows
                 }
             });
@@ -518,5 +521,44 @@ namespace VaccineAPI.Controllers
         [HttpGet("my-reconciliation/{paId}/{clinicId}")]
         public IActionResult GetMyReconciliationByClinic(long paId, long clinicId)
             => GetMyReconciliation(paId, clinicId);
+
+        // POST /api/PaCashHandover/adjust
+        // Doctor manually adjusts a PA's payable (positive = increase, negative = decrease)
+        [HttpPost("adjust")]
+        public IActionResult Adjust([FromBody] PaPayableAdjustmentDto dto)
+        {
+            if (dto.Amount == 0)
+                return Ok(new { IsSuccess = false, Message = "Adjustment amount cannot be zero." });
+
+            if (string.IsNullOrWhiteSpace(dto.Reason))
+                return Ok(new { IsSuccess = false, Message = "Please provide a reason for the adjustment." });
+
+            _db.PaPayableAdjustments.Add(new PaPayableAdjustment
+            {
+                PaId       = dto.PaId,
+                DoctorId   = dto.DoctorId,
+                ClinicId   = dto.ClinicId,
+                Amount     = dto.Amount,
+                Reason     = dto.Reason.Trim(),
+                AdjustedAt = DateTime.UtcNow
+            });
+
+            try { _db.SaveChanges(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            return Ok(new { IsSuccess = true });
+        }
+    }
+
+    public class PaPayableAdjustmentDto
+    {
+        public long PaId { get; set; }
+        public long DoctorId { get; set; }
+        public long? ClinicId { get; set; }
+        public decimal Amount { get; set; }
+        public string Reason { get; set; } = "";
     }
 }

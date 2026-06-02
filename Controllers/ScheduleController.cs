@@ -636,6 +636,36 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Weight = scheduleDTO.Weight;
                 dbSchedule.Height = scheduleDTO.Height;
                 dbSchedule.Circle = scheduleDTO.Circle;
+
+                // Ungive-after-payment reversal: subtract vaccine amount from invoice and reset payment flag
+                if (scheduleDTO.IsDone == false && dbSchedule.IsDone == true && dbSchedule.IsPaymentCollected)
+                {
+                    var invoiceDate = dbSchedule.GivenDate.HasValue ? dbSchedule.GivenDate.Value.Date : DateTime.UtcNow.Date;
+                    var inv = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                        x.ChildId == dbSchedule.ChildId &&
+                        x.DoctorId == scheduleDTO.DoctorId &&
+                        x.InvoiceDate.Date == invoiceDate);
+                    if (inv != null)
+                    {
+                        inv.TotalAmount = Math.Max(0, inv.TotalAmount - (dbSchedule.Amount ?? 0));
+                        _db.Entry(inv).State = EntityState.Modified;
+                    }
+                    dbSchedule.IsPaymentCollected = false;
+                    if (scheduleDTO.PaId.HasValue)
+                    {
+                        _db.PaActivityLogs.Add(new PaActivityLog {
+                            PaId = scheduleDTO.PaId.Value,
+                            DoctorId = scheduleDTO.DoctorId,
+                            PatientId = dbSchedule.ChildId,
+                            ActionCode = "UngiveAfterPayment",
+                            Description = "PA ungave a vaccine after payment was collected. Invoice adjusted.",
+                            Notes = "Amount reversed: " + (dbSchedule.Amount ?? 0).ToString(),
+                            IsReversal = true,
+                            ActionDate = DateTime.UtcNow
+                        });
+                    }
+                }
+
                 dbSchedule.IsDone = scheduleDTO.IsDone;
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
@@ -1325,6 +1355,35 @@ namespace VaccineAPI.Controllers
                         schedule.GiveCount++;
                     else if (scheduleDTO.IsDone == false && wasIsDone == true)
                         schedule.UngiveCount++;
+                }
+
+                // Ungive-after-payment reversal: subtract vaccine amount from invoice and reset payment flag
+                if (scheduleDTO.IsDone == false && wasIsDone == true && schedule.IsPaymentCollected)
+                {
+                    var invoiceDate = schedule.GivenDate.HasValue ? schedule.GivenDate.Value.Date : DateTime.UtcNow.Date;
+                    var inv = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                        x.ChildId == schedule.ChildId &&
+                        x.DoctorId == scheduleDTO.DoctorId &&
+                        x.InvoiceDate.Date == invoiceDate);
+                    if (inv != null)
+                    {
+                        inv.TotalAmount = Math.Max(0, inv.TotalAmount - (schedule.Amount ?? 0));
+                        _db.Entry(inv).State = EntityState.Modified;
+                    }
+                    schedule.IsPaymentCollected = false;
+                    if (scheduleDTO.PaId.HasValue)
+                    {
+                        _db.PaActivityLogs.Add(new PaActivityLog {
+                            PaId = scheduleDTO.PaId.Value,
+                            DoctorId = scheduleDTO.DoctorId,
+                            PatientId = schedule.ChildId,
+                            ActionCode = "UngiveAfterPayment",
+                            Description = "PA ungave a vaccine after payment was collected. Invoice adjusted.",
+                            Notes = "Amount reversed: " + (schedule.Amount ?? 0).ToString(),
+                            IsReversal = true,
+                            ActionDate = DateTime.UtcNow
+                        });
+                    }
                 }
 
                 if (scheduleDTO.ScheduleBrands.Count > 0)

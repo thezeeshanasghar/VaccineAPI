@@ -96,14 +96,15 @@ namespace VaccineAPI.Controllers
             if (paId.HasValue && assignment.PersonalAssistantId != paId.Value)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to complete this assignment" });
 
-            // Payment gate: all schedules this PA collected must have payment mode recorded
+            // Payment gate: all schedules this PA collected with a non-zero amount must have payment recorded
             var assignDate = assignment.AssignedAt.Date;
             var unpaid = _db.Schedules
                 .Where(s => s.ChildId == assignment.ChildId
                          && s.PaymentCollectorPaId == assignment.PersonalAssistantId
                          && s.GivenDate.HasValue
                          && s.GivenDate.Value.Date == assignDate
-                         && !s.IsPaymentCollected)
+                         && !s.IsPaymentCollected
+                         && s.Amount > 0)
                 .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => d.Name)
                 .ToList();
 

@@ -51,6 +51,7 @@ namespace VaccineAPI.Controllers
                             s.Id,
                             DoseName           = d.Name,
                             s.IsPaymentCollected,
+                            s.Amount,
                             s.Weight,
                             s.Height,
                             s.Circle

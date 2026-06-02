@@ -61,7 +61,7 @@ namespace VaccineAPI.Controllers
                     .ToList();
 
                 var invoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == a.ChildId && i.PaId == paId)
+                    .Where(i => i.ChildId == a.ChildId && i.InvoiceDate.Date == assignDate)
                     .OrderByDescending(i => i.SubmittedAt)
                     .FirstOrDefault();
 

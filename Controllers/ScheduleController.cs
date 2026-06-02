@@ -1588,10 +1588,14 @@ namespace VaccineAPI.Controllers
         {
             // Always upsert the InvoiceSubmission so vaccination fee is recorded
             // regardless of whether caller is a PA or doctor (PaId may be null for doctor)
+            // Use a ±1 day window to guard against UTC/PKT offset causing date mismatch on second call
+            var invoiceDateMin = dto.InvoiceDate.Date.AddDays(-1);
+            var invoiceDateMax = dto.InvoiceDate.Date.AddDays(1);
             var existing = _db.InvoiceSubmissions.FirstOrDefault(x =>
                 x.ChildId == dto.ChildId &&
                 x.DoctorId == dto.DoctorId &&
-                x.InvoiceDate.Date == dto.InvoiceDate.Date);
+                x.InvoiceDate.Date >= invoiceDateMin &&
+                x.InvoiceDate.Date <= invoiceDateMax);
 
             if (existing != null)
             {

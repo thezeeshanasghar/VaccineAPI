@@ -221,6 +221,19 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
 
+            // Move invoice from old PA to new PA
+            var reassignDay = DateTime.UtcNow.Date;
+            var invoiceToMove = _db.InvoiceSubmissions.FirstOrDefault(i =>
+                i.ChildId == old.ChildId &&
+                i.InvoiceDate.Date == reassignDay &&
+                (i.PaId == old.PersonalAssistantId || i.PaId == null));
+            if (invoiceToMove != null)
+            {
+                invoiceToMove.PaId = dto.NewPaId;
+                _db.Entry(invoiceToMove).State = EntityState.Modified;
+                await _db.SaveChangesAsync();
+            }
+
             // Notify new PA by email (fire-and-forget)
             var pa = await _db.PersonalAssistant.FindAsync(dto.NewPaId);
             if (pa != null && !string.IsNullOrEmpty(pa.Email))
@@ -299,6 +312,19 @@ namespace VaccineAPI.Controllers
 
                 _db.PAAssignments.Add(assignment);
                 await _db.SaveChangesAsync();
+
+                // Stamp today's doctor-downloaded invoice with this PA so it appears in their payable
+                var assignDay = DateTime.UtcNow.Date;
+                var todayInvoice = _db.InvoiceSubmissions.FirstOrDefault(i =>
+                    i.ChildId == dto.ChildId &&
+                    i.InvoiceDate.Date == assignDay &&
+                    i.PaId == null);
+                if (todayInvoice != null)
+                {
+                    todayInvoice.PaId = dto.PersonalAssistantId;
+                    _db.Entry(todayInvoice).State = EntityState.Modified;
+                    await _db.SaveChangesAsync();
+                }
 
                 // Fire-and-forget email
                 var newPa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);

@@ -1588,14 +1588,54 @@ namespace VaccineAPI.Controllers
                     });
                 }
 
+                var oldAmount = existing.TotalAmount;
+                var newAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
+                var delta = newAmount - oldAmount;
+
                 existing.ConsultationFee = dto.ConsultationFee;
-                existing.TotalAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
+                existing.TotalAmount = newAmount;
                 if (dto.ClinicId.HasValue && existing.ClinicId == null)
                     existing.ClinicId = dto.ClinicId;
                 _db.Entry(existing).State = EntityState.Modified;
+
+                // PA edit: track financial delta against PA payable
+                if (dto.PaId.HasValue && delta != 0)
+                {
+                    if (delta > 0)
+                    {
+                        // Amount increased — credit PA payable immediately
+                        _db.PaPayableAdjustments.Add(new PaPayableAdjustment
+                        {
+                            PaId = dto.PaId.Value,
+                            DoctorId = dto.DoctorId,
+                            ClinicId = dto.ClinicId,
+                            Amount = delta,
+                            Reason = $"Invoice edit increase: Rs {delta} for child {dto.ChildId} on {dto.InvoiceDate:yyyy-MM-dd}",
+                            AdjustedAt = DateTime.UtcNow
+                        });
+                    }
+                    else
+                    {
+                        // Amount decreased — create pending reversal; doctor must approve before payable reduces
+                        _db.PaActivityLogs.Add(new PaActivityLog
+                        {
+                            PaId = dto.PaId.Value,
+                            DoctorId = dto.DoctorId,
+                            ClinicId = dto.ClinicId,
+                            PatientId = dto.ChildId,
+                            ActionCode = "InvoiceAmountReduction",
+                            Description = "PA reduced invoice amount. Awaiting doctor approval to reduce payable.",
+                            Notes = $"Reduction: {Math.Abs(delta)} | OldAmount: {oldAmount} | NewAmount: {newAmount} | ChildId: {dto.ChildId} | InvoiceDate: {dto.InvoiceDate:yyyy-MM-dd}",
+                            IsReversal = true,
+                            IsReversalApproved = false,
+                            ActionDate = DateTime.UtcNow
+                        });
+                    }
+                }
             }
             else
             {
+                var newTotal = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
                 _db.InvoiceSubmissions.Add(new InvoiceSubmission
                 {
                     ChildId = dto.ChildId,
@@ -1605,7 +1645,7 @@ namespace VaccineAPI.Controllers
                     InvoiceDate = dto.InvoiceDate.Date,
                     SubmittedAt = DateTime.UtcNow,
                     ConsultationFee = dto.ConsultationFee,
-                    TotalAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee,
+                    TotalAmount = newTotal,
                     EditCount = 0
                 });
 
@@ -1622,6 +1662,20 @@ namespace VaccineAPI.Controllers
                         Notes = "Consultation fee: " + dto.ConsultationFee,
                         ActionDate = DateTime.UtcNow
                     });
+
+                    // New invoice — credit PA payable immediately
+                    if (newTotal > 0)
+                    {
+                        _db.PaPayableAdjustments.Add(new PaPayableAdjustment
+                        {
+                            PaId = dto.PaId.Value,
+                            DoctorId = dto.DoctorId,
+                            ClinicId = dto.ClinicId,
+                            Amount = newTotal,
+                            Reason = $"Invoice submitted: Rs {newTotal} for child {dto.ChildId} on {dto.InvoiceDate:yyyy-MM-dd}",
+                            AdjustedAt = DateTime.UtcNow
+                        });
+                    }
                 }
             }
 

@@ -96,16 +96,17 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/PaActivityLog/pending-reversals/{doctorId}
-        // Doctor fetches all ungive-after-payment events awaiting their approval
+        // Doctor fetches all pending reversals awaiting approval (ungive-after-payment + invoice reductions)
         [HttpGet("pending-reversals/{doctorId:long}")]
         public ActionResult GetPendingReversals(long doctorId)
         {
             var logs = _db.PaActivityLogs
                 .Include(l => l.PersonalAssistant)
                 .Where(l => l.DoctorId == doctorId
-                         && l.ActionCode == "UngiveAfterPayment"
+                         && (l.ActionCode == "UngiveAfterPayment" || l.ActionCode == "InvoiceAmountReduction")
                          && l.IsReversal == true
-                         && l.IsReversalApproved == false)
+                         && l.IsReversalApproved == false
+                         && l.IsReversalRejected != true)
                 .OrderByDescending(l => l.ActionDate)
                 .Select(l => new {
                     l.Id,
@@ -114,6 +115,7 @@ namespace VaccineAPI.Controllers
                     l.PatientId,
                     l.Notes,
                     l.Description,
+                    l.ActionCode,
                     l.ActionDate
                 })
                 .ToList();
@@ -122,7 +124,7 @@ namespace VaccineAPI.Controllers
         }
 
         // PATCH /api/PaActivityLog/{id}/approve-reversal
-        // Doctor approves: invoice is adjusted and IsPaymentCollected reset on the schedule
+        // Doctor approves: invoice adjusted and PA payable reduced
         [HttpPatch("{id:long}/approve-reversal")]
         public ActionResult ApproveReversal(long id)
         {
@@ -130,39 +132,116 @@ namespace VaccineAPI.Controllers
             if (log == null)
                 return Ok(new { IsSuccess = false, Message = "Log entry not found." });
 
-            if (log.ActionCode != "UngiveAfterPayment" || !log.IsReversal)
+            if (!log.IsReversal)
                 return Ok(new { IsSuccess = false, Message = "This entry is not a pending reversal." });
 
             if (log.IsReversalApproved)
                 return Ok(new { IsSuccess = false, Message = "Already approved." });
 
-            // Parse ScheduleId from Notes field ("Amount pending reversal: X | ScheduleId: Y")
-            long scheduleId = 0;
-            var notesParts = log.Notes ?? "";
-            var sidIndex = notesParts.IndexOf("ScheduleId: ");
-            if (sidIndex >= 0)
-                long.TryParse(notesParts.Substring(sidIndex + 12).Trim(), out scheduleId);
+            if (log.IsReversalRejected == true)
+                return Ok(new { IsSuccess = false, Message = "Already rejected." });
 
-            if (scheduleId > 0)
+            if (log.ActionCode == "UngiveAfterPayment")
             {
-                var schedule = _db.Schedules.FirstOrDefault(s => s.Id == scheduleId);
-                if (schedule != null)
+                // Parse ScheduleId from Notes ("Amount pending reversal: X | ScheduleId: Y")
+                long scheduleId = 0;
+                var notesParts = log.Notes ?? "";
+                var sidIndex = notesParts.IndexOf("ScheduleId: ");
+                if (sidIndex >= 0)
+                    long.TryParse(notesParts.Substring(sidIndex + 12).Trim(), out scheduleId);
+
+                if (scheduleId > 0)
                 {
-                    var invoiceDate = schedule.GivenDate.HasValue ? schedule.GivenDate.Value.Date : log.ActionDate.Date;
-                    var inv = _db.InvoiceSubmissions.FirstOrDefault(x =>
-                        x.ChildId == schedule.ChildId &&
-                        x.DoctorId == log.DoctorId &&
-                        x.InvoiceDate.Date == invoiceDate);
-                    if (inv != null)
+                    var schedule = _db.Schedules.FirstOrDefault(s => s.Id == scheduleId);
+                    if (schedule != null)
                     {
-                        inv.TotalAmount = Math.Max(0, inv.TotalAmount - (schedule.Amount ?? 0));
-                        _db.Entry(inv).State = EntityState.Modified;
+                        var invoiceDate = schedule.GivenDate.HasValue ? schedule.GivenDate.Value.Date : log.ActionDate.Date;
+                        var inv = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                            x.ChildId == schedule.ChildId &&
+                            x.DoctorId == log.DoctorId &&
+                            x.InvoiceDate.Date == invoiceDate);
+                        if (inv != null)
+                        {
+                            inv.TotalAmount = Math.Max(0, inv.TotalAmount - (schedule.Amount ?? 0));
+                            _db.Entry(inv).State = EntityState.Modified;
+                        }
+                        schedule.IsPaymentCollected = false;
+
+                        // Reduce PA payable for the ungiven vaccine amount
+                        if (log.PaId > 0 && (schedule.Amount ?? 0) > 0)
+                        {
+                            _db.PaPayableAdjustments.Add(new PaPayableAdjustment
+                            {
+                                PaId = log.PaId,
+                                DoctorId = log.DoctorId,
+                                ClinicId = log.ClinicId,
+                                Amount = -(schedule.Amount ?? 0),
+                                Reason = $"Doctor approved ungive reversal (ScheduleId: {scheduleId})",
+                                AdjustedAt = DateTime.UtcNow
+                            });
+                        }
                     }
-                    schedule.IsPaymentCollected = false;
+                }
+            }
+            else if (log.ActionCode == "InvoiceAmountReduction")
+            {
+                // Parse reduction amount from Notes ("Reduction: X | OldAmount: Y | NewAmount: Z | ...")
+                decimal reduction = 0;
+                var notes = log.Notes ?? "";
+                var rIdx = notes.IndexOf("Reduction: ");
+                if (rIdx >= 0)
+                {
+                    var afterR = notes.Substring(rIdx + 11);
+                    var end = afterR.IndexOf(" |");
+                    var numStr = end >= 0 ? afterR.Substring(0, end) : afterR.Trim();
+                    decimal.TryParse(numStr, out reduction);
+                }
+
+                // Apply the reduction to PA payable
+                if (log.PaId > 0 && reduction > 0)
+                {
+                    _db.PaPayableAdjustments.Add(new PaPayableAdjustment
+                    {
+                        PaId = log.PaId,
+                        DoctorId = log.DoctorId,
+                        ClinicId = log.ClinicId,
+                        Amount = -reduction,
+                        Reason = $"Doctor approved invoice amount reduction of Rs {reduction}",
+                        AdjustedAt = DateTime.UtcNow
+                    });
                 }
             }
 
             log.IsReversalApproved = true;
+
+            try { _db.SaveChanges(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            return Ok(new { IsSuccess = true });
+        }
+
+        // PATCH /api/PaActivityLog/{id}/reject-reversal
+        // Doctor rejects: no financial change, reversal dismissed
+        [HttpPatch("{id:long}/reject-reversal")]
+        public ActionResult RejectReversal(long id)
+        {
+            var log = _db.PaActivityLogs.FirstOrDefault(l => l.Id == id);
+            if (log == null)
+                return Ok(new { IsSuccess = false, Message = "Log entry not found." });
+
+            if (!log.IsReversal)
+                return Ok(new { IsSuccess = false, Message = "This entry is not a pending reversal." });
+
+            if (log.IsReversalApproved)
+                return Ok(new { IsSuccess = false, Message = "Already approved — cannot reject." });
+
+            if (log.IsReversalRejected == true)
+                return Ok(new { IsSuccess = false, Message = "Already rejected." });
+
+            log.IsReversalRejected = true;
 
             try { _db.SaveChanges(); }
             catch (Exception ex)

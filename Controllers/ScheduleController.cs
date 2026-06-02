@@ -656,6 +656,23 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                // Void the Invoice row immediately on ungive so the QR code on any downloaded PDF
+                // shows "INVOICE CANCELLED" rather than the original valid invoice.
+                if (scheduleDTO.IsDone == false && dbSchedule.IsDone == true)
+                {
+                    var invoiceToVoid = _db.Invoices
+                        .FirstOrDefault(i => i.DoseId == dbSchedule.DoseId
+                                          && i.ChildId == dbSchedule.ChildId
+                                          && i.DoctorId == scheduleDTO.DoctorId
+                                          && i.IsVoided == false);
+                    if (invoiceToVoid != null)
+                    {
+                        invoiceToVoid.IsVoided = true;
+                        invoiceToVoid.SupersededBy = "UNGIVEN";
+                        _db.Entry(invoiceToVoid).State = EntityState.Modified;
+                    }
+                }
+
                 dbSchedule.IsDone = scheduleDTO.IsDone;
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
@@ -1366,6 +1383,23 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                // Void the Invoice row immediately on ungive so the QR code on any downloaded PDF
+                // shows "INVOICE CANCELLED" rather than the original valid invoice.
+                if (scheduleDTO.IsDone == false && wasIsDone == true)
+                {
+                    var invoiceToVoid = _db.Invoices
+                        .FirstOrDefault(i => i.DoseId == schedule.DoseId
+                                          && i.ChildId == schedule.ChildId
+                                          && i.DoctorId == scheduleDTO.DoctorId
+                                          && i.IsVoided == false);
+                    if (invoiceToVoid != null)
+                    {
+                        invoiceToVoid.IsVoided = true;
+                        invoiceToVoid.SupersededBy = "UNGIVEN";
+                        _db.Entry(invoiceToVoid).State = EntityState.Modified;
+                    }
+                }
+
                 if (scheduleDTO.ScheduleBrands.Count > 0)
                 {
                     var scheduleBrand = scheduleDTO.ScheduleBrands.Find(
@@ -1598,39 +1632,22 @@ namespace VaccineAPI.Controllers
                     existing.ClinicId = dto.ClinicId;
                 _db.Entry(existing).State = EntityState.Modified;
 
-                // PA edit: track financial delta against PA payable
-                if (dto.PaId.HasValue && delta != 0)
+                // PA edit: log a pending reversal if amount was reduced (doctor must approve)
+                if (dto.PaId.HasValue && delta < 0)
                 {
-                    if (delta > 0)
+                    _db.PaActivityLogs.Add(new PaActivityLog
                     {
-                        // Amount increased — credit PA payable immediately
-                        _db.PaPayableAdjustments.Add(new PaPayableAdjustment
-                        {
-                            PaId = dto.PaId.Value,
-                            DoctorId = dto.DoctorId,
-                            ClinicId = dto.ClinicId,
-                            Amount = delta,
-                            Reason = $"Invoice edit increase: Rs {delta} for child {dto.ChildId} on {dto.InvoiceDate:yyyy-MM-dd}",
-                            AdjustedAt = DateTime.UtcNow
-                        });
-                    }
-                    else
-                    {
-                        // Amount decreased — create pending reversal; doctor must approve before payable reduces
-                        _db.PaActivityLogs.Add(new PaActivityLog
-                        {
-                            PaId = dto.PaId.Value,
-                            DoctorId = dto.DoctorId,
-                            ClinicId = dto.ClinicId,
-                            PatientId = dto.ChildId,
-                            ActionCode = "InvoiceAmountReduction",
-                            Description = "PA reduced invoice amount. Awaiting doctor approval to reduce payable.",
-                            Notes = $"Reduction: {Math.Abs(delta)} | OldAmount: {oldAmount} | NewAmount: {newAmount} | ChildId: {dto.ChildId} | InvoiceDate: {dto.InvoiceDate:yyyy-MM-dd}",
-                            IsReversal = true,
-                            IsReversalApproved = false,
-                            ActionDate = DateTime.UtcNow
-                        });
-                    }
+                        PaId = dto.PaId.Value,
+                        DoctorId = dto.DoctorId,
+                        ClinicId = dto.ClinicId,
+                        PatientId = dto.ChildId,
+                        ActionCode = "InvoiceAmountReduction",
+                        Description = "PA reduced invoice amount. Awaiting doctor approval to reduce payable.",
+                        Notes = $"Reduction: {Math.Abs(delta)} | OldAmount: {oldAmount} | NewAmount: {newAmount} | ChildId: {dto.ChildId} | InvoiceDate: {dto.InvoiceDate:yyyy-MM-dd}",
+                        IsReversal = true,
+                        IsReversalApproved = false,
+                        ActionDate = DateTime.UtcNow
+                    });
                 }
             }
             else
@@ -1662,20 +1679,6 @@ namespace VaccineAPI.Controllers
                         Notes = "Consultation fee: " + dto.ConsultationFee,
                         ActionDate = DateTime.UtcNow
                     });
-
-                    // New invoice — credit PA payable immediately
-                    if (newTotal > 0)
-                    {
-                        _db.PaPayableAdjustments.Add(new PaPayableAdjustment
-                        {
-                            PaId = dto.PaId.Value,
-                            DoctorId = dto.DoctorId,
-                            ClinicId = dto.ClinicId,
-                            Amount = newTotal,
-                            Reason = $"Invoice submitted: Rs {newTotal} for child {dto.ChildId} on {dto.InvoiceDate:yyyy-MM-dd}",
-                            AdjustedAt = DateTime.UtcNow
-                        });
-                    }
                 }
             }
 

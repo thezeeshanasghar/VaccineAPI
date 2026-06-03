@@ -469,7 +469,7 @@ namespace VaccineAPI.Controllers
                 HasPendingAmendment = i.HasPendingAmendment,
                 PendingHandover     = i.PendingHandover,
                 PaId                = i.PaId.Value,
-                PaName              = paNames.ContainsKey(i.PaId.Value) ? paNames[i.PaId.Value] : "",
+                PaName              = i.SubmittedByLabel ?? (paNames.ContainsKey(i.PaId.Value) ? paNames[i.PaId.Value] : ""),
                 ClinicId            = i.ClinicId ?? 0,
                 ClinicName          = (i.ClinicId.HasValue && clinicNames.ContainsKey(i.ClinicId.Value)) ? clinicNames[i.ClinicId.Value] : "",
                 OldAmount           = (decimal?)null,

@@ -28,5 +28,7 @@ namespace VaccineAPI.Models
         // true after PA clicks "Mark Done", before doctor confirms
         public bool PendingHandover { get; set; } = false;
         public DateTime? HandoverDoneAt { get; set; }
+        // "Doctor" when submitted by doctor alone, "Doctor/(PA Name)" when assigned to PA
+        public string? SubmittedByLabel { get; set; }
     }
 }

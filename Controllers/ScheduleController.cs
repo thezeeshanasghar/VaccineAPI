@@ -1639,7 +1639,8 @@ namespace VaccineAPI.Controllers
                     if (existing.EditCount >= 1)
                         return new Response<object>(false, "Invoice has already been edited once. Further changes are not allowed.", null);
 
-                    if (existing.SubmittedAt.Date != DateTime.UtcNow.Date)
+                    var pktToday = DateTime.UtcNow.AddHours(5).Date;
+                    if (existing.SubmittedAt.AddHours(5).Date != pktToday)
                         return new Response<object>(false, "Invoice can only be edited on the same day it was first submitted.", null);
 
                     if (existing.PaId != dto.PaId)
@@ -1727,7 +1728,8 @@ namespace VaccineAPI.Controllers
             if (submission == null)
                 return Ok(new { isSubmitted = false, editCount = 0, canEdit = true, submittedByPaId = (long?)null });
 
-            bool canEdit = submission.EditCount < 1 && submission.SubmittedAt.Date == DateTime.UtcNow.Date;
+            var pktNow = DateTime.UtcNow.AddHours(5);
+            bool canEdit = submission.EditCount < 1 && submission.SubmittedAt.AddHours(5).Date == pktNow.Date;
             return Ok(new { isSubmitted = true, editCount = submission.EditCount, canEdit, submittedByPaId = submission.PaId });
         }
 

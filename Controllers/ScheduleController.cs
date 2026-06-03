@@ -516,7 +516,7 @@ namespace VaccineAPI.Controllers
                         dbSchedule.IsDone = scheduleDTO.IsDone;
                         dbSchedule.GivenDate = scheduleDTO.GivenDate;
                         dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
-                        dbSchedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
+                        if (scheduleDTO.PaymentMode != null) dbSchedule.PaymentMode = scheduleDTO.PaymentMode;
                         dbSchedule.OnlineService = scheduleDTO.OnlineService;
                         dbSchedule.IsPaymentApproved = false;
                         dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
@@ -695,7 +695,7 @@ namespace VaccineAPI.Controllers
                     dbSchedule.PaymentCollectorPaId = scheduleDTO.PaId;
                 else if (!scheduleDTO.IsDone)
                     dbSchedule.PaymentCollectorPaId = null;
-                dbSchedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
+                if (scheduleDTO.PaymentMode != null) dbSchedule.PaymentMode = scheduleDTO.PaymentMode;
                 dbSchedule.OnlineService = scheduleDTO.OnlineService;
                 dbSchedule.IsPaymentApproved = false;
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
@@ -790,7 +790,7 @@ namespace VaccineAPI.Controllers
                 if (doctorId <= 0) return;
             }
 
-            var today = DateTime.UtcNow.Date;
+            var today = DateTime.UtcNow.AddHours(5).Date; // PKT = UTC+5
             var exists = _db.PAAssignments.Any(a =>
                 a.ChildId == childId &&
                 a.PersonalAssistantId == paId &&
@@ -1354,7 +1354,7 @@ namespace VaccineAPI.Controllers
                 schedule.IsDone = scheduleDTO.IsDone;
                 schedule.GivenDate = scheduleDTO.GivenDate.Date;
                 schedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
-                schedule.PaymentMode = scheduleDTO.PaymentMode ?? "Cash";
+                if (scheduleDTO.PaymentMode != null) schedule.PaymentMode = scheduleDTO.PaymentMode;
                 schedule.OnlineService = scheduleDTO.OnlineService;
                 schedule.IsPaymentApproved = false;
                 schedule.IsPAApprove= scheduleDTO.IsPAApprove;

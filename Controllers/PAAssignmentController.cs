@@ -35,16 +35,15 @@ namespace VaccineAPI.Controllers
             // Enrich each assignment with child info, schedules, and invoice
             var result = rawAssignments.Select(a =>
             {
-                var child      = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
-                var assignDate = a.AssignedAt.Date;
+                var child = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
 
-                var assignDateEnd = assignDate.AddDays(1);
+                // No date filter — PaymentCollectorPaId is the authoritative link.
+                // InvoiceDate can differ from AssignedAt when vaccine was given on a different
+                // calendar day than scheduled (PA downloads via the scheduled-date URL route).
                 var schedules = _db.Schedules
                     .Where(s => s.ChildId == a.ChildId
                              && s.PaymentCollectorPaId == paId
-                             && s.GivenDate.HasValue
-                             && s.GivenDate.Value >= assignDate
-                             && s.GivenDate.Value < assignDateEnd)
+                             && s.IsDone == true)
                     .Join(_db.Doses,
                         s => s.DoseId,
                         d => d.Id,
@@ -61,7 +60,7 @@ namespace VaccineAPI.Controllers
                     .ToList();
 
                 var invoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == a.ChildId && i.InvoiceDate.Date == assignDate)
+                    .Where(i => i.ChildId == a.ChildId && i.PaId == paId)
                     .OrderByDescending(i => i.SubmittedAt)
                     .FirstOrDefault();
 
@@ -349,15 +348,14 @@ namespace VaccineAPI.Controllers
                     await _db.SaveChangesAsync();
                 }
 
-                // Set PaymentCollectorPaId on all done schedules for this child/date
-                // where doctor gave the vaccine (PaymentCollectorPaId is null)
+                // Stamp PaymentCollectorPaId on all done schedules for this child/date —
+                // override any previous PA stamp so the correct PA gets credit for collection
                 var schedulesToStamp = _db.Schedules
                     .Where(s => s.ChildId == dto.ChildId
                              && s.IsDone == true
                              && s.GivenDate.HasValue
                              && s.GivenDate.Value >= assignDay
-                             && s.GivenDate.Value < assignDayEnd
-                             && s.PaymentCollectorPaId == null)
+                             && s.GivenDate.Value < assignDayEnd)
                     .ToList();
                 foreach (var s in schedulesToStamp)
                 {
@@ -405,15 +403,10 @@ namespace VaccineAPI.Controllers
             if (paId.HasValue && assignment.PersonalAssistantId != paId.Value)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to update this assignment." });
 
-            // Payment gate: at least one schedule for this child/day must have payment recorded
-            var assignDate    = assignment.AssignedAt.Date;
-            var assignDateEnd = assignDate.AddDays(1);
+            // Payment gate: PA must have collected payment on at least one schedule for this child
             var hasPayment = _db.Schedules.Any(s =>
                 s.ChildId == assignment.ChildId &&
                 s.PaymentCollectorPaId == assignment.PersonalAssistantId &&
-                s.GivenDate.HasValue &&
-                s.GivenDate.Value >= assignDate &&
-                s.GivenDate.Value < assignDateEnd &&
                 s.IsPaymentCollected == true);
 
             if (!hasPayment)
@@ -425,7 +418,7 @@ namespace VaccineAPI.Controllers
             // Flag the linked InvoiceSubmission so it shows as PendingHandover on reconciliation
             var inv = _db.InvoiceSubmissions.FirstOrDefault(i =>
                 i.ChildId == assignment.ChildId &&
-                i.InvoiceDate.Date == assignDate);
+                i.PaId == assignment.PersonalAssistantId);
             if (inv != null)
             {
                 inv.PendingHandover = true;

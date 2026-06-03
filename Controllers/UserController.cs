@@ -123,6 +123,7 @@ namespace VaccineAPI.Controllers
                 userDTO.AllowInvoice = doctorDb.AllowInvoice;
                 userDTO.ProfileImage = doctorDb.ProfileImage;
                 userDTO.DoctorType = doctorDb.DoctorType;
+                userDTO.Name = !string.IsNullOrEmpty(doctorDb.DisplayName) ? doctorDb.DisplayName : doctorDb.FirstName;
             }
             else if (userDTO.UserType.Equals("PARENT"))
             {
@@ -145,6 +146,7 @@ namespace VaccineAPI.Controllers
                     userDTO.PAId = paDb.Id;
                 userDTO.DoctorId = paDb.DoctorId;
                 userDTO.IsVerified = paDb.IsVerified;
+                userDTO.Name = paDb.Name;
 
                 var doctorDb = _db.Doctors.Where(x => x.Id == paDb.DoctorId).FirstOrDefault();
                 userDTO.AllowInventory = doctorDb != null && doctorDb.AllowInventory;

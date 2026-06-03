@@ -75,6 +75,7 @@ namespace VaccineAPI.Controllers
                     DOB           = child != null ? child.DOB       : (DateTime?)null,
                     FatherName    = child != null ? child.FatherName: "",
                     a.IsAutoCreated,
+                    a.AssignmentStatus,
                     InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
                     Schedules     = schedules
                 };

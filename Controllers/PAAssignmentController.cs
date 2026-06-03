@@ -222,7 +222,8 @@ namespace VaccineAPI.Controllers
             }
 
             // Move invoice from old PA to new PA
-            var reassignDay = DateTime.UtcNow.Date;
+            var reassignDay    = DateTime.UtcNow.Date;
+            var reassignDayEnd = reassignDay.AddDays(1);
             var invoiceToMove = _db.InvoiceSubmissions.FirstOrDefault(i =>
                 i.ChildId == old.ChildId &&
                 i.InvoiceDate.Date == reassignDay &&
@@ -235,6 +236,23 @@ namespace VaccineAPI.Controllers
                 _db.Entry(invoiceToMove).State = EntityState.Modified;
                 await _db.SaveChangesAsync();
             }
+
+            // Move PaymentCollectorPaId from old PA to new PA on all schedules for this child/date
+            var schedulesToMove = _db.Schedules
+                .Where(s => s.ChildId == old.ChildId
+                         && s.IsDone == true
+                         && s.GivenDate.HasValue
+                         && s.GivenDate.Value >= reassignDay
+                         && s.GivenDate.Value < reassignDayEnd
+                         && s.PaymentCollectorPaId == old.PersonalAssistantId)
+                .ToList();
+            foreach (var s in schedulesToMove)
+            {
+                s.PaymentCollectorPaId = dto.NewPaId;
+                _db.Entry(s).State = EntityState.Modified;
+            }
+            if (schedulesToMove.Any())
+                await _db.SaveChangesAsync();
 
             // Notify new PA by email (fire-and-forget)
             var pa = await _db.PersonalAssistant.FindAsync(dto.NewPaId);
@@ -316,7 +334,8 @@ namespace VaccineAPI.Controllers
                 await _db.SaveChangesAsync();
 
                 // Stamp today's doctor-downloaded invoice with this PA so it appears in their payable
-                var assignDay = DateTime.UtcNow.Date;
+                var assignDay    = DateTime.UtcNow.Date;
+                var assignDayEnd = assignDay.AddDays(1);
                 var todayInvoice = _db.InvoiceSubmissions.FirstOrDefault(i =>
                     i.ChildId == dto.ChildId &&
                     i.InvoiceDate.Date == assignDay &&
@@ -329,6 +348,24 @@ namespace VaccineAPI.Controllers
                     _db.Entry(todayInvoice).State = EntityState.Modified;
                     await _db.SaveChangesAsync();
                 }
+
+                // Set PaymentCollectorPaId on all done schedules for this child/date
+                // where doctor gave the vaccine (PaymentCollectorPaId is null)
+                var schedulesToStamp = _db.Schedules
+                    .Where(s => s.ChildId == dto.ChildId
+                             && s.IsDone == true
+                             && s.GivenDate.HasValue
+                             && s.GivenDate.Value >= assignDay
+                             && s.GivenDate.Value < assignDayEnd
+                             && s.PaymentCollectorPaId == null)
+                    .ToList();
+                foreach (var s in schedulesToStamp)
+                {
+                    s.PaymentCollectorPaId = dto.PersonalAssistantId;
+                    _db.Entry(s).State = EntityState.Modified;
+                }
+                if (schedulesToStamp.Any())
+                    await _db.SaveChangesAsync();
 
                 // Fire-and-forget email
                 var newPa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);

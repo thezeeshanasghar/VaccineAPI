@@ -462,7 +462,7 @@ namespace VaccineAPI.Controllers
                 Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
                 Amount              = i.TotalAmount,
-                PaymentMode         = i.PaymentMode ?? "Cash",
+                PaymentMode         = i.PaymentMode ?? "",
                 IsConfirmed         = i.IsConfirmedByDoctor,
                 ConfirmedAt         = i.ConfirmedAt.HasValue ? i.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                 InvoiceStatus       = i.InvoiceStatus,
@@ -508,7 +508,7 @@ namespace VaccineAPI.Controllers
                 PatientName         = (a.InvoiceSubmission != null && amendChildNames.ContainsKey(a.InvoiceSubmission.ChildId))
                                         ? amendChildNames[a.InvoiceSubmission.ChildId] : "",
                 Amount              = a.OldAmount,
-                PaymentMode         = (a.InvoiceSubmission != null ? a.InvoiceSubmission.PaymentMode : null) ?? "Cash",
+                PaymentMode         = (a.InvoiceSubmission != null ? a.InvoiceSubmission.PaymentMode : null) ?? "",
                 IsConfirmed         = false,
                 ConfirmedAt         = (string)null,
                 InvoiceStatus       = a.AmendmentType == "Ungive" ? "UngiveReversal" : "EditReversal",

@@ -402,7 +402,10 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/PaCashHandover/reconciliation/{doctorId}
-        // One row per downloaded invoice (InvoiceSubmission) where a PA submitted it.
+        // Returns two row types in one list:
+        //   RowType="Invoice"        — standard InvoiceSubmission rows (PA payable)
+        //   RowType="UngiveReversal" — pending ungive amendments awaiting doctor approve/reject
+        //   RowType="EditReversal"   — pending invoice-edit amendments awaiting doctor approve/reject
         [HttpGet("reconciliation/{doctorId}")]
         public IActionResult GetReconciliation(
             long doctorId,
@@ -430,8 +433,7 @@ namespace VaccineAPI.Controllers
                 .Where(c => clinicIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
-            // Source of truth: InvoiceSubmission — created when PA downloads invoice
-            // Include rows with null ClinicId (doctor-downloaded) as long as DoctorId matches
+            // --- Part 1: Standard invoice rows ---
             var invQuery = _db.InvoiceSubmissions
                 .Where(i =>
                     i.PaId.HasValue &&
@@ -439,39 +441,92 @@ namespace VaccineAPI.Controllers
                     i.DoctorId == doctorId &&
                     (i.ClinicId == null || clinicIds.Contains(i.ClinicId.Value)));
 
-            if (clinicId.HasValue)
-                invQuery = invQuery.Where(i => i.ClinicId == clinicId.Value);
-            if (paId.HasValue)
-                invQuery = invQuery.Where(i => i.PaId == paId.Value);
-            if (from.HasValue)
-                invQuery = invQuery.Where(i => i.InvoiceDate.Date >= from.Value);
-            if (to.HasValue)
-                invQuery = invQuery.Where(i => i.InvoiceDate.Date < to.Value);
+            if (clinicId.HasValue) invQuery = invQuery.Where(i => i.ClinicId == clinicId.Value);
+            if (paId.HasValue)     invQuery = invQuery.Where(i => i.PaId == paId.Value);
+            if (from.HasValue)     invQuery = invQuery.Where(i => i.InvoiceDate.Date >= from.Value);
+            if (to.HasValue)       invQuery = invQuery.Where(i => i.InvoiceDate.Date < to.Value);
 
             var invoices = invQuery.OrderByDescending(i => i.InvoiceDate).ToList();
 
-            var childIds = invoices.Select(i => i.ChildId).Distinct().ToList();
+            var invChildIds = invoices.Select(i => i.ChildId).Distinct().ToList();
             var childNames = _db.Childs
-                .Where(c => childIds.Contains(c.Id))
+                .Where(c => invChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
-            var result = invoices.Select(i => new {
+            var invoiceRows = invoices.Select(i => new
+            {
+                RowType             = "Invoice",
                 InvoiceSubmissionId = i.Id,
-                ScheduleId          = i.Id,          // keep alias so existing frontend key works
+                ScheduleId          = i.Id,
+                AmendmentId         = (long?)null,
                 Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
-                Vaccines            = "Invoice",
                 Amount              = i.TotalAmount,
-                PaymentMode         = "Cash",         // invoice-level; mode detail is on schedule rows
+                PaymentMode         = i.PaymentMode ?? "Cash",
                 IsConfirmed         = i.IsConfirmedByDoctor,
                 ConfirmedAt         = i.ConfirmedAt.HasValue ? i.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                InvoiceStatus       = i.InvoiceStatus,
+                HasPendingAmendment = i.HasPendingAmendment,
+                PendingHandover     = i.PendingHandover,
                 PaId                = i.PaId.Value,
                 PaName              = paNames.ContainsKey(i.PaId.Value) ? paNames[i.PaId.Value] : "",
-                ClinicId            = i.ClinicId.Value,
-                ClinicName          = clinicNames.ContainsKey(i.ClinicId.Value) ? clinicNames[i.ClinicId.Value] : ""
-            }).ToList();
+                ClinicId            = i.ClinicId ?? 0,
+                ClinicName          = (i.ClinicId.HasValue && clinicNames.ContainsKey(i.ClinicId.Value)) ? clinicNames[i.ClinicId.Value] : "",
+                OldAmount           = (decimal?)null,
+                NewAmount           = (decimal?)null
+            });
 
-            return Ok(new { IsSuccess = true, ResponseData = result });
+            // --- Part 2: Pending amendment rows (ungive / edit reversals) ---
+            var amendQuery = _db.InvoiceAmendments
+                .Include(a => a.InvoiceSubmission)
+                .Where(a =>
+                    a.DoctorId == doctorId &&
+                    !a.IsApprovedByDoctor &&
+                    !a.IsRejectedByDoctor);
+
+            if (paId.HasValue) amendQuery = amendQuery.Where(a => a.PaId == paId.Value);
+            if (from.HasValue) amendQuery = amendQuery.Where(a => a.CreatedAt.Date >= from.Value);
+            if (to.HasValue)   amendQuery = amendQuery.Where(a => a.CreatedAt.Date < to.Value);
+
+            var amendments = amendQuery.OrderByDescending(a => a.CreatedAt).ToList();
+
+            var amendChildIds = amendments
+                .Where(a => a.InvoiceSubmission != null)
+                .Select(a => a.InvoiceSubmission.ChildId)
+                .Distinct().ToList();
+            var amendChildNames = _db.Childs
+                .Where(c => amendChildIds.Contains(c.Id))
+                .ToDictionary(c => c.Id, c => c.Name ?? "");
+
+            var amendmentRows = amendments.Select(a => new
+            {
+                RowType             = a.AmendmentType == "Ungive" ? "UngiveReversal" : "EditReversal",
+                InvoiceSubmissionId = a.InvoiceSubmissionId,
+                ScheduleId          = a.InvoiceSubmissionId,
+                AmendmentId         = (long?)a.Id,
+                Date                = a.CreatedAt.ToString("yyyy-MM-dd"),
+                PatientName         = (a.InvoiceSubmission != null && amendChildNames.ContainsKey(a.InvoiceSubmission.ChildId))
+                                        ? amendChildNames[a.InvoiceSubmission.ChildId] : "",
+                Amount              = a.OldAmount,
+                PaymentMode         = (a.InvoiceSubmission != null ? a.InvoiceSubmission.PaymentMode : null) ?? "Cash",
+                IsConfirmed         = false,
+                ConfirmedAt         = (string)null,
+                InvoiceStatus       = a.AmendmentType == "Ungive" ? "UngiveReversal" : "EditReversal",
+                HasPendingAmendment = true,
+                PendingHandover     = false,
+                PaId                = a.PaId,
+                PaName              = paNames.ContainsKey(a.PaId) ? paNames[a.PaId] : "",
+                ClinicId            = (a.InvoiceSubmission != null && a.InvoiceSubmission.ClinicId.HasValue) ? a.InvoiceSubmission.ClinicId.Value : 0,
+                ClinicName          = (a.InvoiceSubmission != null && a.InvoiceSubmission.ClinicId.HasValue && clinicNames.ContainsKey(a.InvoiceSubmission.ClinicId.Value))
+                                        ? clinicNames[a.InvoiceSubmission.ClinicId.Value] : "",
+                OldAmount           = (decimal?)a.OldAmount,
+                NewAmount           = (decimal?)a.NewAmount
+            });
+
+            // Merge: invoice rows first, then pending amendment rows (doctor must action these)
+            var combined = invoiceRows.Cast<object>().Concat(amendmentRows.Cast<object>()).ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = combined });
         }
 
         // GET /api/PaCashHandover/my-reconciliation/{paId}?clinicId=X

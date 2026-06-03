@@ -167,6 +167,19 @@ namespace VaccineAPI.Controllers
                         }
                         schedule.IsPaymentCollected = false;
 
+                        // Belt-and-suspenders: ensure Invoice row is voided in case the ungive path missed it
+                        var invoiceToVoid = _db.Invoices
+                            .FirstOrDefault(i => i.DoseId == schedule.DoseId
+                                              && i.ChildId == schedule.ChildId
+                                              && i.DoctorId == log.DoctorId
+                                              && i.IsVoided == false);
+                        if (invoiceToVoid != null)
+                        {
+                            invoiceToVoid.IsVoided = true;
+                            invoiceToVoid.SupersededBy = "UNGIVEN-APPROVED";
+                            _db.Entry(invoiceToVoid).State = EntityState.Modified;
+                        }
+
                         // Reduce PA payable for the ungiven vaccine amount
                         if (log.PaId > 0 && (schedule.Amount ?? 0) > 0)
                         {

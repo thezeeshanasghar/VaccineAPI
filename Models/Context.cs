@@ -47,6 +47,7 @@ namespace VaccineAPI.Models
         public DbSet<Expense> Expenses { get; set; }
         public DbSet<PAAssignment> PAAssignments { get; set; }
         public DbSet<PaPayableAdjustment> PaPayableAdjustments { get; set; }
+        public DbSet<InvoiceAmendment> InvoiceAmendments { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

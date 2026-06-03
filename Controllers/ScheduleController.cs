@@ -637,22 +637,36 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Height = scheduleDTO.Height;
                 dbSchedule.Circle = scheduleDTO.Circle;
 
-                // Ungive-after-payment: log a pending reversal — doctor must approve before invoice is adjusted
-                if (scheduleDTO.IsDone == false && dbSchedule.IsDone == true && dbSchedule.IsPaymentCollected)
+                // Ungive-after-download: create an InvoiceAmendment so it appears on the
+                // doctor's Payment Reconciliation page. PA payable stays unchanged until doctor acts.
+                // Doctor APPROVE → payable drops to 0. Doctor REJECT → PA still owes full amount.
+                if (scheduleDTO.IsDone == false && dbSchedule.IsDone == true && scheduleDTO.PaId.HasValue)
                 {
-                    if (scheduleDTO.PaId.HasValue)
+                    var invoiceDateMin2 = DateTime.UtcNow.Date.AddDays(-1);
+                    var invoiceDateMax2 = DateTime.UtcNow.Date.AddDays(1);
+                    var invSub = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                        x.ChildId == dbSchedule.ChildId &&
+                        x.DoctorId == scheduleDTO.DoctorId &&
+                        x.InvoiceDate.Date >= invoiceDateMin2 &&
+                        x.InvoiceDate.Date <= invoiceDateMax2 &&
+                        x.TotalAmount > 0);
+
+                    if (invSub != null && !invSub.HasPendingAmendment)
                     {
-                        _db.PaActivityLogs.Add(new PaActivityLog {
+                        _db.InvoiceAmendments.Add(new InvoiceAmendment
+                        {
+                            InvoiceSubmissionId = invSub.Id,
+                            AmendmentType = "Ungive",
+                            OldAmount = invSub.TotalAmount,
+                            NewAmount = 0,
                             PaId = scheduleDTO.PaId.Value,
                             DoctorId = scheduleDTO.DoctorId,
-                            PatientId = dbSchedule.ChildId,
-                            ActionCode = "UngiveAfterPayment",
-                            Description = "PA ungave a vaccine after payment was collected. Awaiting doctor approval to reverse invoice.",
-                            Notes = "Amount pending reversal: " + (dbSchedule.Amount ?? 0).ToString() + " | ScheduleId: " + dbSchedule.Id.ToString(),
-                            IsReversal = true,
-                            IsReversalApproved = false,
-                            ActionDate = DateTime.UtcNow
+                            Notes = $"PA ungave vaccine after invoice was downloaded. ScheduleId: {dbSchedule.Id}. Payment collected: {dbSchedule.IsPaymentCollected}",
+                            CreatedAt = DateTime.UtcNow
                         });
+                        invSub.InvoiceStatus = "UngiveReversal";
+                        invSub.HasPendingAmendment = true;
+                        _db.Entry(invSub).State = EntityState.Modified;
                     }
                 }
 
@@ -1364,22 +1378,36 @@ namespace VaccineAPI.Controllers
                         schedule.UngiveCount++;
                 }
 
-                // Ungive-after-payment: log a pending reversal — doctor must approve before invoice is adjusted
-                if (scheduleDTO.IsDone == false && wasIsDone == true && schedule.IsPaymentCollected)
+                // Ungive-after-download: create an InvoiceAmendment so it appears on the
+                // doctor's Payment Reconciliation page. PA payable stays unchanged until doctor acts.
+                // Doctor APPROVE → payable drops to 0. Doctor REJECT → PA still owes full amount.
+                if (scheduleDTO.IsDone == false && wasIsDone == true && scheduleDTO.PaId.HasValue)
                 {
-                    if (scheduleDTO.PaId.HasValue)
+                    var invoiceDateMin3 = DateTime.UtcNow.Date.AddDays(-1);
+                    var invoiceDateMax3 = DateTime.UtcNow.Date.AddDays(1);
+                    var invSub2 = _db.InvoiceSubmissions.FirstOrDefault(x =>
+                        x.ChildId == schedule.ChildId &&
+                        x.DoctorId == scheduleDTO.DoctorId &&
+                        x.InvoiceDate.Date >= invoiceDateMin3 &&
+                        x.InvoiceDate.Date <= invoiceDateMax3 &&
+                        x.TotalAmount > 0);
+
+                    if (invSub2 != null && !invSub2.HasPendingAmendment)
                     {
-                        _db.PaActivityLogs.Add(new PaActivityLog {
+                        _db.InvoiceAmendments.Add(new InvoiceAmendment
+                        {
+                            InvoiceSubmissionId = invSub2.Id,
+                            AmendmentType = "Ungive",
+                            OldAmount = invSub2.TotalAmount,
+                            NewAmount = 0,
                             PaId = scheduleDTO.PaId.Value,
                             DoctorId = scheduleDTO.DoctorId,
-                            PatientId = schedule.ChildId,
-                            ActionCode = "UngiveAfterPayment",
-                            Description = "PA ungave a vaccine after payment was collected. Awaiting doctor approval to reverse invoice.",
-                            Notes = "Amount pending reversal: " + (schedule.Amount ?? 0).ToString() + " | ScheduleId: " + schedule.Id.ToString(),
-                            IsReversal = true,
-                            IsReversalApproved = false,
-                            ActionDate = DateTime.UtcNow
+                            Notes = $"PA ungave vaccine after invoice was downloaded. ScheduleId: {schedule.Id}. Payment collected: {schedule.IsPaymentCollected}",
+                            CreatedAt = DateTime.UtcNow
                         });
+                        invSub2.InvoiceStatus = "UngiveReversal";
+                        invSub2.HasPendingAmendment = true;
+                        _db.Entry(invSub2).State = EntityState.Modified;
                     }
                 }
 
@@ -1586,8 +1614,6 @@ namespace VaccineAPI.Controllers
         [HttpPut("update-bulk-invoice")]
         public Response<object> updateInvoice([FromBody] BulkInvoiceSubmitDTO dto)
         {
-            // Always upsert the InvoiceSubmission so vaccination fee is recorded
-            // regardless of whether caller is a PA or doctor (PaId may be null for doctor)
             // Use a ±1 day window to guard against UTC/PKT offset causing date mismatch on second call
             var invoiceDateMin = dto.InvoiceDate.Date.AddDays(-1);
             var invoiceDateMax = dto.InvoiceDate.Date.AddDays(1);
@@ -1596,6 +1622,12 @@ namespace VaccineAPI.Controllers
                 x.DoctorId == dto.DoctorId &&
                 x.InvoiceDate.Date >= invoiceDateMin &&
                 x.InvoiceDate.Date <= invoiceDateMax);
+
+            // If the existing row was ungiven (pending reversal approval), treat this download
+            // as a fresh invoice for the re-given vaccines. Both rows coexist on the reconciliation
+            // page: Row A = ungive reversal (pending doctor approval), Row B = new active payable.
+            if (existing != null && existing.InvoiceStatus == "UngiveReversal")
+                existing = null;
 
             if (existing != null)
             {
@@ -1611,51 +1643,49 @@ namespace VaccineAPI.Controllers
                     if (existing.PaId != dto.PaId)
                         return new Response<object>(false, "Only the PA who submitted this invoice can edit it.", null);
 
+                    var oldAmount = existing.TotalAmount;
+                    var newAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
+
+                    // Create an InvoiceAmendment to freeze Amount1 pending doctor approval.
+                    // TotalAmount stays at Amount1 until the doctor acts — PA payable is unchanged.
+                    _db.InvoiceAmendments.Add(new InvoiceAmendment
+                    {
+                        InvoiceSubmissionId = existing.Id,
+                        AmendmentType = "Edit",
+                        OldAmount = oldAmount,
+                        NewAmount = newAmount,
+                        PaId = dto.PaId.Value,
+                        DoctorId = dto.DoctorId,
+                        Notes = $"PA edited invoice. Consultation fee: {dto.ConsultationFee}",
+                        CreatedAt = DateTime.UtcNow
+                    });
+
                     existing.EditCount++;
-                    _db.PaActivityLogs.Add(new PaActivityLog
-                    {
-                        PaId = dto.PaId.Value,
-                        DoctorId = dto.DoctorId,
-                        ClinicId = dto.ClinicId,
-                        PatientId = dto.ChildId,
-                        ActionCode = "InvoiceEdit",
-                        Description = "PA edited invoice prices after first submission",
-                        Notes = "Consultation fee: " + dto.ConsultationFee,
-                        IsReversal = false,
-                        ActionDate = DateTime.UtcNow
-                    });
+                    existing.HasPendingAmendment = true;
+                    if (dto.ClinicId.HasValue && existing.ClinicId == null)
+                        existing.ClinicId = dto.ClinicId;
+                    _db.Entry(existing).State = EntityState.Modified;
                 }
-
-                var oldAmount = existing.TotalAmount;
-                var newAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
-                var delta = newAmount - oldAmount;
-
-                existing.ConsultationFee = dto.ConsultationFee;
-                existing.TotalAmount = newAmount;
-                if (dto.ClinicId.HasValue && existing.ClinicId == null)
-                    existing.ClinicId = dto.ClinicId;
-                _db.Entry(existing).State = EntityState.Modified;
-
-                // PA edit: log a pending reversal if amount was reduced (doctor must approve)
-                if (dto.PaId.HasValue && delta < 0)
+                else
                 {
-                    _db.PaActivityLogs.Add(new PaActivityLog
-                    {
-                        PaId = dto.PaId.Value,
-                        DoctorId = dto.DoctorId,
-                        ClinicId = dto.ClinicId,
-                        PatientId = dto.ChildId,
-                        ActionCode = "InvoiceAmountReduction",
-                        Description = "PA reduced invoice amount. Awaiting doctor approval to reduce payable.",
-                        Notes = $"Reduction: {Math.Abs(delta)} | OldAmount: {oldAmount} | NewAmount: {newAmount} | ChildId: {dto.ChildId} | InvoiceDate: {dto.InvoiceDate:yyyy-MM-dd}",
-                        IsReversal = true,
-                        IsReversalApproved = false,
-                        ActionDate = DateTime.UtcNow
-                    });
+                    // Doctor editing — direct update, no amendment gate needed
+                    var newAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
+                    existing.ConsultationFee = dto.ConsultationFee;
+                    existing.TotalAmount = newAmount;
+                    if (dto.ClinicId.HasValue && existing.ClinicId == null)
+                        existing.ClinicId = dto.ClinicId;
+                    _db.Entry(existing).State = EntityState.Modified;
                 }
             }
             else
             {
+                // First download — read PaymentMode from related schedules if available
+                var scheduleIds = dto.Schedules.Select(s => s.Id).ToList();
+                var paymentMode = _db.Schedules
+                    .Where(s => scheduleIds.Contains(s.Id) && s.PaymentMode != null)
+                    .Select(s => s.PaymentMode)
+                    .FirstOrDefault();
+
                 var newTotal = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
                 _db.InvoiceSubmissions.Add(new InvoiceSubmission
                 {
@@ -1667,23 +1697,10 @@ namespace VaccineAPI.Controllers
                     SubmittedAt = DateTime.UtcNow,
                     ConsultationFee = dto.ConsultationFee,
                     TotalAmount = newTotal,
-                    EditCount = 0
+                    EditCount = 0,
+                    InvoiceStatus = "Active",
+                    PaymentMode = paymentMode
                 });
-
-                if (dto.PaId.HasValue)
-                {
-                    _db.PaActivityLogs.Add(new PaActivityLog
-                    {
-                        PaId = dto.PaId.Value,
-                        DoctorId = dto.DoctorId,
-                        ClinicId = dto.ClinicId,
-                        PatientId = dto.ChildId,
-                        ActionCode = "InvoiceSubmit",
-                        Description = "PA submitted invoice",
-                        Notes = "Consultation fee: " + dto.ConsultationFee,
-                        ActionDate = DateTime.UtcNow
-                    });
-                }
             }
 
             foreach (var item in dto.Schedules)

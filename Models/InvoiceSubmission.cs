@@ -18,5 +18,15 @@ namespace VaccineAPI.Models
         public decimal TotalAmount { get; set; } = 0;
         public bool IsConfirmedByDoctor { get; set; } = false;
         public DateTime? ConfirmedAt { get; set; }
+
+        // "Active" | "UngiveReversal" | "Cancelled"
+        public string InvoiceStatus { get; set; } = "Active";
+        // true while an InvoiceAmendment row awaits doctor approve/reject
+        public bool HasPendingAmendment { get; set; } = false;
+        // payment mode copied from Schedule at download time
+        public string? PaymentMode { get; set; }
+        // true after PA clicks "Mark Done", before doctor confirms
+        public bool PendingHandover { get; set; } = false;
+        public DateTime? HandoverDoneAt { get; set; }
     }
 }

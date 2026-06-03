@@ -20,5 +20,10 @@ namespace VaccineAPI.Models
         public string? CancelReason { get; set; }
         public long? ReassignedFromAssignmentId { get; set; }
         public bool IsAutoCreated { get; set; } = false;
+
+        // "Active" | "InvoiceDownloaded" | "PaymentCollected" | "PendingHandover" | "Completed"
+        public string AssignmentStatus { get; set; } = "Active";
+        public DateTime? HandoverDoneAt { get; set; }
+        public long? InvoiceSubmissionId { get; set; }
     }
 }

@@ -349,6 +349,62 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // PATCH /api/PAAssignment/{id}/mark-done
+        // PA marks assignment as done (payment collected) — transitions to PendingHandover state.
+        // Doctor sees this row on Payment Reconciliation with "Pending Handover" flag.
+        [HttpPatch("{id}/mark-done")]
+        public async Task<IActionResult> MarkDone(long id, [FromQuery] long? paId = null)
+        {
+            var assignment = await _db.PAAssignments.FindAsync(id);
+            if (assignment == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found." });
+
+            if (assignment.IsCancelled)
+                return Ok(new { IsSuccess = false, Message = "Assignment is cancelled." });
+
+            if (assignment.AssignmentStatus == "PendingHandover" || assignment.IsCompleted)
+                return Ok(new { IsSuccess = false, Message = "Assignment is already marked done." });
+
+            if (paId.HasValue && assignment.PersonalAssistantId != paId.Value)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to update this assignment." });
+
+            // Payment gate: at least one schedule for this child/day must have payment recorded
+            var assignDate    = assignment.AssignedAt.Date;
+            var assignDateEnd = assignDate.AddDays(1);
+            var hasPayment = _db.Schedules.Any(s =>
+                s.ChildId == assignment.ChildId &&
+                s.PaymentCollectorPaId == assignment.PersonalAssistantId &&
+                s.GivenDate.HasValue &&
+                s.GivenDate.Value >= assignDate &&
+                s.GivenDate.Value < assignDateEnd &&
+                s.IsPaymentCollected == true);
+
+            if (!hasPayment)
+                return Ok(new { IsSuccess = false, Message = "Please record payment mode before marking done." });
+
+            assignment.AssignmentStatus = "PendingHandover";
+            assignment.HandoverDoneAt   = DateTime.UtcNow;
+
+            // Flag the linked InvoiceSubmission so it shows as PendingHandover on reconciliation
+            var inv = _db.InvoiceSubmissions.FirstOrDefault(i =>
+                i.ChildId == assignment.ChildId &&
+                i.InvoiceDate.Date == assignDate);
+            if (inv != null)
+            {
+                inv.PendingHandover = true;
+                inv.HandoverDoneAt  = DateTime.UtcNow;
+                _db.Entry(inv).State = EntityState.Modified;
+            }
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            return Ok(new { IsSuccess = true, Message = "Assignment marked as done. Pending handover to doctor." });
+        }
+
         // GET /api/PAAssignment/active/{doctorId}
         // Returns all active (non-completed, non-cancelled) assignments for a doctor today
         [HttpGet("active/{doctorId}")]

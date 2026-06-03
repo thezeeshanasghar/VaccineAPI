@@ -332,15 +332,14 @@ namespace VaccineAPI.Controllers
                 _db.PAAssignments.Add(assignment);
                 await _db.SaveChangesAsync();
 
-                // Stamp today's doctor-downloaded invoice with this PA so it appears in their payable.
-                // Use ±1 day window so scheduled-date invoices are found regardless of UTC/PKT offset.
+                // Stamp the most recent unassigned invoice for this child with the PA.
+                // No date restriction — avoids issues with wrong InvoiceDate values.
                 var assignDay    = DateTime.UtcNow.AddHours(5).Date;
                 var assignDayEnd = assignDay.AddDays(1);
-                var todayInvoice = _db.InvoiceSubmissions.FirstOrDefault(i =>
-                    i.ChildId == dto.ChildId &&
-                    i.InvoiceDate.Date >= assignDay.AddDays(-1) &&
-                    i.InvoiceDate.Date <= assignDay &&
-                    i.PaId == null);
+                var todayInvoice = _db.InvoiceSubmissions
+                    .Where(i => i.ChildId == dto.ChildId && i.PaId == null)
+                    .OrderByDescending(i => i.SubmittedAt)
+                    .FirstOrDefault();
                 if (todayInvoice != null)
                 {
                     var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);

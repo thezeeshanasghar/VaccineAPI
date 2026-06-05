@@ -360,12 +360,6 @@ namespace VaccineAPI.Controllers
             string billNo = billEntry != null ? billEntry.BillNo : "";
 
             var first = transfers[0];
-            var brandIds = transfers.Select(t => t.BrandId).Distinct().ToList();
-            var vaccineBrands = await _db.VaccineBrands
-                .Include(vb => vb.Vaccine)
-                .Where(vb => brandIds.Contains(vb.BrandId))
-                .ToListAsync();
-
             using (var ms = new MemoryStream())
             {
                 var doc = new Document(PageSize.A4, 36, 36, 50, 36);
@@ -395,12 +389,12 @@ namespace VaccineAPI.Controllers
                 else
                     doc.Add(new Paragraph(" ") { SpacingAfter = 8 });
 
-                // Table: Vaccine | Brand | Batch | Expiry | Qty | Unit Price | Total
-                var tbl = new PdfPTable(7) { WidthPercentage = 100, SpacingBefore = 4 };
-                tbl.SetWidths(new float[] { 2.2f, 1.8f, 1.6f, 1.6f, 0.8f, 1.4f, 1.4f });
+                // Table: Brand | Batch | Expiry | Qty | Unit Price | Total
+                var tbl = new PdfPTable(6) { WidthPercentage = 100, SpacingBefore = 4 };
+                tbl.SetWidths(new float[] { 2.2f, 1.8f, 1.6f, 0.8f, 1.4f, 1.4f });
 
                 BaseColor headerBg = new BaseColor(21, 101, 192);
-                string[] headers = { "Vaccine", "Brand", "Batch", "Expiry", "Qty", "Unit Price", "Total" };
+                string[] headers = { "Brand", "Batch", "Expiry", "Qty", "Unit Price", "Total" };
                 foreach (var h in headers)
                 {
                     bool rightAlign = h == "Qty" || h == "Unit Price" || h == "Total";
@@ -423,8 +417,6 @@ namespace VaccineAPI.Controllers
                     bool expired = t.ExpiryDate.HasValue && t.ExpiryDate.Value < DateTime.Today;
                     bool soon = !expired && t.ExpiryDate.HasValue && (t.ExpiryDate.Value - DateTime.Today).TotalDays <= 90;
 
-                    var vb = vaccineBrands.FirstOrDefault(x => x.BrandId == t.BrandId);
-                    string vaccineName = vb != null && vb.Vaccine != null ? vb.Vaccine.Name : "";
                     string brandName = t.Brand != null ? t.Brand.Name : "";
                     string batchStr = string.IsNullOrEmpty(t.BatchLot) ? "—" : t.BatchLot;
                     string expiryStr = t.ExpiryDate.HasValue ? t.ExpiryDate.Value.ToString("dd MMM yyyy") : "—";
@@ -445,7 +437,6 @@ namespace VaccineAPI.Controllers
                         });
                     }
 
-                    AddCell(vaccineName, cellFont);
                     AddCell(brandName, cellFont);
                     AddCell(batchStr, cellFont);
                     AddCell(expiryLabel, expiryFont);

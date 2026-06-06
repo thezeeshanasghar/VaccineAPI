@@ -91,21 +91,37 @@ namespace VaccineAPI.Controllers
        }
 
        [HttpGet("schedule-amount")]
-        public ActionResult<Response<decimal>> GetScheduleAmount(long Id, long doseId, long childId)
+        public ActionResult<Response<decimal>> GetScheduleAmount(long Id, long doseId, long childId, long? clinicId = null)
         {
             var schedule = _db.Schedules
                 .FirstOrDefault(s => s.DoseId == doseId && s.ChildId == childId && s.Id == Id);
 
-            if (schedule != null && schedule.Amount != null)
-            {
+            if (schedule == null)
+                return Ok(new Response<decimal>(false, "Schedule not found.", 0));
+
+            // Amount is set — return it (normal first-download case)
+            if (schedule.Amount != null)
                 return Ok(new Response<decimal>(true, "Amount found.", schedule.Amount.Value));
-            }
-            else
+
+            // Amount was cleared by ungive — look up fresh brand price for the actor's current clinic
+            if (schedule.BrandId != null && clinicId.HasValue && clinicId.Value > 0)
             {
-                return NotFound(new Response<decimal>(false, "Amount not found for the given DoseId and ChildId.", 0));
+                var clinic = _db.Clinics.FirstOrDefault(c => c.Id == clinicId.Value);
+                if (clinic != null)
+                {
+                    var brandAmt = _db.BrandAmounts
+                        .FirstOrDefault(x => x.BrandId == schedule.BrandId
+                                          && x.DoctorId == clinic.DoctorId
+                                          && x.ClinicId == clinicId.Value);
+                    if (brandAmt != null)
+                        return Ok(new Response<decimal>(true, "Brand price found.", brandAmt.Amount));
+                }
             }
+
+            // OHF, no brand, or no clinic context — return 0, user enters manually
+            return Ok(new Response<decimal>(false, "Amount not found.", 0));
         }
-       
+
        [HttpGet("invoice-total")]
         public ActionResult<Response<decimal>> GetInvoiceTotal([FromQuery] long childId, [FromQuery] string scheduleDate)
         {
@@ -113,7 +129,10 @@ namespace VaccineAPI.Controllers
                 return Ok(new Response<decimal>(false, "Invalid date.", 0));
 
             var submission = _db.InvoiceSubmissions
-                .Where(x => x.ChildId == childId && x.InvoiceDate.Date == date.Date)
+                .Where(x => x.ChildId == childId
+                         && x.InvoiceDate.Date == date.Date
+                         && x.InvoiceStatus != "Cancelled"
+                         && x.InvoiceStatus != "UngiveReversal")
                 .OrderByDescending(x => x.Id)
                 .FirstOrDefault();
 

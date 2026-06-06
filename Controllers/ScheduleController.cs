@@ -331,6 +331,7 @@ namespace VaccineAPI.Controllers
                     dbSchedule.OnlineService = null;
                     dbSchedule.IsPaymentApproved = false;
                     dbSchedule.BrandId = null;
+                    dbSchedule.Amount = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
                     if (scheduleDTO.IsSkip == true)
                     {
@@ -1369,6 +1370,7 @@ namespace VaccineAPI.Controllers
                 {
                     schedule.GivenByPaId = null;
                     schedule.PaymentCollectorPaId = null;
+                    schedule.Amount = null;
                 }
 
                 // PA audit counters
@@ -1626,10 +1628,28 @@ namespace VaccineAPI.Controllers
                 x.InvoiceDate.Date <= invoiceDateMax);
 
             // If the existing row was ungiven (pending reversal approval), treat this download
-            // as a fresh invoice for the re-given vaccines. Both rows coexist on the reconciliation
-            // page: Row A = ungive reversal (pending doctor approval), Row B = new active payable.
+            // as a fresh invoice for the re-given vaccines.
             if (existing != null && existing.InvoiceStatus == "UngiveReversal")
+            {
+                // Doctor re-downloading: auto-cancel the pending amendment so reconciliation queue stays clean.
+                // PA re-downloading: leave amendment pending — doctor reviews PA actions later.
+                if (!dto.PaId.HasValue)
+                {
+                    var pendingAmendment = _db.InvoiceAmendments
+                        .FirstOrDefault(a => a.InvoiceSubmissionId == existing.Id
+                                          && a.AmendmentType == "Ungive"
+                                          && a.ApprovedAt == null
+                                          && a.RejectedAt == null);
+                    if (pendingAmendment != null)
+                    {
+                        pendingAmendment.ApprovedAt = DateTime.UtcNow;
+                        pendingAmendment.Notes = (pendingAmendment.Notes ?? "") + " [Auto-cancelled: doctor re-downloaded]";
+                    }
+                    existing.InvoiceStatus = "Cancelled";
+                    _db.Entry(existing).State = EntityState.Modified;
+                }
                 existing = null;
+            }
 
             if (existing != null)
             {

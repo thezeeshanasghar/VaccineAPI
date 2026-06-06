@@ -3379,6 +3379,9 @@ namespace VaccineAPI.Controllers
             if (schedule == null) return Ok(new Response<ScheduleDTO>(false, "Not found", null));
             if (schedule.PaymentCollectorPaId == null)
                 return Ok(new Response<ScheduleDTO>(false, "No PA assigned for this payment.", null));
+            var allowed = new[] { "Cash", "Online Transfer" };
+            if (dto.PaymentMode != null && !allowed.Contains(dto.PaymentMode))
+                return Ok(new Response<ScheduleDTO>(false, "Invalid payment mode.", null));
 
             schedule.IsPaymentCollected = true;
             schedule.PaymentMode = dto.PaymentMode ?? schedule.PaymentMode;
@@ -3394,6 +3397,9 @@ namespace VaccineAPI.Controllers
         {
             var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
             if (schedule == null) return Ok(new Response<ScheduleDTO>(false, "Not found", null));
+            var allowed = new[] { "Cash", "Online Transfer" };
+            if (dto.PaymentMode != null && !allowed.Contains(dto.PaymentMode))
+                return Ok(new Response<ScheduleDTO>(false, "Invalid payment mode.", null));
             schedule.PaymentMode = dto.PaymentMode ?? schedule.PaymentMode;
             schedule.OnlineService = dto.OnlineService ?? schedule.OnlineService;
             schedule.IsPaymentCollected = true;

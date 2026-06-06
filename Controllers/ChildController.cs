@@ -117,7 +117,7 @@ namespace VaccineAPI.Controllers
                 .OrderByDescending(x => x.Id)
                 .FirstOrDefault();
 
-            if (submission == null || submission.TotalAmount == 0)
+            if (submission == null)
                 return Ok(new Response<decimal>(false, "No invoice found for this visit.", 0));
 
             return Ok(new Response<decimal>(true, "Total found.", submission.TotalAmount));

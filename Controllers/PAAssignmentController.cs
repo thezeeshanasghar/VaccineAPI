@@ -77,6 +77,7 @@ namespace VaccineAPI.Controllers
                     a.IsAutoCreated,
                     a.AssignmentStatus,
                     InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
+                    HasInvoice    = invoice != null,
                     Schedules     = schedules
                 };
             }).ToList();

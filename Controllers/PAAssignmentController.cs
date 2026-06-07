@@ -235,7 +235,9 @@ namespace VaccineAPI.Controllers
             }
 
             // Move invoice from old PA to new PA
-            var reassignDay    = DateTime.UtcNow.Date;
+            // PKT-local "today" — same AddHours(5) idiom as ScheduleController's give/ungive
+            // same-day checks, since GivenDate/InvoiceDate are PKT-local calendar dates, not UTC
+            var reassignDay    = DateTime.UtcNow.AddHours(5).Date;
             var reassignDayEnd = reassignDay.AddDays(1);
             var invoiceToMove = _db.InvoiceSubmissions.FirstOrDefault(i =>
                 i.ChildId == old.ChildId &&

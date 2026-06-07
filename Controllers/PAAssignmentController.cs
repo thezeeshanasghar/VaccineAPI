@@ -194,6 +194,165 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true });
         }
 
+        // PATCH /api/PAAssignment/{id}/request-cancel
+        // PA-only: clean assignment cancel becomes a pending request requiring doctor approval (no instant cancel)
+        [HttpPatch("{id}/request-cancel")]
+        public async Task<IActionResult> RequestCancel(long id, [FromBody] CancelAssignmentDto dto)
+        {
+            var assignment = await _db.PAAssignments.FindAsync(id);
+            if (assignment == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+
+            if (assignment.IsCompleted)
+                return Ok(new { IsSuccess = false, Message = "Assignment is already completed" });
+
+            if (assignment.IsCancelled)
+                return Ok(new { IsSuccess = false, Message = "Assignment is already cancelled" });
+
+            if (assignment.PersonalAssistantId != dto.CallerId)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to cancel this assignment" });
+
+            if (assignment.AssignmentStatus == "PendingCancellation")
+                return Ok(new { IsSuccess = false, Message = "Cancellation already requested — awaiting doctor approval" });
+
+            // Belt-and-suspenders — frontend already blocks this, but guard here too (same rule as instant Cancel)
+            var hasGivenOrPaid = await _db.Schedules.AnyAsync(s =>
+                s.ChildId == assignment.ChildId
+                && s.PaymentCollectorPaId == assignment.PersonalAssistantId
+                && (s.IsDone == true || s.IsPaymentCollected == true));
+
+            if (hasGivenOrPaid)
+                return BadRequest(new { IsSuccess = false, Message = "This assignment has vaccines given or payment recorded and can no longer be self-cancelled. Please contact the doctor." });
+
+            assignment.AssignmentStatus   = "PendingCancellation";
+            assignment.CancelRequestedAt  = DateTime.UtcNow;
+            assignment.CancelRequestReason = dto.Reason;
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            // Notify doctor by email (fire-and-forget)
+            var doctor = await _db.Doctors.FindAsync(assignment.DoctorId);
+            if (doctor != null && !string.IsNullOrEmpty(doctor.Email))
+            {
+                var paUser = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
+                var paNameStr    = paUser?.Name ?? "Your PA";
+                var child        = await _db.Childs.FindAsync(assignment.ChildId);
+                var childNameStr = child?.Name ?? "a patient";
+                var reasonStr    = dto.Reason ?? "No reason given";
+                _ = Task.Run(() => UserEmail.SendEmail(
+                    doctor.Email,
+                    $"{paNameStr} has requested to cancel the assignment for patient {childNameStr}. Reason: {reasonStr}. Please review and approve or reject this request in the VacDoc app.",
+                    "PA Cancellation Request — Approval Needed"
+                ));
+            }
+
+            return Ok(new { IsSuccess = true });
+        }
+
+        // GET /api/PAAssignment/pending-cancellations/{doctorId}
+        [HttpGet("pending-cancellations/{doctorId}")]
+        public async Task<IActionResult> GetPendingCancellations(long doctorId)
+        {
+            var pending = await _db.PAAssignments
+                .Where(a => a.DoctorId == doctorId && a.AssignmentStatus == "PendingCancellation" && !a.IsCancelled)
+                .OrderByDescending(a => a.CancelRequestedAt)
+                .ToListAsync();
+
+            var childIds = pending.Select(a => a.ChildId).Distinct().ToList();
+            var childNames = await _db.Childs
+                .Where(c => childIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name ?? "");
+
+            var paIds = pending.Select(a => a.PersonalAssistantId).Distinct().ToList();
+            var paNames = await _db.PersonalAssistant
+                .Where(p => paIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Name ?? "");
+
+            var result = pending.Select(a => new
+            {
+                AssignmentId       = a.Id,
+                ChildId            = a.ChildId,
+                ChildName          = childNames.ContainsKey(a.ChildId) ? childNames[a.ChildId] : "",
+                PaId               = a.PersonalAssistantId,
+                PaName             = paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "",
+                CancelRequestedAt  = a.CancelRequestedAt,
+                CancelRequestReason = a.CancelRequestReason
+            });
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
+        }
+
+        // PATCH /api/PAAssignment/{id}/approve-cancel
+        [HttpPatch("{id}/approve-cancel")]
+        public async Task<IActionResult> ApproveCancelRequest(long id, [FromQuery] long doctorId)
+        {
+            var assignment = await _db.PAAssignments.FindAsync(id);
+            if (assignment == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+
+            if (assignment.DoctorId != doctorId)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to act on this assignment" });
+
+            if (assignment.AssignmentStatus != "PendingCancellation" || assignment.IsCancelled)
+                return Ok(new { IsSuccess = false, Message = "This cancellation request has already been resolved" });
+
+            assignment.IsCancelled  = true;
+            assignment.CancelledAt  = DateTime.UtcNow;
+            assignment.CancelReason = assignment.CancelRequestReason;
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            return Ok(new { IsSuccess = true, Message = "Cancellation approved" });
+        }
+
+        // PATCH /api/PAAssignment/{id}/reject-cancel
+        [HttpPatch("{id}/reject-cancel")]
+        public async Task<IActionResult> RejectCancelRequest(long id, [FromBody] RejectCancelDto dto)
+        {
+            var assignment = await _db.PAAssignments.FindAsync(id);
+            if (assignment == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+
+            if (assignment.DoctorId != dto.DoctorId)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to act on this assignment" });
+
+            if (assignment.AssignmentStatus != "PendingCancellation" || assignment.IsCancelled)
+                return Ok(new { IsSuccess = false, Message = "This cancellation request has already been resolved" });
+
+            assignment.AssignmentStatus = "Active";
+            assignment.RejectionNote    = dto.Notes;
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            // Notify PA by email (fire-and-forget)
+            var pa = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
+            if (pa != null && !string.IsNullOrEmpty(pa.Email))
+            {
+                var child = await _db.Childs.FindAsync(assignment.ChildId);
+                var childNameStr = child?.Name ?? "the patient";
+                var reason = !string.IsNullOrEmpty(dto.Notes) ? dto.Notes : "No reason given";
+                _ = Task.Run(() => UserEmail.SendEmail(
+                    pa.Email,
+                    $"Hi {pa.Name},<br><br>Your request to cancel the assignment for patient <b>{childNameStr}</b> has been <b>rejected</b>.<br>Reason: {reason}<br><br>The assignment remains active.",
+                    "Cancellation Request Rejected"
+                ));
+            }
+
+            return Ok(new { IsSuccess = true, Message = "Cancellation request rejected" });
+        }
+
         // PATCH /api/PAAssignment/{id}/reassign
         [HttpPatch("{id}/reassign")]
         public async Task<IActionResult> Reassign(long id, [FromBody] ReassignDto dto)
@@ -207,6 +366,9 @@ namespace VaccineAPI.Controllers
 
             if (old.IsCancelled)
                 return Ok(new { IsSuccess = false, Message = "Cannot reassign a cancelled assignment" });
+
+            if (old.AssignmentStatus == "PendingCancellation")
+                return Ok(new { IsSuccess = false, Message = "This assignment has a pending cancellation request — resolve it before reassigning." });
 
             // Cancel the old one
             old.IsCancelled  = true;
@@ -509,6 +671,12 @@ namespace VaccineAPI.Controllers
     public class ReassignDto
     {
         public long NewPaId { get; set; }
+    }
+
+    public class RejectCancelDto
+    {
+        public long DoctorId { get; set; }
+        public string? Notes { get; set; }
     }
 
     public class CreateAssignmentDto

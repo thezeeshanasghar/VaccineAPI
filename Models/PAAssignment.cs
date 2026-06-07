@@ -21,9 +21,14 @@ namespace VaccineAPI.Models
         public long? ReassignedFromAssignmentId { get; set; }
         public bool IsAutoCreated { get; set; } = false;
 
-        // "Active" | "InvoiceDownloaded" | "PaymentCollected" | "PendingHandover" | "Completed"
+        // "Active" | "InvoiceDownloaded" | "PaymentCollected" | "PendingHandover" | "Completed" | "PendingCancellation"
         public string AssignmentStatus { get; set; } = "Active";
         public DateTime? HandoverDoneAt { get; set; }
         public long? InvoiceSubmissionId { get; set; }
+
+        // PA's cancellation request — set on RequestCancel, cleared/finalized on doctor approve/reject
+        public DateTime? CancelRequestedAt { get; set; }
+        public string? CancelRequestReason { get; set; }
+        public string? RejectionNote { get; set; }
     }
 }

@@ -402,10 +402,11 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/PaCashHandover/reconciliation/{doctorId}
-        // Returns two row types in one list:
-        //   RowType="Invoice"        — standard InvoiceSubmission rows (PA payable)
-        //   RowType="UngiveReversal" — pending ungive amendments awaiting doctor approve/reject
-        //   RowType="EditReversal"   — pending invoice-edit amendments awaiting doctor approve/reject
+        // Returns multiple row types in one list:
+        //   RowType="Invoice"         — standard InvoiceSubmission rows (PA payable)
+        //   RowType="UngiveReversal"  — pending ungive amendments awaiting doctor approve/reject
+        //   RowType="EditReversal"    — pending invoice-edit amendments awaiting doctor approve/reject
+        //   RowType="AwaitingInvoice" — assignment exists but no invoice yet (informational only, no actions)
         [HttpGet("reconciliation/{doctorId}")]
         public IActionResult GetReconciliation(
             long doctorId,
@@ -476,6 +477,59 @@ namespace VaccineAPI.Controllers
                 NewAmount           = (decimal?)null
             });
 
+            // --- Part 0: Assignments with no invoice yet — informational "Awaiting Invoice" rows ---
+            // Lets the doctor see a row the moment they assign a PA, before any invoice exists.
+            var assignQuery = _db.PAAssignments
+                .Where(a =>
+                    a.DoctorId == doctorId &&
+                    !a.IsCancelled &&
+                    (a.ClinicId == null || clinicIds.Contains(a.ClinicId.Value)));
+
+            if (clinicId.HasValue) assignQuery = assignQuery.Where(a => a.ClinicId == clinicId.Value);
+            if (paId.HasValue)     assignQuery = assignQuery.Where(a => a.PersonalAssistantId == paId.Value);
+            if (from.HasValue)     assignQuery = assignQuery.Where(a => a.AssignedAt.Date >= from.Value);
+            if (to.HasValue)       assignQuery = assignQuery.Where(a => a.AssignedAt.Date < to.Value);
+
+            var assignments = assignQuery.OrderByDescending(a => a.AssignedAt).ToList();
+
+            // An assignment "already has an invoice" if the same child+PA pair was invoiced the same day
+            // (mirrors EnsurePAAssignment's own same-day ChildId+PaId dedup convention in ScheduleController).
+            var invoicedPairs = new HashSet<(long ChildId, long PaId, DateTime Day)>(
+                invoices.Where(i => i.PaId.HasValue)
+                        .Select(i => (i.ChildId, i.PaId.Value, i.InvoiceDate.Date)));
+
+            var pendingAssignments = assignments
+                .Where(a => !invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId, a.AssignedAt.Date)))
+                .ToList();
+
+            var pendingChildIds = pendingAssignments.Select(a => a.ChildId).Distinct().ToList();
+            var pendingChildNames = _db.Childs
+                .Where(c => pendingChildIds.Contains(c.Id))
+                .ToDictionary(c => c.Id, c => c.Name ?? "");
+
+            var awaitingInvoiceRows = pendingAssignments.Select(a => new
+            {
+                RowType             = "AwaitingInvoice",
+                InvoiceSubmissionId = (long?)null,
+                ScheduleId          = a.Id,
+                AmendmentId         = (long?)null,
+                Date                = a.AssignedAt.ToString("yyyy-MM-dd"),
+                PatientName         = pendingChildNames.ContainsKey(a.ChildId) ? pendingChildNames[a.ChildId] : "",
+                Amount              = 0m,
+                PaymentMode         = "",
+                IsConfirmed         = false,
+                ConfirmedAt         = (string)null,
+                InvoiceStatus       = (string)null,
+                HasPendingAmendment = false,
+                PendingHandover     = false,
+                PaId                = a.PersonalAssistantId,
+                PaName              = paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "",
+                ClinicId            = a.ClinicId ?? 0,
+                ClinicName          = (a.ClinicId.HasValue && clinicNames.ContainsKey(a.ClinicId.Value)) ? clinicNames[a.ClinicId.Value] : "",
+                OldAmount           = (decimal?)null,
+                NewAmount           = (decimal?)null
+            });
+
             // --- Part 2: Pending amendment rows (ungive / edit reversals) ---
             var amendQuery = _db.InvoiceAmendments
                 .Include(a => a.InvoiceSubmission)
@@ -523,8 +577,12 @@ namespace VaccineAPI.Controllers
                 NewAmount           = (decimal?)a.NewAmount
             });
 
-            // Merge: invoice rows first, then pending amendment rows (doctor must action these)
-            var combined = invoiceRows.Cast<object>().Concat(amendmentRows.Cast<object>()).ToList();
+            // Merge: invoice rows first, then pending amendment rows (doctor must action these),
+            // then informational "awaiting invoice" rows last (nothing to action yet)
+            var combined = invoiceRows.Cast<object>()
+                .Concat(amendmentRows.Cast<object>())
+                .Concat(awaitingInvoiceRows.Cast<object>())
+                .ToList();
 
             return Ok(new { IsSuccess = true, ResponseData = combined });
         }

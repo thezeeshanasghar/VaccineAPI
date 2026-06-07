@@ -150,6 +150,18 @@ namespace VaccineAPI.Controllers
             if (dto.CallerType == "DOCTOR" && assignment.DoctorId != dto.CallerId)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to cancel this assignment" });
 
+            // PA cannot self-cancel once vaccines were given or payment was recorded — must ask the doctor
+            if (dto.CallerType == "PA")
+            {
+                var hasGivenOrPaid = await _db.Schedules.AnyAsync(s =>
+                    s.ChildId == assignment.ChildId
+                    && s.PaymentCollectorPaId == assignment.PersonalAssistantId
+                    && (s.IsDone == true || s.IsPaymentCollected == true));
+
+                if (hasGivenOrPaid)
+                    return BadRequest(new { IsSuccess = false, Message = "This assignment has vaccines given or payment recorded and can no longer be self-cancelled. Please contact the doctor." });
+            }
+
             assignment.IsCancelled  = true;
             assignment.CancelledAt  = DateTime.UtcNow;
             assignment.CancelReason = dto.Reason;

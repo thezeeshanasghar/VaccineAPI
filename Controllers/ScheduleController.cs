@@ -3388,6 +3388,7 @@ namespace VaccineAPI.Controllers
             if (dto.Weight > 0) schedule.Weight = dto.Weight;
             if (dto.Height > 0) schedule.Height = dto.Height;
             if (dto.Circle > 0) schedule.Circle = dto.Circle;
+            SyncInvoicePaymentMode(schedule);
             _db.SaveChanges();
             return Ok(new Response<ScheduleDTO>(true, "Payment marked as collected.", null));
         }
@@ -3403,8 +3404,26 @@ namespace VaccineAPI.Controllers
             schedule.PaymentMode = dto.PaymentMode ?? schedule.PaymentMode;
             schedule.OnlineService = dto.OnlineService ?? schedule.OnlineService;
             schedule.IsPaymentCollected = true;
+            SyncInvoicePaymentMode(schedule);
             _db.SaveChanges();
             return Ok(new Response<ScheduleDTO>(true, "Payment recorded.", null));
+        }
+
+        // Keeps InvoiceSubmission.PaymentMode (frozen at invoice-creation time, often
+        // still the "Cash" default) in sync with the schedule's actual recorded mode,
+        // so the Doctor's reconciliation page reflects what was really collected.
+        private void SyncInvoicePaymentMode(Schedule schedule)
+        {
+            if (!schedule.GivenDate.HasValue) return;
+            var relatedInvoice = _db.InvoiceSubmissions
+                .Where(x => x.ChildId == schedule.ChildId
+                         && x.InvoiceDate.Date == schedule.GivenDate.Value.Date
+                         && x.InvoiceStatus != "Cancelled"
+                         && x.InvoiceStatus != "UngiveReversal")
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefault();
+            if (relatedInvoice != null)
+                relatedInvoice.PaymentMode = schedule.PaymentMode;
         }
 
         [HttpGet("day-log/{doctorId}/{date}")]

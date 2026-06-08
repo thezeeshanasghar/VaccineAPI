@@ -70,7 +70,7 @@ namespace VaccineAPI
             if (scheduleDate.Date == DateTime.UtcNow.AddHours(5).Date)
                 sms1 += "Today ";
             else
-                sms1 += scheduleDate.Date.ToString("MM-dd-yyyy");
+                sms1 += scheduleDate.Date.ToString("dd-MM-yyyy");
 
             sms1 += " at " + textInfo.ToTitleCase(child.Clinic.Name) + "\n";
             sms1 += "Plz confirm your appointment with Dr. " + textInfo.ToTitleCase(child.Clinic.Doctor.FirstName);

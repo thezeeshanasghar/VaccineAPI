@@ -517,19 +517,37 @@ namespace VaccineAPI.Controllers
 
             var assignments = assignQuery.OrderByDescending(a => a.AssignedAt).ToList();
 
-            // An assignment "already has an invoice" if the same child+PA pair was invoiced the same
-            // PKT calendar day (mirrors EnsurePAAssignment's own same-day dedup convention — including
-            // its DateTime.UtcNow.AddHours(5).Date PKT conversion. AssignedAt is stored as raw UTC, while
-            // InvoiceDate is already a PKT-intended date-only value, so only AssignedAt needs the +5h shift
-            // before comparing — omitting it caused the "Awaiting Invoice" row to never be suppressed for
-            // assignments created late enough in the PKT day to cross the UTC midnight boundary).
-            var invoicedPairs = new HashSet<(long ChildId, long PaId, DateTime Day)>(
-                invoices.Where(i => i.PaId.HasValue)
-                        .Select(i => (i.ChildId, i.PaId.Value, i.InvoiceDate.Date)));
+            // An assignment "already has an invoice" if the same child+PA pair has ANY invoice —
+            // no date component. Reverted to the originally-approved (Child,PaId) dedup design
+            // (see plan `its-plan-only-mode-groovy-orbit.md`) after live data proved the shipped
+            // (Child,PaId,Day) version fundamentally broken: confirmed via the deployed API that
+            // "Tesdsd" (ChildId 16805) has assignment AssignedAt=2026-06-08 but its real, already-
+            // downloaded InvoiceSubmission #146 is dated InvoiceDate=2026-06-07 (TotalAmount 12971,
+            // PaId 21) — a genuine one-day gap between assignment date and invoice date (e.g. PA
+            // assigned the next day, or invoicing a late-night/prior-day visit), NOT a UTC/PKT
+            // rounding artifact. No per-day key can bridge a real one-day data gap like that — the
+            // simpler (Child,PaId) key the user originally approved is correct precisely because an
+            // assignment+invoice pair for the same child+PA virtually never coexist with an
+            // UNRELATED second pending assignment for that same pair on a different day in this flow.
+            //
+            // Built from a query that does NOT carry `invoices`' `TotalAmount > 0` display filter —
+            // a real invoice downloaded with a zero amount must still suppress its placeholder row.
+            var invoicedPairsQuery = _db.InvoiceSubmissions
+                .Where(i =>
+                    i.PaId.HasValue &&
+                    i.DoctorId == doctorId &&
+                    (i.ClinicId == null || clinicIds.Contains(i.ClinicId.Value)));
+            if (clinicId.HasValue) invoicedPairsQuery = invoicedPairsQuery.Where(i => i.ClinicId == clinicId.Value);
+            if (paId.HasValue)     invoicedPairsQuery = invoicedPairsQuery.Where(i => i.PaId == paId.Value);
+
+            var invoicedPairs = new HashSet<(long ChildId, long PaId)>(
+                invoicedPairsQuery
+                    .Select(i => new { i.ChildId, i.PaId })
+                    .ToList()
+                    .Select(i => (i.ChildId, i.PaId.Value)));
 
             var pendingAssignments = assignments
-                .Where(a => !invoicedPairs.Contains(
-                    (a.ChildId, a.PersonalAssistantId, a.AssignedAt.AddHours(5).Date)))
+                .Where(a => !invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId)))
                 .ToList();
 
             var pendingChildIds = pendingAssignments.Select(a => a.ChildId).Distinct().ToList();

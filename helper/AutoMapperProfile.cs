@@ -12,6 +12,8 @@ namespace VaccineAPI
             CreateMap<User, UserDTO>().ReverseMap();
             CreateMap<Schedule, ScheduleDTO>().ReverseMap();
             CreateMap<Message, MessageDTO>().ReverseMap();
+            CreateMap<Booking, BookingDTO>().ReverseMap();
+            CreateMap<Notification, NotificationDTO>().ReverseMap();
             CreateMap<FollowUp, FollowUpDTO>().ReverseMap();
             CreateMap<Dose, DoseDTO>().ReverseMap();
             CreateMap<DoctorSchedule, DoctorScheduleDTO>().ReverseMap();

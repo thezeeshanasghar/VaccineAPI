@@ -492,14 +492,19 @@ namespace VaccineAPI.Controllers
 
             var assignments = assignQuery.OrderByDescending(a => a.AssignedAt).ToList();
 
-            // An assignment "already has an invoice" if the same child+PA pair was invoiced the same day
-            // (mirrors EnsurePAAssignment's own same-day ChildId+PaId dedup convention in ScheduleController).
+            // An assignment "already has an invoice" if the same child+PA pair was invoiced the same
+            // PKT calendar day (mirrors EnsurePAAssignment's own same-day dedup convention — including
+            // its DateTime.UtcNow.AddHours(5).Date PKT conversion. AssignedAt is stored as raw UTC, while
+            // InvoiceDate is already a PKT-intended date-only value, so only AssignedAt needs the +5h shift
+            // before comparing — omitting it caused the "Awaiting Invoice" row to never be suppressed for
+            // assignments created late enough in the PKT day to cross the UTC midnight boundary).
             var invoicedPairs = new HashSet<(long ChildId, long PaId, DateTime Day)>(
                 invoices.Where(i => i.PaId.HasValue)
                         .Select(i => (i.ChildId, i.PaId.Value, i.InvoiceDate.Date)));
 
             var pendingAssignments = assignments
-                .Where(a => !invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId, a.AssignedAt.Date)))
+                .Where(a => !invoicedPairs.Contains(
+                    (a.ChildId, a.PersonalAssistantId, a.AssignedAt.AddHours(5).Date)))
                 .ToList();
 
             var pendingChildIds = pendingAssignments.Select(a => a.ChildId).Distinct().ToList();

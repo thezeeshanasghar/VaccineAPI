@@ -454,6 +454,30 @@ namespace VaccineAPI.Controllers
                 .Where(c => invChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
+            // PaymentMode is frozen at invoice-creation time from Schedule.PaymentMode,
+            // which model-defaults to "Cash" — so a freshly-downloaded invoice always
+            // carries "Cash" even though the PA hasn't recorded anything yet. Look up
+            // whether payment was actually collected (same ChildId+GivenDate≈InvoiceDate
+            // matching convention as SyncInvoicePaymentMode, ±1 day tolerance for the
+            // same UTC/PKT class of mismatch) so the UI can show "—"/awaiting-payment
+            // instead of a misleading "Cash" badge until the PA truly records a mode.
+            var collectedFlags = _db.Schedules
+                .Where(s => invChildIds.Contains(s.ChildId) && s.GivenDate.HasValue)
+                .Select(s => new { s.ChildId, s.GivenDate, s.IsPaymentCollected })
+                .ToList()
+                .GroupBy(s => s.ChildId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            bool WasPaymentCollected(long childId, DateTime invoiceDate)
+            {
+                if (!collectedFlags.TryGetValue(childId, out var schedules)) return false;
+                var min = invoiceDate.Date.AddDays(-1);
+                var max = invoiceDate.Date.AddDays(1);
+                return schedules.Any(s => s.GivenDate.Value.Date >= min
+                                       && s.GivenDate.Value.Date <= max
+                                       && s.IsPaymentCollected == true);
+            }
+
             var invoiceRows = invoices.Select(i => new
             {
                 RowType             = "Invoice",
@@ -464,6 +488,7 @@ namespace VaccineAPI.Controllers
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
                 Amount              = i.TotalAmount,
                 PaymentMode         = i.PaymentMode ?? "",
+                IsPaymentCollected  = WasPaymentCollected(i.ChildId, i.InvoiceDate.Date),
                 IsConfirmed         = i.IsConfirmedByDoctor,
                 ConfirmedAt         = i.ConfirmedAt.HasValue ? i.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                 InvoiceStatus       = i.InvoiceStatus,

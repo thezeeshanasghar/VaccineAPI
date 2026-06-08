@@ -1741,10 +1741,15 @@ namespace VaccineAPI.Controllers
         [HttpGet("invoice-status")]
         public ActionResult GetInvoiceStatus([FromQuery] long childId, [FromQuery] long doctorId, [FromQuery] DateTime invoiceDate)
         {
+            // Same ±1 day window as update-bulk-invoice's existing-row lookup, to guard
+            // against the same UTC/PKT offset that can shift InvoiceDate by a day between calls.
+            var invoiceDateMin = invoiceDate.Date.AddDays(-1);
+            var invoiceDateMax = invoiceDate.Date.AddDays(1);
             var submission = _db.InvoiceSubmissions.FirstOrDefault(x =>
                 x.ChildId == childId &&
                 x.DoctorId == doctorId &&
-                x.InvoiceDate.Date == invoiceDate.Date);
+                x.InvoiceDate.Date >= invoiceDateMin &&
+                x.InvoiceDate.Date <= invoiceDateMax);
 
             if (submission == null)
                 return Ok(new { isSubmitted = false, editCount = 0, canEdit = true, submittedByPaId = (long?)null });

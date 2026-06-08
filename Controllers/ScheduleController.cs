@@ -3418,21 +3418,12 @@ namespace VaccineAPI.Controllers
         // Keeps InvoiceSubmission.PaymentMode (frozen at invoice-creation time, often
         // still the "Cash" default) in sync with the schedule's actual recorded mode,
         // so the Doctor's reconciliation page reflects what was really collected.
-        // Same ±1 day window as update-bulk-invoice's existing-row lookup and
-        // GetInvoiceStatus — rows created during the (now-fixed) InvoiceDate/GivenDate
-        // mismatch window would otherwise never match an exact x.InvoiceDate.Date ==
-        // schedule.GivenDate.Value.Date comparison, leaving their PaymentMode frozen
-        // at the give-time "Cash" default forever (the sync silently no-ops, finds
-        // nothing, and never corrects it even after the PA records "Online").
         private void SyncInvoicePaymentMode(Schedule schedule)
         {
             if (!schedule.GivenDate.HasValue) return;
-            var givenDateMin = schedule.GivenDate.Value.Date.AddDays(-1);
-            var givenDateMax = schedule.GivenDate.Value.Date.AddDays(1);
             var relatedInvoice = _db.InvoiceSubmissions
                 .Where(x => x.ChildId == schedule.ChildId
-                         && x.InvoiceDate.Date >= givenDateMin
-                         && x.InvoiceDate.Date <= givenDateMax
+                         && x.InvoiceDate.Date == schedule.GivenDate.Value.Date
                          && x.InvoiceStatus != "Cancelled"
                          && x.InvoiceStatus != "UngiveReversal")
                 .OrderByDescending(x => x.Id)

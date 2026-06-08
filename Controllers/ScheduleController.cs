@@ -1215,6 +1215,7 @@ namespace VaccineAPI.Controllers
                     else
                         scheduleDTO.Amount = schedule.Amount?? 0;
                     scheduleDTO.Date = schedule.Date;
+                    scheduleDTO.GivenDate = schedule.GivenDate ?? default;
                     scheduleDTO.InvoiceDate = schedule.GivenDate;
                     scheduleDTO.IsDone = schedule.IsDone;
                     scheduleDTOs.Add(scheduleDTO);

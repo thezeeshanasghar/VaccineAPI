@@ -42,6 +42,7 @@ namespace VaccineAPI.ModelDTO
         public bool IsBrand { get; set; }
         public string Type { get; set; } = "";
         public bool IsConsultationFee { get; set; }
+        public bool IsHomeBookingDoctor { get; set; }
 
         //To select Vaccine of the child on add-new-child page
         public List<VaccineDTO> ChildVaccines { get; set; } = new List<VaccineDTO>();

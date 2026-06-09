@@ -286,7 +286,12 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == id);
+                var booking = await _db.Bookings
+                    .Include(b => b.Child)
+                        .ThenInclude(c => c.Clinic)
+                            .ThenInclude(cl => cl.Doctor)
+                    .FirstOrDefaultAsync(b => b.Id == id);
+
                 if (booking == null)
                 {
                     return new Response<BookingDTO>(false, "Booking not found.", null);
@@ -299,6 +304,39 @@ namespace VaccineAPI.Controllers
                 booking.Status = "Cancelled";
                 booking.UpdatedAt = DateTime.Now;
                 await _db.SaveChangesAsync();
+
+                var doctor = booking.Child != null && booking.Child.Clinic != null ? booking.Child.Clinic.Doctor : null;
+                if (doctor != null)
+                {
+                    var isHome = booking.Type == "HomeBooked";
+                    var title = "Booking Cancelled by Parent";
+                    var message = booking.ChildName + " (" + booking.FatherName + ") has cancelled their " +
+                        (isHome ? "home visit" : "clinic visit") + " booking for " + booking.Vaccines + ".";
+
+                    _db.Notifications.Add(new Notification
+                    {
+                        Type = "BookingCancelledByParent",
+                        RecipientType = "DOCTOR",
+                        RecipientId = doctor.Id,
+                        BookingId = booking.Id,
+                        ChildId = booking.ChildId,
+                        ClinicId = booking.ClinicId,
+                        Title = title,
+                        Message = message,
+                        IsRead = false,
+                        CreatedAt = DateTime.Now
+                    });
+                    await _db.SaveChangesAsync();
+
+                    try
+                    {
+                        UserEmail.SendEmail(doctor.Email, message + "\n\nOpen VacDoc → Bookings to review.", title);
+                    }
+                    catch (Exception)
+                    {
+                        // Best-effort — email failure must not fail the cancellation
+                    }
+                }
 
                 var dto = MapBookingToDTO(booking);
                 return new Response<BookingDTO>(true, "Booking cancelled.", dto);

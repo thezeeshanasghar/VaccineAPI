@@ -142,9 +142,9 @@ namespace VaccineAPI.Controllers
                         Status = booking.Type
                     });
                 }
-                catch (Exception)
+                catch (Exception sheetsEx)
                 {
-                    // Best-effort secondary audit log — never block the booking on a Sheets failure
+                    Console.WriteLine("Sheets write failed: " + sheetsEx.Message);
                 }
 
                 var doctor = child.Clinic.Doctor;

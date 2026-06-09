@@ -428,7 +428,8 @@ namespace VaccineAPI.Controllers
         {
             GoogleCredential credential;
             //Reading Credentials File...
-            using (var stream = new FileStream("app_client_secret.json", FileMode.Open, FileAccess.Read))
+            var credPath = Path.Combine(AppContext.BaseDirectory, "app_client_secret.json");
+            using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
             {
                 credential = GoogleCredential.FromStream(stream)
                     .CreateScoped(Scopes);

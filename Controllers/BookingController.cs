@@ -25,7 +25,7 @@ namespace VaccineAPI.Controllers
 
         static readonly string[] Scopes = { SheetsService.Scope.Spreadsheets }; //SheetsService.Scope.SpreadsheetsReadonly
         static readonly string ApplicationName = "VaccineAPI"; //"quickstart-1599807090946";
-        static readonly string SpreadsheetId = "1VxF4JqAPwfZZomaf3GctMkWAq3nEg0N4yTjkCYJr_PY";
+        static readonly string SpreadsheetId = "1DZnUf0by6jm0qTqVne-29-3Pym4vRtJ3pHR94ZJcbFA";
         static SheetsService? service;
 
         public BookingController(Context context, IMapper mapper)

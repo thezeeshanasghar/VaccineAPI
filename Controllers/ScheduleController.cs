@@ -1260,9 +1260,16 @@ namespace VaccineAPI.Controllers
             ScheduleDTO scheduleDTO,
             [FromQuery] bool ignoreMaxAgeRule = false,
             [FromQuery] bool ignoreMinAgeFromDOB = false,
-            [FromQuery] bool ignoreMinGapFromPreviousDose = false
+            [FromQuery] bool ignoreMinGapFromPreviousDose = false,
+            [FromQuery] bool isParent = false
         )
         {
+            if (isParent)
+            {
+                ignoreMaxAgeRule = false;
+                ignoreMinAgeFromDOB = false;
+                ignoreMinGapFromPreviousDose = false;
+            }
             var dbSchedule = _db.Schedules
                 .Include(x => x.Dose)
                 .Include(x => x.Child)
@@ -2030,10 +2037,17 @@ namespace VaccineAPI.Controllers
             ScheduleDTO scheduleDTO,
             [FromQuery] bool ignoreMaxAgeRule = false,
             [FromQuery] bool ignoreMinAgeFromDOB = false,
-            [FromQuery] bool ignoreMinGapFromPreviousDose = false
+            [FromQuery] bool ignoreMinGapFromPreviousDose = false,
+            [FromQuery] bool isParent = false
         )
         {
             {
+                if (isParent)
+                {
+                    ignoreMaxAgeRule = false;
+                    ignoreMinAgeFromDOB = false;
+                    ignoreMinGapFromPreviousDose = false;
+                }
                 var dbSchedule = _db.Schedules
                     .Include(x => x.Dose)
                     .Include(x => x.Child)

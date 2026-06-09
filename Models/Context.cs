@@ -17,6 +17,7 @@ namespace VaccineAPI.Models
         public DbSet<Message> Messages { get; set; }
         public DbSet<Booking> Bookings { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<HomeServiceCity> HomeServiceCities { get; set; }
         public DbSet<FollowUp> FollowUps { get; set; }
         public DbSet<Dose> Doses { get; set; }
         public DbSet<DoctorSchedule> DoctorSchedules { get; set; }

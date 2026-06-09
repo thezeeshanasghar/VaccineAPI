@@ -281,6 +281,34 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [HttpPut("{id}/parent-cancel")]
+        public async Task<Response<BookingDTO>> ParentCancelBooking(long id)
+        {
+            try
+            {
+                var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == id);
+                if (booking == null)
+                {
+                    return new Response<BookingDTO>(false, "Booking not found.", null);
+                }
+                if (booking.Status != "Pending")
+                {
+                    return new Response<BookingDTO>(false, "Only pending bookings can be cancelled.", null);
+                }
+
+                booking.Status = "Cancelled";
+                booking.UpdatedAt = DateTime.Now;
+                await _db.SaveChangesAsync();
+
+                var dto = MapBookingToDTO(booking);
+                return new Response<BookingDTO>(true, "Booking cancelled.", dto);
+            }
+            catch (Exception ex)
+            {
+                return new Response<BookingDTO>(false, $"An error occurred: {ex.Message}", null);
+            }
+        }
+
         [HttpGet("pending-count/{clinicId}")]
         public async Task<Response<int>> GetPendingCount(long clinicId)
         {

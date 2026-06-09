@@ -62,6 +62,7 @@ namespace VaccineAPI.Models
                     entity.SetTableName(tableName.ToLower());
                 }
             }
+            modelBuilder.Entity<HomeServiceCity>().ToTable("home_service_cities");
             modelBuilder.Entity<User>().HasData(new User() { Id = 1, MobileNumber = "3331231231", Password = "1234", UserType = "SUPERADMIN", CountryCode = "92" });
         }
     }

@@ -9,7 +9,7 @@ namespace VaccineAPI.Models
     public class FollowUp
     {
         public long Id { get; set; }
-        public string Disease { get; set; } = "";
+        public string? Disease { get; set; }
         // public DateTime? CurrentVisitDate { get; set; }
         // public DateTime NextVisitDate { get; set; }
         public Nullable<System.DateTime> NextVisitDate { get; set; }

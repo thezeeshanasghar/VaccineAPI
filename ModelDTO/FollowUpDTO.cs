@@ -13,7 +13,7 @@ namespace VaccineAPI.ModelDTO
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime CurrentVisitDate { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
-        public DateTime NextVisitDate { get; set; }
+        public DateTime? NextVisitDate { get; set; }
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? OFC { get; set; }

@@ -2331,10 +2331,16 @@ namespace VaccineAPI.Controllers
         [HttpPost("followup")]
         public Response<List<FollowUpDTO>> GetFollowUp(FollowUpDTO followUpDto)
         {
+            try
             {
                 if (followUpDto.DoctorId < 1)
                 {
-                    var dbChild = _db.Childs.Include("Clinic").FirstOrDefault();
+                    var dbChild = _db.Childs.Include("Clinic")
+                                             .FirstOrDefault(c => c.Id == followUpDto.ChildId);
+                    if (dbChild?.Clinic == null)
+                    {
+                        return new Response<List<FollowUpDTO>>(false, "Child or clinic not found.", null);
+                    }
                     followUpDto.DoctorId = dbChild.Clinic.DoctorId;
                 }
                 var dbFollowUps = _db.FollowUps.Include(x => x.Child)
@@ -2367,6 +2373,10 @@ namespace VaccineAPI.Controllers
                 }
 
                 return new Response<List<FollowUpDTO>>(true, null, followUpDTOs);
+            }
+            catch (Exception ex)
+            {
+                return new Response<List<FollowUpDTO>>(false, $"An error occurred: {ex.Message}", null);
             }
         }
 

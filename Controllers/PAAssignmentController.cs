@@ -470,7 +470,7 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var today = DateTime.UtcNow.Date;
+                var today = DateTime.UtcNow.AddHours(5).Date;
 
                 var exists = await _db.PAAssignments.AnyAsync(a =>
                     a.ChildId == dto.ChildId &&
@@ -623,7 +623,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("active/{doctorId}")]
         public async Task<IActionResult> GetActiveForDoctor(long doctorId)
         {
-            var today = DateTime.UtcNow.Date;
+            var today = DateTime.UtcNow.AddHours(5).Date;
 
             // Fetch raw assignment rows first, then enrich in memory to avoid EF join translation issues
             var raw = await _db.PAAssignments

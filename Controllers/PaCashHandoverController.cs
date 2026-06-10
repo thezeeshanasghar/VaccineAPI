@@ -487,8 +487,8 @@ namespace VaccineAPI.Controllers
 
             if (clinicId.HasValue) assignQuery = assignQuery.Where(a => a.ClinicId == clinicId.Value);
             if (paId.HasValue)     assignQuery = assignQuery.Where(a => a.PersonalAssistantId == paId.Value);
-            if (from.HasValue)     assignQuery = assignQuery.Where(a => a.AssignedAt.Date >= from.Value);
-            if (to.HasValue)       assignQuery = assignQuery.Where(a => a.AssignedAt.Date < to.Value);
+            if (from.HasValue)     assignQuery = assignQuery.Where(a => a.AssignedAt.AddHours(5).Date >= from.Value);
+            if (to.HasValue)       assignQuery = assignQuery.Where(a => a.AssignedAt.AddHours(5).Date < to.Value);
 
             var assignments = assignQuery.OrderByDescending(a => a.AssignedAt).ToList();
 
@@ -518,7 +518,7 @@ namespace VaccineAPI.Controllers
                 InvoiceSubmissionId = (long?)null,
                 ScheduleId          = a.Id,
                 AmendmentId         = (long?)null,
-                Date                = a.AssignedAt.ToString("yyyy-MM-dd"),
+                Date                = a.AssignedAt.AddHours(5).ToString("yyyy-MM-dd"),
                 PatientName         = pendingChildNames.ContainsKey(a.ChildId) ? pendingChildNames[a.ChildId] : "",
                 Amount              = 0m,
                 PaymentMode         = "",

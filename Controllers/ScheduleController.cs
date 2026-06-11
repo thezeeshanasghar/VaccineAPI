@@ -729,13 +729,54 @@ namespace VaccineAPI.Controllers
                 return new Response<ScheduleDTO>(false, "Schedule not found", null);
             }
 
+            // Same-day-only restriction (PKT = UTC+5): vitals can only be edited via after-fill
+            // on the same calendar day the dose was given. DoneAt is the authoritative UTC
+            // timestamp set when IsDone was marked; fall back to GivenDate if DoneAt is missing.
+            var today = DateTime.UtcNow.AddHours(5).Date;
+            DateTime? visitDate = dbSchedule.DoneAt.HasValue
+                ? dbSchedule.DoneAt.Value.AddHours(5).Date
+                : dbSchedule.GivenDate?.Date;
+
+            if (!dbSchedule.IsDone || !visitDate.HasValue || visitDate.Value != today)
+            {
+                return new Response<ScheduleDTO>(false, "This visit was not completed today. Vitals can only be updated on the same day as the visit.", null);
+            }
+
             dbSchedule.Weight = scheduleDTO.Weight;
             dbSchedule.Height = scheduleDTO.Height;
             dbSchedule.Circle = scheduleDTO.Circle;
 
             _db.SaveChanges();
 
+            UpsertFollowUpVitalsForToday(dbSchedule, scheduleDTO, today);
+
             return new Response<ScheduleDTO>(true, "Schedule updated successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
+        }
+
+        // Propagates after-fill vitals into today's auto-vaccine FollowUp row (Disease == "Vaccination"),
+        // created by autoCreateFollowUp/autoCreateFollowUpForBulk in VacDoc. After-fill is same-day-only,
+        // so (ChildId, CurrentVisitDate.Date == today) reliably identifies the matching row. No-op if
+        // no such row exists.
+        private void UpsertFollowUpVitalsForToday(Schedule dbSchedule, ScheduleDTO scheduleDTO, DateTime today)
+        {
+            FollowUp? existing = _db.FollowUps
+                .Where(f => f.ChildId == dbSchedule.ChildId
+                         && f.CurrentVisitDate.HasValue
+                         && f.CurrentVisitDate.Value.Date == today
+                         && f.Disease == "Vaccination")
+                .OrderByDescending(f => f.Id)
+                .FirstOrDefault();
+
+            if (existing == null)
+            {
+                return;
+            }
+
+            if (scheduleDTO.Weight.HasValue) existing.Weight = scheduleDTO.Weight;
+            if (scheduleDTO.Height.HasValue) existing.Height = scheduleDTO.Height;
+            if (scheduleDTO.Circle.HasValue) existing.OFC = scheduleDTO.Circle;
+
+            _db.SaveChanges();
         }
 
         private Stock? GetLatestStockByBrandAndClinic(long? brandId, long clinicId)

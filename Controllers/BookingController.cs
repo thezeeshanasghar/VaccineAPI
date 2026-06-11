@@ -218,6 +218,32 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [HttpGet("doctor/{doctorId}")]
+        public async Task<Response<IEnumerable<BookingDTO>>> GetByDoctor(long doctorId, [FromQuery] string? status, [FromQuery] string? type)
+        {
+            try
+            {
+                var query = _db.Bookings.AsNoTracking().Where(b => b.DoctorId == doctorId);
+
+                if (!string.IsNullOrEmpty(status))
+                {
+                    query = query.Where(b => b.Status == status);
+                }
+                if (!string.IsNullOrEmpty(type))
+                {
+                    query = query.Where(b => b.Type == type);
+                }
+
+                var bookings = await query.OrderByDescending(b => b.Id).ToListAsync();
+                var dtos = bookings.Select(MapBookingToDTO).ToList();
+                return new Response<IEnumerable<BookingDTO>>(true, null, dtos);
+            }
+            catch (Exception ex)
+            {
+                return new Response<IEnumerable<BookingDTO>>(false, $"An error occurred: {ex.Message}", null);
+            }
+        }
+
         [HttpGet("{id}")]
         public async Task<Response<BookingDTO>> GetSingle(long id)
         {

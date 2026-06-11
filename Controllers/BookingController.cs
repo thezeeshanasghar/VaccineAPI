@@ -68,7 +68,7 @@ namespace VaccineAPI.Controllers
                     .OrderByDescending(b => b.Id)
                     .ToListAsync();
 
-                var dtos = bookings.Select(MapBookingToDTO).ToList();
+                var dtos = bookings.Select(b => MapBookingToDTO(b)).ToList();
                 return new Response<IEnumerable<BookingDTO>>(true, null, dtos);
             }
             catch (Exception ex)
@@ -209,7 +209,12 @@ namespace VaccineAPI.Controllers
                 }
 
                 var bookings = await query.OrderByDescending(b => b.Id).ToListAsync();
-                var dtos = bookings.Select(MapBookingToDTO).ToList();
+                var clinicName = await _db.Clinics.AsNoTracking()
+                    .Where(c => c.Id == clinicId)
+                    .Select(c => c.Name)
+                    .FirstOrDefaultAsync();
+                var clinicNames = new Dictionary<long, string> { { clinicId, clinicName ?? "" } };
+                var dtos = bookings.Select(b => MapBookingToDTO(b, clinicNames)).ToList();
                 return new Response<IEnumerable<BookingDTO>>(true, null, dtos);
             }
             catch (Exception ex)
@@ -235,7 +240,10 @@ namespace VaccineAPI.Controllers
                 }
 
                 var bookings = await query.OrderByDescending(b => b.Id).ToListAsync();
-                var dtos = bookings.Select(MapBookingToDTO).ToList();
+                var clinicNames = await _db.Clinics.AsNoTracking()
+                    .Where(c => c.DoctorId == doctorId)
+                    .ToDictionaryAsync(c => c.Id, c => c.Name);
+                var dtos = bookings.Select(b => MapBookingToDTO(b, clinicNames)).ToList();
                 return new Response<IEnumerable<BookingDTO>>(true, null, dtos);
             }
             catch (Exception ex)
@@ -426,13 +434,17 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        private BookingDTO MapBookingToDTO(Booking booking)
+        private BookingDTO MapBookingToDTO(Booking booking, IDictionary<long, string>? clinicNames = null)
         {
             var dto = _mapper.Map<BookingDTO>(booking);
             dto.UserId = booking.ParentUserId;
             dto.DOB = booking.DOB.ToString("yyyy-MM-dd");
             dto.BookingDate = booking.CreatedAt.ToString("yyyy-MM-dd");
             dto.PreferredDate = booking.PreferredDate.HasValue ? booking.PreferredDate.Value.ToString("yyyy-MM-dd") : "";
+            if (clinicNames != null && clinicNames.TryGetValue(booking.ClinicId, out var clinicName))
+            {
+                dto.ClinicName = clinicName;
+            }
             return dto;
         }
 

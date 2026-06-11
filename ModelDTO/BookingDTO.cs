@@ -27,6 +27,7 @@ namespace VaccineAPI.ModelDTO
         public long ChildId { get; set; }
         public long UserId { get; set; }
         public long ClinicId { get; set; }
+        public string ClinicName { get; set; } = "";
         public long DoctorId { get; set; }
         public string ChildName { get; set; } = "";
         public string FatherName { get; set; } = "";

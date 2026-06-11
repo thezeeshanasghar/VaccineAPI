@@ -571,12 +571,12 @@ namespace VaccineAPI.Controllers
             followUpHeaderTable.AddCell(CreateCell("Weight", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("Height", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("OFC", "backgroudLightGray", 1, "center", "scheduleRecords"));
-            followUpHeaderTable.AddCell(CreateCell("Growth Velocity", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("Ht Velocity (cm/yr)", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
             // Loop through follow-up details and add them to the table
             int srNo = 1; // Initialize serial number
-            float? previousHeight = null; // To store the height of the previous record
-            DateTime? previousVisitDate = null; // To store the visit date of the previous record
+            float? lastValidHeight = null; // Last visit's height where height was actually documented
+            DateTime? lastValidHeightDate = null; // Visit date corresponding to lastValidHeight
 
             foreach (var followUpDetails in followUpDetailsList)
             {
@@ -585,7 +585,7 @@ namespace VaccineAPI.Controllers
                 string weightStr = (followUpDetails.Weight.HasValue && followUpDetails.Weight.Value > 0) ? $"{followUpDetails.Weight.Value} kg" : "-";
                 string heightStr = (followUpDetails.Height.HasValue && followUpDetails.Height.Value > 0) ? $"{followUpDetails.Height.Value} cm" : "-";
                 string ofcStr    = (followUpDetails.OFC.HasValue    && followUpDetails.OFC.Value    > 0) ? $"{followUpDetails.OFC.Value} cm"    : "-";
-                float height = followUpDetails.Height ?? 0;
+                bool hasHeight = followUpDetails.Height.HasValue && followUpDetails.Height.Value > 0;
 
                 // Add current record to the table
                 followUpHeaderTable.AddCell(new PdfPCell(new Phrase(srNo.ToString(), FontFactory.GetFont(FontFactory.HELVETICA, 10)))
@@ -625,33 +625,32 @@ namespace VaccineAPI.Controllers
                     HorizontalAlignment = Element.ALIGN_CENTER
                 });
 
-                // Growth Velocity = Height Difference / Time Difference in Years
-                if (previousHeight.HasValue && previousVisitDate.HasValue)
+                // Growth Velocity = (Height difference) / (Time difference in years), comparing
+                // against the most recent prior visit where height was actually documented.
+                string velocityStr = "-";
+                if (hasHeight && lastValidHeight.HasValue && lastValidHeightDate.HasValue)
                 {
-                    float heightDifference = height - previousHeight.Value; // Calculate height difference
-
-                    // Add Growth Velocity to the table
-                    followUpHeaderTable.AddCell(new PdfPCell(new Phrase($"{heightDifference:F2} cm/year", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                    double years = (currentVisitDate - lastValidHeightDate.Value).TotalDays / 365.25;
+                    if (years >= (1.0 / 365.25))
                     {
-                        BackgroundColor = BaseColor.White,
-                        BorderColor = BaseColor.LightGray,
-                        HorizontalAlignment = Element.ALIGN_CENTER
-                    });
-                }
-                else
-                {
-                    // If it's the first record, just add N/A for growth velocity
-                    followUpHeaderTable.AddCell(new PdfPCell(new Phrase("N/A", FontFactory.GetFont(FontFactory.HELVETICA, 10)))
-                    {
-                        BackgroundColor = BaseColor.White,
-                        BorderColor = BaseColor.LightGray,
-                        HorizontalAlignment = Element.ALIGN_CENTER
-                    });
+                        float velocity = (followUpDetails.Height.Value - lastValidHeight.Value) / (float)years;
+                        velocityStr = $"{velocity:F2} cm/yr";
+                    }
                 }
 
-                // Update previous record values for the next iteration
-                previousHeight = height;
-                previousVisitDate = currentVisitDate;
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(velocityStr, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    BackgroundColor = BaseColor.White,
+                    BorderColor = BaseColor.LightGray,
+                    HorizontalAlignment = Element.ALIGN_CENTER
+                });
+
+                // Only update the "last valid" reference when this visit actually documented height
+                if (hasHeight)
+                {
+                    lastValidHeight = followUpDetails.Height.Value;
+                    lastValidHeightDate = currentVisitDate;
+                }
 
                 srNo++; // Increment serial number
             }

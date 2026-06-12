@@ -31,6 +31,7 @@ namespace VaccineAPI.ModelDTO
         public bool IsVerified { get; set; }
         public bool IsInactive { get; set; }
         public long ClinicId { get; set; }
+        public string ClinicName { get; set; } = "";
         public bool IsPAApprove { get; set; }
         public long? AddedByPaId { get; set; }
         public string AddedByPaName { get; set; } = "";
@@ -46,6 +47,8 @@ namespace VaccineAPI.ModelDTO
 
         //To select Vaccine of the child on add-new-child page
         public List<VaccineDTO> ChildVaccines { get; set; } = new List<VaccineDTO>();
+
+        public List<ScheduleDTO> Schedules { get; set; } = new List<ScheduleDTO>();
 
         [JsonConverter(typeof(OnlyDateConverter))]
         public DateTime InvoiceDate { get; set; }

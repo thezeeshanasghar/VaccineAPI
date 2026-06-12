@@ -3930,15 +3930,21 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf");
         }
 
-        [HttpGet("not-approved/{clinicId}")]
-        public Response<IEnumerable<ChildDTO>> GetNotApprovedChildrenByClinic(long clinicId)
+        [HttpGet("not-approved/{doctorId}")]
+        public Response<IEnumerable<ChildDTO>> GetNotApprovedChildrenByClinic(long doctorId)
         {
             try
             {
+                var clinicIds = _db.Clinics
+                    .Where(c => c.DoctorId == doctorId)
+                    .Select(c => c.Id)
+                    .ToList();
 
                 var dbChildren = _db
-                    .Childs.Include(c => c.User) .Include(c => c.Schedules) 
-                    .Where(c =>c.ClinicId == clinicId&& (c.IsPAApprove == false
+                    .Childs.Include(c => c.User)
+                    .Include(c => c.Clinic)
+                    .Include(c => c.Schedules).ThenInclude(s => s.Dose).ThenInclude(d => d.Vaccine)
+                    .Where(c => clinicIds.Contains(c.ClinicId) && (c.IsPAApprove == false
                             || c.Schedules.Any(s => s.IsPAApprove == false && s.IsDone == true)))
                     .ToList();
 
@@ -3947,6 +3953,10 @@ namespace VaccineAPI.Controllers
                 var paIds = childDTOs
                     .Where(c => c.AddedByPaId.HasValue)
                     .Select(c => c.AddedByPaId.Value)
+                    .Concat(childDTOs
+                        .SelectMany(c => c.Schedules)
+                        .Where(s => s.GivenByPaId.HasValue)
+                        .Select(s => s.GivenByPaId.Value))
                     .Distinct()
                     .ToList();
                 var paNames = _db.PersonalAssistant
@@ -3955,31 +3965,47 @@ namespace VaccineAPI.Controllers
 
                 foreach (var childDTO in childDTOs)
                 {
-                    var user = dbChildren.FirstOrDefault(c => c.Id == childDTO.Id)?.User;
+                    var dbChild = dbChildren.FirstOrDefault(c => c.Id == childDTO.Id);
+                    var user = dbChild?.User;
                     if (user != null)
                     {
                         childDTO.CountryCode = user.CountryCode;
                         childDTO.MobileNumber = user.MobileNumber;
                     }
+                    if (dbChild?.Clinic != null)
+                    {
+                        childDTO.ClinicName = dbChild.Clinic.Name;
+                    }
                     if (childDTO.AddedByPaId.HasValue && paNames.ContainsKey(childDTO.AddedByPaId.Value))
                         childDTO.AddedByPaName = paNames[childDTO.AddedByPaId.Value];
+
+                    foreach (var schedule in childDTO.Schedules)
+                    {
+                        if (schedule.GivenByPaId.HasValue && paNames.ContainsKey(schedule.GivenByPaId.Value))
+                            schedule.GivenByPaName = paNames[schedule.GivenByPaId.Value];
+                    }
                 }
                 return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching not-approved children for clinic ID {clinicId}: {ex.Message}");
+                Console.WriteLine($"Error fetching not-approved children for doctor ID {doctorId}: {ex.Message}");
                 return new Response<IEnumerable<ChildDTO>>(false,"An error occurred while fetching not-approved children.",null);
             }
         }
 
-        [HttpGet("pending-count/{clinicId}")]
-        public Response<int> GetPendingApprovalCount(long clinicId)
+        [HttpGet("pending-count/{doctorId}")]
+        public Response<int> GetPendingApprovalCount(long doctorId)
         {
             try
             {
+                var clinicIds = _db.Clinics
+                    .Where(c => c.DoctorId == doctorId)
+                    .Select(c => c.Id)
+                    .ToList();
+
                 var count = _db.Childs
-                    .Where(c => c.ClinicId == clinicId
+                    .Where(c => clinicIds.Contains(c.ClinicId)
                              && (c.IsPAApprove == false
                                  || c.Schedules.Any(s => s.IsPAApprove == false && s.IsDone == true)))
                     .Count();
@@ -3987,7 +4013,7 @@ namespace VaccineAPI.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching pending approval count for clinic ID {clinicId}: {ex.Message}");
+                Console.WriteLine($"Error fetching pending approval count for doctor ID {doctorId}: {ex.Message}");
                 return new Response<int>(false, "An error occurred while fetching pending approval count.", 0);
             }
         }

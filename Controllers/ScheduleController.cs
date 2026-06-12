@@ -1751,10 +1751,13 @@ namespace VaccineAPI.Controllers
             }
             else
             {
-                // First download — read PaymentMode from related schedules if available
+                // First download — only carry over PaymentMode if the PA has actually recorded
+                // payment for one of these schedules. Schedule.PaymentMode defaults to "Cash"
+                // even when no payment has been collected, so gate on IsPaymentCollected to
+                // avoid the reconciliation table showing "Cash" before the PA picks a mode.
                 var scheduleIds = dto.Schedules.Select(s => s.Id).ToList();
                 var paymentMode = _db.Schedules
-                    .Where(s => scheduleIds.Contains(s.Id) && s.PaymentMode != null)
+                    .Where(s => scheduleIds.Contains(s.Id) && s.IsPaymentCollected && s.PaymentMode != null)
                     .Select(s => s.PaymentMode)
                     .FirstOrDefault();
 
@@ -3470,9 +3473,9 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<ScheduleDTO>(true, "Payment recorded.", null));
         }
 
-        // Keeps InvoiceSubmission.PaymentMode (frozen at invoice-creation time, often
-        // still the "Cash" default) in sync with the schedule's actual recorded mode,
-        // so the Doctor's reconciliation page reflects what was really collected.
+        // Keeps InvoiceSubmission.PaymentMode in sync with the schedule's actual
+        // recorded mode, so the Doctor's reconciliation page reflects what was
+        // really collected (invoice creation leaves PaymentMode null until then).
         private void SyncInvoicePaymentMode(Schedule schedule)
         {
             if (!schedule.GivenDate.HasValue) return;

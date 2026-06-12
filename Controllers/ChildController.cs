@@ -3950,6 +3950,19 @@ namespace VaccineAPI.Controllers
 
                 var childDTOs = _mapper.Map<List<ChildDTO>>(dbChildren);
 
+                foreach (var childDTO in childDTOs)
+                {
+                    var dbChildForSchedules = dbChildren.FirstOrDefault(c => c.Id == childDTO.Id);
+                    if (dbChildForSchedules != null)
+                    {
+                        childDTO.Schedules = _mapper.Map<List<ScheduleDTO>>(dbChildForSchedules.Schedules);
+                        foreach (var s in childDTO.Schedules)
+                        {
+                            s.Child = null!;
+                        }
+                    }
+                }
+
                 var paIds = childDTOs
                     .Where(c => c.AddedByPaId.HasValue)
                     .Select(c => c.AddedByPaId.Value)

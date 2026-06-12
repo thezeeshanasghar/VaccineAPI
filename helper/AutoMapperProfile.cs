@@ -11,7 +11,7 @@ namespace VaccineAPI
             CreateMap<Vaccine, VaccineDTO>().ReverseMap();
             CreateMap<User, UserDTO>().ReverseMap();
             CreateMap<Schedule, ScheduleDTO>()
-                .ForMember(dest => dest.Child, opt => opt.Ignore())
+                .MaxDepth(1)
                 .ReverseMap();
             CreateMap<Message, MessageDTO>().ReverseMap();
             CreateMap<Booking, BookingDTO>().ReverseMap();

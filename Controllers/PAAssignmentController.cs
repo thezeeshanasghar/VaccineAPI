@@ -85,52 +85,6 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
-        // GET /api/PAAssignment/pa/{paId}/history?doctorId={doctorId}
-        // Doctor-facing: full assignment history for a PA (any status), for the
-        // "Manage Assignments" admin panel on the Payment Reconciliation page.
-        [HttpGet("pa/{paId}/history")]
-        public async Task<IActionResult> GetByPAForDoctor(long paId, [FromQuery] long doctorId)
-        {
-            var rawAssignments = await _db.PAAssignments
-                .Where(a => a.PersonalAssistantId == paId && a.DoctorId == doctorId)
-                .OrderByDescending(a => a.AssignedAt)
-                .ToListAsync();
-
-            var childIds = rawAssignments.Select(a => a.ChildId).Distinct().ToList();
-            var children = childIds.Any()
-                ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
-                : new Dictionary<long, VaccineAPI.Models.Child>();
-
-            var result = rawAssignments.Select(a =>
-            {
-                var child = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
-
-                var invoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == a.ChildId && i.PaId == paId)
-                    .OrderByDescending(i => i.SubmittedAt)
-                    .FirstOrDefault();
-
-                return new
-                {
-                    AssignmentId  = a.Id,
-                    a.AssignedAt,
-                    a.Notes,
-                    ChildId       = a.ChildId,
-                    Name          = child != null ? child.Name : "",
-                    a.IsAutoCreated,
-                    a.AssignmentStatus,
-                    a.IsCompleted,
-                    a.IsCancelled,
-                    a.CancelledAt,
-                    a.HandoverDoneAt,
-                    InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
-                    HasInvoice    = invoice != null
-                };
-            }).ToList();
-
-            return Ok(new { IsSuccess = true, ResponseData = result });
-        }
-
         // DELETE /api/PAAssignment/{id}?doctorId={doctorId}
         // Doctor-facing cascade delete: removes the assignment, its invoice (and any
         // amendments), and resets the schedules this PA gave/collected payment for on

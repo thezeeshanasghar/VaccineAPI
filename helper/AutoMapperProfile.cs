@@ -23,7 +23,10 @@ namespace VaccineAPI
             CreateMap<Clinic, ClinicDTO>().ReverseMap();
             CreateMap<Child, ChildDTO>()
                 .ForMember(dest => dest.Schedules, opt => opt.Ignore())
-                .ReverseMap();
+                .ReverseMap()
+                .ForMember(dest => dest.Clinic, opt => opt.Ignore())
+                .ForMember(dest => dest.User, opt => opt.Ignore())
+                .ForMember(dest => dest.Schedules, opt => opt.Ignore());
             CreateMap<Brand, BrandDTO>().ReverseMap();
         }
     }

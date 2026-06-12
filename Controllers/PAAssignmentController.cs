@@ -85,6 +85,110 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
+        // GET /api/PAAssignment/pa/{paId}/history?doctorId={doctorId}
+        // Doctor-facing: full assignment history for a PA (any status), for the
+        // "Manage Assignments" admin panel on the Payment Reconciliation page.
+        [HttpGet("pa/{paId}/history")]
+        public async Task<IActionResult> GetByPAForDoctor(long paId, [FromQuery] long doctorId)
+        {
+            var rawAssignments = await _db.PAAssignments
+                .Where(a => a.PersonalAssistantId == paId && a.DoctorId == doctorId)
+                .OrderByDescending(a => a.AssignedAt)
+                .ToListAsync();
+
+            var childIds = rawAssignments.Select(a => a.ChildId).Distinct().ToList();
+            var children = childIds.Any()
+                ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
+                : new Dictionary<long, VaccineAPI.Models.Child>();
+
+            var result = rawAssignments.Select(a =>
+            {
+                var child = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
+
+                var invoice = _db.InvoiceSubmissions
+                    .Where(i => i.ChildId == a.ChildId && i.PaId == paId)
+                    .OrderByDescending(i => i.SubmittedAt)
+                    .FirstOrDefault();
+
+                return new
+                {
+                    AssignmentId  = a.Id,
+                    a.AssignedAt,
+                    a.Notes,
+                    ChildId       = a.ChildId,
+                    Name          = child != null ? child.Name : "",
+                    a.IsAutoCreated,
+                    a.AssignmentStatus,
+                    a.IsCompleted,
+                    a.IsCancelled,
+                    a.CancelledAt,
+                    a.HandoverDoneAt,
+                    InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
+                    HasInvoice    = invoice != null
+                };
+            }).ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
+        }
+
+        // DELETE /api/PAAssignment/{id}?doctorId={doctorId}
+        // Doctor-facing cascade delete: removes the assignment, its invoice (and any
+        // amendments), and resets the schedules this PA gave/collected payment for on
+        // this child back to "not given" — used to clean up test assignments.
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId)
+        {
+            var assignment = await _db.PAAssignments.FindAsync(id);
+            if (assignment == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+            if (assignment.DoctorId != doctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised" });
+
+            var paId = assignment.PersonalAssistantId;
+            var childId = assignment.ChildId;
+
+            var invoiceIds = await _db.InvoiceSubmissions
+                .Where(i => i.ChildId == childId && i.PaId == paId)
+                .Select(i => i.Id)
+                .ToListAsync();
+
+            if (invoiceIds.Count > 0)
+            {
+                var amendments = _db.InvoiceAmendments.Where(am => invoiceIds.Contains(am.InvoiceSubmissionId));
+                _db.InvoiceAmendments.RemoveRange(amendments);
+
+                var invoices = _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id));
+                _db.InvoiceSubmissions.RemoveRange(invoices);
+            }
+
+            var schedules = await _db.Schedules
+                .Where(s => s.ChildId == childId && s.PaymentCollectorPaId == paId)
+                .ToListAsync();
+
+            foreach (var s in schedules)
+            {
+                s.IsDone = false;
+                s.GivenDate = null;
+                s.DoneAt = null;
+                s.GivenByPaId = null;
+                s.PaymentMode = "Cash";
+                s.OnlineService = null;
+                s.IsPaymentApproved = false;
+                s.BrandId = null;
+                s.Amount = null;
+                s.PaymentCollectorPaId = null;
+                s.IsPaymentCollected = false;
+                s.IsSkip = false;
+                s.SkippedByPaId = null;
+                s.SkippedAt = null;
+            }
+
+            _db.PAAssignments.Remove(assignment);
+
+            await _db.SaveChangesAsync();
+            return Ok(new { IsSuccess = true });
+        }
+
         // POST /api/PAAssignment/{id}/complete
         [HttpPost("{id}/complete")]
         public async Task<IActionResult> Complete(long id, [FromQuery] long? paId = null)

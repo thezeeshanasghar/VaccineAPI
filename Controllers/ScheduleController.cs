@@ -3487,44 +3487,6 @@ namespace VaccineAPI.Controllers
                 relatedInvoice.PaymentMode = schedule.PaymentMode;
         }
 
-        [HttpGet("day-log/{doctorId}/{date}")]
-        public IActionResult GetDayLog(long doctorId, DateTime date)
-        {
-            var clinicIds = _db.Clinics.Where(c => c.DoctorId == doctorId).Select(c => c.Id).ToList();
-            var schedules = _db.Schedules
-                .Include(s => s.Child)
-                .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
-                .Include(s => s.Brand)
-                .Where(s => clinicIds.Contains(s.Child.ClinicId)
-                         && s.IsDone == true
-                         && s.GivenDate != null
-                         && s.GivenDate.Value.Date == date.Date)
-                .ToList();
-            var paIds = schedules
-                .Where(s => s.PaymentCollectorPaId.HasValue)
-                .Select(s => s.PaymentCollectorPaId.Value).Distinct().ToList();
-            var paNames = _db.PersonalAssistant
-                .Where(p => paIds.Contains(p.Id))
-                .ToDictionary(p => p.Id, p => p.Name);
-            var dtos = _mapper.Map<List<ScheduleDTO>>(schedules);
-            foreach (var d in dtos)
-            {
-                if (d.PaymentCollectorPaId.HasValue && paNames.ContainsKey(d.PaymentCollectorPaId.Value))
-                    d.PaymentCollectorPaName = paNames[d.PaymentCollectorPaId.Value];
-            }
-            return Ok(new Response<List<ScheduleDTO>>(true, "OK", dtos));
-        }
-
-        [HttpPatch("{id}/approve-payment")]
-        public IActionResult ApprovePayment(long id)
-        {
-            var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
-            if (schedule == null) return Ok(new Response<ScheduleDTO>(false, "Not found", null));
-            schedule.IsPAApprove = true;
-            _db.SaveChanges();
-            return Ok(new Response<ScheduleDTO>(true, "Payment approved.", null));
-        }
-
         // PATCH /api/Schedule/{id}/verify-payment?doctorId=X
         // Doctor verifies a payment (cash or online). Sets IsPaymentApproved + audit trail.
         [HttpPatch("{id}/verify-payment")]

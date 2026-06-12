@@ -18,36 +18,6 @@ namespace VaccineAPI.Controllers
             _db = db;
         }
 
-        // TEMP DEBUG — remove after Test 2 diagnosis. Dumps raw InvoiceSubmission rows for a child.
-        // GET /api/PAAssignment/debug-invoices/{childId}
-        [HttpGet("debug-invoices/{childId}")]
-        public IActionResult DebugInvoices(long childId)
-        {
-            var rows = _db.InvoiceSubmissions
-                .Where(i => i.ChildId == childId)
-                .OrderByDescending(i => i.SubmittedAt)
-                .Select(i => new
-                {
-                    i.Id,
-                    i.ChildId,
-                    i.DoctorId,
-                    i.PaId,
-                    i.ClinicId,
-                    InvoiceDate = i.InvoiceDate.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    SubmittedAt = i.SubmittedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    i.TotalAmount,
-                    i.InvoiceStatus,
-                    i.PaymentMode,
-                    i.EditCount,
-                    i.HasPendingAmendment,
-                    i.PendingHandover,
-                    i.IsConfirmedByDoctor
-                })
-                .ToList();
-
-            return Ok(new { IsSuccess = true, ResponseData = rows });
-        }
-
         // GET /api/PAAssignment/pa/{paId}
         [HttpGet("pa/{paId}")]
         public async Task<IActionResult> GetByPA(long paId)

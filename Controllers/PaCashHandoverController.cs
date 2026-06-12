@@ -492,19 +492,32 @@ namespace VaccineAPI.Controllers
 
             var assignments = assignQuery.OrderByDescending(a => a.AssignedAt).ToList();
 
-            // An assignment "already has an invoice" if the same child+PA pair was invoiced the same
-            // PKT calendar day (mirrors EnsurePAAssignment's own same-day dedup convention — including
-            // its DateTime.UtcNow.AddHours(5).Date PKT conversion. AssignedAt is stored as raw UTC, while
-            // InvoiceDate is already a PKT-intended date-only value, so only AssignedAt needs the +5h shift
-            // before comparing — omitting it caused the "Awaiting Invoice" row to never be suppressed for
-            // assignments created late enough in the PKT day to cross the UTC midnight boundary).
-            var invoicedPairs = new HashSet<(long ChildId, long PaId, DateTime Day)>(
-                invoices.Where(i => i.PaId.HasValue)
-                        .Select(i => (i.ChildId, i.PaId.Value, i.InvoiceDate.Date)));
+            // An assignment "already has an invoice" if the same child+PA pair has ANY invoice —
+            // no date component. A day-keyed dedup (ChildId, PaId, Day) was tried and proven broken
+            // by live data: a PA's assignment can be dated a day apart from its already-downloaded
+            // invoice (e.g. invoicing a prior day's visit), which no per-day key can bridge. The
+            // simpler (ChildId, PaId) key is correct because an assignment+invoice pair for the same
+            // child+PA virtually never coexists with an UNRELATED second pending assignment for that
+            // same pair on a different day in this flow.
+            //
+            // Built from a query that does NOT carry `invoices`' `TotalAmount > 0` display filter —
+            // a real invoice downloaded with a zero amount must still suppress its placeholder row.
+            var invoicedPairsQuery = _db.InvoiceSubmissions
+                .Where(i =>
+                    i.PaId.HasValue &&
+                    i.DoctorId == doctorId &&
+                    (i.ClinicId == null || clinicIds.Contains(i.ClinicId.Value)));
+            if (clinicId.HasValue) invoicedPairsQuery = invoicedPairsQuery.Where(i => i.ClinicId == clinicId.Value);
+            if (paId.HasValue)     invoicedPairsQuery = invoicedPairsQuery.Where(i => i.PaId == paId.Value);
+
+            var invoicedPairs = new HashSet<(long ChildId, long PaId)>(
+                invoicedPairsQuery
+                    .Select(i => new { i.ChildId, i.PaId })
+                    .ToList()
+                    .Select(i => (i.ChildId, i.PaId.Value)));
 
             var pendingAssignments = assignments
-                .Where(a => !invoicedPairs.Contains(
-                    (a.ChildId, a.PersonalAssistantId, a.AssignedAt.AddHours(5).Date)))
+                .Where(a => !invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId)))
                 .ToList();
 
             var pendingChildIds = pendingAssignments.Select(a => a.ChildId).Distinct().ToList();

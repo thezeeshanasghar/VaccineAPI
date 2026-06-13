@@ -332,6 +332,7 @@ namespace VaccineAPI.Controllers
                     dbSchedule.IsPaymentApproved = false;
                     dbSchedule.BrandId = null;
                     dbSchedule.Amount = null;
+                    dbSchedule.VaccineCost = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
                     if (scheduleDTO.IsSkip == true)
                     {
@@ -896,6 +897,7 @@ namespace VaccineAPI.Controllers
             {
                 dbSchedule.Lot = stock.BatchLot ?? "";
                 dbSchedule.Expiry = stock.Expiry;
+                dbSchedule.VaccineCost = stock.StockAmount;
             }
         }
 

@@ -26,6 +26,7 @@ namespace VaccineAPI.Models
         public long? BrandId { get; set; }
         public virtual Brand Brand { get; set; } = null!;
         public decimal? Amount { get; set; }
+        public decimal? VaccineCost { get; set; }
         public string Manufacturer { get; set; } = "";
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }

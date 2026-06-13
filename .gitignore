@@ -54,3 +54,7 @@ cert_renewal.log
 certs/myapi.pfx
 certs/privkey.pem
 certs/fullchain.pem
+
+# User-uploaded files written by Docker container - must not be tracked or cleaned by git
+Resources/Expenses/
+Resources/Invoices/

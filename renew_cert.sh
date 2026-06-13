@@ -86,22 +86,31 @@ if nginx_listening_on_80; then
 fi
 
 set +e
-certbot renew --cert-name "$DOMAIN" --no-random-sleep-on-renew
+CERTBOT_OUTPUT=$(certbot renew --cert-name "$DOMAIN" --no-random-sleep-on-renew 2>&1)
 CERTBOT_EXIT_CODE=$?
 set -e
+
+# Print certbot output so it appears in the log
+echo "$CERTBOT_OUTPUT"
 
 if [ "$NGINX_STOPPED" -eq 1 ]; then
     start_nginx
     NGINX_STOPPED=0
 fi
 
-# Step 2: Convert to PFX (only if renewal was successful)
+# Step 2: Convert to PFX only if certbot ACTUALLY issued a new certificate.
+# certbot exits 0 for both "renewed" and "not yet due" - distinguish by output.
 if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
     log "Certificate renewal failed (exit code: $CERTBOT_EXIT_CODE)"
     exit "$CERTBOT_EXIT_CODE"
 fi
 
-log "Certificate renewed successfully, converting to PFX"
+if ! echo "$CERTBOT_OUTPUT" | grep -q "Congratulations"; then
+    log "Certificate not yet due for renewal - skipping PFX conversion and Docker restart"
+    exit 0
+fi
+
+log "Certificate renewed - converting to PFX"
 cd "$PROJECT_DIR"
 openssl pkcs12 -export -out ./certs/myapi.pfx \
     -inkey "$CERT_DIR/privkey.pem" \

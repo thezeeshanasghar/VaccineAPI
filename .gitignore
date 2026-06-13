@@ -49,3 +49,8 @@ Resources/Images/
 # Keep example file
 !.env.example
 cert_renewal.log
+
+# Runtime certificate files - managed by renew_cert.sh, must NOT be overwritten by git
+certs/myapi.pfx
+certs/privkey.pem
+certs/fullchain.pem

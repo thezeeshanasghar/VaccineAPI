@@ -1746,6 +1746,13 @@ namespace VaccineAPI.Controllers
                     existing.TotalAmount = newAmount;
                     if (dto.ClinicId.HasValue && existing.ClinicId == null)
                         existing.ClinicId = dto.ClinicId;
+
+                    // Self-heal PaId: if the doctor is editing and this invoice isn't linked
+                    // to the currently active PA assignment, sync it. Covers cases where the
+                    // one-shot stamp in PAAssignmentController.Create missed this invoice
+                    // (wrong ordering, no matching PaId==null row at assignment time, etc.).
+                    SyncInvoicePaToActiveAssignment(existing, dto.ChildId);
+
                     _db.Entry(existing).State = EntityState.Modified;
                 }
             }
@@ -1762,7 +1769,7 @@ namespace VaccineAPI.Controllers
                     .FirstOrDefault();
 
                 var newTotal = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
-                _db.InvoiceSubmissions.Add(new InvoiceSubmission
+                var newInvoice = new InvoiceSubmission
                 {
                     ChildId = dto.ChildId,
                     DoctorId = dto.DoctorId,
@@ -1775,7 +1782,15 @@ namespace VaccineAPI.Controllers
                     EditCount = 0,
                     InvoiceStatus = "Active",
                     PaymentMode = paymentMode
-                });
+                };
+
+                // Doctor's first download: if a PA is already actively assigned to this
+                // child, link the invoice to them immediately instead of waiting for
+                // PAAssignmentController.Create's stamp (which only fires on assignment).
+                if (!dto.PaId.HasValue)
+                    SyncInvoicePaToActiveAssignment(newInvoice, dto.ChildId);
+
+                _db.InvoiceSubmissions.Add(newInvoice);
             }
 
             foreach (var item in dto.Schedules)
@@ -1787,6 +1802,27 @@ namespace VaccineAPI.Controllers
 
             _db.SaveChanges();
             return new Response<object>(true, "Invoice updated successfully.", null);
+        }
+
+        // Syncs an InvoiceSubmission's PaId/SubmittedByLabel to whatever PA is currently
+        // actively assigned to this child, if it isn't already. Used by update-bulk-invoice's
+        // doctor-driven branches to self-heal invoices that PAAssignmentController.Create's
+        // one-shot stamp missed (e.g. assign-then-download ordering, or no matching
+        // PaId==null row at assignment time).
+        private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId)
+        {
+            var activeAssignment = _db.PAAssignments
+                .Where(a => a.ChildId == childId && !a.IsCancelled)
+                .OrderByDescending(a => a.AssignedAt)
+                .FirstOrDefault();
+
+            if (activeAssignment == null || invoice.PaId == activeAssignment.PersonalAssistantId)
+                return;
+
+            var pa = _db.PersonalAssistant.Find(activeAssignment.PersonalAssistantId);
+            var paName = pa?.Name ?? "PA";
+            invoice.PaId = activeAssignment.PersonalAssistantId;
+            invoice.SubmittedByLabel = "Doctor/(" + paName + ")";
         }
 
         [HttpGet("invoice-status")]

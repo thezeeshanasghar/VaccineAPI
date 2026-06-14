@@ -1215,6 +1215,7 @@ namespace VaccineAPI.Controllers
             {
                 var dbSchedule = _db.Schedules
                     .Include(x => x.Dose)
+                    .ThenInclude(x => x.Vaccine)
                     .Where(x =>x.Date.Date == scheduleDto.Date.Date && x.ChildId == scheduleDto.ChildId)
                     .ToList();
                 var dbDose = _db.Doses.Include(x => x.Vaccine).ToList();
@@ -1265,6 +1266,7 @@ namespace VaccineAPI.Controllers
                     scheduleDTO.GivenDate = schedule.GivenDate ?? default;
                     scheduleDTO.InvoiceDate = schedule.GivenDate;
                     scheduleDTO.IsDone = schedule.IsDone;
+                    scheduleDTO.Validity = schedule.Validity ?? schedule.Dose.Vaccine.Validity;
                     scheduleDTOs.Add(scheduleDTO);
                 }
 
@@ -1494,6 +1496,9 @@ namespace VaccineAPI.Controllers
                     );
                     if (scheduleBrand != null)
                     {
+                        if (scheduleBrand.Validity.HasValue)
+                            schedule.Validity = scheduleBrand.Validity;
+
                         var previousBrandId = schedule.BrandId;
                         schedule.BrandId = scheduleBrand.BrandId;
 

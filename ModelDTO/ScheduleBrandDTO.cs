@@ -12,5 +12,6 @@ namespace VaccineAPI.ModelDTO
         public string? Manufacturer { get; set; }
         public string? Lot { get; set; }
         public DateTime? Expiry { get; set; }
+        public int? Validity { get; set; }
     }
 }

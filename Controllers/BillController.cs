@@ -133,6 +133,9 @@ namespace VaccineAPI.Controllers
             if (dto == null || dto.Lines == null || dto.Lines.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "At least one line item is required" });
 
+            if (dto.Lines.Any(l => l.Quantity <= 0 || l.UnitPrice <= 0))
+                return Ok(new { IsSuccess = false, Message = "Each line item must have quantity and price greater than 0. Remove the row instead of zeroing it." });
+
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
@@ -245,12 +248,28 @@ namespace VaccineAPI.Controllers
             if (dto == null || dto.Lines == null || dto.Lines.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "At least one line item is required" });
 
+            if (dto.Lines.Any(l => l.Quantity <= 0 || l.UnitPrice <= 0))
+                return Ok(new { IsSuccess = false, Message = "Each line item must have quantity and price greater than 0. Remove the row instead of zeroing it." });
+
             var bill = await _db.Bills
                 .Include(b => b.Stocks)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (bill == null)
                 return Ok(new { IsSuccess = false, Message = "Bill not found" });
+
+            // Any old line being removed (not present in dto.Lines by Brand+Batch+Expiry) that still
+            // has consumed units must be split off via /split-consumed first — otherwise that
+            // purchase-cost history would be silently lost.
+            var removedWithConsumption = bill.Stocks.Where(stock =>
+                stock.Quantity < stock.OriginalQuantity &&
+                !dto.Lines.Any(l => l.BrandId == stock.BrandId && l.BatchLot == stock.BatchLot && l.Expiry == stock.Expiry)
+            ).ToList();
+            if (removedWithConsumption.Count > 0)
+            {
+                var ids = string.Join(", ", removedWithConsumption.Select(s => s.Id));
+                return Ok(new { IsSuccess = false, Message = $"Line(s) with stock id(s) {ids} have already-consumed units. Use split-consumed before removing them.", ResponseData = removedWithConsumption.Select(s => s.Id).ToList() });
+            }
 
             using var tx = await _db.Database.BeginTransactionAsync();
             try
@@ -288,8 +307,11 @@ namespace VaccineAPI.Controllers
                 bill.SupplierId = dto.SupplierId;
                 bill.AwtPercent = dto.AwtPercent;
                 bill.AwtAmount = awtAmount;
-                // Recalculate IsPaid based on existing AmountPaid vs new total
+                // Reclamp AmountPaid down if the edit shrank TotalPayable below what's already paid
                 decimal paid = bill.AmountPaid ?? 0;
+                if (paid > totalPayable)
+                    paid = totalPayable;
+                bill.AmountPaid = paid;
                 bill.IsPaid = paid >= totalPayable && totalPayable > 0;
                 bill.PaidDate = bill.IsPaid && bill.PaidDate == null ? (DateTime?)DateTime.Now : bill.PaidDate;
 
@@ -423,6 +445,120 @@ namespace VaccineAPI.Controllers
                 .ToListAsync();
 
             return Ok(new { IsSuccess = true, ResponseData = payments });
+        }
+
+        // GET /api/bill/{billId}/line/{stockId}/consumed-check
+        [HttpGet("{billId}/line/{stockId}/consumed-check")]
+        public async Task<IActionResult> ConsumedCheck(int billId, int stockId)
+        {
+            var stock = await _db.Stocks
+                .Include(s => s.Brand)
+                .FirstOrDefaultAsync(s => s.Id == stockId && s.BillId == billId);
+
+            if (stock == null)
+                return Ok(new { IsSuccess = false, Message = "Stock line not found for this bill" });
+
+            int consumed = stock.OriginalQuantity - stock.Quantity;
+
+            var result = new ConsumedCheckDTO
+            {
+                StockId = stock.Id,
+                Quantity = stock.Quantity,
+                OriginalQuantity = stock.OriginalQuantity,
+                Consumed = consumed,
+                UnitPrice = stock.StockAmount,
+                ConsumedAmount = Math.Round(consumed * stock.StockAmount, 2),
+                BrandName = stock.Brand != null ? stock.Brand.Name : "",
+                BatchLot = stock.BatchLot ?? ""
+            };
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
+        }
+
+        // POST /api/bill/{billId}/line/{stockId}/split-consumed
+        // Splits off the already-consumed portion of a stock line into a new, fully-paid bill
+        // (preserves purchase-cost history), leaving the original line holding only the
+        // unconsumed remainder (Quantity == OriginalQuantity afterward).
+        [HttpPost("{billId}/line/{stockId}/split-consumed")]
+        public async Task<IActionResult> SplitConsumed(int billId, int stockId)
+        {
+            var bill = await _db.Bills.FirstOrDefaultAsync(b => b.Id == billId);
+            if (bill == null)
+                return Ok(new { IsSuccess = false, Message = "Bill not found" });
+
+            var stock = await _db.Stocks.FirstOrDefaultAsync(s => s.Id == stockId && s.BillId == billId);
+            if (stock == null)
+                return Ok(new { IsSuccess = false, Message = "Stock line not found for this bill" });
+
+            int consumed = stock.OriginalQuantity - stock.Quantity;
+            if (consumed <= 0)
+                return Ok(new { IsSuccess = false, Message = "No consumed units on this line" });
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                decimal consumedAmount = Math.Round(consumed * stock.StockAmount, 2);
+
+                // Auto-generate BillNo — doctor-wide uniqueness across all clinics (same pattern as Create)
+                string prefix = $"BILL-{bill.BillDate.Year}-";
+                var usedNos = await _db.Bills
+                    .Where(b => b.DoctorId == bill.DoctorId && b.BillNo.StartsWith(prefix))
+                    .Select(b => b.BillNo)
+                    .ToListAsync();
+                int seq = 1;
+                while (usedNos.Contains($"{prefix}{seq:D4}")) seq++;
+                string newBillNo = $"{prefix}{seq:D4}";
+
+                var newBill = new Bill
+                {
+                    BillNo = newBillNo,
+                    BillDate = bill.BillDate,
+                    Supplier = bill.Supplier,
+                    SupplierId = bill.SupplierId,
+                    DoctorId = bill.DoctorId,
+                    ClinicId = bill.ClinicId,
+                    AwtPercent = bill.AwtPercent,
+                    AwtAmount = 0,
+                    AmountPaid = consumedAmount,
+                    PaymentMethod = bill.PaymentMethod,
+                    IsPaid = true,
+                    PaidDate = DateTime.Now,
+                    IsPAApprove = false
+                };
+                _db.Bills.Add(newBill);
+                await _db.SaveChangesAsync();
+
+                _db.Stocks.Add(new Stock
+                {
+                    BrandId = stock.BrandId,
+                    BillId = newBill.Id,
+                    Quantity = consumed,
+                    OriginalQuantity = consumed,
+                    StockAmount = stock.StockAmount,
+                    BatchLot = stock.BatchLot,
+                    Expiry = stock.Expiry
+                });
+
+                // Shrink the original line to the unconsumed remainder
+                stock.OriginalQuantity = stock.Quantity;
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                var result = new SplitConsumedResultDTO
+                {
+                    NewBillId = newBill.Id,
+                    NewBillNo = newBill.BillNo,
+                    ConsumedAmount = consumedAmount
+                };
+
+                return Ok(new { IsSuccess = true, Message = "Consumed units moved to new paid bill", ResponseData = result });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return Ok(new { IsSuccess = false, Message = ex.Message });
+            }
         }
 
         // DELETE /api/bill/{id}/reverse

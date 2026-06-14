@@ -83,6 +83,25 @@ namespace VaccineAPI.ModelDTO
         public List<BillLineDTO> Lines { get; set; } = new List<BillLineDTO>();
     }
 
+    public class ConsumedCheckDTO
+    {
+        public int StockId { get; set; }
+        public int Quantity { get; set; }
+        public int OriginalQuantity { get; set; }
+        public int Consumed { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal ConsumedAmount { get; set; }
+        public string BrandName { get; set; } = "";
+        public string BatchLot { get; set; } = "";
+    }
+
+    public class SplitConsumedResultDTO
+    {
+        public int NewBillId { get; set; }
+        public string NewBillNo { get; set; } = "";
+        public decimal ConsumedAmount { get; set; }
+    }
+
     public class SupplierPaymentCreateDTO
     {
         public int BillId { get; set; }

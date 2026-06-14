@@ -119,7 +119,7 @@ namespace VaccineAPI.Controllers
                     // Deduct source
                     sourceStock.Quantity -= item.Quantity;
                     sourceBa.Count = Math.Max(0, sourceBa.Count - item.Quantity);
-                    if (sourceStock.Quantity == 0)
+                    if (sourceStock.Quantity == 0 && sourceStock.BillId == null)
                         _db.Stocks.Remove(sourceStock);
                     else
                         _db.Entry(sourceStock).State = EntityState.Modified;

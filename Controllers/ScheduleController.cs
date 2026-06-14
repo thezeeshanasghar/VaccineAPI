@@ -447,7 +447,7 @@ namespace VaccineAPI.Controllers
                             int deduct = Math.Min(src.Quantity, fillRemaining);
                             src.Quantity -= deduct;
                             fillRemaining -= deduct;
-                            if (src.Quantity == 0) _db.Stocks.Remove(src);
+                            if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
                             else _db.Entry(src).State = EntityState.Modified;
                         }
                     }
@@ -1656,7 +1656,7 @@ namespace VaccineAPI.Controllers
                                             int deduct = Math.Min(src.Quantity, bulkFillRemaining);
                                             src.Quantity -= deduct;
                                             bulkFillRemaining -= deduct;
-                                            if (src.Quantity == 0) _db.Stocks.Remove(src);
+                                            if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
                                             else _db.Entry(src).State = EntityState.Modified;
                                         }
 

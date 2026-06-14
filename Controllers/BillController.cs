@@ -29,7 +29,7 @@ namespace VaccineAPI.Controllers
 
             var result = bills.Select(b =>
             {
-                decimal totalAmount = b.Stocks.Sum(s => s.Quantity * s.StockAmount);
+                decimal totalAmount = b.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount);
                 decimal awtPercent = b.AwtPercent;
                 decimal awtAmount = Math.Round(totalAmount * awtPercent / 100, 2);
                 decimal totalPayable = totalAmount + awtAmount;
@@ -38,7 +38,7 @@ namespace VaccineAPI.Controllers
                 decimal paid = b.AmountPaid ?? 0;
                 decimal pending = Math.Round(totalPayable - paid, 2);
                 if (pending < 0) pending = 0;
-                string status = paid >= totalPayable && totalPayable > 0 ? "Paid"
+                string status = pending == 0 && paid > 0 ? "Paid"
                               : paid > 0 ? "Partial"
                               : "Unpaid";
 
@@ -81,7 +81,7 @@ namespace VaccineAPI.Controllers
                 .Where(vb => brandIds.Contains(vb.BrandId))
                 .ToListAsync();
 
-            decimal totalAmount = bill.Stocks.Sum(s => s.Quantity * s.StockAmount);
+            decimal totalAmount = bill.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount);
             decimal awtPercent = bill.AwtPercent;
             decimal awtAmount = Math.Round(totalAmount * awtPercent / 100, 2);
             string supplierName = bill.SupplierRef != null ? bill.SupplierRef.Name : (bill.Supplier ?? "");
@@ -97,9 +97,9 @@ namespace VaccineAPI.Controllers
                     VaccineName = vb != null && vb.Vaccine != null ? vb.Vaccine.Name : "",
                     BatchLot = s.BatchLot ?? "",
                     Expiry = s.Expiry,
-                    Quantity = s.Quantity,
+                    Quantity = s.OriginalQuantity,
                     UnitPrice = s.StockAmount,
-                    LineTotal = Math.Round(s.Quantity * s.StockAmount, 2)
+                    LineTotal = Math.Round(s.OriginalQuantity * s.StockAmount, 2)
                 };
             }).ToList();
 
@@ -358,7 +358,7 @@ namespace VaccineAPI.Controllers
             try
             {
                 // Calculate total payable
-                decimal totalAmount = bill.Stocks.Sum(s => s.Quantity * s.StockAmount);
+                decimal totalAmount = bill.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount);
                 decimal awtAmount = bill.AwtAmount ?? 0;
                 decimal totalPayable = totalAmount + awtAmount;
 

@@ -29,10 +29,12 @@ namespace VaccineAPI.Controllers
 
             var result = bills.Select(b =>
             {
-                decimal totalAmount = b.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount);
+                // Stock.StockAmount is already AWT-inclusive (UnitPrice * (1 + AwtPercent/100)),
+                // so this sum IS the total payable — do not re-apply AWT% on top of it.
+                decimal totalPayable = Math.Round(b.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount), 2);
                 decimal awtPercent = b.AwtPercent;
-                decimal awtAmount = Math.Round(totalAmount * awtPercent / 100, 2);
-                decimal totalPayable = totalAmount + awtAmount;
+                decimal totalAmount = awtPercent > 0 ? Math.Round(totalPayable / (1 + awtPercent / 100), 2) : totalPayable;
+                decimal awtAmount = totalPayable - totalAmount;
                 string supplierName = b.SupplierRef != null ? b.SupplierRef.Name : (b.Supplier ?? "");
 
                 decimal paid = b.AmountPaid ?? 0;
@@ -48,10 +50,10 @@ namespace VaccineAPI.Controllers
                     BillNo = b.BillNo,
                     BillDate = b.BillDate,
                     SupplierName = supplierName,
-                    TotalAmount = Math.Round(totalAmount, 2),
+                    TotalAmount = totalAmount,
                     AwtPercent = awtPercent,
                     AwtAmount = awtAmount,
-                    TotalPayable = Math.Round(totalPayable, 2),
+                    TotalPayable = totalPayable,
                     AmountPaid = Math.Round(paid, 2),
                     PendingAmount = pending,
                     PaymentStatus = status,
@@ -81,9 +83,12 @@ namespace VaccineAPI.Controllers
                 .Where(vb => brandIds.Contains(vb.BrandId))
                 .ToListAsync();
 
-            decimal totalAmount = bill.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount);
+            // Stock.StockAmount is already AWT-inclusive (UnitPrice * (1 + AwtPercent/100)),
+            // so this sum IS the total payable — do not re-apply AWT% on top of it.
+            decimal totalPayable = Math.Round(bill.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount), 2);
             decimal awtPercent = bill.AwtPercent;
-            decimal awtAmount = Math.Round(totalAmount * awtPercent / 100, 2);
+            decimal totalAmount = awtPercent > 0 ? Math.Round(totalPayable / (1 + awtPercent / 100), 2) : totalPayable;
+            decimal awtAmount = totalPayable - totalAmount;
             string supplierName = bill.SupplierRef != null ? bill.SupplierRef.Name : (bill.Supplier ?? "");
 
             var lines = bill.Stocks.Select(s =>
@@ -112,8 +117,8 @@ namespace VaccineAPI.Controllers
                 SupplierName = supplierName,
                 AwtPercent = awtPercent,
                 AwtAmount = awtAmount,
-                TotalAmount = Math.Round(totalAmount, 2),
-                TotalPayable = Math.Round(totalAmount + awtAmount, 2),
+                TotalAmount = totalAmount,
+                TotalPayable = totalPayable,
                 IsPaid = bill.IsPaid,
                 Lines = lines
             };
@@ -357,10 +362,8 @@ namespace VaccineAPI.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Calculate total payable
-                decimal totalAmount = bill.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount);
-                decimal awtAmount = bill.AwtAmount ?? 0;
-                decimal totalPayable = totalAmount + awtAmount;
+                // Stock.StockAmount is already AWT-inclusive — do not add AwtAmount again
+                decimal totalPayable = Math.Round(bill.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount), 2);
 
                 decimal alreadyPaid = bill.AmountPaid ?? 0;
                 decimal remaining = totalPayable - alreadyPaid;

@@ -63,9 +63,8 @@ namespace VaccineAPI.Controllers
             // Merge bills and payments into chronological order
             var billItems = bills.Select(b =>
             {
-                decimal subtotal = b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount);
-                decimal awt = b.AwtAmount ?? 0;
-                decimal totalPayable = subtotal + awt;
+                // Stock.StockAmount is already AWT-inclusive — do not add AwtAmount again
+                decimal totalPayable = b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount);
                 return new { Date = b.BillDate, SortKey = (long)b.Id, IsBill = true, Bill = b, TotalPayable = totalPayable };
             }).ToList();
 
@@ -86,9 +85,8 @@ namespace VaccineAPI.Controllers
                 if (item.IsBill)
                 {
                     var b = billItems.First(x => x.SortKey == item.SortKey).Bill;
-                    decimal subtotal = b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount);
-                    decimal awt = b.AwtAmount ?? 0;
-                    decimal totalPayable = subtotal + awt;
+                    // Stock.StockAmount is already AWT-inclusive — do not add AwtAmount again
+                    decimal totalPayable = b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount);
                     balance += totalPayable;
                     entries.Add(new
                     {
@@ -135,11 +133,8 @@ namespace VaccineAPI.Controllers
                 }
             }
 
-            decimal totalBills = bills.Sum(b =>
-            {
-                decimal subtotal = b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount);
-                return subtotal + (b.AwtAmount ?? 0);
-            });
+            // Stock.StockAmount is already AWT-inclusive — do not add AwtAmount again
+            decimal totalBills = bills.Sum(b => b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount));
             decimal totalAWT = bills.Sum(b => b.AwtAmount ?? 0);
             decimal totalPaidOnBills = bills.Sum(b => b.AmountPaid ?? 0);
             decimal totalStandalonePayments = payments.Sum(p => p.Amount);

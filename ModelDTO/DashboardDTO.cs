@@ -5,32 +5,6 @@ using System;
 
 namespace VaccineAPI.ModelDTO
 {
-    // Single combined payload for the members shell (menu) + dashboard page.
-    // Replaces several separate calls fired on every dashboard visit.
-    public class ShellDataDTO
-    {
-        public List<VaccineAPI.Models.Clinic> Clinics { get; set; } = new List<VaccineAPI.Models.Clinic>();
-        public VaccineAPI.Models.Clinic? OnlineClinic { get; set; }
-        public bool HasPA { get; set; }
-        public int PendingApprovalsCount { get; set; }
-        public int PendingBookingsCount { get; set; }
-        public int UnreadNotificationCount { get; set; }
-
-        // Doctor-only fields
-        public string? DisplayName { get; set; }
-        public string? ProfileImage { get; set; }
-        public bool AllowInventory { get; set; }
-        public bool AllowFinancial { get; set; }
-        public bool AllowAnalytics { get; set; }
-        public bool AllowAgent { get; set; }
-        public bool AllowAssistant { get; set; }
-
-        // PA-only fields
-        public string? PaName { get; set; }
-        public VaccineAPI.Models.PaPermission? PaPermissions { get; set; }
-        public int PaAssignmentCount { get; set; }
-    }
-
     public class DashboardDTO
     {
         public int CurrentMonthChildCount { get; set; }

@@ -513,8 +513,14 @@ namespace VaccineAPI.Controllers
                 {
                     string itemName = brandsLookup.TryGetValue(bid, out var n) ? n : $"Brand {bid}";
 
-                    // Opening stock = all movement before `from` date
-                    int openingStock = await ComputeStockUpTo(_db, clinicId, bid, from.Date.AddDays(-1));
+                    // First date this clinic ever received this item, via direct purchase or incoming transfer
+                    DateTime? firstReceiptDate = await GetFirstReceiptDate(_db, clinicId, bid);
+
+                    // Opening stock can only be reconciled from the first receipt date onward
+                    bool hasBaseline = firstReceiptDate.HasValue && from.Date >= firstReceiptDate.Value.Date;
+                    int openingStock = hasBaseline
+                        ? await ComputeStockUpTo(_db, clinicId, bid, from.Date.AddDays(-1))
+                        : 0;
 
                     // Fetch all events in range for this brand
                     var soldRows = await _db.Schedules
@@ -563,6 +569,18 @@ namespace VaccineAPI.Controllers
                     doc.Add(new Paragraph(clinicName, subFont) { Alignment = Element.ALIGN_CENTER });
                     doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
 
+                    if (!hasBaseline)
+                    {
+                        string noteText = firstReceiptDate.HasValue
+                            ? $"Note: No purchase bill or incoming transfer is recorded for this item before {firstReceiptDate.Value:dd-MM-yyyy}. " +
+                              $"Opening Stock and Stock In Hand cannot be determined for dates before this. " +
+                              $"Figures below for dates prior to {firstReceiptDate.Value:dd-MM-yyyy} show units sold/consumed per available data only."
+                            : "Note: No purchase bill or incoming transfer has ever been recorded for this item at this clinic. " +
+                              "Opening Stock and Stock In Hand cannot be determined. " +
+                              "Figures below show units sold/consumed per available data only.";
+                        doc.Add(new Paragraph(noteText, footerFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 8 });
+                    }
+
                     // Table: Date | Opening Stock | Sold | Direct Sale | Transfer | Purchased | Adjusted | Stock In Hand
                     var tbl = new PdfPTable(8) { WidthPercentage = 100, SpacingBefore = 4 };
                     tbl.SetWidths(new float[] { 1.8f, 1.4f, 1f, 1.2f, 1.2f, 1.3f, 1.2f, 1.5f });
@@ -581,47 +599,68 @@ namespace VaccineAPI.Controllers
                     int running = openingStock;
                     int totSold = 0, totDirectSale = 0, totTransfer = 0, totPurchased = 0, totAdjusted = 0;
                     bool alt = false;
+                    bool reconciling = hasBaseline;
 
                     foreach (var d in activeDates)
                     {
-                        int dayOpening   = running;
+                        // Once we reach the first receipt date, balances become reconcilable
+                        if (!reconciling && firstReceiptDate.HasValue && d >= firstReceiptDate.Value.Date)
+                            reconciling = true;
+
                         int sold         = soldRows.Count(s => s.GivenDate.Value.Date == d);
                         int directSale   = 0; // placeholder — direct sale not yet in model
                         int purchased    = purchRows.Where(p => p.Bill.BillDate.Date == d).Sum(p => p.Quantity);
                         int xferNet      = xferInRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity)
                                          - xferOutRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity);
                         int adjusted     = adjRows.Where(a => a.Date.Date == d).Sum(a => a.Adjustment);
-                        int closing      = dayOpening - sold - directSale + xferNet + purchased + adjusted;
 
                         totSold       += sold;
                         totDirectSale += directSale;
                         totTransfer   += xferNet;
                         totPurchased  += purchased;
                         totAdjusted   += adjusted;
-                        running        = closing;
 
                         var bg = alt ? altBg : whiteBg;
                         alt = !alt;
 
                         tbl.AddCell(Cell(d.ToString("dd-MM-yyyy"), cellFont, bg, borderClr));
-                        tbl.AddCell(CellR(dayOpening.ToString(), cellFont, bg, borderClr));
-                        tbl.AddCell(CellR(sold.ToString(), cellFont, bg, borderClr));
-                        tbl.AddCell(CellR(directSale.ToString(), cellFont, bg, borderClr));
-                        tbl.AddCell(CellR(xferNet.ToString(), cellFont, bg, borderClr));
-                        tbl.AddCell(CellR(purchased.ToString(), cellFont, bg, borderClr));
-                        tbl.AddCell(CellR(adjusted.ToString(), cellFont, bg, borderClr));
-                        tbl.AddCell(CellR(closing.ToString(), boldCell, bg, borderClr));
+
+                        if (!reconciling)
+                        {
+                            // No purchase/transfer history yet — balance cannot be determined
+                            tbl.AddCell(CellR("N/A", cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(sold.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(directSale.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(xferNet.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(purchased.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(adjusted.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR("N/A", boldCell, bg, borderClr));
+                        }
+                        else
+                        {
+                            int dayOpening = running;
+                            int closing    = dayOpening - sold - directSale + xferNet + purchased + adjusted;
+                            running        = closing;
+
+                            tbl.AddCell(CellR(dayOpening.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(sold.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(directSale.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(xferNet.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(purchased.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(adjusted.ToString(), cellFont, bg, borderClr));
+                            tbl.AddCell(CellR(closing.ToString(), boldCell, bg, borderClr));
+                        }
                     }
 
                     // Totals row
                     tbl.AddCell(new PdfPCell(new Phrase("Totals", boldCell)) { BackgroundColor = totalsBg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4 });
-                    tbl.AddCell(CellR(openingStock.ToString(), boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(hasBaseline ? openingStock.ToString() : "N/A", boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totSold.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totDirectSale.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totTransfer.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totPurchased.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totAdjusted.ToString(), boldCell, totalsBg, borderClr));
-                    tbl.AddCell(CellR(running.ToString(), boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(reconciling ? running.ToString() : "N/A", boldCell, totalsBg, borderClr));
 
                     doc.Add(tbl);
                     doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8 });
@@ -673,6 +712,31 @@ namespace VaccineAPI.Controllers
                 .SumAsync(a => (int?)a.Adjustment) ?? 0;
 
             return purchased + xferIn - sold - xferOut + adjusted;
+        }
+
+        // First date this clinic received any units of this brand, via direct purchase bill
+        // (excluding XFER- bills) or incoming stock transfer. Null if never received.
+        private static async Task<DateTime?> GetFirstReceiptDate(Context db, long clinicId, long brandId)
+        {
+            DateTime? firstPurchase = await db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId
+                         && !s.Bill.BillNo.StartsWith("XFER-")
+                         && s.BrandId == brandId)
+                .Select(s => (DateTime?)s.Bill.BillDate)
+                .OrderBy(d => d)
+                .FirstOrDefaultAsync();
+
+            DateTime? firstTransferIn = await db.StockTransfers
+                .Where(t => t.ToClinicId == clinicId && t.BrandId == brandId)
+                .Select(t => (DateTime?)t.TransferDate)
+                .OrderBy(d => d)
+                .FirstOrDefaultAsync();
+
+            if (firstPurchase.HasValue && firstTransferIn.HasValue)
+                return firstPurchase.Value < firstTransferIn.Value ? firstPurchase : firstTransferIn;
+
+            return firstPurchase ?? firstTransferIn;
         }
 
         // GET /api/stock/items-purchase-report?clinicId=X&brandId=X&from=DATE&to=DATE

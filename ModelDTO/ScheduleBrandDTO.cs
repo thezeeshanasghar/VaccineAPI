@@ -9,5 +9,8 @@ namespace VaccineAPI.ModelDTO
     {
         public int ScheduleId { get; set; }
         public long? BrandId { get; set; }
+        public string? Manufacturer { get; set; }
+        public string? Lot { get; set; }
+        public DateTime? Expiry { get; set; }
     }
 }

@@ -856,7 +856,11 @@ namespace VaccineAPI.Controllers
 
         private void ApplyStockSourceFields(Schedule dbSchedule, ScheduleDTO scheduleDTO, long clinicId)
         {
-            var brandId = scheduleDTO.BrandId;
+            ApplyStockSourceFields(dbSchedule, scheduleDTO.BrandId, scheduleDTO.Lot, scheduleDTO.Expiry, clinicId);
+        }
+
+        private void ApplyStockSourceFields(Schedule dbSchedule, long? brandId, string? lot, DateTime? expiry, long clinicId)
+        {
             dbSchedule.Manufacturer = _db.Brands
                 .Where(b => b.Id == (brandId ?? 0))
                 .Select(b => b.Manufacturer)
@@ -864,8 +868,8 @@ namespace VaccineAPI.Controllers
             dbSchedule.Lot = "";
             dbSchedule.Expiry = null;
 
-            var selectedLot = string.IsNullOrWhiteSpace(scheduleDTO.Lot) ? null : scheduleDTO.Lot.Trim();
-            var selectedExpiry = scheduleDTO.Expiry.HasValue ? scheduleDTO.Expiry.Value.Date : (DateTime?)null;
+            var selectedLot = string.IsNullOrWhiteSpace(lot) ? null : lot.Trim();
+            var selectedExpiry = expiry.HasValue ? expiry.Value.Date : (DateTime?)null;
 
             Stock? stock = null;
 
@@ -1492,6 +1496,13 @@ namespace VaccineAPI.Controllers
                     {
                         var previousBrandId = schedule.BrandId;
                         schedule.BrandId = scheduleBrand.BrandId;
+
+                        var bulkStockClinicId = ResolveClinicIdForStock(
+                            scheduleDTO.DoctorId,
+                            schedule.Child?.ClinicId ?? 0
+                        );
+                        ApplyStockSourceFields(schedule, scheduleBrand.BrandId, scheduleBrand.Lot, scheduleBrand.Expiry, bulkStockClinicId);
+
                         if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                         {
                             // Null brand means OHF/external source; do not consume inventory.

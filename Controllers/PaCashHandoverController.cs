@@ -632,13 +632,13 @@ namespace VaccineAPI.Controllers
                 NewAmount           = (decimal?)a.NewAmount
             });
 
-            // --- Part 3: PA-collected direct-sale cash rows ---
-            // Pooled cash (no per-row confirm — settled via PaCashHandover, same as Schedule.PaymentCollectorPaId cash)
+            // --- Part 3: PA-assigned direct-sale rows ---
+            // Visible as soon as the doctor assigns a PA — even before the PA
+            // has recorded a payment mode. Pooled cash (no separate cash-in-hand
+            // confirm — settled via PaCashHandover, same as Schedule.PaymentCollectorPaId cash).
             var dsQuery = _db.DirectSales
                 .Where(d =>
                     d.PaymentCollectorPaId.HasValue &&
-                    d.PaymentMode == "Cash" &&
-                    d.IsPaymentCollected == true &&
                     d.DoctorId == doctorId &&
                     clinicIds.Contains(d.ClinicId));
 
@@ -663,12 +663,13 @@ namespace VaccineAPI.Controllers
                         Date                = first.SaleDate.ToString("yyyy-MM-dd"),
                         PatientName         = first.ClientName ?? "",
                         Amount              = g.Sum(x => x.TotalSaleValue),
-                        PaymentMode         = first.PaymentMode ?? "",
-                        IsConfirmed         = false,
-                        ConfirmedAt         = (string)null,
+                        PaymentMode         = first.IsPaymentCollected ? (first.PaymentMode ?? "") : "",
+                        IsConfirmed         = first.IsConfirmedByDoctor,
+                        ConfirmedAt         = first.ConfirmedAt.HasValue ? first.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                         InvoiceStatus       = (string)null,
                         HasPendingAmendment = false,
-                        PendingHandover     = false,
+                        PendingHandover     = first.IsMarkedDoneByPA,
+                        IsPaymentCollected  = first.IsPaymentCollected,
                         PaId                = first.PaymentCollectorPaId.Value,
                         PaName              = paNames.ContainsKey(first.PaymentCollectorPaId.Value) ? paNames[first.PaymentCollectorPaId.Value] : "",
                         ClinicId            = first.ClinicId,

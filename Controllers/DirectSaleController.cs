@@ -176,15 +176,57 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, Message = "Payment recorded." });
         }
 
+        // PATCH /api/DirectSale/by-bill/{saleBillNo}/mark-done
+        // PA's second step after recording the payment mode — hands the sale
+        // off to the doctor's Payment Reconciliation page (status becomes
+        // "Pending Handover"). Mirrors PAAssignmentController.MarkDone.
+        [HttpPatch("by-bill/{saleBillNo}/mark-done")]
+        public IActionResult MarkDone(string saleBillNo)
+        {
+            var rows = _db.DirectSales.Where(d => d.SaleBillNo == saleBillNo).ToList();
+            if (rows.Count == 0)
+                return Ok(new { IsSuccess = false, Message = "Sale not found." });
+
+            if (rows.Any(r => !r.IsPaymentCollected))
+                return Ok(new { IsSuccess = false, Message = "Record the payment mode before marking this done." });
+
+            foreach (var row in rows)
+                row.IsMarkedDoneByPA = true;
+
+            _db.SaveChanges();
+            return Ok(new { IsSuccess = true, Message = "Marked as done." });
+        }
+
+        // PATCH /api/DirectSale/by-bill/{saleBillNo}/confirm
+        // Doctor's confirmation on the Payment Reconciliation page that this
+        // sale's payment has been received. Mirrors ScheduleController.ConfirmInvoice.
+        [HttpPatch("by-bill/{saleBillNo}/confirm")]
+        public IActionResult Confirm(string saleBillNo)
+        {
+            var rows = _db.DirectSales.Where(d => d.SaleBillNo == saleBillNo).ToList();
+            if (rows.Count == 0)
+                return Ok(new { IsSuccess = false, Message = "Sale not found." });
+
+            var now = DateTime.UtcNow;
+            foreach (var row in rows)
+            {
+                row.IsConfirmedByDoctor = true;
+                row.ConfirmedAt = now;
+            }
+
+            _db.SaveChanges();
+            return Ok(new { IsSuccess = true, Message = "Confirmed." });
+        }
+
         // GET /api/DirectSale/pending-for-pa/{paId}
-        // Direct sales assigned to this PA for cash collection where the
-        // payment mode hasn't been recorded yet — shown in the PA's
-        // Assignments page under "Direct Sales — Record Payment".
+        // Direct sales assigned to this PA that the PA still needs to act on —
+        // either record the payment mode, or mark done after recording it.
+        // Shown in the PA's Assignments page under "Direct Sales — Record Payment".
         [HttpGet("pending-for-pa/{paId}")]
         public IActionResult GetPendingForPa(long paId)
         {
             var rows = _db.DirectSales
-                .Where(d => d.PaymentCollectorPaId == paId && !d.IsPaymentCollected)
+                .Where(d => d.PaymentCollectorPaId == paId && !d.IsMarkedDoneByPA)
                 .OrderByDescending(d => d.SaleDate)
                 .ToList();
 
@@ -199,7 +241,9 @@ namespace VaccineAPI.Controllers
                         ClientName = first.ClientName ?? "",
                         Date = first.SaleDate.ToString("yyyy-MM-dd"),
                         Amount = g.Sum(x => x.TotalSaleValue),
-                        ClinicId = first.ClinicId
+                        ClinicId = first.ClinicId,
+                        IsPaymentCollected = first.IsPaymentCollected,
+                        PaymentMode = first.IsPaymentCollected ? first.PaymentMode : null
                     };
                 });
 

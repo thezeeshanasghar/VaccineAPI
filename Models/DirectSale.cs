@@ -57,14 +57,26 @@ namespace VaccineAPI.Models
 
         public DateTime SaleDate { get; set; } = DateTime.UtcNow;
 
-        // PA who collected the cash for this sale (mirrors Schedule.PaymentCollectorPaId).
-        // Only meaningful when PaymentMode == "Cash"; flows into that PA's cash-in-hand pool.
+        // PA assigned to collect/record payment for this sale (mirrors Schedule.PaymentCollectorPaId).
+        // When set, PaymentMode starts as "Pending" until the PA records the actual mode;
+        // if Cash, the amount flows into that PA's cash-in-hand pool once recorded.
         public long? PaymentCollectorPaId { get; set; }
 
         // True once payment mode is finalized: either set immediately at sale creation
         // (no PA assigned), or recorded later by the assigned PA via record-payment-mode.
         // Mirrors Schedule.IsPaymentCollected.
         public bool IsPaymentCollected { get; set; } = true;
+
+        // PA's second step (after recording payment mode): marks the sale as handed off /
+        // ready for the doctor to reconcile. Mirrors PAAssignment "mark done" -> PendingHandover.
+        public bool IsMarkedDoneByPA { get; set; } = false;
+
+        // Doctor's confirmation that this sale's payment has been received/reconciled.
+        // Mirrors InvoiceSubmission.IsConfirmedByDoctor. Irrelevant (left false) when no
+        // PA is assigned, since those sales never appear on the reconciliation page.
+        public bool IsConfirmedByDoctor { get; set; } = false;
+
+        public DateTime? ConfirmedAt { get; set; }
 
         [ForeignKey("BrandId")]
         public virtual Brand Brand { get; set; } = null!;

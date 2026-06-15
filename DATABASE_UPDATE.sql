@@ -261,3 +261,19 @@ ALTER TABLE `directsales`
 
 -- Rollback:
 -- ALTER TABLE `directsales` DROP COLUMN `PaymentCollectorPaId`, DROP COLUMN `IsPaymentCollected`;
+
+-- =====================================================
+-- Direct Sale reconciliation lifecycle (PA-assigned sales)
+-- IsMarkedDoneByPA mirrors PAAssignment "mark done" step
+-- (PA hands off after recording payment mode).
+-- IsConfirmedByDoctor + ConfirmedAt mirror
+-- InvoiceSubmission.IsConfirmedByDoctor/ConfirmedAt — the
+-- doctor's per-row "Confirm Receipt" on reconciliation.
+-- =====================================================
+ALTER TABLE `directsales`
+  ADD COLUMN `IsMarkedDoneByPA` TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `IsConfirmedByDoctor` TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `ConfirmedAt` DATETIME NULL;
+
+-- Rollback:
+-- ALTER TABLE `directsales` DROP COLUMN `IsMarkedDoneByPA`, DROP COLUMN `IsConfirmedByDoctor`, DROP COLUMN `ConfirmedAt`;

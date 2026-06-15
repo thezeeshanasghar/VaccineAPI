@@ -142,6 +142,20 @@ namespace VaccineAPI.Controllers
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
+                // Notify the assigned PA by email (fire-and-forget)
+                if (dto.PaymentCollectorPaId.HasValue)
+                {
+                    var collectorPa = await _db.PersonalAssistant.FindAsync(dto.PaymentCollectorPaId.Value);
+                    if (collectorPa != null && !string.IsNullOrEmpty(collectorPa.Email))
+                    {
+                        _ = Task.Run(() => UserEmail.SendEmail(
+                            collectorPa.Email,
+                            "A direct sale has been assigned to you for cash collection. Please log in to your VacDoc app to view it under Assignments.",
+                            "New Direct Sale Assignment"
+                        ));
+                    }
+                }
+
                 return Ok(new { IsSuccess = true, Message = "Sale recorded", ResponseData = new { SaleBillNo = saleBillNo } });
             }
             catch (Exception ex)
@@ -244,6 +258,38 @@ namespace VaccineAPI.Controllers
                         ClinicId = first.ClinicId,
                         IsPaymentCollected = first.IsPaymentCollected,
                         PaymentMode = first.IsPaymentCollected ? first.PaymentMode : null
+                    };
+                });
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
+        }
+
+        // GET /api/DirectSale/completed-for-pa/{paId}
+        // Direct sales this PA has marked done — shown in the PA's
+        // "Completed" list alongside completed vaccine assignments.
+        [HttpGet("completed-for-pa/{paId}")]
+        public IActionResult GetCompletedForPa(long paId)
+        {
+            var rows = _db.DirectSales
+                .Where(d => d.PaymentCollectorPaId == paId && d.IsMarkedDoneByPA)
+                .OrderByDescending(d => d.SaleDate)
+                .ToList();
+
+            var result = rows
+                .GroupBy(d => d.SaleBillNo ?? $"id-{d.Id}")
+                .Select(g =>
+                {
+                    var first = g.First();
+                    return new
+                    {
+                        SaleBillNo = first.SaleBillNo,
+                        ClientName = first.ClientName ?? "",
+                        Date = first.SaleDate.ToString("yyyy-MM-dd"),
+                        Amount = g.Sum(x => x.TotalSaleValue),
+                        ClinicId = first.ClinicId,
+                        PaymentMode = first.PaymentMode,
+                        IsConfirmedByDoctor = first.IsConfirmedByDoctor,
+                        ConfirmedAt = first.ConfirmedAt.HasValue ? first.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null
                     };
                 });
 

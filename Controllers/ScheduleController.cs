@@ -176,6 +176,10 @@ namespace VaccineAPI.Controllers
                 }
 
                 var previousBrandId = dbSchedule.BrandId;
+                // Capture prior IsDone before any mutation — this is the reliable signal for
+                // whether inventory was actually deducted for this schedule, since BrandId can
+                // be persisted on a not-yet-given schedule by earlier partial saves.
+                var wasGiven = dbSchedule.IsDone;
                 var onlineClinicId = ResolveClinicIdForStock(
                     scheduleDTO.DoctorId,
                     dbSchedule.Child?.ClinicId ?? 0
@@ -283,7 +287,7 @@ namespace VaccineAPI.Controllers
                         dbSchedule.SkipCount++;
                     }
 
-                    if (inventoryEnabled && previousBrandId.HasValue)
+                    if (inventoryEnabled && wasGiven && previousBrandId.HasValue)
                     {
                         rollbackClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId, onlineClinicId);
                         var rollbackDoctorId = _db.Clinics
@@ -310,7 +314,7 @@ namespace VaccineAPI.Controllers
                             .FirstOrDefault();
                     }
 
-                    if (inventoryEnabled && previousBrandId.HasValue && dbBrandInventory2 == null)
+                    if (inventoryEnabled && wasGiven && previousBrandId.HasValue && dbBrandInventory2 == null)
                     {
                         return new Response<ScheduleDTO>(
                             false,
@@ -348,7 +352,7 @@ namespace VaccineAPI.Controllers
                     ScheduleDTO newData2 = _mapper.Map<ScheduleDTO>(dbSchedule);
                     if (inventoryEnabled && dbBrandInventory2 != null)
                     {
-                        if (previousBrandId.HasValue)
+                        if (wasGiven && previousBrandId.HasValue)
                         {
                             dbBrandInventory2.Count += 1;
 
@@ -396,7 +400,7 @@ namespace VaccineAPI.Controllers
                     return new Response<ScheduleDTO>(true, "Congratulations", newData2);
                 }
 
-                if (!previousBrandId.HasValue)
+                if (!wasGiven)
                 {
                     // Null brand means OHF/external source; do not consume inventory.
                     if (inventoryEnabled && scheduleDTO.BrandId.HasValue && scheduleDTO.BrandId.Value > 0)
@@ -1510,55 +1514,52 @@ namespace VaccineAPI.Controllers
 
                         if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
                         {
-                            // Null brand means OHF/external source; do not consume inventory.
-                            // But if a brand was previously given (previousBrandId) and we are now
-                            // ungiving (IsDone=false), restore inventory for that dose.
-                            if (!scheduleBrand.BrandId.HasValue || scheduleBrand.BrandId.Value <= 0)
+                            // Ungive transition: dose was given before, now being ungiven.
+                            // Restore inventory for whatever brand was actually deducted (previousBrandId),
+                            // regardless of the brand now present in the request.
+                            if (wasIsDone == true && scheduleDTO.IsDone == false && previousBrandId.HasValue)
                             {
-                                if (previousBrandId.HasValue && scheduleDTO.IsDone == false)
-                                {
-                                    var ungiveClinicId = ResolveClinicIdForStock(
-                                        scheduleDTO.DoctorId,
-                                        dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0
-                                    );
+                                var ungiveClinicId = ResolveClinicIdForStock(
+                                    scheduleDTO.DoctorId,
+                                    dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0
+                                );
 
-                                    if (ungiveClinicId > 0)
+                                if (ungiveClinicId > 0)
+                                {
+                                    var ungiveInventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, ungiveClinicId);
+                                    if (ungiveInventoryEnabled)
                                     {
-                                        var ungiveInventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, ungiveClinicId);
-                                        if (ungiveInventoryEnabled)
+                                        var ungiveDoctorId = _db.Clinics
+                                            .Where(c => c.Id == ungiveClinicId)
+                                            .Select(c => c.DoctorId)
+                                            .FirstOrDefault();
+
+                                        if (ungiveDoctorId > 0)
                                         {
-                                            var ungiveDoctorId = _db.Clinics
-                                                .Where(c => c.Id == ungiveClinicId)
-                                                .Select(c => c.DoctorId)
+                                            var ungiveInventory = _db.BrandAmounts
+                                                .Where(b => b.BrandId == previousBrandId
+                                                         && b.DoctorId == ungiveDoctorId
+                                                         && b.ClinicId == ungiveClinicId)
                                                 .FirstOrDefault();
 
-                                            if (ungiveDoctorId > 0)
+                                            if (ungiveInventory != null)
                                             {
-                                                var ungiveInventory = _db.BrandAmounts
-                                                    .Where(b => b.BrandId == previousBrandId
-                                                             && b.DoctorId == ungiveDoctorId
-                                                             && b.ClinicId == ungiveClinicId)
+                                                ungiveInventory.Count++;
+
+                                                var bulkRestoreStock = _db.Stocks
+                                                    .Include(s => s.Bill)
+                                                    .Where(s => s.BrandId == previousBrandId
+                                                             && s.Bill.ClinicId == ungiveClinicId
+                                                             && s.Quantity >= 0)
+                                                    .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                                                    .ThenBy(s => s.Expiry)
+                                                    .ThenBy(s => s.Id)
                                                     .FirstOrDefault();
 
-                                                if (ungiveInventory != null)
+                                                if (bulkRestoreStock != null)
                                                 {
-                                                    ungiveInventory.Count++;
-
-                                                    var bulkRestoreStock = _db.Stocks
-                                                        .Include(s => s.Bill)
-                                                        .Where(s => s.BrandId == previousBrandId
-                                                                 && s.Bill.ClinicId == ungiveClinicId
-                                                                 && s.Quantity >= 0)
-                                                        .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
-                                                        .ThenBy(s => s.Expiry)
-                                                        .ThenBy(s => s.Id)
-                                                        .FirstOrDefault();
-
-                                                    if (bulkRestoreStock != null)
-                                                    {
-                                                        bulkRestoreStock.Quantity++;
-                                                        _db.Entry(bulkRestoreStock).State = EntityState.Modified;
-                                                    }
+                                                    bulkRestoreStock.Quantity++;
+                                                    _db.Entry(bulkRestoreStock).State = EntityState.Modified;
                                                 }
                                             }
                                         }
@@ -1566,7 +1567,10 @@ namespace VaccineAPI.Controllers
                                 }
                             }
 
-                            if (scheduleBrand.BrandId.HasValue && scheduleBrand.BrandId.Value > 0)
+                            // Give transition: dose was not given before, now being given.
+                            // Deduct inventory for the brand selected in this request.
+                            if (wasIsDone == false && scheduleDTO.IsDone == true
+                                && scheduleBrand.BrandId.HasValue && scheduleBrand.BrandId.Value > 0)
                             {
                                 var onlineClinicId = ResolveClinicIdForStock(
                                     scheduleDTO.DoctorId,
@@ -1608,61 +1612,58 @@ namespace VaccineAPI.Controllers
                                         )
                                         .FirstOrDefault();
 
-                                    if (!previousBrandId.HasValue)
+                                    if (brandInventory == null)
                                     {
-                                        if (brandInventory == null)
-                                        {
-                                            return new Response<ScheduleDTO>(
-                                                false,
-                                                BuildInventoryContextMessage(
-                                                    "Inventory row not found for brand",
-                                                    scheduleBrand.BrandId.Value,
-                                                    onlineClinicId
-                                                ),
-                                                null
-                                            );
-                                        }
-
-                                        if (brandInventory.Count <= 0)
-                                        {
-                                            return new Response<ScheduleDTO>(
-                                                false,
-                                                BuildInventoryContextMessage(
-                                                    "Insufficient inventory for brand",
-                                                    scheduleBrand.BrandId.Value,
-                                                    onlineClinicId
-                                                ),
-                                                null
-                                            );
-                                        }
-
-                                        brandInventory.Count--;
-
-                                        // Deduct from Stock rows in FEFO order
-                                        var bulkFillStocks = _db.Stocks
-                                            .Include(s => s.Bill)
-                                            .Where(s => s.BrandId == scheduleBrand.BrandId.Value
-                                                     && s.Bill.ClinicId == onlineClinicId
-                                                     && s.Quantity > 0)
-                                            .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
-                                            .ThenBy(s => s.Expiry)
-                                            .ThenBy(s => s.Id)
-                                            .ToList();
-
-                                        int bulkFillRemaining = 1;
-                                        foreach (var src in bulkFillStocks)
-                                        {
-                                            if (bulkFillRemaining <= 0) break;
-                                            int deduct = Math.Min(src.Quantity, bulkFillRemaining);
-                                            src.Quantity -= deduct;
-                                            bulkFillRemaining -= deduct;
-                                            if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
-                                            else _db.Entry(src).State = EntityState.Modified;
-                                        }
-
-                                        if (bulkFillRemaining > 0)
-                                            brandInventory.Count++;
+                                        return new Response<ScheduleDTO>(
+                                            false,
+                                            BuildInventoryContextMessage(
+                                                "Inventory row not found for brand",
+                                                scheduleBrand.BrandId.Value,
+                                                onlineClinicId
+                                            ),
+                                            null
+                                        );
                                     }
+
+                                    if (brandInventory.Count <= 0)
+                                    {
+                                        return new Response<ScheduleDTO>(
+                                            false,
+                                            BuildInventoryContextMessage(
+                                                "Insufficient inventory for brand",
+                                                scheduleBrand.BrandId.Value,
+                                                onlineClinicId
+                                            ),
+                                            null
+                                        );
+                                    }
+
+                                    brandInventory.Count--;
+
+                                    // Deduct from Stock rows in FEFO order
+                                    var bulkFillStocks = _db.Stocks
+                                        .Include(s => s.Bill)
+                                        .Where(s => s.BrandId == scheduleBrand.BrandId.Value
+                                                 && s.Bill.ClinicId == onlineClinicId
+                                                 && s.Quantity > 0)
+                                        .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
+                                        .ThenBy(s => s.Expiry)
+                                        .ThenBy(s => s.Id)
+                                        .ToList();
+
+                                    int bulkFillRemaining = 1;
+                                    foreach (var src in bulkFillStocks)
+                                    {
+                                        if (bulkFillRemaining <= 0) break;
+                                        int deduct = Math.Min(src.Quantity, bulkFillRemaining);
+                                        src.Quantity -= deduct;
+                                        bulkFillRemaining -= deduct;
+                                        if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
+                                        else _db.Entry(src).State = EntityState.Modified;
+                                    }
+
+                                    if (bulkFillRemaining > 0)
+                                        brandInventory.Count++;
                                 }
                             }
                         }

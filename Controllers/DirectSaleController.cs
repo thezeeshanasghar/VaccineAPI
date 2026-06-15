@@ -33,6 +33,14 @@ namespace VaccineAPI.Controllers
             if (string.IsNullOrWhiteSpace(dto.PaymentMode))
                 return Ok(new { IsSuccess = false, Message = "Payment mode is required" });
 
+            if (dto.PaymentCollectorPaId.HasValue)
+            {
+                var collectorPa = await _db.PersonalAssistant
+                    .FirstOrDefaultAsync(p => p.Id == dto.PaymentCollectorPaId.Value && p.DoctorId == dto.DoctorId && p.IsActive);
+                if (collectorPa == null)
+                    return Ok(new { IsSuccess = false, Message = "Selected PA is not valid for this doctor." });
+            }
+
             foreach (var item in dto.Items)
             {
                 if (item.Quantity <= 0)
@@ -120,12 +128,14 @@ namespace VaccineAPI.Controllers
                         TotalCostValue = totalCost,
                         Profit = profit,
                         ClientName = dto.ClientName,
-                        PaymentMode = dto.PaymentMode,
+                        PaymentMode = dto.PaymentCollectorPaId.HasValue ? "Pending" : dto.PaymentMode,
                         OnlineService = dto.OnlineService ?? "",
                         IsPaymentApproved = true,
                         Notes = dto.Notes ?? "",
                         SaleBillNo = saleBillNo,
-                        SaleDate = dto.SaleDate
+                        SaleDate = dto.SaleDate,
+                        PaymentCollectorPaId = dto.PaymentCollectorPaId,
+                        IsPaymentCollected = !dto.PaymentCollectorPaId.HasValue
                     });
                 }
 
@@ -139,6 +149,61 @@ namespace VaccineAPI.Controllers
                 await tx.RollbackAsync();
                 return Ok(new { IsSuccess = false, Message = "Failed to save sale: " + ex.Message });
             }
+        }
+
+        // PATCH /api/DirectSale/by-bill/{saleBillNo}/record-payment-mode
+        // Called by the PA assigned as cash collector once they know how the
+        // client actually paid. Updates all rows sharing this SaleBillNo.
+        [HttpPatch("by-bill/{saleBillNo}/record-payment-mode")]
+        public IActionResult RecordPaymentMode(string saleBillNo, [FromBody] DirectSalePaymentModeDTO dto)
+        {
+            var rows = _db.DirectSales.Where(d => d.SaleBillNo == saleBillNo).ToList();
+            if (rows.Count == 0)
+                return Ok(new { IsSuccess = false, Message = "Sale not found." });
+
+            var allowed = new[] { "Cash", "Online" };
+            if (!allowed.Contains(dto.PaymentMode))
+                return Ok(new { IsSuccess = false, Message = "Invalid payment mode." });
+
+            foreach (var row in rows)
+            {
+                row.PaymentMode = dto.PaymentMode;
+                row.OnlineService = dto.OnlineService;
+                row.IsPaymentCollected = true;
+            }
+            _db.SaveChanges();
+
+            return Ok(new { IsSuccess = true, Message = "Payment recorded." });
+        }
+
+        // GET /api/DirectSale/pending-for-pa/{paId}
+        // Direct sales assigned to this PA for cash collection where the
+        // payment mode hasn't been recorded yet — shown in the PA's
+        // Assignments page under "Direct Sales — Record Payment".
+        [HttpGet("pending-for-pa/{paId}")]
+        public IActionResult GetPendingForPa(long paId)
+        {
+            var rows = _db.DirectSales
+                .Where(d => d.PaymentCollectorPaId == paId && !d.IsPaymentCollected)
+                .OrderByDescending(d => d.SaleDate)
+                .ToList();
+
+            var result = rows
+                .GroupBy(d => d.SaleBillNo ?? $"id-{d.Id}")
+                .Select(g =>
+                {
+                    var first = g.First();
+                    return new
+                    {
+                        SaleBillNo = first.SaleBillNo,
+                        ClientName = first.ClientName ?? "",
+                        Date = first.SaleDate.ToString("yyyy-MM-dd"),
+                        Amount = g.Sum(x => x.TotalSaleValue),
+                        ClinicId = first.ClinicId
+                    };
+                });
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
         [HttpGet]
@@ -156,6 +221,13 @@ namespace VaccineAPI.Controllers
                 .Include(vb => vb.Vaccine)
                 .Where(vb => brandIds.Contains(vb.BrandId))
                 .ToListAsync();
+
+            var paIds = rows.Where(s => s.PaymentCollectorPaId.HasValue)
+                .Select(s => s.PaymentCollectorPaId.Value)
+                .Distinct().ToList();
+            var paNames = await _db.PersonalAssistant
+                .Where(p => paIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Name);
 
             var result = rows.Select(s =>
             {
@@ -178,7 +250,10 @@ namespace VaccineAPI.Controllers
                     PaymentMode = s.PaymentMode,
                     OnlineService = s.OnlineService ?? "",
                     Notes = s.Notes ?? "",
-                    SaleDate = s.SaleDate
+                    SaleDate = s.SaleDate,
+                    PaymentCollectorPaId = s.PaymentCollectorPaId,
+                    PaymentCollectorPaName = s.PaymentCollectorPaId.HasValue && paNames.ContainsKey(s.PaymentCollectorPaId.Value)
+                        ? paNames[s.PaymentCollectorPaId.Value] : null
                 };
             }).ToList();
 
@@ -194,6 +269,10 @@ namespace VaccineAPI.Controllers
 
             string saleBillNo = sale.SaleBillNo ?? "";
 
+            // Note: if sale.PaymentCollectorPaId is set and that cash was already swept into a
+            // confirmed PaCashHandover, reversing this sale can make the PA's cash-in-hand go
+            // negative. This is acceptable and correctable via POST /api/PaCashHandover/adjust
+            // (PaPayableAdjustment), the existing escape valve for reconciliation discrepancies.
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {

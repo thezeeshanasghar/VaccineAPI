@@ -39,6 +39,17 @@ namespace VaccineAPI.Controllers
                 .Select(g => new { g.Key.PaId, g.Key.ClinicId, Total = g.Sum(s => (decimal?)s.Amount) ?? 0m })
                 .ToList();
 
+            var directCollected = _db.DirectSales
+                .Where(d => d.PaymentCollectorPaId.HasValue
+                         && paIds.Contains(d.PaymentCollectorPaId.Value)
+                         && d.PaymentMode == "Cash"
+                         && d.IsPaymentApproved == true
+                         && d.IsPaymentCollected == true
+                         && clinicIds.Contains(d.ClinicId))
+                .GroupBy(d => new { PaId = d.PaymentCollectorPaId.Value, d.ClinicId })
+                .Select(g => new { g.Key.PaId, g.Key.ClinicId, Total = g.Sum(d => (decimal?)d.TotalSaleValue) ?? 0m })
+                .ToList();
+
             var handedOver = _db.PaCashHandovers
                 .Where(h => paIds.Contains(h.PaId) && clinicIds.Contains(h.ClinicId) && h.Status == "Confirmed")
                 .GroupBy(h => new { h.PaId, h.ClinicId })
@@ -49,8 +60,9 @@ namespace VaccineAPI.Controllers
             foreach (var pair in pairs)
             {
                 var c = collected.FirstOrDefault(x => x.PaId == pair.PaId && x.ClinicId == pair.ClinicId);
+                var d = directCollected.FirstOrDefault(x => x.PaId == pair.PaId && x.ClinicId == pair.ClinicId);
                 var h = handedOver.FirstOrDefault(x => x.PaId == pair.PaId && x.ClinicId == pair.ClinicId);
-                result[(pair.PaId, pair.ClinicId)] = (c?.Total ?? 0m) - (h?.Total ?? 0m);
+                result[(pair.PaId, pair.ClinicId)] = (c?.Total ?? 0m) + (d?.Total ?? 0m) - (h?.Total ?? 0m);
             }
             return result;
         }
@@ -66,11 +78,19 @@ namespace VaccineAPI.Controllers
                          && s.Amount != null)
                 .Sum(s => (decimal?)s.Amount) ?? 0m;
 
+            var directSaleCollected = _db.DirectSales
+                .Where(d => d.PaymentCollectorPaId == paId
+                         && d.PaymentMode == "Cash"
+                         && d.IsPaymentApproved == true
+                         && d.IsPaymentCollected == true
+                         && d.ClinicId == clinicId)
+                .Sum(d => (decimal?)d.TotalSaleValue) ?? 0m;
+
             var totalHandedOver = _db.PaCashHandovers
                 .Where(h => h.PaId == paId && h.ClinicId == clinicId && h.Status == "Confirmed")
                 .Sum(h => (decimal?)h.Amount) ?? 0m;
 
-            return totalCollected - totalHandedOver;
+            return totalCollected + directSaleCollected - totalHandedOver;
         }
 
         // GET /api/PaCashHandover/cash-in-hand/{paId}/{clinicId}
@@ -248,21 +268,24 @@ namespace VaccineAPI.Controllers
         public IActionResult GetDailySummary(long doctorId, [FromQuery] string date = null)
         {
             DateTime targetDate;
-            try { targetDate = date != null ? DateTime.Parse(date).Date : DateTime.UtcNow.Date; }
-            catch { targetDate = DateTime.UtcNow.Date; }
+            try { targetDate = date != null ? DateTime.Parse(date).Date : DateTime.UtcNow.AddHours(5).Date; }
+            catch { targetDate = DateTime.UtcNow.AddHours(5).Date; }
 
             var clinicIds = _db.Clinics
                 .Where(c => c.DoctorId == doctorId)
                 .Select(c => c.Id)
                 .ToList();
 
+            // DoneAt is stored as UTC; convert to PKT (UTC+5) before comparing calendar dates
+            // so a vaccine given late at night PKT isn't attributed to the previous UTC day.
             var rows = _db.Schedules
                 .Include(s => s.Child)
                 .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
                 .Where(s => s.IsDone
                     && s.DoneAt.HasValue
-                    && s.DoneAt.Value.Date == targetDate
                     && clinicIds.Contains(s.Child.ClinicId))
+                .ToList()
+                .Where(s => s.DoneAt.Value.AddHours(5).Date == targetDate)
                 .ToList();
 
             var paRows = rows.Where(s => s.PaymentCollectorPaId.HasValue).ToList();
@@ -609,10 +632,57 @@ namespace VaccineAPI.Controllers
                 NewAmount           = (decimal?)a.NewAmount
             });
 
+            // --- Part 3: PA-collected direct-sale cash rows ---
+            // Pooled cash (no per-row confirm — settled via PaCashHandover, same as Schedule.PaymentCollectorPaId cash)
+            var dsQuery = _db.DirectSales
+                .Where(d =>
+                    d.PaymentCollectorPaId.HasValue &&
+                    d.PaymentMode == "Cash" &&
+                    d.IsPaymentCollected == true &&
+                    d.DoctorId == doctorId &&
+                    clinicIds.Contains(d.ClinicId));
+
+            if (clinicId.HasValue) dsQuery = dsQuery.Where(d => d.ClinicId == clinicId.Value);
+            if (paId.HasValue)     dsQuery = dsQuery.Where(d => d.PaymentCollectorPaId == paId.Value);
+            if (from.HasValue)     dsQuery = dsQuery.Where(d => d.SaleDate.Date >= from.Value);
+            if (to.HasValue)       dsQuery = dsQuery.Where(d => d.SaleDate.Date < to.Value);
+
+            var directSaleRows = dsQuery.ToList()
+                .GroupBy(d => d.SaleBillNo ?? $"id-{d.Id}")
+                .Select(g =>
+                {
+                    var first = g.First();
+                    return new
+                    {
+                        RowType             = "DirectSale",
+                        InvoiceSubmissionId = (long?)null,
+                        ScheduleId          = first.Id,
+                        AmendmentId         = (long?)null,
+                        AssignmentId        = (long?)null,
+                        DirectSaleBillNo    = first.SaleBillNo,
+                        Date                = first.SaleDate.ToString("yyyy-MM-dd"),
+                        PatientName         = first.ClientName ?? "",
+                        Amount              = g.Sum(x => x.TotalSaleValue),
+                        PaymentMode         = first.PaymentMode ?? "",
+                        IsConfirmed         = false,
+                        ConfirmedAt         = (string)null,
+                        InvoiceStatus       = (string)null,
+                        HasPendingAmendment = false,
+                        PendingHandover     = false,
+                        PaId                = first.PaymentCollectorPaId.Value,
+                        PaName              = paNames.ContainsKey(first.PaymentCollectorPaId.Value) ? paNames[first.PaymentCollectorPaId.Value] : "",
+                        ClinicId            = first.ClinicId,
+                        ClinicName          = clinicNames.ContainsKey(first.ClinicId) ? clinicNames[first.ClinicId] : "",
+                        OldAmount           = (decimal?)null,
+                        NewAmount           = (decimal?)null
+                    };
+                });
+
             // Merge: invoice rows first, then pending amendment rows (doctor must action these),
-            // then informational "awaiting invoice" rows last (nothing to action yet)
+            // then PA-collected direct-sale rows, then informational "awaiting invoice" rows last
             var combined = invoiceRows.Cast<object>()
                 .Concat(amendmentRows.Cast<object>())
+                .Concat(directSaleRows.Cast<object>())
                 .Concat(awaitingInvoiceRows.Cast<object>())
                 .ToList();
 
@@ -638,19 +708,48 @@ namespace VaccineAPI.Controllers
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
             var rows = invoices.Select(i => new {
+                RowType             = "Invoice",
                 InvoiceSubmissionId = i.Id,
                 ChildId             = i.ChildId,
                 Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
                 Amount              = i.TotalAmount,
-                IsConfirmed         = i.IsConfirmedByDoctor
+                IsConfirmed         = i.IsConfirmedByDoctor,
+                DirectSaleBillNo    = (string)null
             }).ToList();
 
-            var totalCollected = invoices.Sum(i => i.TotalAmount);
+            // PA-collected direct-sale cash — pooled, never individually confirmed
+            var dsQuery = _db.DirectSales
+                .Where(d => d.PaymentCollectorPaId == paId && d.PaymentMode == "Cash" && d.IsPaymentApproved == true && d.IsPaymentCollected == true);
+
+            if (clinicId.HasValue)
+                dsQuery = dsQuery.Where(d => d.ClinicId == clinicId.Value);
+
+            var directSales = dsQuery.OrderByDescending(d => d.SaleDate).ToList();
+
+            var directSaleRows = directSales
+                .GroupBy(d => d.SaleBillNo ?? $"id-{d.Id}")
+                .Select(g => {
+                    var first = g.First();
+                    return new {
+                        RowType             = "DirectSale",
+                        InvoiceSubmissionId = (long?)null,
+                        ChildId             = (long?)null,
+                        Date                = first.SaleDate.ToString("yyyy-MM-dd"),
+                        PatientName         = first.ClientName ?? "",
+                        Amount              = g.Sum(x => x.TotalSaleValue),
+                        IsConfirmed         = false,
+                        DirectSaleBillNo    = first.SaleBillNo
+                    };
+                }).ToList();
+
+            var totalCollected = invoices.Sum(i => i.TotalAmount) + directSales.Sum(d => d.TotalSaleValue);
             var totalConfirmed = invoices.Where(i => i.IsConfirmedByDoctor).Sum(i => i.TotalAmount);
             var adjustments    = _db.PaPayableAdjustments
                 .Where(a => a.PaId == paId)
                 .Sum(a => (decimal?)a.Amount) ?? 0;
+
+            var allRows = rows.Cast<object>().Concat(directSaleRows.Cast<object>()).ToList();
 
             return Ok(new {
                 IsSuccess    = true,
@@ -658,7 +757,7 @@ namespace VaccineAPI.Controllers
                     TotalCollected = totalCollected,
                     TotalConfirmed = totalConfirmed,
                     TotalPending   = totalCollected - totalConfirmed + adjustments,
-                    Rows           = rows
+                    Rows           = allRows
                 }
             });
         }

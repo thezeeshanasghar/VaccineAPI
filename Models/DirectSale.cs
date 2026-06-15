@@ -57,6 +57,15 @@ namespace VaccineAPI.Models
 
         public DateTime SaleDate { get; set; } = DateTime.UtcNow;
 
+        // PA who collected the cash for this sale (mirrors Schedule.PaymentCollectorPaId).
+        // Only meaningful when PaymentMode == "Cash"; flows into that PA's cash-in-hand pool.
+        public long? PaymentCollectorPaId { get; set; }
+
+        // True once payment mode is finalized: either set immediately at sale creation
+        // (no PA assigned), or recorded later by the assigned PA via record-payment-mode.
+        // Mirrors Schedule.IsPaymentCollected.
+        public bool IsPaymentCollected { get; set; } = true;
+
         [ForeignKey("BrandId")]
         public virtual Brand Brand { get; set; } = null!;
 

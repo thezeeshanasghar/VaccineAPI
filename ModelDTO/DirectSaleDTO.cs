@@ -22,6 +22,13 @@ namespace VaccineAPI.ModelDTO
         public string Notes { get; set; } = "";
         public DateTime SaleDate { get; set; }
         public List<DirectSaleItemDTO> Items { get; set; } = new List<DirectSaleItemDTO>();
+        public long? PaymentCollectorPaId { get; set; }
+    }
+
+    public class DirectSalePaymentModeDTO
+    {
+        public string PaymentMode { get; set; } = "";
+        public string? OnlineService { get; set; }
     }
 
     public class DirectSaleListDTO
@@ -43,5 +50,7 @@ namespace VaccineAPI.ModelDTO
         public string OnlineService { get; set; } = "";
         public string Notes { get; set; } = "";
         public DateTime SaleDate { get; set; }
+        public long? PaymentCollectorPaId { get; set; }
+        public string? PaymentCollectorPaName { get; set; }
     }
 }

@@ -245,3 +245,19 @@ ALTER TABLE `papermissions`
 --   ADD COLUMN `AddDirectSale`        tinyint(1) NOT NULL DEFAULT 0,
 --   ADD COLUMN `ViewDirectSaleHistory` tinyint(1) NOT NULL DEFAULT 0,
 --   ADD COLUMN `DownloadStockReport`  tinyint(1) NOT NULL DEFAULT 0;
+
+-- =====================================================
+-- PA Cash Collector + Payment Status for Direct Sales
+-- PaymentCollectorPaId mirrors Schedule.PaymentCollectorPaId
+-- — marks which PA collects cash for a doctor-recorded
+-- direct sale. IsPaymentCollected mirrors
+-- Schedule.IsPaymentCollected — false while PaymentMode
+-- is "Pending" (PA hasn't recorded actual mode yet).
+-- =====================================================
+-- Verify table name first: SHOW TABLES LIKE 'directsale%';
+ALTER TABLE `directsales`
+  ADD COLUMN `PaymentCollectorPaId` BIGINT NULL,
+  ADD COLUMN `IsPaymentCollected` TINYINT(1) NOT NULL DEFAULT 1;
+
+-- Rollback:
+-- ALTER TABLE `directsales` DROP COLUMN `PaymentCollectorPaId`, DROP COLUMN `IsPaymentCollected`;

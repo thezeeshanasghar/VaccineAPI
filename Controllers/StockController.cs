@@ -516,10 +516,12 @@ namespace VaccineAPI.Controllers
                     // First date this clinic ever received this item, via direct purchase or incoming transfer
                     DateTime? firstReceiptDate = await GetFirstReceiptDate(_db, clinicId, bid);
 
-                    // Opening stock can only be reconciled from the first receipt date onward
+                    // Opening stock can only be reconciled from the first receipt date onward.
+                    // Anchor the balance to that date so pre-tracking "sold" backlog (with no
+                    // matching purchase/transfer history) doesn't drag the balance negative.
                     bool hasBaseline = firstReceiptDate.HasValue && from.Date >= firstReceiptDate.Value.Date;
                     int openingStock = hasBaseline
-                        ? await ComputeStockUpTo(_db, clinicId, bid, from.Date.AddDays(-1))
+                        ? await ComputeStockUpTo(_db, clinicId, bid, from.Date.AddDays(-1), firstReceiptDate)
                         : 0;
 
                     // Fetch all events in range for this brand
@@ -683,32 +685,43 @@ namespace VaccineAPI.Controllers
         private static PdfPCell CellR(string text, Font font, BaseColor bg, BaseColor border) =>
             new PdfPCell(new Phrase(text, font)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = border, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT };
 
-        private static async Task<int> ComputeStockUpTo(Context db, long clinicId, long brandId, DateTime upTo)
+        // Computes the running balance up to (and including) `upTo`. If `since` is provided,
+        // only movements on/after that date are counted — used to anchor the balance to the
+        // first date this clinic actually received the item, ignoring any pre-tracking
+        // "sold" backlog that predates all purchase/transfer history.
+        private static async Task<int> ComputeStockUpTo(Context db, long clinicId, long brandId, DateTime upTo, DateTime? since = null)
         {
+            DateTime sinceDate = since?.Date ?? DateTime.MinValue;
+
             int purchased = await db.Stocks
                 .Include(s => s.Bill)
                 .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId
                          && !s.Bill.BillNo.StartsWith("XFER-")
-                         && s.BrandId == brandId && s.Bill.BillDate.Date <= upTo.Date)
+                         && s.BrandId == brandId && s.Bill.BillDate.Date <= upTo.Date
+                         && s.Bill.BillDate.Date >= sinceDate)
                 .SumAsync(s => (int?)s.Quantity) ?? 0;
 
             int sold = await db.Schedules
                 .Include(s => s.Child)
                 .Where(s => s.Child.ClinicId == clinicId && s.IsDone == true
                          && s.BrandId == brandId && s.GivenDate.HasValue
-                         && s.GivenDate.Value.Date <= upTo.Date)
+                         && s.GivenDate.Value.Date <= upTo.Date
+                         && s.GivenDate.Value.Date >= sinceDate)
                 .CountAsync();
 
             int xferIn = await db.StockTransfers
-                .Where(t => t.ToClinicId == clinicId && t.BrandId == brandId && t.TransferDate.Date <= upTo.Date)
+                .Where(t => t.ToClinicId == clinicId && t.BrandId == brandId
+                         && t.TransferDate.Date <= upTo.Date && t.TransferDate.Date >= sinceDate)
                 .SumAsync(t => (int?)t.Quantity) ?? 0;
 
             int xferOut = await db.StockTransfers
-                .Where(t => t.FromClinicId == clinicId && t.BrandId == brandId && t.TransferDate.Date <= upTo.Date)
+                .Where(t => t.FromClinicId == clinicId && t.BrandId == brandId
+                         && t.TransferDate.Date <= upTo.Date && t.TransferDate.Date >= sinceDate)
                 .SumAsync(t => (int?)t.Quantity) ?? 0;
 
             int adjusted = await db.AdjustStocks
-                .Where(a => a.ClinicId == clinicId && a.BrandId == brandId && a.Date.Date <= upTo.Date)
+                .Where(a => a.ClinicId == clinicId && a.BrandId == brandId
+                         && a.Date.Date <= upTo.Date && a.Date.Date >= sinceDate)
                 .SumAsync(a => (int?)a.Adjustment) ?? 0;
 
             return purchased + xferIn - sold - xferOut + adjusted;

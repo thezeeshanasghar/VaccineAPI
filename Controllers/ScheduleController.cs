@@ -1070,7 +1070,17 @@ namespace VaccineAPI.Controllers
             var previousdosedate = scheduleDTO.GivenDate.Date;
             foreach (var d in AllDoses)
             {
-                var minimumGap = d.MinGap;
+                if (!d.MinGap.HasValue)
+                {
+                    var skipSchedule = _db.Schedules
+                        .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
+                        .FirstOrDefault();
+                    if (skipSchedule != null)
+                        previousdosedate = skipSchedule.Date.Date;
+                    continue;
+                }
+
+                var minimumGap = d.MinGap.Value;
 
                 var TargetSchedule = _db.Schedules
                     .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == d.Id)
@@ -1082,12 +1092,10 @@ namespace VaccineAPI.Controllers
                     );
                     if (Targetdosegap < minimumGap)
                     {
-                        // TargetSchedule.Date =
-                        //     calculateDate(TargetSchedule.Date, Convert.ToInt32(d.MinGap)); //TargetSchedule.Date.AddDays(daysDifference);
                         TargetSchedule.Date = calculateDate(
                                 previousdosedate,
-                                Convert.ToInt32(minimumGap)
-                            ); //TargetSchedule.Date.AddDays(daysDifference);
+                                minimumGap
+                            );
                         previousdosedate = TargetSchedule.Date.Date;
                     }
                 }

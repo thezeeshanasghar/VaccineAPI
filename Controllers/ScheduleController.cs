@@ -175,6 +175,56 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                // Step 2 — Dose.MinAge check at give-time
+                if (scheduleDTO.IsDone == true && !scheduleDTO.IgnoreMinAgeAtGiveTime)
+                {
+                    var dose = dbSchedule.Dose;
+                    if (dose != null && dose.MinAge > 0)
+                    {
+                        var minAgeDate = calculateDate(dbSchedule.Child.DOB, dose.MinAge).Date;
+                        if (scheduleDTO.GivenDate.Date < minAgeDate)
+                        {
+                            var doseName = dose.Name ?? "This dose";
+                            if (scheduleDTO.PaId.HasValue)
+                                return new Response<ScheduleDTO>(false,
+                                    doseName + " cannot be given before " + minAgeDate.ToString("dd-MM-yyyy") + " (minimum age not reached).", null);
+                            else
+                                return Response<ScheduleDTO>.Warning(
+                                    doseName + " minimum age is not reached — earliest allowed date is " + minAgeDate.ToString("dd-MM-yyyy") + ". Override?");
+                        }
+                    }
+                }
+
+                // Step 3 — MinGap check at give-time
+                if (scheduleDTO.IsDone == true && dbSchedule.Dose.DoseOrder > 1 && !scheduleDTO.IgnoreMinGapAtGiveTime)
+                {
+                    var dose = dbSchedule.Dose;
+                    if (dose != null && dose.MinGap.HasValue)
+                    {
+                        var prevDoseForGap = _db.Doses
+                            .FirstOrDefault(x => x.VaccineId == dose.VaccineId && x.DoseOrder == (dose.DoseOrder - 1));
+                        if (prevDoseForGap != null)
+                        {
+                            var prevScheduleForGap = _db.Schedules
+                                .FirstOrDefault(x => x.ChildId == dbSchedule.ChildId && x.DoseId == prevDoseForGap.Id);
+                            if (prevScheduleForGap != null && prevScheduleForGap.IsDone && prevScheduleForGap.GivenDate.HasValue)
+                            {
+                                var minGapDate = calculateDate(prevScheduleForGap.GivenDate.Value.Date, dose.MinGap.Value).Date;
+                                if (scheduleDTO.GivenDate.Date < minGapDate)
+                                {
+                                    var doseName = dose.Name ?? "This dose";
+                                    if (scheduleDTO.PaId.HasValue)
+                                        return new Response<ScheduleDTO>(false,
+                                            doseName + " cannot be given before " + minGapDate.ToString("dd-MM-yyyy") + " (minimum gap from previous dose not met).", null);
+                                    else
+                                        return Response<ScheduleDTO>.Warning(
+                                            doseName + " minimum gap is not met — earliest allowed date is " + minGapDate.ToString("dd-MM-yyyy") + ". Override?");
+                                }
+                            }
+                        }
+                    }
+                }
+
                 var previousBrandId = dbSchedule.BrandId;
                 // Capture prior IsDone before any mutation — this is the reliable signal for
                 // whether inventory was actually deducted for this schedule, since BrandId can
@@ -1331,6 +1381,12 @@ namespace VaccineAPI.Controllers
                 ignoreMinAgeFromDOB = false;
                 ignoreMinGapFromPreviousDose = false;
             }
+            // Step 5 — PA cannot bypass ignore flags on reschedule
+            if (scheduleDTO.PaId.HasValue)
+            {
+                ignoreMinAgeFromDOB = false;
+                ignoreMinGapFromPreviousDose = false;
+            }
             var dbSchedule = _db.Schedules
                 .Include(x => x.Dose)
                 .Include(x => x.Child)
@@ -1412,6 +1468,68 @@ namespace VaccineAPI.Controllers
                     }
                     if (scheduleDTO.IsDone == true && checkSchedule.IsDone == false && checkSchedule.GiveCount >= 2)
                         return new Response<ScheduleDTO>(false, "One or more vaccines have already been given twice. Contact the doctor.", null);
+                }
+            }
+
+            // Step 4 — MinAge and MinGap checks for bulk give (accumulate all errors)
+            if (scheduleDTO.IsDone == true)
+            {
+                var bulkErrors = new System.Collections.Generic.List<string>();
+                foreach (var chk in dbChildSchedules)
+                {
+                    var chkDose = _db.Doses.FirstOrDefault(x => x.Id == chk.DoseId);
+                    if (chkDose == null) continue;
+
+                    // Dose.MinAge
+                    if (!scheduleDTO.IgnoreMinAgeAtGiveTime && chkDose.MinAge > 0)
+                    {
+                        var child = _db.Childs.FirstOrDefault(x => x.Id == chk.ChildId);
+                        if (child != null)
+                        {
+                            var minAgeDate = calculateDate(child.DOB, chkDose.MinAge).Date;
+                            if (scheduleDTO.GivenDate.Date < minAgeDate)
+                            {
+                                var msg = (chkDose.Name ?? "A dose") + " cannot be given before " + minAgeDate.ToString("dd-MM-yyyy") + " (minimum age not reached).";
+                                if (scheduleDTO.PaId.HasValue)
+                                    bulkErrors.Add(msg);
+                                else if (!bulkErrors.Contains(msg))
+                                    bulkErrors.Add("[Warning] " + msg);
+                            }
+                        }
+                    }
+
+                    // MinGap
+                    if (!scheduleDTO.IgnoreMinGapAtGiveTime && chkDose.DoseOrder > 1 && chkDose.MinGap.HasValue)
+                    {
+                        var prevDoseChk = _db.Doses
+                            .FirstOrDefault(x => x.VaccineId == chkDose.VaccineId && x.DoseOrder == (chkDose.DoseOrder - 1));
+                        if (prevDoseChk != null)
+                        {
+                            var prevSchedChk = _db.Schedules
+                                .FirstOrDefault(x => x.ChildId == chk.ChildId && x.DoseId == prevDoseChk.Id);
+                            if (prevSchedChk != null && prevSchedChk.IsDone && prevSchedChk.GivenDate.HasValue)
+                            {
+                                var minGapDate = calculateDate(prevSchedChk.GivenDate.Value.Date, chkDose.MinGap.Value).Date;
+                                if (scheduleDTO.GivenDate.Date < minGapDate)
+                                {
+                                    var msg = (chkDose.Name ?? "A dose") + " cannot be given before " + minGapDate.ToString("dd-MM-yyyy") + " (minimum gap not met).";
+                                    if (scheduleDTO.PaId.HasValue)
+                                        bulkErrors.Add(msg);
+                                    else if (!bulkErrors.Contains("[Warning] " + msg))
+                                        bulkErrors.Add("[Warning] " + msg);
+                                }
+                            }
+                        }
+                    }
+                }
+                if (bulkErrors.Count > 0)
+                {
+                    var combined = string.Join(" | ", bulkErrors);
+                    bool anyHardBlock = scheduleDTO.PaId.HasValue || bulkErrors.Any(e => !e.StartsWith("[Warning]"));
+                    if (anyHardBlock && scheduleDTO.PaId.HasValue)
+                        return new Response<ScheduleDTO>(false, combined, null);
+                    else
+                        return Response<ScheduleDTO>.Warning(combined);
                 }
             }
 
@@ -2152,6 +2270,12 @@ namespace VaccineAPI.Controllers
                 if (isParent)
                 {
                     ignoreMaxAgeRule = false;
+                    ignoreMinAgeFromDOB = false;
+                    ignoreMinGapFromPreviousDose = false;
+                }
+                // Step 5 — PA cannot bypass ignore flags on reschedule
+                if (scheduleDTO.PaId.HasValue)
+                {
                     ignoreMinAgeFromDOB = false;
                     ignoreMinGapFromPreviousDose = false;
                 }

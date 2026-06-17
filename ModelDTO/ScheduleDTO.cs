@@ -61,6 +61,8 @@ namespace VaccineAPI.ModelDTO
         [JsonConverter(typeof(OnlyDateConverter))]
         public System.DateTime? InvoiceDate { get; set; }
         public List<ClinicDTO> Clinics { get; set; } = new List<ClinicDTO>();
+        public bool IgnoreMinAgeAtGiveTime { get; set; } = false;
+        public bool IgnoreMinGapAtGiveTime { get; set; } = false;
     }
 
 }

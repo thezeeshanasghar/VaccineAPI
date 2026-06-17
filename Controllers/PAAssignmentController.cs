@@ -32,11 +32,19 @@ namespace VaccineAPI.Controllers
                 ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
                 : new Dictionary<long, VaccineAPI.Models.Child>();
 
-            var today    = DateTime.UtcNow.AddHours(5).Date;
-            var todayEnd = today.AddDays(1);
-            var pa       = await _db.PersonalAssistant.FindAsync(paId);
-            var paName   = pa?.Name ?? "PA";
-            var healedAny = false;
+            // Look up each assignment's linked invoice directly via the InvoiceSubmissionId FK —
+            // no date/PaId guessing. The FK is written once, at the moment the link is actually
+            // known (PAAssignmentController.Create or ScheduleController's
+            // SyncInvoicePaToActiveAssignment), so reading it here is exact: it can never surface
+            // — or steal — a different PA's unrelated invoice for the same child.
+            var invoiceIds = rawAssignments
+                .Select(a => a.InvoiceSubmissionId)
+                .Where(id => id.HasValue)
+                .Select(id => id.GetValueOrDefault())
+                .Distinct().ToList();
+            var invoices = invoiceIds.Any()
+                ? await _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id)
+                : new Dictionary<long, InvoiceSubmission>();
 
             // Enrich each assignment with child info, schedules, and invoice
             var result = rawAssignments.Select(a =>
@@ -65,27 +73,9 @@ namespace VaccineAPI.Controllers
                         })
                     .ToList();
 
-                // Match this PA's own invoice, an invoice not yet stamped to any PA, or any
-                // invoice submitted today for this child — covers both orderings (assign then
-                // download, or download then assign) even if the doctor never re-saves to
-                // trigger the PaId self-heal. Scoped to today so an older invoice from a
-                // different PA's earlier visit for this same child is never matched.
-                var invoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == a.ChildId
-                             && (i.PaId == paId || i.PaId == null
-                                 || (i.SubmittedAt.AddHours(5) >= today && i.SubmittedAt.AddHours(5) < todayEnd)))
-                    .OrderByDescending(i => i.SubmittedAt)
-                    .FirstOrDefault();
-
-                // Self-heal: persist the PaId stamp now so reconciliation/other exact-match
-                // lookups pick it up too, instead of only fixing the response for this call.
-                if (invoice != null && invoice.PaId != paId)
-                {
-                    invoice.PaId = paId;
-                    invoice.SubmittedByLabel = "Doctor/(" + paName + ")";
-                    _db.Entry(invoice).State = EntityState.Modified;
-                    healedAny = true;
-                }
+                var invoice = a.InvoiceSubmissionId.HasValue && invoices.ContainsKey(a.InvoiceSubmissionId.Value)
+                    ? invoices[a.InvoiceSubmissionId.Value]
+                    : null;
 
                 return new
                 {
@@ -104,9 +94,6 @@ namespace VaccineAPI.Controllers
                     Schedules     = schedules
                 };
             }).ToList();
-
-            if (healedAny)
-                await _db.SaveChangesAsync();
 
             return Ok(new { IsSuccess = true, ResponseData = result });
         }
@@ -459,7 +446,8 @@ namespace VaccineAPI.Controllers
             old.CancelledAt  = DateTime.UtcNow;
             old.CancelReason = "Reassigned to another PA";
 
-            // Create new assignment for the new PA
+            // Create new assignment for the new PA — carries the old assignment's
+            // InvoiceSubmissionId FK forward directly (this assignment's invoice, no guessing)
             var newAssignment = new PAAssignment
             {
                 DoctorId                    = old.DoctorId,
@@ -469,7 +457,8 @@ namespace VaccineAPI.Controllers
                 Notes                       = !string.IsNullOrEmpty(dto.Notes) ? dto.Notes : old.Notes,
                 AssignedAt                  = DateTime.UtcNow,
                 IsCompleted                 = false,
-                ReassignedFromAssignmentId  = old.Id
+                ReassignedFromAssignmentId  = old.Id,
+                InvoiceSubmissionId         = old.InvoiceSubmissionId
             };
 
             _db.PAAssignments.Add(newAssignment);
@@ -480,40 +469,36 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
 
-            // Move invoice from old PA to new PA
-            // PKT-local "today" — same AddHours(5) idiom as ScheduleController's give/ungive
-            // same-day checks, since GivenDate/InvoiceDate are PKT-local calendar dates, not UTC
-            var reassignDay    = DateTime.UtcNow.AddHours(5).Date;
-            var reassignDayEnd = reassignDay.AddDays(1);
-            var invoiceToMove = _db.InvoiceSubmissions.FirstOrDefault(i =>
-                i.ChildId == old.ChildId &&
-                i.InvoiceDate.Date == reassignDay &&
-                (i.PaId == old.PersonalAssistantId || i.PaId == null));
-            if (invoiceToMove != null)
+            // Move the linked invoice's PaId to the new PA — exact, via the FK just carried
+            // forward above, not a date-window guess.
+            if (old.InvoiceSubmissionId.HasValue)
             {
-                invoiceToMove.PaId = dto.NewPaId;
-                if (invoiceToMove.ClinicId == null && old.ClinicId.HasValue)
-                    invoiceToMove.ClinicId = old.ClinicId;
-                _db.Entry(invoiceToMove).State = EntityState.Modified;
-                await _db.SaveChangesAsync();
-            }
+                var invoiceToMove = await _db.InvoiceSubmissions.FindAsync(old.InvoiceSubmissionId.Value);
+                if (invoiceToMove != null)
+                {
+                    invoiceToMove.PaId = dto.NewPaId;
+                    if (invoiceToMove.ClinicId == null && old.ClinicId.HasValue)
+                        invoiceToMove.ClinicId = old.ClinicId;
+                    _db.Entry(invoiceToMove).State = EntityState.Modified;
 
-            // Move PaymentCollectorPaId from old PA to new PA on all schedules for this child/date
-            var schedulesToMove = _db.Schedules
-                .Where(s => s.ChildId == old.ChildId
-                         && s.IsDone == true
-                         && s.GivenDate.HasValue
-                         && s.GivenDate.Value >= reassignDay
-                         && s.GivenDate.Value < reassignDayEnd
-                         && s.PaymentCollectorPaId == old.PersonalAssistantId)
-                .ToList();
-            foreach (var s in schedulesToMove)
-            {
-                s.PaymentCollectorPaId = dto.NewPaId;
-                _db.Entry(s).State = EntityState.Modified;
+                    // Move PaymentCollectorPaId from old PA to new PA on that invoice's own
+                    // schedules (matched by the invoice's own InvoiceDate, not a "today" window).
+                    var schedulesToMove = _db.Schedules
+                        .Where(s => s.ChildId == old.ChildId
+                                 && s.IsDone == true
+                                 && s.GivenDate.HasValue
+                                 && s.GivenDate.Value.Date == invoiceToMove.InvoiceDate.Date
+                                 && s.PaymentCollectorPaId == old.PersonalAssistantId)
+                        .ToList();
+                    foreach (var s in schedulesToMove)
+                    {
+                        s.PaymentCollectorPaId = dto.NewPaId;
+                        _db.Entry(s).State = EntityState.Modified;
+                    }
+
+                    await _db.SaveChangesAsync();
+                }
             }
-            if (schedulesToMove.Any())
-                await _db.SaveChangesAsync();
 
             // Notify new PA by email (fire-and-forget)
             var pa = await _db.PersonalAssistant.FindAsync(dto.NewPaId);
@@ -594,48 +579,49 @@ namespace VaccineAPI.Controllers
                 _db.PAAssignments.Add(assignment);
                 await _db.SaveChangesAsync();
 
-                // Stamp today's invoice for this child with the new PA — covers both an
-                // unassigned invoice (PaId == null) and one still pointing at a stale PA
-                // from before this (re)assignment. Scoped to SubmittedAt being today so an
-                // old, unrelated, already-settled invoice from a prior visit is never touched.
-                var assignDay    = DateTime.UtcNow.AddHours(5).Date;
-                var assignDayEnd = assignDay.AddDays(1);
-                var todayInvoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == dto.ChildId
-                             && i.PaId != dto.PersonalAssistantId
-                             && i.SubmittedAt.AddHours(5) >= assignDay
-                             && i.SubmittedAt.AddHours(5) < assignDayEnd)
+                // Link this child's orphaned invoice (downloaded before any PA was assigned —
+                // PaId == null) to the new assignment directly via the InvoiceSubmissionId FK.
+                // No date guessing needed: a child can have at most one active assignment at a
+                // time (enforced by the `exists` check above), so "the orphaned invoice for this
+                // child" is already an unambiguous fact, not an inference. An invoice already
+                // owned by a different PA (a separate, already-settled visit) is never touched.
+                var orphanInvoice = _db.InvoiceSubmissions
+                    .Where(i => i.ChildId == dto.ChildId && i.PaId == null)
                     .OrderByDescending(i => i.SubmittedAt)
                     .FirstOrDefault();
-                if (todayInvoice != null)
+                if (orphanInvoice != null)
                 {
                     var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
                     var paName = pa?.Name ?? "PA";
-                    todayInvoice.PaId = dto.PersonalAssistantId;
-                    todayInvoice.SubmittedAt = DateTime.UtcNow;
-                    todayInvoice.SubmittedByLabel = "Doctor/(" + paName + ")";
-                    if (todayInvoice.ClinicId == null && dto.ClinicId.HasValue)
-                        todayInvoice.ClinicId = dto.ClinicId;
-                    _db.Entry(todayInvoice).State = EntityState.Modified;
+                    orphanInvoice.PaId = dto.PersonalAssistantId;
+                    orphanInvoice.SubmittedByLabel = "Doctor/(" + paName + ")";
+                    if (orphanInvoice.ClinicId == null && dto.ClinicId.HasValue)
+                        orphanInvoice.ClinicId = dto.ClinicId;
+                    assignment.InvoiceSubmissionId = orphanInvoice.Id;
+                    _db.Entry(orphanInvoice).State = EntityState.Modified;
+                    _db.Entry(assignment).State = EntityState.Modified;
                     await _db.SaveChangesAsync();
-                }
 
-                // Stamp PaymentCollectorPaId on all done schedules for this child/date —
-                // override any previous PA stamp so the correct PA gets credit for collection
-                var schedulesToStamp = _db.Schedules
-                    .Where(s => s.ChildId == dto.ChildId
-                             && s.IsDone == true
-                             && s.GivenDate.HasValue
-                             && s.GivenDate.Value >= assignDay
-                             && s.GivenDate.Value < assignDayEnd)
-                    .ToList();
-                foreach (var s in schedulesToStamp)
-                {
-                    s.PaymentCollectorPaId = dto.PersonalAssistantId;
-                    _db.Entry(s).State = EntityState.Modified;
+                    // Stamp PaymentCollectorPaId on that invoice's own schedules that don't
+                    // already have a different PA's collection credit. Scoped to the schedules
+                    // actually on the invoice being linked — not a date-window guess — so a
+                    // separate visit's schedules (different invoice) are never touched.
+                    var scheduleIdsOnInvoice = _db.Schedules
+                        .Where(s => s.ChildId == dto.ChildId
+                                 && s.IsDone == true
+                                 && s.GivenDate.HasValue
+                                 && s.GivenDate.Value.Date == orphanInvoice.InvoiceDate.Date
+                                 && (s.PaymentCollectorPaId == null || s.PaymentCollectorPaId == dto.PersonalAssistantId
+                                     || s.GivenByPaId == dto.PersonalAssistantId))
+                        .ToList();
+                    foreach (var s in scheduleIdsOnInvoice)
+                    {
+                        s.PaymentCollectorPaId = dto.PersonalAssistantId;
+                        _db.Entry(s).State = EntityState.Modified;
+                    }
+                    if (scheduleIdsOnInvoice.Any())
+                        await _db.SaveChangesAsync();
                 }
-                if (schedulesToStamp.Any())
-                    await _db.SaveChangesAsync();
 
                 // Fire-and-forget email
                 var newPa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
@@ -688,9 +674,9 @@ namespace VaccineAPI.Controllers
             assignment.HandoverDoneAt   = DateTime.UtcNow;
 
             // Flag the linked InvoiceSubmission so it shows as PendingHandover on reconciliation
-            var inv = _db.InvoiceSubmissions.FirstOrDefault(i =>
-                i.ChildId == assignment.ChildId &&
-                i.PaId == assignment.PersonalAssistantId);
+            var inv = assignment.InvoiceSubmissionId.HasValue
+                ? await _db.InvoiceSubmissions.FindAsync(assignment.InvoiceSubmissionId.Value)
+                : null;
             if (inv != null)
             {
                 inv.PendingHandover = true;

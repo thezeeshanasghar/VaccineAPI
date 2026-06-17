@@ -1929,13 +1929,13 @@ namespace VaccineAPI.Controllers
                     PaymentMode = paymentMode
                 };
 
-                // Doctor's first download: if a PA is already actively assigned to this
-                // child, link the invoice to them immediately instead of waiting for
-                // PAAssignmentController.Create's stamp (which only fires on assignment).
-                if (!dto.PaId.HasValue)
-                    SyncInvoicePaToActiveAssignment(newInvoice, dto.ChildId);
-
                 _db.InvoiceSubmissions.Add(newInvoice);
+                _db.SaveChanges(); // need newInvoice.Id before linking it to the assignment below
+
+                // Link this invoice to the child's active assignment's InvoiceSubmissionId FK —
+                // whether the doctor downloaded it (PaId stamped here too) or the PA submitted
+                // it themselves (PaId already set via dto.PaId — never overwritten, just linked).
+                SyncInvoicePaToActiveAssignment(newInvoice, dto.ChildId, allowPaIdOverwrite: !dto.PaId.HasValue);
             }
 
             foreach (var item in dto.Schedules)
@@ -1949,25 +1949,40 @@ namespace VaccineAPI.Controllers
             return new Response<object>(true, "Invoice updated successfully.", null);
         }
 
-        // Syncs an InvoiceSubmission's PaId/SubmittedByLabel to whatever PA is currently
-        // actively assigned to this child, if it isn't already. Used by update-bulk-invoice's
-        // doctor-driven branches to self-heal invoices that PAAssignmentController.Create's
-        // one-shot stamp missed (e.g. assign-then-download ordering, or no matching
-        // PaId==null row at assignment time).
-        private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId)
+        // Links an InvoiceSubmission to whatever PA is currently actively assigned to this
+        // child (there is at most one — PAAssignmentController.Create blocks a second active
+        // assignment per child), and stamps the assignment's InvoiceSubmissionId FK directly.
+        // No date/PA guessing: "the active assignment for this child" is already a unique,
+        // enforced fact, so this is a direct lookup-and-link, not an inference.
+        // Used by update-bulk-invoice's doctor-driven branches to self-heal invoices that
+        // PAAssignmentController.Create's one-shot stamp missed (e.g. assign-then-download
+        // ordering). Caller must SaveChanges() after calling this if invoice.Id was just assigned.
+        // allowPaIdOverwrite should be false when a specific PA explicitly submitted this
+        // invoice themselves (dto.PaId.HasValue) — their own stamp must never be overwritten,
+        // even if a different PA is now the active assignment (e.g. reassigned afterward).
+        private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId, bool allowPaIdOverwrite = true)
         {
             var activeAssignment = _db.PAAssignments
-                .Where(a => a.ChildId == childId && !a.IsCancelled)
+                .Where(a => a.ChildId == childId && !a.IsCancelled && !a.IsCompleted)
                 .OrderByDescending(a => a.AssignedAt)
                 .FirstOrDefault();
 
-            if (activeAssignment == null || invoice.PaId == activeAssignment.PersonalAssistantId)
+            if (activeAssignment == null)
                 return;
 
-            var pa = _db.PersonalAssistant.Find(activeAssignment.PersonalAssistantId);
-            var paName = pa?.Name ?? "PA";
-            invoice.PaId = activeAssignment.PersonalAssistantId;
-            invoice.SubmittedByLabel = "Doctor/(" + paName + ")";
+            if (allowPaIdOverwrite && invoice.PaId != activeAssignment.PersonalAssistantId)
+            {
+                var pa = _db.PersonalAssistant.Find(activeAssignment.PersonalAssistantId);
+                var paName = pa?.Name ?? "PA";
+                invoice.PaId = activeAssignment.PersonalAssistantId;
+                invoice.SubmittedByLabel = "Doctor/(" + paName + ")";
+            }
+
+            if (activeAssignment.InvoiceSubmissionId != invoice.Id && invoice.Id > 0)
+            {
+                activeAssignment.InvoiceSubmissionId = invoice.Id;
+                _db.Entry(activeAssignment).State = EntityState.Modified;
+            }
         }
 
         [HttpGet("invoice-status")]

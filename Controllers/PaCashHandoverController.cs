@@ -576,7 +576,7 @@ namespace VaccineAPI.Controllers
                 HasPendingAmendment = false,
                 PendingHandover     = false,
                 PaId                = a.PersonalAssistantId,
-                PaName              = paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "",
+                PaName              = "Doctor/(" + (paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "PA") + ")",
                 ClinicId            = a.ClinicId ?? 0,
                 ClinicName          = (a.ClinicId.HasValue && clinicNames.ContainsKey(a.ClinicId.Value)) ? clinicNames[a.ClinicId.Value] : "",
                 OldAmount           = (decimal?)null,

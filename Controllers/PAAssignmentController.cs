@@ -32,6 +32,12 @@ namespace VaccineAPI.Controllers
                 ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
                 : new Dictionary<long, VaccineAPI.Models.Child>();
 
+            var today    = DateTime.UtcNow.AddHours(5).Date;
+            var todayEnd = today.AddDays(1);
+            var pa       = await _db.PersonalAssistant.FindAsync(paId);
+            var paName   = pa?.Name ?? "PA";
+            var healedAny = false;
+
             // Enrich each assignment with child info, schedules, and invoice
             var result = rawAssignments.Select(a =>
             {
@@ -59,10 +65,27 @@ namespace VaccineAPI.Controllers
                         })
                     .ToList();
 
+                // Match this PA's own invoice, an invoice not yet stamped to any PA, or any
+                // invoice submitted today for this child — covers both orderings (assign then
+                // download, or download then assign) even if the doctor never re-saves to
+                // trigger the PaId self-heal. Scoped to today so an older invoice from a
+                // different PA's earlier visit for this same child is never matched.
                 var invoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == a.ChildId && i.PaId == paId)
+                    .Where(i => i.ChildId == a.ChildId
+                             && (i.PaId == paId || i.PaId == null
+                                 || (i.SubmittedAt.AddHours(5) >= today && i.SubmittedAt.AddHours(5) < todayEnd)))
                     .OrderByDescending(i => i.SubmittedAt)
                     .FirstOrDefault();
+
+                // Self-heal: persist the PaId stamp now so reconciliation/other exact-match
+                // lookups pick it up too, instead of only fixing the response for this call.
+                if (invoice != null && invoice.PaId != paId)
+                {
+                    invoice.PaId = paId;
+                    invoice.SubmittedByLabel = "Doctor/(" + paName + ")";
+                    _db.Entry(invoice).State = EntityState.Modified;
+                    healedAny = true;
+                }
 
                 return new
                 {
@@ -81,6 +104,9 @@ namespace VaccineAPI.Controllers
                     Schedules     = schedules
                 };
             }).ToList();
+
+            if (healedAny)
+                await _db.SaveChangesAsync();
 
             return Ok(new { IsSuccess = true, ResponseData = result });
         }
@@ -440,7 +466,7 @@ namespace VaccineAPI.Controllers
                 ClinicId                    = old.ClinicId,
                 PersonalAssistantId         = dto.NewPaId,
                 ChildId                     = old.ChildId,
-                Notes                       = old.Notes,
+                Notes                       = !string.IsNullOrEmpty(dto.Notes) ? dto.Notes : old.Notes,
                 AssignedAt                  = DateTime.UtcNow,
                 IsCompleted                 = false,
                 ReassignedFromAssignmentId  = old.Id
@@ -568,12 +594,17 @@ namespace VaccineAPI.Controllers
                 _db.PAAssignments.Add(assignment);
                 await _db.SaveChangesAsync();
 
-                // Stamp the most recent unassigned invoice for this child with the PA.
-                // No date restriction — avoids issues with wrong InvoiceDate values.
+                // Stamp today's invoice for this child with the new PA — covers both an
+                // unassigned invoice (PaId == null) and one still pointing at a stale PA
+                // from before this (re)assignment. Scoped to SubmittedAt being today so an
+                // old, unrelated, already-settled invoice from a prior visit is never touched.
                 var assignDay    = DateTime.UtcNow.AddHours(5).Date;
                 var assignDayEnd = assignDay.AddDays(1);
                 var todayInvoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == dto.ChildId && i.PaId == null)
+                    .Where(i => i.ChildId == dto.ChildId
+                             && i.PaId != dto.PersonalAssistantId
+                             && i.SubmittedAt.AddHours(5) >= assignDay
+                             && i.SubmittedAt.AddHours(5) < assignDayEnd)
                     .OrderByDescending(i => i.SubmittedAt)
                     .FirstOrDefault();
                 if (todayInvoice != null)
@@ -729,6 +760,7 @@ namespace VaccineAPI.Controllers
     public class ReassignDto
     {
         public long NewPaId { get; set; }
+        public string? Notes { get; set; }
     }
 
     public class RejectCancelDto

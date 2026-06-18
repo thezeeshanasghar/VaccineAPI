@@ -54,17 +54,24 @@ namespace VaccineAPI.Controllers
                 .Select(ba =>
                 {
                     var vb = vaccineBrands.FirstOrDefault(x => x.BrandId == ba.BrandId);
+                    // Multiple bills can each own a Stock row for the same Brand+Batch+Expiry
+                    // (never merged at write-time — see BillController). Collapse them here into
+                    // one displayed line per batch so the UI never shows duplicate batch rows.
+                    // Purchase price is intentionally not surfaced here (Stock Overview never
+                    // displayed it) — rows in the same batch can legitimately have different
+                    // costs across bills, and there is no single correct "the" price to show.
                     var batches = stockRows
                         .Where(s => s.BrandId == ba.BrandId)
-                        .Select(s => new
+                        .GroupBy(s => new { s.BatchLot, s.Expiry })
+                        .Select(g => new
                         {
-                            s.Id,
-                            s.BatchLot,
-                            Expiry = s.Expiry.HasValue ? s.Expiry.Value.ToString("yyyy-MM-dd") : null,
-                            s.Quantity,
-                            UnitPrice = s.StockAmount,
-                            LineTotal = s.Quantity * s.StockAmount
+                            Id = g.Max(s => s.Id),
+                            g.Key.BatchLot,
+                            Expiry = g.Key.Expiry.HasValue ? g.Key.Expiry.Value.ToString("yyyy-MM-dd") : null,
+                            Quantity = g.Sum(s => s.Quantity)
                         })
+                        .OrderBy(b => b.Expiry == null ? 1 : 0)
+                        .ThenBy(b => b.Expiry)
                         .ToList();
 
                     return new
@@ -136,7 +143,20 @@ namespace VaccineAPI.Controllers
                     .OrderBy(ba => ba.Brand != null ? ba.Brand.Name : "")
                     .Select(ba =>
                     {
-                        var batches = stockRows.Where(s => s.BrandId == ba.BrandId).ToList();
+                        // Collapse multiple bills' Stock rows for the same Batch+Expiry into one
+                        // displayed line — see same logic/reasoning in GET above.
+                        var batches = stockRows
+                            .Where(s => s.BrandId == ba.BrandId)
+                            .GroupBy(s => new { s.BatchLot, s.Expiry })
+                            .Select(g => new
+                            {
+                                BatchLot = g.Key.BatchLot,
+                                Expiry = g.Key.Expiry,
+                                Quantity = g.Sum(s => s.Quantity)
+                            })
+                            .OrderBy(b => b.Expiry == null ? 1 : 0)
+                            .ThenBy(b => b.Expiry)
+                            .ToList();
                         return new
                         {
                             BrandName  = ba.Brand != null ? ba.Brand.Name : "",

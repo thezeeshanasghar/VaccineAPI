@@ -190,11 +190,13 @@ namespace VaccineAPI.Controllers
 
                 foreach (var line in dto.Lines)
                 {
+                    // Only consolidate against a Stock row already belonging to THIS bill
+                    // (e.g. two lines in the same form with the same Brand+Batch+Expiry).
+                    // Never merge into another bill's row — that would silently move the
+                    // purchased quantity off of the bill that actually paid for it.
                     var existingStock = await _db.Stocks
-                        .Include(s => s.Bill)
                         .Where(s => s.BrandId == line.BrandId
-                                 && s.BillId != null
-                                 && s.Bill.ClinicId == dto.ClinicId
+                                 && s.BillId == bill.Id
                                  && s.BatchLot == line.BatchLot
                                  && s.Expiry == line.Expiry)
                         .FirstOrDefaultAsync();
@@ -315,14 +317,14 @@ namespace VaccineAPI.Controllers
                 bill.IsPaid = paid >= totalPayable && totalPayable > 0;
                 bill.PaidDate = bill.IsPaid && bill.PaidDate == null ? (DateTime?)DateTime.Now : bill.PaidDate;
 
-                // Create new stock rows (consolidate if same brand+batch+expiry already exists)
+                // Create new stock rows (consolidate only against a row already on THIS bill —
+                // old rows for this bill were just removed above, so this only matters if
+                // dto.Lines itself contains duplicate Brand+Batch+Expiry entries)
                 foreach (var line in dto.Lines)
                 {
                     var existingStock = await _db.Stocks
-                        .Include(s => s.Bill)
                         .Where(s => s.BrandId == line.BrandId
-                                 && s.BillId != null
-                                 && s.Bill.ClinicId == bill.ClinicId
+                                 && s.BillId == bill.Id
                                  && s.BatchLot == line.BatchLot
                                  && s.Expiry == line.Expiry)
                         .FirstOrDefaultAsync();
@@ -563,7 +565,7 @@ namespace VaccineAPI.Controllers
 
         // DELETE /api/bill/{id}/reverse
         [HttpDelete("{id}/reverse")]
-        public async Task<IActionResult> Reverse(int id)
+        public async Task<IActionResult> Reverse(int id, [FromQuery] bool force = false)
         {
             var bill = await _db.Bills
                 .Include(b => b.Stocks)
@@ -571,6 +573,21 @@ namespace VaccineAPI.Controllers
 
             if (bill == null)
                 return Ok(new { IsSuccess = false, Message = "Bill not found" });
+
+            // Legacy-data guard: a bill with money paid but no Stock rows of its own has nothing
+            // here to structurally reverse (its purchase was never recorded against this bill —
+            // pre-existing data issue). Deleting it would erase the paid amount with no stock
+            // correction anywhere, so require explicit confirmation instead of silently succeeding.
+            if (bill.Stocks.Count == 0 && (bill.AmountPaid ?? 0) > 0 && !force)
+            {
+                return Ok(new
+                {
+                    IsSuccess = false,
+                    Message = $"This bill has Rs {bill.AmountPaid:N2} paid but no recorded line items — there is no stock to reverse. " +
+                              "Reversing will only delete the bill and its payment record. Confirm to proceed anyway.",
+                    ResponseData = new { RequiresForce = true }
+                });
+            }
 
             using var tx = await _db.Database.BeginTransactionAsync();
             try
@@ -586,6 +603,9 @@ namespace VaccineAPI.Controllers
 
                     _db.Stocks.Remove(stock);
                 }
+
+                var payments = await _db.SupplierPayments.Where(p => p.BillId == id).ToListAsync();
+                _db.SupplierPayments.RemoveRange(payments);
 
                 _db.Bills.Remove(bill);
                 await _db.SaveChangesAsync();

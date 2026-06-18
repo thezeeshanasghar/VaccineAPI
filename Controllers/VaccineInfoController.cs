@@ -67,6 +67,7 @@ namespace VaccineAPI.Controllers
             dbVaccineInfo.ScheduleHtml = vaccineInfoDTO.ScheduleHtml;
             dbVaccineInfo.WhyVaccinateHtml = vaccineInfoDTO.WhyVaccinateHtml;
             dbVaccineInfo.ImportantNoteHtml = vaccineInfoDTO.ImportantNoteHtml;
+            dbVaccineInfo.BrandsAvailableHtml = vaccineInfoDTO.BrandsAvailableHtml;
             _db.SaveChanges();
             return new Response<VaccineInfoDTO>(true, null, vaccineInfoDTO);
         }

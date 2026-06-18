@@ -11,6 +11,7 @@ namespace VaccineAPI.Models
         public string ScheduleHtml { get; set; } = "";
         public string WhyVaccinateHtml { get; set; } = "";
         public string ImportantNoteHtml { get; set; } = "";
+        public string BrandsAvailableHtml { get; set; } = "";
     }
 
 }

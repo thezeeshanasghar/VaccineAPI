@@ -9,6 +9,7 @@ namespace VaccineAPI
         public AutoMapperProfile()
         {
             CreateMap<Vaccine, VaccineDTO>().ReverseMap();
+            CreateMap<VaccineInfo, VaccineInfoDTO>().ReverseMap();
             CreateMap<User, UserDTO>().ReverseMap();
             CreateMap<Schedule, ScheduleDTO>().ReverseMap();
             CreateMap<Message, MessageDTO>().ReverseMap();

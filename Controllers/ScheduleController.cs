@@ -2006,6 +2006,36 @@ namespace VaccineAPI.Controllers
             return Ok(new { isSubmitted = true, editCount = submission.EditCount, canEdit, submittedByPaId = submission.PaId });
         }
 
+        // Converts a GapInDays code into a human-readable duration for messages
+        public static string DescribeGapInDays(int gapInDays)
+        {
+            if (gapInDays >= 401 && gapInDays <= 460)
+                return Pluralize(gapInDays - 400, "month");
+            else if (gapInDays == 4109)
+                return Pluralize(109, "month");
+            else if (gapInDays == 4110)
+                return Pluralize(110, "month");
+            else if (gapInDays == 4113)
+                return Pluralize(113, "month");
+            else if (gapInDays == 4114)
+                return Pluralize(114, "month");
+            else if (gapInDays == 4164)
+                return Pluralize(164, "month");
+            else if (gapInDays == 462)
+                return Pluralize(62, "month");
+            else if (gapInDays >= 3001 && gapInDays <= 3020)
+                return Pluralize(gapInDays - 3000, "year");
+            else if (gapInDays >= 7 && gapInDays % 7 == 0)
+                return Pluralize(gapInDays / 7, "week");
+            else
+                return Pluralize(gapInDays, "day");
+        }
+
+        private static string Pluralize(int value, string unit)
+        {
+            return value + " " + unit + (value == 1 ? "" : "s");
+        }
+
         //date Function
         public static DateTime calculateDate(DateTime date, int GapInDays)
         {
@@ -2202,8 +2232,8 @@ namespace VaccineAPI.Controllers
                             message =
                                 "Cannot reschedule to your selected date: "
                                 + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
-                                + " because Minimum Age of this vaccine from date of birth should be "
-                                + d.MinAge + ".";
+                                + " because the minimum age of this vaccine from date of birth should be "
+                                + DescribeGapInDays(d.MinAge) + ".";
                             return message;
                         }
                         else
@@ -2256,8 +2286,8 @@ namespace VaccineAPI.Controllers
                                 message =
                                     "Cannot reschedule to your selected date: "
                                     + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
-                                    + " because Minimum Gap from previous dose of this vaccine should be "
-                                    + lastDose.MinGap + ".";
+                                    + " because the minimum gap from the previous dose of this vaccine should be "
+                                    + DescribeGapInDays(lastDose.MinGap.Value) + ".";
                                 return message;
                             }
                         }

@@ -12,10 +12,12 @@ namespace VaccineAPI.Controllers
     public class PAAssignmentController : ControllerBase
     {
         private readonly Context _db;
+        private readonly VaccineAPI.Services.InventoryTransactionService _inventory;
 
-        public PAAssignmentController(Context db)
+        public PAAssignmentController(Context db, VaccineAPI.Services.InventoryTransactionService inventory)
         {
             _db = db;
+            _inventory = inventory;
         }
 
         // GET /api/PAAssignment/pa/{paId}
@@ -98,12 +100,15 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
-        // DELETE /api/PAAssignment/{id}?doctorId={doctorId}
-        // Doctor-facing cascade delete: removes the assignment, its invoice (and any
-        // amendments), and resets the schedules this PA gave/collected payment for on
-        // this child back to "not given" — used to clean up test assignments.
+        // DELETE /api/PAAssignment/{id}?doctorId={doctorId}&mode={UnassignOnly|FullReset}
+        // Doctor-facing removal of an assignment row, with two modes:
+        //   UnassignOnly (default) — removes only the PAAssignment row. The patient's
+        //     vaccine/payment records and the invoice are left completely untouched.
+        //   FullReset — also deletes the invoice (and any amendments) and resets the
+        //     schedules this PA gave/collected payment for on this child back to
+        //     "not given", crediting any consumed stock back via the inventory ledger.
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId)
+        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId, [FromQuery] string mode = "UnassignOnly")
         {
             var assignment = await _db.PAAssignments.FindAsync(id);
             if (assignment == null)
@@ -111,49 +116,75 @@ namespace VaccineAPI.Controllers
             if (assignment.DoctorId != doctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised" });
 
-            var paId = assignment.PersonalAssistantId;
-            var childId = assignment.ChildId;
-
-            var invoiceIds = await _db.InvoiceSubmissions
-                .Where(i => i.ChildId == childId && i.PaId == paId)
-                .Select(i => i.Id)
-                .ToListAsync();
-
-            if (invoiceIds.Count > 0)
+            if (mode == "FullReset")
             {
-                var amendments = _db.InvoiceAmendments.Where(am => invoiceIds.Contains(am.InvoiceSubmissionId));
-                _db.InvoiceAmendments.RemoveRange(amendments);
+                var paId = assignment.PersonalAssistantId;
+                var childId = assignment.ChildId;
 
-                var invoices = _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id));
-                _db.InvoiceSubmissions.RemoveRange(invoices);
-            }
+                var invoiceIds = await _db.InvoiceSubmissions
+                    .Where(i => i.ChildId == childId && i.PaId == paId)
+                    .Select(i => i.Id)
+                    .ToListAsync();
 
-            var schedules = await _db.Schedules
-                .Where(s => s.ChildId == childId && s.PaymentCollectorPaId == paId)
-                .ToListAsync();
+                if (invoiceIds.Count > 0)
+                {
+                    var amendments = _db.InvoiceAmendments.Where(am => invoiceIds.Contains(am.InvoiceSubmissionId));
+                    _db.InvoiceAmendments.RemoveRange(amendments);
 
-            foreach (var s in schedules)
-            {
-                s.IsDone = false;
-                s.GivenDate = null;
-                s.DoneAt = null;
-                s.GivenByPaId = null;
-                s.PaymentMode = "Cash";
-                s.OnlineService = null;
-                s.IsPaymentApproved = false;
-                s.BrandId = null;
-                s.Amount = null;
-                s.PaymentCollectorPaId = null;
-                s.IsPaymentCollected = false;
-                s.IsSkip = false;
-                s.SkippedByPaId = null;
-                s.SkippedAt = null;
+                    var invoices = _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id));
+                    _db.InvoiceSubmissions.RemoveRange(invoices);
+                }
+
+                var schedules = await _db.Schedules
+                    .Where(s => s.ChildId == childId && s.PaymentCollectorPaId == paId)
+                    .ToListAsync();
+
+                var inventoryEnabled = IsInventoryEnabledForDoctor(doctorId);
+
+                foreach (var s in schedules)
+                {
+                    if (inventoryEnabled && s.IsDone == true && s.BrandId.HasValue)
+                    {
+                        var clinicId = assignment.ClinicId ?? 0;
+                        var brandInventory = _db.BrandAmounts
+                            .Where(b => b.BrandId == s.BrandId && b.DoctorId == doctorId && b.ClinicId == clinicId)
+                            .FirstOrDefault();
+
+                        if (brandInventory != null)
+                            _inventory.UnadministerSync(doctorId, clinicId, s.BrandId.Value, s.Id, paId);
+                    }
+
+                    s.IsDone = false;
+                    s.GivenDate = null;
+                    s.DoneAt = null;
+                    s.GivenByPaId = null;
+                    s.PaymentMode = "Cash";
+                    s.OnlineService = null;
+                    s.IsPaymentApproved = false;
+                    s.BrandId = null;
+                    s.Amount = null;
+                    s.PaymentCollectorPaId = null;
+                    s.IsPaymentCollected = false;
+                    s.IsSkip = false;
+                    s.SkippedByPaId = null;
+                    s.SkippedAt = null;
+                }
             }
 
             _db.PAAssignments.Remove(assignment);
 
             await _db.SaveChangesAsync();
             return Ok(new { IsSuccess = true });
+        }
+
+        private bool IsInventoryEnabledForDoctor(long doctorId)
+        {
+            var doctorAllowInventory = _db.Doctors
+                .Where(d => d.Id == doctorId)
+                .Select(d => (bool?)d.AllowInventory)
+                .FirstOrDefault();
+
+            return doctorAllowInventory ?? false;
         }
 
         // POST /api/PAAssignment/{id}/complete

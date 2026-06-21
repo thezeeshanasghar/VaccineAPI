@@ -103,6 +103,7 @@ namespace VaccineAPI.Controllers
                 return new Response<UserDTO>(false, "Invalid Mobile Number and Password.", null);
 
             userDTO.Id = dbUser.Id;
+            userDTO.SecurityStamp = dbUser.SecurityStamp;
 
             if (userDTO.UserType.Equals("SUPERADMIN"))
                 return new Response<UserDTO>(true, null, userDTO);
@@ -321,12 +322,25 @@ namespace VaccineAPI.Controllers
                 else
                 {
                     userDB.Password = user.NewPassword;
+                    // Rotate the stamp so every other device's cached stamp goes stale and gets logged out.
+                    userDB.SecurityStamp = Guid.NewGuid().ToString();
                     _db.SaveChanges();
-                    return new Response<UserDTO>(true, "Password change successfully.", null);
+                    return new Response<UserDTO>(true, "Password change successfully.", new UserDTO { SecurityStamp = userDB.SecurityStamp });
                 }
             }
         }
 
+
+        [HttpGet("validate-session")]
+        public Response<bool> ValidateSession(long userId, string securityStamp)
+        {
+            var dbUser = _db.Users.Where(x => x.Id == userId).FirstOrDefault();
+            if (dbUser == null)
+                return new Response<bool>(false, "User not found.", false);
+
+            bool isValid = dbUser.SecurityStamp == securityStamp;
+            return new Response<bool>(true, null, isValid);
+        }
 
         [HttpPost("change-parent-password")]
         public ActionResult<Response<UserDTO>> ChangeParentPassword([FromBody] ChangePasswordRequestDTO request)

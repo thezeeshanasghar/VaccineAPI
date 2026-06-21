@@ -500,6 +500,23 @@ namespace VaccineAPI.Controllers
                 }
             }
 
+            // Credit the new PA for any of the child's doses given under the old assignment
+            // that are still unpaid and weren't already moved above (covers doses given before
+            // any invoice was downloaded — the invoice-linked move only fires when one exists).
+            var unpaidGivenSchedules = _db.Schedules
+                .Where(s => s.ChildId == old.ChildId
+                         && s.IsDone == true
+                         && s.IsPaymentCollected == false
+                         && (s.PaymentCollectorPaId == null || s.PaymentCollectorPaId == old.PersonalAssistantId))
+                .ToList();
+            foreach (var s in unpaidGivenSchedules)
+            {
+                s.PaymentCollectorPaId = dto.NewPaId;
+                _db.Entry(s).State = EntityState.Modified;
+            }
+            if (unpaidGivenSchedules.Any())
+                await _db.SaveChangesAsync();
+
             // Notify new PA by email (fire-and-forget)
             var pa = await _db.PersonalAssistant.FindAsync(dto.NewPaId);
             if (pa != null && !string.IsNullOrEmpty(pa.Email))
@@ -578,6 +595,25 @@ namespace VaccineAPI.Controllers
 
                 _db.PAAssignments.Add(assignment);
                 await _db.SaveChangesAsync();
+
+                // Credit this new PA as payment collector for any of the child's doses that
+                // were already given before this assignment existed and are still unpaid —
+                // independent of whether an invoice has been downloaded yet (the invoice-linked
+                // block below only fires once an invoice exists; this covers the gap where it
+                // doesn't yet, so a later invoice download/redownload still shows the money icon).
+                var unpaidGivenSchedules = _db.Schedules
+                    .Where(s => s.ChildId == dto.ChildId
+                             && s.IsDone == true
+                             && s.IsPaymentCollected == false
+                             && s.PaymentCollectorPaId == null)
+                    .ToList();
+                foreach (var s in unpaidGivenSchedules)
+                {
+                    s.PaymentCollectorPaId = dto.PersonalAssistantId;
+                    _db.Entry(s).State = EntityState.Modified;
+                }
+                if (unpaidGivenSchedules.Any())
+                    await _db.SaveChangesAsync();
 
                 // Link this child's orphaned invoice (downloaded before any PA was assigned —
                 // PaId == null) to the new assignment directly via the InvoiceSubmissionId FK.

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
+using VaccineAPI.Services;
 
 namespace VaccineAPI.Controllers
 {
@@ -14,7 +15,12 @@ namespace VaccineAPI.Controllers
     public class BillController : ControllerBase
     {
         private readonly Context _db;
-        public BillController(Context db) { _db = db; }
+        private readonly InventoryTransactionService _inventory;
+        public BillController(Context db, InventoryTransactionService inventory)
+        {
+            _db = db;
+            _inventory = inventory;
+        }
 
         // GET /api/bill?doctorId=X&clinicId=Y
         [HttpGet]
@@ -190,44 +196,9 @@ namespace VaccineAPI.Controllers
 
                 foreach (var line in dto.Lines)
                 {
-                    // Only consolidate against a Stock row already belonging to THIS bill
-                    // (e.g. two lines in the same form with the same Brand+Batch+Expiry).
-                    // Never merge into another bill's row — that would silently move the
-                    // purchased quantity off of the bill that actually paid for it.
-                    var existingStock = await _db.Stocks
-                        .Where(s => s.BrandId == line.BrandId
-                                 && s.BillId == bill.Id
-                                 && s.BatchLot == line.BatchLot
-                                 && s.Expiry == line.Expiry)
-                        .FirstOrDefaultAsync();
-
-                    if (existingStock != null)
-                    {
-                        existingStock.Quantity += line.Quantity;
-                        existingStock.OriginalQuantity += line.Quantity;
-                    }
-                    else
-                    {
-                        var stock = new Stock
-                        {
-                            BrandId = line.BrandId,
-                            BillId = bill.Id,
-                            Quantity = line.Quantity,
-                            OriginalQuantity = line.Quantity,
-                            StockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4),
-                            BatchLot = line.BatchLot,
-                            Expiry = line.Expiry
-                        };
-                        _db.Stocks.Add(stock);
-                    }
-
-                    // Increment BrandAmount.Count only — no weighted avg
-                    var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
-                        x.BrandId == line.BrandId &&
-                        x.DoctorId == dto.DoctorId &&
-                        x.ClinicId == dto.ClinicId);
-                    if (ba != null)
-                        ba.Count += line.Quantity;
+                    decimal stockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4);
+                    await _inventory.PostPurchaseLine(dto.DoctorId, dto.ClinicId, bill.Id, line.BrandId,
+                        line.Quantity, stockAmount, line.BatchLot, line.Expiry);
                 }
 
                 await _db.SaveChangesAsync();
@@ -277,15 +248,9 @@ namespace VaccineAPI.Controllers
             try
             {
                 // Reverse old stock rows
-                foreach (var stock in bill.Stocks)
+                foreach (var stock in bill.Stocks.ToList())
                 {
-                    var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
-                        x.BrandId == stock.BrandId &&
-                        x.DoctorId == bill.DoctorId &&
-                        x.ClinicId == bill.ClinicId);
-                    if (ba != null)
-                        ba.Count = Math.Max(0, ba.Count - stock.Quantity);
-                    _db.Stocks.Remove(stock);
+                    await _inventory.ReverseBillLine(bill.DoctorId, bill.ClinicId, stock, bill.Id);
                 }
                 await _db.SaveChangesAsync();
 
@@ -322,39 +287,9 @@ namespace VaccineAPI.Controllers
                 // dto.Lines itself contains duplicate Brand+Batch+Expiry entries)
                 foreach (var line in dto.Lines)
                 {
-                    var existingStock = await _db.Stocks
-                        .Where(s => s.BrandId == line.BrandId
-                                 && s.BillId == bill.Id
-                                 && s.BatchLot == line.BatchLot
-                                 && s.Expiry == line.Expiry)
-                        .FirstOrDefaultAsync();
-
-                    if (existingStock != null)
-                    {
-                        existingStock.Quantity += line.Quantity;
-                        existingStock.OriginalQuantity += line.Quantity;
-                    }
-                    else
-                    {
-                        var stock = new Stock
-                        {
-                            BrandId = line.BrandId,
-                            BillId = bill.Id,
-                            Quantity = line.Quantity,
-                            OriginalQuantity = line.Quantity,
-                            StockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4),
-                            BatchLot = line.BatchLot,
-                            Expiry = line.Expiry
-                        };
-                        _db.Stocks.Add(stock);
-                    }
-
-                    var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
-                        x.BrandId == line.BrandId &&
-                        x.DoctorId == bill.DoctorId &&
-                        x.ClinicId == bill.ClinicId);
-                    if (ba != null)
-                        ba.Count += line.Quantity;
+                    decimal stockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4);
+                    await _inventory.PostPurchaseLine(bill.DoctorId, bill.ClinicId, bill.Id, line.BrandId,
+                        line.Quantity, stockAmount, line.BatchLot, line.Expiry);
                 }
 
                 await _db.SaveChangesAsync();
@@ -530,7 +465,7 @@ namespace VaccineAPI.Controllers
                 _db.Bills.Add(newBill);
                 await _db.SaveChangesAsync();
 
-                _db.Stocks.Add(new Stock
+                var newStock = new Stock
                 {
                     BrandId = stock.BrandId,
                     BillId = newBill.Id,
@@ -539,10 +474,15 @@ namespace VaccineAPI.Controllers
                     StockAmount = stock.StockAmount,
                     BatchLot = stock.BatchLot,
                     Expiry = stock.Expiry
-                });
+                };
+                _db.Stocks.Add(newStock);
+                await _db.SaveChangesAsync(); // need newStock.Id for the ledger row
 
                 // Shrink the original line to the unconsumed remainder
                 stock.OriginalQuantity = stock.Quantity;
+
+                _inventory.LogSplitConsumed(bill.DoctorId, bill.ClinicId, stock.BrandId, stock.Id, newStock.Id,
+                    stock.BatchLot, stock.Expiry, consumed, stock.StockAmount, bill.Id, newBill.Id);
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -592,16 +532,9 @@ namespace VaccineAPI.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                foreach (var stock in bill.Stocks)
+                foreach (var stock in bill.Stocks.ToList())
                 {
-                    var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
-                        x.BrandId == stock.BrandId &&
-                        x.DoctorId == bill.DoctorId &&
-                        x.ClinicId == bill.ClinicId);
-                    if (ba != null)
-                        ba.Count = Math.Max(0, ba.Count - stock.Quantity);
-
-                    _db.Stocks.Remove(stock);
+                    await _inventory.ReverseBillStock(bill.DoctorId, bill.ClinicId, stock, bill.Id);
                 }
 
                 var payments = await _db.SupplierPayments.Where(p => p.BillId == id).ToListAsync();

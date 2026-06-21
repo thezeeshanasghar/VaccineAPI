@@ -9,6 +9,7 @@ using iTextSharp.text;
 using iTextSharp.text.pdf;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using VaccineAPI.Services;
 
 namespace VaccineAPI.Controllers
 {
@@ -17,10 +18,12 @@ namespace VaccineAPI.Controllers
     public class DirectSaleController : ControllerBase
     {
         private readonly Context _db;
+        private readonly InventoryTransactionService _inventory;
 
-        public DirectSaleController(Context db)
+        public DirectSaleController(Context db, InventoryTransactionService inventory)
         {
             _db = db;
+            _inventory = inventory;
         }
 
         [HttpPost]
@@ -106,15 +109,7 @@ namespace VaccineAPI.Controllers
                     decimal totalCost = purchasePrice * item.Quantity;
                     decimal profit = totalSale - totalCost;
 
-                    // Deduct source stock
-                    sourceStock.Quantity -= item.Quantity;
-                    sourceBa.Count = Math.Max(0, sourceBa.Count - item.Quantity);
-                    if (sourceStock.Quantity == 0 && sourceStock.BillId == null)
-                        _db.Stocks.Remove(sourceStock);
-                    else
-                        _db.Entry(sourceStock).State = EntityState.Modified;
-
-                    _db.DirectSales.Add(new DirectSale
+                    var saleRow = new DirectSale
                     {
                         BrandId = item.BrandId,
                         ClinicId = dto.ClinicId,
@@ -136,7 +131,11 @@ namespace VaccineAPI.Controllers
                         SaleDate = dto.SaleDate,
                         PaymentCollectorPaId = dto.PaymentCollectorPaId,
                         IsPaymentCollected = !dto.PaymentCollectorPaId.HasValue
-                    });
+                    };
+                    _db.DirectSales.Add(saleRow);
+                    await _db.SaveChangesAsync(); // need saleRow.Id for the ledger SourceId
+
+                    await _inventory.SellDirect(dto.DoctorId, dto.ClinicId, sourceStock, sourceBa, item.Quantity, saleRow.Id);
                 }
 
                 await _db.SaveChangesAsync();
@@ -373,48 +372,8 @@ namespace VaccineAPI.Controllers
 
                 foreach (var row in allRows)
                 {
-                    // Restore BrandAmount
-                    var sourceBa = await _db.BrandAmounts
-                        .FirstOrDefaultAsync(b => b.BrandId == row.BrandId && b.DoctorId == row.DoctorId && b.ClinicId == row.ClinicId);
-                    if (sourceBa != null)
-                        sourceBa.Count += row.Quantity;
-
-                    // Restore Stock.Quantity
-                    var sourceStock = await _db.Stocks
-                        .Include(s => s.Bill)
-                        .Where(s => s.BrandId == row.BrandId
-                                 && s.BillId != null
-                                 && s.BatchLot == row.BatchLot
-                                 && s.Bill.ClinicId == row.ClinicId)
-                        .FirstOrDefaultAsync();
-
-                    if (sourceStock != null)
-                    {
-                        sourceStock.Quantity += row.Quantity;
-                        _db.Entry(sourceStock).State = EntityState.Modified;
-                    }
-                    else
-                    {
-                        // Row was deleted (hit zero) — recreate on most recent non-XFER bill
-                        var anchorBill = await _db.Bills
-                            .Where(b => b.ClinicId == row.ClinicId && !b.BillNo.StartsWith("XFER-"))
-                            .OrderByDescending(b => b.BillDate)
-                            .ThenByDescending(b => b.Id)
-                            .FirstOrDefaultAsync();
-                        if (anchorBill != null)
-                        {
-                            _db.Stocks.Add(new Stock
-                            {
-                                BrandId = row.BrandId,
-                                BillId = anchorBill.Id,
-                                Quantity = row.Quantity,
-                                OriginalQuantity = 0,
-                                StockAmount = row.PurchasePricePerUnit,
-                                BatchLot = row.BatchLot,
-                                Expiry = row.ExpiryDate
-                            });
-                        }
-                    }
+                    await _inventory.ReverseDirectSale(row.DoctorId, row.ClinicId, row.BrandId, row.Quantity,
+                        row.BatchLot, row.PurchasePricePerUnit, row.ExpiryDate, row.Id);
                 }
 
                 _db.DirectSales.RemoveRange(allRows);

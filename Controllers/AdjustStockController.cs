@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
+using VaccineAPI.Services;
 
 namespace VaccineAPI.Controllers
 {
@@ -13,7 +14,12 @@ namespace VaccineAPI.Controllers
     public class AdjustStockController : ControllerBase
     {
         private readonly Context _db;
-        public AdjustStockController(Context db) { _db = db; }
+        private readonly InventoryTransactionService _inventory;
+        public AdjustStockController(Context db, InventoryTransactionService inventory)
+        {
+            _db = db;
+            _inventory = inventory;
+        }
 
         // GET /api/adjuststock?doctorId=X&clinicId=Y
         [HttpGet]
@@ -76,44 +82,6 @@ namespace VaccineAPI.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Check BrandAmount exists and has stock
-                var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
-                    x.BrandId == dto.BrandId &&
-                    x.DoctorId == dto.DoctorId &&
-                    x.ClinicId == dto.ClinicId);
-
-                if (ba == null || ba.Count == 0)
-                    return Ok(new { IsSuccess = false, Message = "No stock available for this brand at this clinic" });
-
-                if (dto.Type == "Loss")
-                {
-                    // Find the specific Stock row by brand + clinic + batch
-                    var stockRow = await _db.Stocks
-                        .Include(s => s.Bill)
-                        .Where(s => s.BrandId == dto.BrandId &&
-                                    s.Bill.ClinicId == dto.ClinicId &&
-                                    s.BatchLot == dto.BatchLot &&
-                                    s.Quantity > 0)
-                        .FirstOrDefaultAsync();
-
-                    if (stockRow == null)
-                        return Ok(new { IsSuccess = false, Message = "Batch not found or has no remaining stock" });
-
-                    if (dto.Quantity > stockRow.Quantity)
-                        return Ok(new { IsSuccess = false, Message = $"Cannot reduce more than available quantity ({stockRow.Quantity}) in this batch" });
-
-                    // Decrement batch-level stock
-                    stockRow.Quantity -= dto.Quantity;
-
-                    // Decrement BrandAmount count
-                    ba.Count = Math.Max(0, ba.Count - dto.Quantity);
-                }
-                else
-                {
-                    // Increase — just add to BrandAmount count
-                    ba.Count += dto.Quantity;
-                }
-
                 int adjustment = dto.Type == "Increase" ? dto.Quantity : -dto.Quantity;
 
                 var row = new AdjustStock
@@ -129,6 +97,17 @@ namespace VaccineAPI.Controllers
                     ExpiryDate = dto.ExpiryDate
                 };
                 _db.AdjustStocks.Add(row);
+                await _db.SaveChangesAsync(); // need row.Id for the ledger SourceId
+
+                InventoryOperationResult result = dto.Type == "Loss"
+                    ? await _inventory.AdjustLoss(dto.DoctorId, dto.ClinicId, dto.BrandId, dto.Quantity, row.Id, dto.BatchLot)
+                    : await _inventory.AdjustIncrease(dto.DoctorId, dto.ClinicId, dto.BrandId, dto.Quantity, dto.Price, row.Id, dto.BatchLot, dto.ExpiryDate);
+
+                if (!result.IsSuccess)
+                {
+                    await tx.RollbackAsync();
+                    return Ok(new { IsSuccess = false, Message = result.Message });
+                }
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -153,38 +132,7 @@ namespace VaccineAPI.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
-                    x.BrandId == row.BrandId &&
-                    x.DoctorId == row.DoctorId &&
-                    x.ClinicId == row.ClinicId);
-
-                if (ba != null)
-                {
-                    if (row.Adjustment > 0)
-                    {
-                        // Was an Increase — reverse by subtracting
-                        ba.Count = Math.Max(0, ba.Count - row.Adjustment);
-                    }
-                    else
-                    {
-                        // Was a Loss — reverse by adding back
-                        ba.Count += Math.Abs(row.Adjustment);
-                    }
-                }
-
-                // For Loss: also restore the batch-level Stock row
-                if (row.Adjustment < 0 && !string.IsNullOrEmpty(row.BatchLot))
-                {
-                    var stockRow = await _db.Stocks
-                        .Include(s => s.Bill)
-                        .Where(s => s.BrandId == row.BrandId &&
-                                    s.Bill.ClinicId == row.ClinicId &&
-                                    s.BatchLot == row.BatchLot)
-                        .FirstOrDefaultAsync();
-
-                    if (stockRow != null)
-                        stockRow.Quantity += Math.Abs(row.Adjustment);
-                }
+                await _inventory.ReverseAdjustment(row.DoctorId, row.ClinicId, row.BrandId, row.Adjustment, row.BatchLot, row.Id);
 
                 _db.AdjustStocks.Remove(row);
                 await _db.SaveChangesAsync();

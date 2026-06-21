@@ -228,7 +228,8 @@ namespace VaccineAPI.Services
         }
 
         public async Task<Stock> TransferIn(long doctorId, long toClinicId, long brandId, int billId,
-            int quantity, decimal unitPrice, string batchLot, DateTime? expiry, long stockTransferId)
+            int quantity, decimal unitPrice, string batchLot, DateTime? expiry, long stockTransferId,
+            decimal sourceSalePrice)
         {
             var destStock = new Stock
             {
@@ -243,20 +244,22 @@ namespace VaccineAPI.Services
             _db.Stocks.Add(destStock);
             await _db.SaveChangesAsync(); // need destStock.Id for the ledger row
 
-            // Matches existing behavior: auto-create the destination BrandAmount row if it
-            // doesn't exist yet, seeded from the source's sale price (Amount).
+            // Matches existing behavior exactly: auto-create the destination BrandAmount row if
+            // it doesn't exist yet, seeded from the SOURCE CLINIC's sale price (Amount) — the
+            // caller passes the already-loaded source BrandAmount.Amount rather than this
+            // service re-querying by BrandId+DoctorId with no ClinicId filter, which could
+            // silently match a different clinic's BrandAmount if more than one exists.
             var destBa = await _db.BrandAmounts.FirstOrDefaultAsync(b =>
                 b.BrandId == brandId && b.DoctorId == doctorId && b.ClinicId == toClinicId);
             if (destBa == null)
             {
-                var sourceBaForPrice = await _db.BrandAmounts.FirstOrDefaultAsync(b => b.BrandId == brandId && b.DoctorId == doctorId);
                 destBa = new BrandAmount
                 {
                     BrandId = brandId,
                     DoctorId = doctorId,
                     ClinicId = toClinicId,
                     Count = 0,
-                    Amount = sourceBaForPrice != null ? sourceBaForPrice.Amount : 0,
+                    Amount = sourceSalePrice,
                     PurchasedAmt = 0
                 };
                 _db.BrandAmounts.Add(destBa);
@@ -494,6 +497,121 @@ namespace VaccineAPI.Services
                     recreatedStockId = recreated.Id;
                 }
                 Log(doctorId, clinicId, brandId, recreatedStockId, null, null, 1, unitCost,
+                    InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+            }
+        }
+
+        // ----- Synchronous mirrors of Administer/Unadminister -----
+        // ScheduleController's give/ungive paths are synchronous (use _db.SaveChanges(), not
+        // SaveChangesAsync()) — calling the async versions above and blocking on them risks
+        // deadlocking in an ASP.NET Core request context. These are identical logic, just
+        // using sync EF calls so they compose safely with that controller's existing sync code.
+        // Caller (ScheduleController) has already validated ba != null and ba.Count > 0 with
+        // its own richer, context-specific error messages (BuildInventoryContextMessage) before
+        // calling this — this overload trusts that and performs only the deduction, so we don't
+        // end up with two different error strings for the same condition.
+        public void AdministerSync(BrandAmount ba, long clinicId, long scheduleId, long? createdByPaId = null)
+        {
+            long doctorId = ba.DoctorId;
+            long brandId = ba.BrandId;
+            ba.Count -= 1;
+
+            var fillStocks = _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity > 0)
+                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id)
+                .ToList();
+
+            int remaining = 1;
+            foreach (var src in fillStocks)
+            {
+                if (remaining <= 0) break;
+                int deduct = Math.Min(src.Quantity, remaining);
+                src.Quantity -= deduct;
+                remaining -= deduct;
+
+                Log(doctorId, clinicId, brandId, src.Id, src.BatchLot, src.Expiry, -deduct, src.StockAmount,
+                    InventoryTransactionType.Administer, scheduleId, createdByPaId);
+
+                if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
+                else _db.Entry(src).State = EntityState.Modified;
+            }
+
+            if (remaining > 0) ba.Count += 1;
+        }
+
+        public void UnadministerSync(long doctorId, long clinicId, long brandId, long scheduleId,
+            long? createdByPaId = null)
+        {
+            var ba = _db.BrandAmounts.FirstOrDefault(x => x.BrandId == brandId && x.DoctorId == doctorId && x.ClinicId == clinicId);
+            if (ba != null) ba.Count += 1;
+
+            var restoreStock = _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity >= 0)
+                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id)
+                .FirstOrDefault();
+
+            if (restoreStock != null)
+            {
+                restoreStock.Quantity += 1;
+                _db.Entry(restoreStock).State = EntityState.Modified;
+                Log(doctorId, clinicId, brandId, restoreStock.Id, restoreStock.BatchLot, restoreStock.Expiry,
+                    1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+            }
+            else
+            {
+                var anchorBill = _db.Bills
+                    .Where(b => b.ClinicId == clinicId && !b.BillNo.StartsWith("XFER-"))
+                    .OrderByDescending(b => b.BillDate).ThenByDescending(b => b.Id)
+                    .FirstOrDefault();
+                int? recreatedStockId = null;
+                decimal? unitCost = ba != null ? ba.PurchasedAmt : (decimal?)null;
+                if (anchorBill != null)
+                {
+                    var recreated = new Stock
+                    {
+                        BrandId = brandId,
+                        BillId = anchorBill.Id,
+                        Quantity = 1,
+                        OriginalQuantity = 0,
+                        StockAmount = unitCost ?? 0
+                    };
+                    _db.Stocks.Add(recreated);
+                    _db.SaveChanges();
+                    recreatedStockId = recreated.Id;
+                }
+                Log(doctorId, clinicId, brandId, recreatedStockId, null, null, 1, unitCost,
+                    InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+            }
+        }
+
+        // Bulk-ungive restore path (ScheduleController.UpdateBulkInjection). Deliberately
+        // narrower than UnadministerSync: the original bulk code never had an anchor-bill
+        // fallback for the hard-deleted-row case — it silently no-ops the Stock-level restore
+        // if no live row is found (BrandAmount.Count is still restored either way). Kept
+        // exactly as that pre-existing behavior; not "fixed" to match the single-give path,
+        // since that would be a behavior change beyond this refactor's scope.
+        public void UnadministerBulkSync(BrandAmount ba, long clinicId, long brandId, long scheduleId, long? createdByPaId = null)
+        {
+            ba.Count++;
+
+            var restoreStock = _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity >= 0)
+                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id)
+                .FirstOrDefault();
+
+            if (restoreStock != null)
+            {
+                restoreStock.Quantity++;
+                _db.Entry(restoreStock).State = EntityState.Modified;
+                Log(ba.DoctorId, clinicId, brandId, restoreStock.Id, restoreStock.BatchLot, restoreStock.Expiry,
+                    1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+            }
+            else
+            {
+                Log(ba.DoctorId, clinicId, brandId, null, null, null, 1, null,
                     InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
             }
         }

@@ -9,6 +9,7 @@ using iTextSharp.text;
 using iTextSharp.text.pdf;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using VaccineAPI.Services;
 
 namespace VaccineAPI.Controllers
 {
@@ -17,10 +18,12 @@ namespace VaccineAPI.Controllers
     public class StockTransferController : ControllerBase
     {
         private readonly Context _db;
+        private readonly InventoryTransactionService _inventory;
 
-        public StockTransferController(Context db)
+        public StockTransferController(Context db, InventoryTransactionService inventory)
         {
             _db = db;
+            _inventory = inventory;
         }
 
         [HttpPost]
@@ -116,49 +119,9 @@ namespace VaccineAPI.Controllers
                     var sourceStock = sourceStocks[i];
                     var sourceBa = sourceBas[i];
 
-                    // Deduct source
-                    sourceStock.Quantity -= item.Quantity;
-                    sourceBa.Count = Math.Max(0, sourceBa.Count - item.Quantity);
-                    if (sourceStock.Quantity == 0 && sourceStock.BillId == null)
-                        _db.Stocks.Remove(sourceStock);
-                    else
-                        _db.Entry(sourceStock).State = EntityState.Modified;
-
-                    // Create destination stock row backed by the transfer bill
-                    var destStock = new Stock
-                    {
-                        BrandId = item.BrandId,
-                        BillId = bill.Id,
-                        Quantity = item.Quantity,
-                        OriginalQuantity = item.Quantity,
-                        StockAmount = item.UnitPrice,
-                        BatchLot = item.BatchLot,
-                        Expiry = item.ExpiryDate
-                    };
-                    _db.Stocks.Add(destStock);
-
-                    // Increment destination BrandAmount
-                    var destBa = await _db.BrandAmounts
-                        .FirstOrDefaultAsync(b => b.BrandId == item.BrandId && b.DoctorId == dto.DoctorId && b.ClinicId == dto.ToClinicId);
-                    if (destBa == null)
-                    {
-                        destBa = new BrandAmount
-                        {
-                            BrandId = item.BrandId,
-                            DoctorId = dto.DoctorId,
-                            ClinicId = dto.ToClinicId,
-                            Count = 0,
-                            Amount = sourceBa.Amount,
-                            PurchasedAmt = 0
-                        };
-                        _db.BrandAmounts.Add(destBa);
-                        await _db.SaveChangesAsync();
-                    }
-                    destBa.Count += item.Quantity;
-
-                    // Audit record
+                    // Audit record — created first so its Id is available as the ledger SourceId
                     decimal lineAwt = Math.Round(item.UnitPrice * item.Quantity * dto.AwtPercent / 100, 2);
-                    _db.StockTransfers.Add(new StockTransfer
+                    var transferRow = new StockTransfer
                     {
                         DoctorId = dto.DoctorId,
                         FromClinicId = dto.FromClinicId,
@@ -174,7 +137,12 @@ namespace VaccineAPI.Controllers
                         TransferDate = dto.TransferDate,
                         BillId = bill.Id,
                         CreatedAt = DateTime.UtcNow
-                    });
+                    };
+                    _db.StockTransfers.Add(transferRow);
+                    await _db.SaveChangesAsync();
+
+                    await _inventory.TransferOut(dto.DoctorId, dto.FromClinicId, sourceStock, sourceBa, item.Quantity, transferRow.Id);
+                    await _inventory.TransferIn(dto.DoctorId, dto.ToClinicId, item.BrandId, bill.Id, item.Quantity, item.UnitPrice, item.BatchLot, item.ExpiryDate, transferRow.Id, sourceBa.Amount);
                 }
 
                 await _db.SaveChangesAsync();
@@ -264,53 +232,8 @@ namespace VaccineAPI.Controllers
 
                 foreach (var row in allRows)
                 {
-                    // Restore source BrandAmount
-                    var sourceBa = await _db.BrandAmounts
-                        .FirstOrDefaultAsync(b => b.BrandId == row.BrandId && b.DoctorId == row.DoctorId && b.ClinicId == row.FromClinicId);
-                    if (sourceBa != null)
-                        sourceBa.Count += row.Quantity;
-
-                    // Restore source Stock row
-                    var sourceStock = await _db.Stocks
-                        .Include(s => s.Bill)
-                        .Where(s => s.BrandId == row.BrandId
-                                 && s.BillId != null
-                                 && s.BatchLot == row.BatchLot
-                                 && s.Bill.ClinicId == row.FromClinicId)
-                        .FirstOrDefaultAsync();
-                    if (sourceStock != null)
-                    {
-                        sourceStock.Quantity += row.Quantity;
-                        _db.Entry(sourceStock).State = EntityState.Modified;
-                    }
-                    else
-                    {
-                        // Source row was deleted (quantity hit 0) — recreate it with the original bill
-                        var anchorBill = await _db.Bills
-                            .Where(b => b.ClinicId == row.FromClinicId && !b.BillNo.StartsWith("XFER-"))
-                            .OrderByDescending(b => b.BillDate)
-                            .ThenByDescending(b => b.Id)
-                            .FirstOrDefaultAsync();
-                        if (anchorBill != null)
-                        {
-                            _db.Stocks.Add(new Stock
-                            {
-                                BrandId = row.BrandId,
-                                BillId = anchorBill.Id,
-                                Quantity = row.Quantity,
-                                OriginalQuantity = 0,
-                                StockAmount = row.UnitPrice,
-                                BatchLot = row.BatchLot,
-                                Expiry = row.ExpiryDate
-                            });
-                        }
-                    }
-
-                    // Undo destination BrandAmount
-                    var destBa = await _db.BrandAmounts
-                        .FirstOrDefaultAsync(b => b.BrandId == row.BrandId && b.DoctorId == row.DoctorId && b.ClinicId == row.ToClinicId);
-                    if (destBa != null)
-                        destBa.Count = Math.Max(0, destBa.Count - row.Quantity);
+                    await _inventory.ReverseTransferOut(row.DoctorId, row.FromClinicId, row.BrandId, row.Quantity, row.BatchLot, row.UnitPrice, row.ExpiryDate, row.Id);
+                    await _inventory.ReverseTransferIn(row.DoctorId, row.ToClinicId, row.BrandId, row.Quantity, row.Id);
                 }
 
                 // Remove destination stock rows created by this bill

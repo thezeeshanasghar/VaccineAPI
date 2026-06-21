@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using VaccineAPI.Services;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using System.IO;
@@ -25,11 +26,14 @@ namespace VaccineAPI.Controllers
 
         private readonly IMapper _mapper;
 
-        public ScheduleController(Context context, IMapper mapper, IWebHostEnvironment host)
+        private readonly InventoryTransactionService _inventory;
+
+        public ScheduleController(Context context, IMapper mapper, IWebHostEnvironment host, InventoryTransactionService inventory)
         {
             _host = host;
             _db = context;
             _mapper = mapper;
+            _inventory = inventory;
         }
 
         [HttpGet]
@@ -404,54 +408,8 @@ namespace VaccineAPI.Controllers
                     {
                         if (wasGiven && previousBrandId.HasValue)
                         {
-                            dbBrandInventory2.Count += 1;
-
-                            // Restore Stock row for rolled-back brand using FEFO order
-                            // (earliest expiry first — mirrors exactly what was deducted on give)
-                            // s.Quantity >= 0 so a row at zero (fully consumed but not deleted) is still a valid target
-                            var restoreStock = _db.Stocks
-                                .Include(s => s.Bill)
-                                .Where(s => s.BrandId == previousBrandId
-                                         && s.Bill.ClinicId == rollbackClinicId
-                                         && s.Quantity >= 0)
-                                .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
-                                .ThenBy(s => s.Expiry)
-                                .ThenBy(s => s.Id)
-                                .FirstOrDefault();
-                            if (restoreStock != null)
-                            {
-                                restoreStock.Quantity += 1;
-                                _db.Entry(restoreStock).State = EntityState.Modified;
-                            }
-                            else
-                            {
-                                // No stock row exists at all — batch row was hard-deleted after hitting 0,
-                                // and no live row remembers which bill it came from (Stock.BillId is the
-                                // only provenance link and it's gone). Every FEFO/sale/loss query joins
-                                // Stock to Bill via an inner join on BillId, so a row with BillId == null
-                                // would be invisible to all future stock operations — worse than attributing
-                                // it to the wrong bill. Anchoring to the clinic's most recent purchase bill
-                                // is a known, intentional approximation (not a guess we can improve on with
-                                // the data available today): it keeps the restored unit usable, at the cost
-                                // of misattributing this one unit's purchase-cost history. A real fix needs
-                                // Stock rows to never be hard-deleted in the first place (see TODO below).
-                                var anchorBill = _db.Bills
-                                    .Where(b => b.ClinicId == rollbackClinicId && !b.BillNo.StartsWith("XFER-"))
-                                    .OrderByDescending(b => b.BillDate)
-                                    .ThenByDescending(b => b.Id)
-                                    .FirstOrDefault();
-                                if (anchorBill != null)
-                                {
-                                    _db.Stocks.Add(new Stock
-                                    {
-                                        BrandId          = previousBrandId.Value,
-                                        BillId           = anchorBill.Id,
-                                        Quantity         = 1,
-                                        OriginalQuantity = 0,
-                                        StockAmount      = dbBrandInventory2.PurchasedAmt
-                                    });
-                                }
-                            }
+                            _inventory.UnadministerSync(dbBrandInventory2.DoctorId, rollbackClinicId,
+                                previousBrandId.Value, dbSchedule.Id, scheduleDTO.PaId);
                         }
                     }
                     using (var tx = _db.Database.BeginTransaction())
@@ -506,29 +464,7 @@ namespace VaccineAPI.Controllers
                             );
                         }
 
-                        dbBrandInventory.Count -= 1;
-
-                        // Deduct from Stock rows in FEFO order
-                        var fillStocks = _db.Stocks
-                            .Include(s => s.Bill)
-                            .Where(s => s.BrandId == scheduleDTO.BrandId
-                                     && s.Bill.ClinicId == onlineClinicId
-                                     && s.Quantity > 0)
-                            .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
-                            .ThenBy(s => s.Expiry)
-                            .ThenBy(s => s.Id)
-                            .ToList();
-
-                        int fillRemaining = 1;
-                        foreach (var src in fillStocks)
-                        {
-                            if (fillRemaining <= 0) break;
-                            int deduct = Math.Min(src.Quantity, fillRemaining);
-                            src.Quantity -= deduct;
-                            fillRemaining -= deduct;
-                            if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
-                            else _db.Entry(src).State = EntityState.Modified;
-                        }
+                        _inventory.AdministerSync(dbBrandInventory, onlineClinicId, dbSchedule.Id, scheduleDTO.PaId);
 
                         // Persist the inventory deduction in its own transaction, right here,
                         // rather than deferring to whichever SaveChanges() this method happens to
@@ -1722,23 +1658,7 @@ namespace VaccineAPI.Controllers
 
                                             if (ungiveInventory != null)
                                             {
-                                                ungiveInventory.Count++;
-
-                                                var bulkRestoreStock = _db.Stocks
-                                                    .Include(s => s.Bill)
-                                                    .Where(s => s.BrandId == previousBrandId
-                                                             && s.Bill.ClinicId == ungiveClinicId
-                                                             && s.Quantity >= 0)
-                                                    .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
-                                                    .ThenBy(s => s.Expiry)
-                                                    .ThenBy(s => s.Id)
-                                                    .FirstOrDefault();
-
-                                                if (bulkRestoreStock != null)
-                                                {
-                                                    bulkRestoreStock.Quantity++;
-                                                    _db.Entry(bulkRestoreStock).State = EntityState.Modified;
-                                                }
+                                                _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, scheduleDTO.PaId);
                                             }
                                         }
                                     }
@@ -1816,32 +1736,7 @@ namespace VaccineAPI.Controllers
                                         );
                                     }
 
-                                    brandInventory.Count--;
-
-                                    // Deduct from Stock rows in FEFO order
-                                    var bulkFillStocks = _db.Stocks
-                                        .Include(s => s.Bill)
-                                        .Where(s => s.BrandId == scheduleBrand.BrandId.Value
-                                                 && s.Bill.ClinicId == onlineClinicId
-                                                 && s.Quantity > 0)
-                                        .OrderBy(s => s.Expiry.HasValue ? 0 : 1)
-                                        .ThenBy(s => s.Expiry)
-                                        .ThenBy(s => s.Id)
-                                        .ToList();
-
-                                    int bulkFillRemaining = 1;
-                                    foreach (var src in bulkFillStocks)
-                                    {
-                                        if (bulkFillRemaining <= 0) break;
-                                        int deduct = Math.Min(src.Quantity, bulkFillRemaining);
-                                        src.Quantity -= deduct;
-                                        bulkFillRemaining -= deduct;
-                                        if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
-                                        else _db.Entry(src).State = EntityState.Modified;
-                                    }
-
-                                    if (bulkFillRemaining > 0)
-                                        brandInventory.Count++;
+                                    _inventory.AdministerSync(brandInventory, onlineClinicId, schedule.Id, scheduleDTO.PaId);
                                 }
                             }
                         }

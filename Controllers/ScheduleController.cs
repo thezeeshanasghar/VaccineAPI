@@ -737,7 +737,9 @@ namespace VaccineAPI.Controllers
                 dbSchedule.GivenByPaId = scheduleDTO.IsDone ? scheduleDTO.PaId : null;
                 if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue)
                     dbSchedule.PaymentCollectorPaId = scheduleDTO.PaId;
-                else if (!scheduleDTO.IsDone)
+                else if (scheduleDTO.IsDone)
+                    dbSchedule.PaymentCollectorPaId = GetActivePaIdForChild(dbSchedule.ChildId);
+                else
                     dbSchedule.PaymentCollectorPaId = null;
                 if (scheduleDTO.PaymentMode != null) dbSchedule.PaymentMode = scheduleDTO.PaymentMode;
                 dbSchedule.OnlineService = scheduleDTO.OnlineService;
@@ -1538,8 +1540,9 @@ namespace VaccineAPI.Controllers
                 if (scheduleDTO.IsDone)
                 {
                     schedule.GivenByPaId = scheduleDTO.PaId;
-                    if (scheduleDTO.PaId.HasValue)
-                        schedule.PaymentCollectorPaId = scheduleDTO.PaId;
+                    schedule.PaymentCollectorPaId = scheduleDTO.PaId.HasValue
+                        ? scheduleDTO.PaId
+                        : GetActivePaIdForChild(schedule.ChildId);
                 }
                 else
                 {
@@ -1929,6 +1932,15 @@ namespace VaccineAPI.Controllers
         // allowPaIdOverwrite should be false when a specific PA explicitly submitted this
         // invoice themselves (dto.PaId.HasValue) — their own stamp must never be overwritten,
         // even if a different PA is now the active assignment (e.g. reassigned afterward).
+        private long? GetActivePaIdForChild(long childId)
+        {
+            return _db.PAAssignments
+                .Where(a => a.ChildId == childId && !a.IsCancelled && !a.IsCompleted)
+                .OrderByDescending(a => a.AssignedAt)
+                .Select(a => (long?)a.PersonalAssistantId)
+                .FirstOrDefault();
+        }
+
         private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId, bool allowPaIdOverwrite = true)
         {
             var activeAssignment = _db.PAAssignments

@@ -11,6 +11,8 @@ builder.Services.AddCors(p => p.AddPolicy("corsapp", builder => { builder.WithOr
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+builder.Services.AddScoped<VaccineAPI.Services.InventoryTransactionService>();
+builder.Services.AddScoped<VaccineAPI.Services.InventoryReconciliationService>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? Environment.GetEnvironmentVariable("DefaultConnection");
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 31));

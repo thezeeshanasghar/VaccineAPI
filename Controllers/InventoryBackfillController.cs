@@ -57,6 +57,7 @@ namespace VaccineAPI.Controllers
                         TransferRowsWritten = transferCount,
                         DirectSaleRowsWritten = saleCount,
                         AdministerRowsWritten = administerCount,
+                        AdministerRowsSkippedPreReset = SkippedPreResetAdministrations,
                         StockDriftCount = report.StockDrift.Count,
                         BrandAmountDriftCount = report.BrandAmountDrift.Count,
                         StockDrift = report.StockDrift,
@@ -216,6 +217,17 @@ namespace VaccineAPI.Controllers
         // ledger sum stays correct; per-batch StockDrift for batches with historical given-doses
         // is an EXPECTED, documented gap, not a bug — already partly absorbed into
         // BackfillPurchases()'s consumedGap rows above where the Stock row itself still exists.
+        //
+        // Per-clinic cutoff: this app went through a full stock-system reset (deleted/recreated
+        // Bills+Stocks, zeroed BrandAmount.Count) on a date that varies per clinic depending on
+        // when each doctor's data was rebuilt — Schedules (given-dose history) was never
+        // truncated in that reset. Backfilling Administer rows for doses given BEFORE a clinic's
+        // earliest surviving Bill would subtract historical consumption that has no matching
+        // Purchase left to reconcile against (that purchase data was deliberately deleted),
+        // producing large permanent negative drift that doesn't reflect any current problem —
+        // confirmed against project_stock_management memory's 2026-05-22 reset notes. Using each
+        // clinic's own earliest Bill.BillDate (rather than one hardcoded global date) self-
+        // calibrates per clinic, since different doctors' data was reset at different times.
         private async Task<int> BackfillAdministrations()
         {
             var givenSchedules = await _db.Schedules
@@ -230,11 +242,24 @@ namespace VaccineAPI.Controllers
                 .Select(c => new { c.Id, c.DoctorId })
                 .ToDictionaryAsync(c => c.Id, c => c.DoctorId);
 
+            var earliestBillByClinic = await _db.Bills
+                .GroupBy(b => b.ClinicId)
+                .Select(g => new { ClinicId = g.Key, EarliestBillDate = g.Min(b => b.BillDate) })
+                .ToDictionaryAsync(x => x.ClinicId, x => x.EarliestBillDate);
+
             int count = 0;
+            int skippedPreReset = 0;
             foreach (var schedule in givenSchedules)
             {
                 if (schedule.Child == null) continue;
                 if (!clinicDoctorMap.TryGetValue(schedule.Child.ClinicId, out var clinicDoctorId)) continue;
+
+                var givenAt = schedule.DoneAt ?? schedule.GivenDate ?? DateTime.UtcNow;
+                if (earliestBillByClinic.TryGetValue(schedule.Child.ClinicId, out var cutoff) && givenAt < cutoff)
+                {
+                    skippedPreReset++;
+                    continue;
+                }
 
                 _db.InventoryTransactions.Add(new InventoryTransaction
                 {
@@ -248,12 +273,18 @@ namespace VaccineAPI.Controllers
                     UnitCost = schedule.VaccineCost,
                     SourceType = InventoryTransactionType.Administer,
                     SourceId = schedule.Id,
-                    CreatedAt = schedule.DoneAt ?? schedule.GivenDate ?? DateTime.UtcNow,
+                    CreatedAt = givenAt,
                     CreatedByPaId = schedule.GivenByPaId
                 });
                 count++;
             }
+            SkippedPreResetAdministrations = skippedPreReset;
             return count;
         }
+
+        // Exposed so Run() can report how many historical given-doses were excluded as
+        // pre-dating their clinic's earliest surviving Bill (see comment above
+        // BackfillAdministrations) — useful to sanity-check the cutoff actually fired.
+        private int SkippedPreResetAdministrations { get; set; }
     }
 }

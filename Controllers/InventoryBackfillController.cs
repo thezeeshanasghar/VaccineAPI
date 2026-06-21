@@ -223,17 +223,23 @@ namespace VaccineAPI.Controllers
                 .Where(s => s.IsDone && s.BrandId.HasValue && s.BrandId.Value > 0)
                 .ToListAsync();
 
+            // Project only Id/DoctorId — some live Clinic rows have NULL in columns the C#
+            // model declares non-nullable (e.g. MonogramImage), which throws if EF materializes
+            // the full Clinic entity. Selecting just what's needed avoids touching those columns.
+            var clinicDoctorMap = await _db.Clinics
+                .Select(c => new { c.Id, c.DoctorId })
+                .ToDictionaryAsync(c => c.Id, c => c.DoctorId);
+
             int count = 0;
             foreach (var schedule in givenSchedules)
             {
                 if (schedule.Child == null) continue;
-                var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == schedule.Child.ClinicId);
-                if (clinic == null) continue;
+                if (!clinicDoctorMap.TryGetValue(schedule.Child.ClinicId, out var clinicDoctorId)) continue;
 
                 _db.InventoryTransactions.Add(new InventoryTransaction
                 {
-                    DoctorId = clinic.DoctorId,
-                    ClinicId = clinic.Id,
+                    DoctorId = clinicDoctorId,
+                    ClinicId = schedule.Child.ClinicId,
                     BrandId = schedule.BrandId.Value,
                     StockId = null,
                     BatchLot = string.IsNullOrEmpty(schedule.Lot) ? null : schedule.Lot,

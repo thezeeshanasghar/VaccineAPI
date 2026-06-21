@@ -29,6 +29,14 @@ namespace VaccineAPI.Models
 
         public DateTime? Expiry { get; set; }
 
+        // Optimistic concurrency token. MySQL has no native rowversion type, so this is a
+        // plain counter the app increments on every write; EF's [ConcurrencyCheck] makes any
+        // UPDATE include "WHERE RowVersion = <old value>", so a concurrent writer that read
+        // the same row first will get 0 rows affected and throw DbUpdateConcurrencyException
+        // instead of silently overwriting the other writer's change.
+        [ConcurrencyCheck]
+        public int RowVersion { get; set; }
+
         [ForeignKey("BrandId")]
         public virtual Brand Brand { get; set; } = null!;
 

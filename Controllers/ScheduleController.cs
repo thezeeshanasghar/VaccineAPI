@@ -425,8 +425,16 @@ namespace VaccineAPI.Controllers
                             }
                             else
                             {
-                                // No stock row exists at all — batch row was hard-deleted after hitting 0.
-                                // Anchor to the most recent non-transfer bill for this clinic and recreate a restore row.
+                                // No stock row exists at all — batch row was hard-deleted after hitting 0,
+                                // and no live row remembers which bill it came from (Stock.BillId is the
+                                // only provenance link and it's gone). Every FEFO/sale/loss query joins
+                                // Stock to Bill via an inner join on BillId, so a row with BillId == null
+                                // would be invisible to all future stock operations — worse than attributing
+                                // it to the wrong bill. Anchoring to the clinic's most recent purchase bill
+                                // is a known, intentional approximation (not a guess we can improve on with
+                                // the data available today): it keeps the restored unit usable, at the cost
+                                // of misattributing this one unit's purchase-cost history. A real fix needs
+                                // Stock rows to never be hard-deleted in the first place (see TODO below).
                                 var anchorBill = _db.Bills
                                     .Where(b => b.ClinicId == rollbackClinicId && !b.BillNo.StartsWith("XFER-"))
                                     .OrderByDescending(b => b.BillDate)
@@ -446,7 +454,24 @@ namespace VaccineAPI.Controllers
                             }
                         }
                     }
-                    _db.SaveChanges();
+                    using (var tx = _db.Database.BeginTransaction())
+                    {
+                        try
+                        {
+                            _db.SaveChanges();
+                            tx.Commit();
+                        }
+                        catch (DbUpdateConcurrencyException)
+                        {
+                            tx.Rollback();
+                            return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
+                        }
+                        catch
+                        {
+                            tx.Rollback();
+                            throw;
+                        }
+                    }
                     return new Response<ScheduleDTO>(true, "Congratulations", newData2);
                 }
 
@@ -503,6 +528,33 @@ namespace VaccineAPI.Controllers
                             fillRemaining -= deduct;
                             if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
                             else _db.Entry(src).State = EntityState.Modified;
+                        }
+
+                        // Persist the inventory deduction in its own transaction, right here,
+                        // rather than deferring to whichever SaveChanges() this method happens to
+                        // hit later (there are two further down, on different branches). This is
+                        // the same narrow-transaction-around-the-stock-write pattern already used
+                        // in BillController/AdjustStockController/etc. A concurrent give for the
+                        // same brand+clinic that read Count/Quantity before this commits will now
+                        // fail with DbUpdateConcurrencyException on its own SaveChanges() instead
+                        // of silently overwriting this deduction.
+                        using (var tx = _db.Database.BeginTransaction())
+                        {
+                            try
+                            {
+                                _db.SaveChanges();
+                                tx.Commit();
+                            }
+                            catch (DbUpdateConcurrencyException)
+                            {
+                                tx.Rollback();
+                                return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
+                            }
+                            catch
+                            {
+                                tx.Rollback();
+                                throw;
+                            }
                         }
                     }
                 }
@@ -1805,7 +1857,29 @@ namespace VaccineAPI.Controllers
             // Auto-create assignment when PA bulk-gives vaccines with no prior assignment today
             if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
                 EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null);
-            _db.SaveChanges();
+
+            // Single transaction for the whole bulk batch (matches the existing single
+            // SaveChanges()-for-everything semantics above) — a concurrent give/ungive on any
+            // brand touched by this batch now fails the whole batch with a clear retry message
+            // instead of silently racing past a stale Count/Quantity read.
+            using (var tx = _db.Database.BeginTransaction())
+            {
+                try
+                {
+                    _db.SaveChanges();
+                    tx.Commit();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    tx.Rollback();
+                    return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
+                }
+                catch
+                {
+                    tx.Rollback();
+                    throw;
+                }
+            }
             return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
         }
 

@@ -1,4 +1,7 @@
 using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -9,6 +12,34 @@ namespace VaccineAPI.Models
         public Context(DbContextOptions<Context> options) : base(options)
         {
 
+        }
+
+        // Stock and BrandAmount carry an app-incremented optimistic concurrency token
+        // ([ConcurrencyCheck] RowVersion — MySQL has no native rowversion type). EF only
+        // uses the token's CURRENT value in the UPDATE's WHERE clause; it never bumps it.
+        // Bumping here, centrally, means every existing and future write site gets
+        // concurrency protection for free with no per-controller code.
+        private void BumpConcurrencyTokens()
+        {
+            foreach (var entry in ChangeTracker.Entries<Stock>())
+                if (entry.State == EntityState.Modified)
+                    entry.Entity.RowVersion++;
+
+            foreach (var entry in ChangeTracker.Entries<BrandAmount>())
+                if (entry.State == EntityState.Modified)
+                    entry.Entity.RowVersion++;
+        }
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            BumpConcurrencyTokens();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        {
+            BumpConcurrencyTokens();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         }
 
         public DbSet<Vaccine> Vaccines { get; set; }

@@ -302,7 +302,7 @@ namespace VaccineAPI.Controllers
 
                         if (dbSchedule.IsDone == true)
                         {
-                            if (dbSchedule.GivenByPaId.HasValue && dbSchedule.GivenByPaId != scheduleDTO.PaId)
+                            if (dbSchedule.GivenByPaId != scheduleDTO.PaId)
                                 return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
                             if (!dbSchedule.DoneAt.HasValue || dbSchedule.DoneAt.Value.AddHours(5).Date != today)
                                 return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
@@ -1449,9 +1449,7 @@ namespace VaccineAPI.Controllers
                     {
                         if (checkSchedule.UngiveCount >= 2)
                             return new Response<ScheduleDTO>(false, "One or more vaccines have already been ungiven twice. Contact the doctor.", null);
-                        // Only enforce PA ownership check for doses that were given by a PA.
-                        // Doses given directly by a doctor (GivenByPaId == null) are skipped.
-                        if (checkSchedule.GivenByPaId.HasValue && checkSchedule.GivenByPaId != scheduleDTO.PaId)
+                        if (checkSchedule.GivenByPaId != scheduleDTO.PaId)
                             return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
                         if (!checkSchedule.DoneAt.HasValue || checkSchedule.DoneAt.Value.AddHours(5).Date != today)
                             return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);

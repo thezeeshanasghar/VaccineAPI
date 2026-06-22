@@ -477,14 +477,17 @@ namespace VaccineAPI.Controllers
                 .Where(c => invChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
-            // (ChildId, PaId) -> latest PAAssignment.Id — lets the doctor delete an assignment
-            // (and cascade its invoice/schedules) directly from an Invoice/amendment row.
-            var assignmentLookup = _db.PAAssignments
-                .Where(a => a.DoctorId == doctorId)
-                .OrderByDescending(a => a.AssignedAt)
-                .Select(a => new { a.Id, a.ChildId, a.PersonalAssistantId })
+            // InvoiceSubmissionId -> PAAssignment.Id — the real FK link (PAAssignment.InvoiceSubmissionId,
+            // written at assignment-create/reassign time, see VaccineAPI staging a6fd23e). Lets the doctor
+            // delete an assignment (and cascade its invoice/schedules) directly from an Invoice/amendment
+            // row WITHOUT guessing via (ChildId, PaId) — that guess picks the most-recently-created
+            // assignment for the pair, which can be a different, unrelated assignment than the one that
+            // actually owns this invoice if the same child was ever assigned to the same PA more than once.
+            var assignmentByInvoiceId = _db.PAAssignments
+                .Where(a => a.DoctorId == doctorId && a.InvoiceSubmissionId.HasValue)
+                .Select(a => new { a.Id, InvoiceSubmissionId = a.InvoiceSubmissionId!.Value })
                 .ToList()
-                .GroupBy(a => (a.ChildId, a.PersonalAssistantId))
+                .GroupBy(a => a.InvoiceSubmissionId)
                 .ToDictionary(g => g.Key, g => g.First().Id);
 
             var invoiceRows = invoices.Select(i => new
@@ -493,7 +496,7 @@ namespace VaccineAPI.Controllers
                 InvoiceSubmissionId = i.Id,
                 ScheduleId          = i.Id,
                 AmendmentId         = (long?)null,
-                AssignmentId        = assignmentLookup.ContainsKey((i.ChildId, i.PaId.Value)) ? (long?)assignmentLookup[(i.ChildId, i.PaId.Value)] : (long?)null,
+                AssignmentId        = assignmentByInvoiceId.ContainsKey(i.Id) ? (long?)assignmentByInvoiceId[i.Id] : (long?)null,
                 Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
                 Amount              = i.TotalAmount,
@@ -611,8 +614,8 @@ namespace VaccineAPI.Controllers
                 InvoiceSubmissionId = a.InvoiceSubmissionId,
                 ScheduleId          = a.InvoiceSubmissionId,
                 AmendmentId         = (long?)a.Id,
-                AssignmentId        = (a.InvoiceSubmission != null && assignmentLookup.ContainsKey((a.InvoiceSubmission.ChildId, a.PaId)))
-                                        ? (long?)assignmentLookup[(a.InvoiceSubmission.ChildId, a.PaId)] : (long?)null,
+                AssignmentId        = assignmentByInvoiceId.ContainsKey(a.InvoiceSubmissionId)
+                                        ? (long?)assignmentByInvoiceId[a.InvoiceSubmissionId] : (long?)null,
                 Date                = a.CreatedAt.ToString("yyyy-MM-dd"),
                 PatientName         = (a.InvoiceSubmission != null && amendChildNames.ContainsKey(a.InvoiceSubmission.ChildId))
                                         ? amendChildNames[a.InvoiceSubmission.ChildId] : "",

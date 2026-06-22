@@ -200,6 +200,26 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                // Step 2b — Dose.MaxAge check at give-time
+                if (scheduleDTO.IsDone == true && !scheduleDTO.IgnoreMaxAgeAtGiveTime)
+                {
+                    var dose = dbSchedule.Dose;
+                    if (dose != null && dose.MaxAge.HasValue)
+                    {
+                        var maxAgeDate = calculateDate(dbSchedule.Child.DOB, dose.MaxAge.Value).Date;
+                        if (scheduleDTO.GivenDate.Date > maxAgeDate)
+                        {
+                            var doseName = dose.Name ?? "This dose";
+                            if (scheduleDTO.PaId.HasValue)
+                                return new Response<ScheduleDTO>(false,
+                                    doseName + " cannot be given after " + maxAgeDate.ToString("dd-MM-yyyy") + " (maximum age exceeded).", null);
+                            else
+                                return Response<ScheduleDTO>.Warning(
+                                    doseName + " maximum age is exceeded — latest allowed date was " + maxAgeDate.ToString("dd-MM-yyyy") + ". Override?");
+                        }
+                    }
+                }
+
                 // Step 3 — MinGap check at give-time
                 if (scheduleDTO.IsDone == true && dbSchedule.Dose.DoseOrder > 1 && !scheduleDTO.IgnoreMinGapAtGiveTime)
                 {
@@ -1375,6 +1395,7 @@ namespace VaccineAPI.Controllers
             // Step 5 — PA cannot bypass ignore flags on reschedule
             if (scheduleDTO.PaId.HasValue)
             {
+                ignoreMaxAgeRule = false;
                 ignoreMinAgeFromDOB = false;
                 ignoreMinGapFromPreviousDose = false;
             }
@@ -2228,6 +2249,7 @@ namespace VaccineAPI.Controllers
                         var secondLastDose = AllDoses.ElementAt(AllDoses.Count - 2);
 
                         var TargetSchedule = db.Schedules
+                            .Include(x => x.Child)
                             .Where(x => x.ChildId == dbSchedule.ChildId && x.DoseId == lastDose.Id)
                             .FirstOrDefault();
                         var TargetSchedulePrevious = db.Schedules
@@ -2236,6 +2258,16 @@ namespace VaccineAPI.Controllers
                                     x.ChildId == dbSchedule.ChildId && x.DoseId == secondLastDose.Id
                             )
                             .FirstOrDefault();
+
+                        // check for MaxAge of any Dose
+                        if (TargetSchedule != null && lastDose.MaxAge.HasValue && scheduleDTO.Date.Date > calculateDate(TargetSchedule.Child.DOB, lastDose.MaxAge.Value).Date && !ignoreMaxAgeRule)
+                        {
+                            message =
+                                "Cannot reschedule to your selected date: "
+                                + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
+                                + " because it is greater than the Max Age of dose.";
+                            return message;
+                        }
 
                         if (TargetSchedulePrevious != null)
                         {
@@ -2301,6 +2333,7 @@ namespace VaccineAPI.Controllers
                 // Step 5 — PA cannot bypass ignore flags on reschedule
                 if (scheduleDTO.PaId.HasValue)
                 {
+                    ignoreMaxAgeRule = false;
                     ignoreMinAgeFromDOB = false;
                     ignoreMinGapFromPreviousDose = false;
                 }

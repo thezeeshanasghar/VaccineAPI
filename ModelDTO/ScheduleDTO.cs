@@ -63,6 +63,7 @@ namespace VaccineAPI.ModelDTO
         public List<ClinicDTO> Clinics { get; set; } = new List<ClinicDTO>();
         public bool IgnoreMinAgeAtGiveTime { get; set; } = false;
         public bool IgnoreMinGapAtGiveTime { get; set; } = false;
+        public bool IgnoreMaxAgeAtGiveTime { get; set; } = false;
     }
 
 }

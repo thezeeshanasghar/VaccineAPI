@@ -773,9 +773,14 @@ namespace VaccineAPI.Controllers
                 dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
                 ScheduleDTO newData = _mapper.Map<ScheduleDTO>(dbSchedule);
-                // Auto-create assignment when PA gives a vaccine with no prior assignment today
+                // Auto-create assignment when PA gives a vaccine with no prior assignment today,
+                // and pin this dose to it — covers both "first dose under a brand new
+                // assignment" and "extra dose given mid-visit, not in the original pinned set."
                 if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
-                    EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null);
+                {
+                    var assignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null);
+                    LinkScheduleToAssignment(assignmentId, dbSchedule.Id);
+                }
                 _db.SaveChanges();
                 return new Response<ScheduleDTO>(true, "congratulations", newData);
             }
@@ -885,7 +890,11 @@ namespace VaccineAPI.Controllers
             return stockSelection;
         }
 
-        private void EnsurePAAssignment(long childId, long paId, long doctorId, long? clinicId)
+        // Returns the active assignment's Id (creating one if needed), or 0 if no
+        // assignment exists/could be created. Flushes immediately on create so the
+        // returned Id is usable right away by LinkScheduleToAssignment, ahead of the
+        // caller's own later SaveChanges()/transaction commit.
+        private long EnsurePAAssignment(long childId, long paId, long doctorId, long? clinicId)
         {
             // Validate doctorId is a real doctor — if caller passed a PA ID by mistake, resolve from child's clinic
             var isRealDoctor = _db.Doctors.Any(d => d.Id == doctorId);
@@ -895,28 +904,43 @@ namespace VaccineAPI.Controllers
                     .Where(c => c.Id == (clinicId ?? 0))
                     .Select(c => c.DoctorId)
                     .FirstOrDefault();
-                if (doctorId <= 0) return;
+                if (doctorId <= 0) return 0;
             }
 
             var today = DateTime.UtcNow.AddHours(5).Date; // PKT = UTC+5
-            var exists = _db.PAAssignments.Any(a =>
-                a.ChildId == childId &&
-                a.PersonalAssistantId == paId &&
-                a.AssignedAt >= today && a.AssignedAt < today.AddDays(1) &&
-                !a.IsCancelled);
-            if (!exists)
+            var existing = _db.PAAssignments
+                .Where(a => a.ChildId == childId &&
+                            a.PersonalAssistantId == paId &&
+                            a.AssignedAt >= today && a.AssignedAt < today.AddDays(1) &&
+                            !a.IsCancelled)
+                .Select(a => a.Id)
+                .FirstOrDefault();
+            if (existing > 0) return existing;
+
+            var newAssignment = new PAAssignment
             {
-                _db.PAAssignments.Add(new PAAssignment
-                {
-                    ChildId = childId,
-                    PersonalAssistantId = paId,
-                    DoctorId = doctorId,
-                    ClinicId = clinicId,
-                    AssignedAt = DateTime.UtcNow,
-                    IsCompleted = false,
-                    IsAutoCreated = true
-                });
-            }
+                ChildId = childId,
+                PersonalAssistantId = paId,
+                DoctorId = doctorId,
+                ClinicId = clinicId,
+                AssignedAt = DateTime.UtcNow,
+                IsCompleted = false,
+                IsAutoCreated = true
+            };
+            _db.PAAssignments.Add(newAssignment);
+            _db.SaveChanges();
+            return newAssignment.Id;
+        }
+
+        // Appends a PAAssignmentSchedule row linking scheduleId to assignmentId, if not
+        // already linked. No-op if assignmentId is 0 (no assignment exists/was created).
+        private void LinkScheduleToAssignment(long assignmentId, long scheduleId)
+        {
+            if (assignmentId <= 0) return;
+            var alreadyLinked = _db.PAAssignmentSchedules
+                .Any(l => l.AssignmentId == assignmentId && l.ScheduleId == scheduleId);
+            if (!alreadyLinked)
+                _db.PAAssignmentSchedules.Add(new PAAssignmentSchedule { AssignmentId = assignmentId, ScheduleId = scheduleId });
         }
 
         private void ApplyStockSourceFields(Schedule dbSchedule, ScheduleDTO scheduleDTO, long clinicId)
@@ -1772,9 +1796,15 @@ namespace VaccineAPI.Controllers
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
                 }
             }
-            // Auto-create assignment when PA bulk-gives vaccines with no prior assignment today
+            // Auto-create assignment when PA bulk-gives vaccines with no prior assignment today,
+            // and pin every dose actually given in this batch to it.
             if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
-                EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null);
+            {
+                var bulkAssignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null);
+                foreach (var schedule in dbChildSchedules)
+                    if (schedule.IsDone)
+                        LinkScheduleToAssignment(bulkAssignmentId, schedule.Id);
+            }
 
             // Single transaction for the whole bulk batch (matches the existing single
             // SaveChanges()-for-everything semantics above) — a concurrent give/ungive on any
@@ -1984,6 +2014,20 @@ namespace VaccineAPI.Controllers
                 activeAssignment.InvoiceSubmissionId = invoice.Id;
                 _db.Entry(activeAssignment).State = EntityState.Modified;
             }
+
+            // Pin this invoice's own schedules to the assignment too — covers a dose the
+            // doctor already gave (so it was excluded from any earlier undone-doses pinning)
+            // before its invoice was downloaded. Matched by GivenDate falling on the invoice's
+            // own InvoiceDate, same convention used everywhere else this invoice is matched.
+            var scheduleIdsOnInvoice = _db.Schedules
+                .Where(s => s.ChildId == childId
+                         && s.IsDone == true
+                         && s.GivenDate.HasValue
+                         && s.GivenDate.Value.Date == invoice.InvoiceDate.Date)
+                .Select(s => s.Id)
+                .ToList();
+            foreach (var sid in scheduleIdsOnInvoice)
+                LinkScheduleToAssignment(activeAssignment.Id, sid);
         }
 
         [HttpGet("invoice-status")]

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using VaccineAPI.Models;
@@ -53,13 +54,16 @@ namespace VaccineAPI.Controllers
             {
                 var child = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
 
-                // No date filter — PaymentCollectorPaId is the authoritative link.
-                // InvoiceDate can differ from AssignedAt when vaccine was given on a different
-                // calendar day than scheduled (PA downloads via the scheduled-date URL route).
+                // PAAssignmentSchedule is the single source of truth for "which Schedule rows
+                // does this assignment cover" — no ChildId/date/PaymentCollectorPaId inference.
+                // Not filtered to IsDone == true: a schedule can be pinned here before the PA
+                // has actually given it yet (assign-time auto-include of undone doses).
+                var scheduleIds = _db.PAAssignmentSchedules
+                    .Where(l => l.AssignmentId == a.Id)
+                    .Select(l => l.ScheduleId);
+
                 var schedules = _db.Schedules
-                    .Where(s => s.ChildId == a.ChildId
-                             && s.PaymentCollectorPaId == paId
-                             && s.IsDone == true)
+                    .Where(s => scheduleIds.Contains(s.Id))
                     .Join(_db.Doses,
                         s => s.DoseId,
                         d => d.Id,
@@ -67,11 +71,14 @@ namespace VaccineAPI.Controllers
                         {
                             s.Id,
                             DoseName           = d.Name,
+                            s.IsDone,
                             s.IsPaymentCollected,
                             s.Amount,
                             s.Weight,
                             s.Height,
-                            s.Circle
+                            s.Circle,
+                            s.PaymentCollectorPaId,
+                            s.GivenByPaId
                         })
                     .ToList();
 
@@ -202,17 +209,12 @@ namespace VaccineAPI.Controllers
             if (paId.HasValue && assignment.PersonalAssistantId != paId.Value)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to complete this assignment" });
 
-            // Payment gate: all schedules this PA collected with a non-zero amount must have payment recorded
-            var assignDate    = assignment.AssignedAt.Date;
-            var assignDateEnd = assignDate.AddDays(1);
-            var unpaid = _db.Schedules
-                .Where(s => s.ChildId == assignment.ChildId
-                         && s.PaymentCollectorPaId == assignment.PersonalAssistantId
-                         && s.GivenDate.HasValue
-                         && s.GivenDate.Value >= assignDate
-                         && s.GivenDate.Value < assignDateEnd
-                         && !s.IsPaymentCollected
-                         && s.Amount > 0)
+            // Payment gate: all schedules pinned to this assignment with a non-zero amount
+            // must have payment recorded — exact via PAAssignmentSchedule, no date window.
+            var unpaid = _db.PAAssignmentSchedules
+                .Where(l => l.AssignmentId == assignment.Id)
+                .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
+                .Where(s => !s.IsPaymentCollected && s.Amount > 0)
                 .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => d.Name)
                 .ToList();
 
@@ -255,10 +257,10 @@ namespace VaccineAPI.Controllers
             // PA cannot self-cancel once vaccines were given or payment was recorded — must ask the doctor
             if (dto.CallerType == "PA")
             {
-                var hasGivenOrPaid = await _db.Schedules.AnyAsync(s =>
-                    s.ChildId == assignment.ChildId
-                    && s.PaymentCollectorPaId == assignment.PersonalAssistantId
-                    && (s.IsDone == true || s.IsPaymentCollected == true));
+                var hasGivenOrPaid = await _db.PAAssignmentSchedules
+                    .Where(l => l.AssignmentId == assignment.Id)
+                    .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
+                    .AnyAsync(s => s.IsDone == true || s.IsPaymentCollected == true);
 
                 if (hasGivenOrPaid)
                     return BadRequest(new { IsSuccess = false, Message = "This assignment has vaccines given or payment recorded and can no longer be self-cancelled. Please contact the doctor." });
@@ -318,10 +320,10 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Cancellation already requested — awaiting doctor approval" });
 
             // Belt-and-suspenders — frontend already blocks this, but guard here too (same rule as instant Cancel)
-            var hasGivenOrPaid = await _db.Schedules.AnyAsync(s =>
-                s.ChildId == assignment.ChildId
-                && s.PaymentCollectorPaId == assignment.PersonalAssistantId
-                && (s.IsDone == true || s.IsPaymentCollected == true));
+            var hasGivenOrPaid = await _db.PAAssignmentSchedules
+                .Where(l => l.AssignmentId == assignment.Id)
+                .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
+                .AnyAsync(s => s.IsDone == true || s.IsPaymentCollected == true);
 
             if (hasGivenOrPaid)
                 return BadRequest(new { IsSuccess = false, Message = "This assignment has vaccines given or payment recorded and can no longer be self-cancelled. Please contact the doctor." });
@@ -500,6 +502,17 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
 
+            // Move every PAAssignmentSchedule row from the old assignment to the new one —
+            // exact FK move, no date-window guessing. This is what makes "which schedules
+            // does this assignment cover" survive a reassignment unchanged.
+            var linksToMove = await _db.PAAssignmentSchedules
+                .Where(l => l.AssignmentId == old.Id)
+                .ToListAsync();
+            foreach (var link in linksToMove)
+                link.AssignmentId = newAssignment.Id;
+            if (linksToMove.Count > 0)
+                await _db.SaveChangesAsync();
+
             // Move the linked invoice's PaId to the new PA — exact, via the FK just carried
             // forward above, not a date-window guess.
             if (old.InvoiceSubmissionId.HasValue)
@@ -511,42 +524,9 @@ namespace VaccineAPI.Controllers
                     if (invoiceToMove.ClinicId == null && old.ClinicId.HasValue)
                         invoiceToMove.ClinicId = old.ClinicId;
                     _db.Entry(invoiceToMove).State = EntityState.Modified;
-
-                    // Move PaymentCollectorPaId from old PA to new PA on that invoice's own
-                    // schedules (matched by the invoice's own InvoiceDate, not a "today" window).
-                    var schedulesToMove = _db.Schedules
-                        .Where(s => s.ChildId == old.ChildId
-                                 && s.IsDone == true
-                                 && s.GivenDate.HasValue
-                                 && s.GivenDate.Value.Date == invoiceToMove.InvoiceDate.Date
-                                 && s.PaymentCollectorPaId == old.PersonalAssistantId)
-                        .ToList();
-                    foreach (var s in schedulesToMove)
-                    {
-                        s.PaymentCollectorPaId = dto.NewPaId;
-                        _db.Entry(s).State = EntityState.Modified;
-                    }
-
                     await _db.SaveChangesAsync();
                 }
             }
-
-            // Credit the new PA for any of the child's doses given under the old assignment
-            // that are still unpaid and weren't already moved above (covers doses given before
-            // any invoice was downloaded — the invoice-linked move only fires when one exists).
-            var unpaidGivenSchedules = _db.Schedules
-                .Where(s => s.ChildId == old.ChildId
-                         && s.IsDone == true
-                         && s.IsPaymentCollected == false
-                         && (s.PaymentCollectorPaId == null || s.PaymentCollectorPaId == old.PersonalAssistantId))
-                .ToList();
-            foreach (var s in unpaidGivenSchedules)
-            {
-                s.PaymentCollectorPaId = dto.NewPaId;
-                _db.Entry(s).State = EntityState.Modified;
-            }
-            if (unpaidGivenSchedules.Any())
-                await _db.SaveChangesAsync();
 
             // Notify new PA by email (fire-and-forget)
             var pa = await _db.PersonalAssistant.FindAsync(dto.NewPaId);
@@ -627,24 +607,30 @@ namespace VaccineAPI.Controllers
                 _db.PAAssignments.Add(assignment);
                 await _db.SaveChangesAsync();
 
-                // Credit this new PA as payment collector for any of the child's doses that
-                // were already given before this assignment existed and are still unpaid —
-                // independent of whether an invoice has been downloaded yet (the invoice-linked
-                // block below only fires once an invoice exists; this covers the gap where it
-                // doesn't yet, so a later invoice download/redownload still shows the money icon).
-                var unpaidGivenSchedules = _db.Schedules
-                    .Where(s => s.ChildId == dto.ChildId
-                             && s.IsDone == true
-                             && s.IsPaymentCollected == false
-                             && s.PaymentCollectorPaId == null)
-                    .ToList();
-                foreach (var s in unpaidGivenSchedules)
+                // Pin the date-group's undone schedules to this assignment now, at creation
+                // time — single source of truth for "which doses does this assignment cover."
+                // No later re-inference; an extra dose given mid-visit gets appended by
+                // ScheduleController's LinkScheduleToAssignment, not guessed here. Re-validated
+                // server-side (ChildId + still-undone) rather than trusting the client's list
+                // blindly, in case the popup state went stale between open and confirm.
+                if (dto.ScheduleIds != null && dto.ScheduleIds.Count > 0)
                 {
-                    s.PaymentCollectorPaId = dto.PersonalAssistantId;
-                    _db.Entry(s).State = EntityState.Modified;
+                    var validScheduleIds = await _db.Schedules
+                        .Where(s => dto.ScheduleIds.Contains(s.Id) && s.ChildId == dto.ChildId && s.IsDone == false)
+                        .Select(s => s.Id)
+                        .ToListAsync();
+
+                    foreach (var sid in validScheduleIds)
+                    {
+                        _db.PAAssignmentSchedules.Add(new PAAssignmentSchedule
+                        {
+                            AssignmentId = assignment.Id,
+                            ScheduleId = sid
+                        });
+                    }
+                    if (validScheduleIds.Count > 0)
+                        await _db.SaveChangesAsync();
                 }
-                if (unpaidGivenSchedules.Any())
-                    await _db.SaveChangesAsync();
 
                 // Link this child's orphaned invoice (downloaded before any PA was assigned —
                 // PaId == null) to the new assignment directly via the InvoiceSubmissionId FK.
@@ -669,24 +655,23 @@ namespace VaccineAPI.Controllers
                     _db.Entry(assignment).State = EntityState.Modified;
                     await _db.SaveChangesAsync();
 
-                    // Stamp PaymentCollectorPaId on that invoice's own schedules that don't
-                    // already have a different PA's collection credit. Scoped to the schedules
-                    // actually on the invoice being linked — not a date-window guess — so a
-                    // separate visit's schedules (different invoice) are never touched.
-                    var scheduleIdsOnInvoice = _db.Schedules
+                    // Pin this invoice's own schedules too — covers the doctor-gave-it-then-
+                    // assigned-a-PA ordering, where the dose was already done before the
+                    // assignment existed and so was excluded from the undone-doses pinning
+                    // above. Matched the same way the invoice itself was just identified as
+                    // "orphaned" for this child — by GivenDate falling on the invoice's own
+                    // InvoiceDate — not a blind ChildId-only scan.
+                    var scheduleIdsOnInvoice = await _db.Schedules
                         .Where(s => s.ChildId == dto.ChildId
                                  && s.IsDone == true
                                  && s.GivenDate.HasValue
-                                 && s.GivenDate.Value.Date == orphanInvoice.InvoiceDate.Date
-                                 && (s.PaymentCollectorPaId == null || s.PaymentCollectorPaId == dto.PersonalAssistantId
-                                     || s.GivenByPaId == dto.PersonalAssistantId))
-                        .ToList();
-                    foreach (var s in scheduleIdsOnInvoice)
-                    {
-                        s.PaymentCollectorPaId = dto.PersonalAssistantId;
-                        _db.Entry(s).State = EntityState.Modified;
-                    }
-                    if (scheduleIdsOnInvoice.Any())
+                                 && s.GivenDate.Value.Date == orphanInvoice.InvoiceDate.Date)
+                        .Select(s => s.Id)
+                        .ToListAsync();
+                    foreach (var sid in scheduleIdsOnInvoice)
+                        if (!_db.PAAssignmentSchedules.Any(l => l.AssignmentId == assignment.Id && l.ScheduleId == sid))
+                            _db.PAAssignmentSchedules.Add(new PAAssignmentSchedule { AssignmentId = assignment.Id, ScheduleId = sid });
+                    if (scheduleIdsOnInvoice.Count > 0)
                         await _db.SaveChangesAsync();
                 }
 
@@ -728,11 +713,11 @@ namespace VaccineAPI.Controllers
             if (paId.HasValue && assignment.PersonalAssistantId != paId.Value)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to update this assignment." });
 
-            // Payment gate: PA must have collected payment on at least one schedule for this child
-            var hasPayment = _db.Schedules.Any(s =>
-                s.ChildId == assignment.ChildId &&
-                s.PaymentCollectorPaId == assignment.PersonalAssistantId &&
-                s.IsPaymentCollected == true);
+            // Payment gate: PA must have collected payment on at least one schedule pinned to this assignment
+            var hasPayment = _db.PAAssignmentSchedules
+                .Where(l => l.AssignmentId == assignment.Id)
+                .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
+                .Any(s => s.IsPaymentCollected == true);
 
             if (!hasPayment)
                 return Ok(new { IsSuccess = false, Message = "Please record payment mode before marking done." });
@@ -829,5 +814,6 @@ namespace VaccineAPI.Controllers
         public long PersonalAssistantId { get; set; }
         public long ChildId { get; set; }
         public string? Notes { get; set; }
+        public List<long> ScheduleIds { get; set; } = new List<long>();
     }
 }

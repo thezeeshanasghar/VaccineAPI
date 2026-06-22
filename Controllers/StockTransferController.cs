@@ -10,6 +10,7 @@ using iTextSharp.text.pdf;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
 using VaccineAPI.Services;
+using VaccineAPI.helper;
 
 namespace VaccineAPI.Controllers
 {
@@ -396,7 +397,9 @@ namespace VaccineAPI.Controllers
                 doc.Close();
                 writer.Close();
 
-                string fileName = $"Transfer-{(string.IsNullOrEmpty(billNo) ? billId.ToString() : billNo)}.pdf";
+                string fromClinicName = first.FromClinic != null ? first.FromClinic.Name : $"Clinic{first.FromClinicId}";
+                string toClinicName = first.ToClinic != null ? first.ToClinic.Name : $"Clinic{first.ToClinicId}";
+                string fileName = ReportFileName.Build($"Transfer-{(string.IsNullOrEmpty(billNo) ? billId.ToString() : billNo)}", $"{fromClinicName}-to-{toClinicName}");
                 return File(ms.ToArray(), "application/pdf", fileName);
             }
         }

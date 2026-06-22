@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using VaccineAPI.Models;
+using VaccineAPI.helper;
 
 namespace VaccineAPI.Controllers
 {
@@ -248,7 +249,7 @@ namespace VaccineAPI.Controllers
                 doc.Add(tbl);
                 doc.Close();
                 var bytes = ms.ToArray();
-                return File(bytes, "application/pdf", "StockOverview.pdf");
+                return File(bytes, "application/pdf", ReportFileName.Build("StockOverview", clinicName));
             }
         }
     }

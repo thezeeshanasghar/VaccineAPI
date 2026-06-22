@@ -13,6 +13,7 @@ using VaccineAPI.Services;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using System.IO;
+using VaccineAPI.helper;
 
 namespace VaccineAPI.Controllers
 {
@@ -3621,7 +3622,7 @@ namespace VaccineAPI.Controllers
                     return File(
                         ms.ToArray(),
                         "application/pdf",
-                        $"SalesReport_{clinicId}_{parsedFromDate:yyyyMMdd}_{parsedToDate:yyyyMMdd}.pdf"
+                        ReportFileName.Build("SalesReport", clinicName)
                     );
                 }
             }

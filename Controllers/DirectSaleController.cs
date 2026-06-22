@@ -10,6 +10,7 @@ using iTextSharp.text.pdf;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
 using VaccineAPI.Services;
+using VaccineAPI.helper;
 
 namespace VaccineAPI.Controllers
 {
@@ -519,7 +520,7 @@ namespace VaccineAPI.Controllers
                 doc.Close();
                 writer.Close();
 
-                return File(ms.ToArray(), "application/pdf", $"Sale-{saleBillNo}.pdf");
+                return File(ms.ToArray(), "application/pdf", ReportFileName.Build($"Sale-{saleBillNo}", clinicName));
             }
         }
     }

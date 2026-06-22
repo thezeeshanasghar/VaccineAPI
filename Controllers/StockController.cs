@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using VaccineAPI.Models;
+using VaccineAPI.helper;
 
 namespace VaccineAPI.Controllers
 {
@@ -200,7 +201,7 @@ namespace VaccineAPI.Controllers
 
                 doc.Close();
                 writer.Close();
-                return File(ms.ToArray(), "application/pdf", $"SalesReport-{from:yyyyMMdd}-{to:yyyyMMdd}.pdf");
+                return File(ms.ToArray(), "application/pdf", ReportFileName.Build("SalesReport", clinicName));
             }
         }
 
@@ -446,7 +447,7 @@ namespace VaccineAPI.Controllers
 
                 doc.Close();
                 writer.Close();
-                return File(ms.ToArray(), "application/pdf", $"SalesReport_{clinicId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf");
+                return File(ms.ToArray(), "application/pdf", ReportFileName.Build("SalesCollectionReport", clinic.Name));
             }
         }
 
@@ -672,9 +673,10 @@ namespace VaccineAPI.Controllers
 
                 doc.Close();
                 writer.Close();
-                string fname = brandId > 0
-                    ? $"ItemsReport_{clinicId}_{brandId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf"
-                    : $"ItemsReport_{clinicId}_All_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf";
+                string itemsReportType = brandId > 0 && brandsLookup.ContainsKey(brandId)
+                    ? $"ItemsReport-{brandsLookup[brandId]}"
+                    : "ItemsReport-AllBrands";
+                string fname = ReportFileName.Build(itemsReportType, clinicName);
                 return File(ms.ToArray(), "application/pdf", fname);
             }
         }
@@ -874,9 +876,8 @@ namespace VaccineAPI.Controllers
 
                 doc.Close();
                 writer.Close();
-                string fname = singleBrand
-                    ? $"ItemsWisePurchaseReport_{clinicId}_{brandId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf"
-                    : $"PurchaseReport_{clinicId}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}.pdf";
+                string purchaseReportType = singleBrand ? $"PurchaseReport-{itemName}" : "PurchaseReport-AllItems";
+                string fname = ReportFileName.Build(purchaseReportType, clinicName);
                 return File(ms.ToArray(), "application/pdf", fname);
             }
         }
@@ -976,7 +977,7 @@ namespace VaccineAPI.Controllers
 
                 doc.Close();
                 writer.Close();
-                return File(ms.ToArray(), "application/pdf", $"SupplierReport-{from:yyyyMMdd}-{to:yyyyMMdd}.pdf");
+                return File(ms.ToArray(), "application/pdf", ReportFileName.Build($"SupplierReport-{supplier}", clinicName));
             }
         }
     // Returns the vaccination fee for a patient visit.

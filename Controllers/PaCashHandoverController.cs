@@ -711,7 +711,11 @@ namespace VaccineAPI.Controllers
                 .Where(c => childIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
-            var rows = invoices.Select(i => new {
+            // Rows list is the PA's "Completed" queue — only still-unresolved items belong here.
+            // Once the doctor confirms (IsConfirmedByDoctor = true) or deletes the row entirely,
+            // it must stop appearing; totals below still sum the full historical set so
+            // TotalPending stays correct regardless of which rows are shown.
+            var rows = invoices.Where(i => !i.IsConfirmedByDoctor).Select(i => new {
                 RowType             = "Invoice",
                 InvoiceSubmissionId = i.Id,
                 ChildId             = i.ChildId,
@@ -732,6 +736,7 @@ namespace VaccineAPI.Controllers
             var directSales = dsQuery.OrderByDescending(d => d.SaleDate).ToList();
 
             var directSaleRows = directSales
+                .Where(d => !d.IsConfirmedByDoctor)
                 .GroupBy(d => d.SaleBillNo ?? $"id-{d.Id}")
                 .Select(g => {
                     var first = g.First();

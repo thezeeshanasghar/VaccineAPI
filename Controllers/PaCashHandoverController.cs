@@ -562,6 +562,23 @@ namespace VaccineAPI.Controllers
                 .Where(c => pendingChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
+            // Surfaces a PA-initiated visit where cash was already collected with no invoice
+            // downloaded yet — closes the embezzlement-risk window where a PA could give a
+            // vaccine, take payment, and simply never invoice it. Reuses PAAssignmentSchedule
+            // (single source of truth for "which Schedule rows belong to this assignment",
+            // from the schedule-scoping redesign) — exact FK join, no date-window guessing.
+            // Amount/Mode still render as "—" per the existing AwaitingInvoice convention; this
+            // flag only changes urgency styling, not the displayed figures.
+            var pendingAssignmentIds = pendingAssignments.Select(a => a.Id).ToList();
+            var assignmentsWithUnbilledPayment = new HashSet<long>(
+                _db.PAAssignmentSchedules
+                    .Where(l => pendingAssignmentIds.Contains(l.AssignmentId))
+                    .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => new { l.AssignmentId, s.IsDone, s.IsPaymentCollected })
+                    .Where(x => x.IsDone && x.IsPaymentCollected)
+                    .Select(x => x.AssignmentId)
+                    .Distinct()
+                    .ToList());
+
             var awaitingInvoiceRows = pendingAssignments.Select(a => new
             {
                 RowType             = "AwaitingInvoice",
@@ -578,8 +595,14 @@ namespace VaccineAPI.Controllers
                 InvoiceStatus       = (string)null,
                 HasPendingAmendment = false,
                 PendingHandover     = false,
+                HasUnbilledPayment  = assignmentsWithUnbilledPayment.Contains(a.Id),
                 PaId                = a.PersonalAssistantId,
-                PaName              = "Doctor/(" + (paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "PA") + ")",
+                // Doctor never assigned this PA — the system auto-created the assignment
+                // because the PA gave a dose on their own initiative (EnsurePAAssignment in
+                // ScheduleController.cs). Don't imply doctor involvement that didn't happen.
+                PaName              = a.IsAutoCreated
+                    ? (paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "PA")
+                    : "Doctor/(" + (paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "PA") + ")",
                 ClinicId            = a.ClinicId ?? 0,
                 ClinicName          = (a.ClinicId.HasValue && clinicNames.ContainsKey(a.ClinicId.Value)) ? clinicNames[a.ClinicId.Value] : "",
                 OldAmount           = (decimal?)null,

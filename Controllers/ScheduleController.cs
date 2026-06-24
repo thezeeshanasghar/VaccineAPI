@@ -2019,15 +2019,27 @@ namespace VaccineAPI.Controllers
             // doctor already gave (so it was excluded from any earlier undone-doses pinning)
             // before its invoice was downloaded. Matched by GivenDate falling on the invoice's
             // own InvoiceDate, same convention used everywhere else this invoice is matched.
-            var scheduleIdsOnInvoice = _db.Schedules
+            var schedulesOnInvoice = _db.Schedules
                 .Where(s => s.ChildId == childId
                          && s.IsDone == true
                          && s.GivenDate.HasValue
                          && s.GivenDate.Value.Date == invoice.InvoiceDate.Date)
-                .Select(s => s.Id)
                 .ToList();
-            foreach (var sid in scheduleIdsOnInvoice)
-                LinkScheduleToAssignment(activeAssignment.Id, sid);
+            foreach (var s in schedulesOnInvoice)
+            {
+                LinkScheduleToAssignment(activeAssignment.Id, s.Id);
+                // The money-icon visibility check (hasUnpaidDoneVaccine in vaccine.page.ts)
+                // reads Schedule.PaymentCollectorPaId directly, not PAAssignmentSchedule — a
+                // dose given before any PA was assigned has this stuck at NULL forever (set
+                // once at give-time, never revisited). Backfill it here, the same moment the
+                // schedule is confirmed to belong to this assignment, so the PA can actually
+                // see and record the payment from their own screen.
+                if (s.PaymentCollectorPaId != activeAssignment.PersonalAssistantId)
+                {
+                    s.PaymentCollectorPaId = activeAssignment.PersonalAssistantId;
+                    _db.Entry(s).State = EntityState.Modified;
+                }
+            }
         }
 
         [HttpGet("invoice-status")]

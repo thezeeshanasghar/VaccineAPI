@@ -661,17 +661,26 @@ namespace VaccineAPI.Controllers
                     // above. Matched the same way the invoice itself was just identified as
                     // "orphaned" for this child — by GivenDate falling on the invoice's own
                     // InvoiceDate — not a blind ChildId-only scan.
-                    var scheduleIdsOnInvoice = await _db.Schedules
+                    var schedulesOnInvoice = await _db.Schedules
                         .Where(s => s.ChildId == dto.ChildId
                                  && s.IsDone == true
                                  && s.GivenDate.HasValue
                                  && s.GivenDate.Value.Date == orphanInvoice.InvoiceDate.Date)
-                        .Select(s => s.Id)
                         .ToListAsync();
-                    foreach (var sid in scheduleIdsOnInvoice)
-                        if (!_db.PAAssignmentSchedules.Any(l => l.AssignmentId == assignment.Id && l.ScheduleId == sid))
-                            _db.PAAssignmentSchedules.Add(new PAAssignmentSchedule { AssignmentId = assignment.Id, ScheduleId = sid });
-                    if (scheduleIdsOnInvoice.Count > 0)
+                    foreach (var s in schedulesOnInvoice)
+                    {
+                        if (!_db.PAAssignmentSchedules.Any(l => l.AssignmentId == assignment.Id && l.ScheduleId == s.Id))
+                            _db.PAAssignmentSchedules.Add(new PAAssignmentSchedule { AssignmentId = assignment.Id, ScheduleId = s.Id });
+                        // Same backfill as SyncInvoicePaToActiveAssignment (ScheduleController.cs)
+                        // — the money-icon check reads Schedule.PaymentCollectorPaId directly,
+                        // which stays NULL forever from give-time unless backfilled here.
+                        if (s.PaymentCollectorPaId != dto.PersonalAssistantId)
+                        {
+                            s.PaymentCollectorPaId = dto.PersonalAssistantId;
+                            _db.Entry(s).State = EntityState.Modified;
+                        }
+                    }
+                    if (schedulesOnInvoice.Count > 0)
                         await _db.SaveChangesAsync();
                 }
 

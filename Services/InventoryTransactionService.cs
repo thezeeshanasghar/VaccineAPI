@@ -472,31 +472,15 @@ namespace VaccineAPI.Services
             }
             else
             {
-                // No stock row exists at all — batch row was hard-deleted after hitting 0. Same
-                // documented, intentional anchor-bill approximation as before (see
-                // ScheduleController comment from commit b44095f) — kept verbatim here, but now
-                // also recorded as a true Unadminister ledger row with no fabricated provenance.
-                var anchorBill = await _db.Bills
-                    .Where(b => b.ClinicId == clinicId && !b.BillNo.StartsWith("XFER-"))
-                    .OrderByDescending(b => b.BillDate).ThenByDescending(b => b.Id)
-                    .FirstOrDefaultAsync();
-                int? recreatedStockId = null;
+                // No live stock row exists at all — batch row was hard-deleted after hitting 0.
+                // Previously this fabricated a new Stock row anchored to the clinic's most
+                // recent unrelated posted bill (BillId = anchorBill.Id), misattributing the
+                // restored unit's provenance. Removed per explicit decision: a posted bill is
+                // immutable and has nothing to do with this restore. Matches
+                // UnadministerBulkSync's existing behavior in this exact case — restore
+                // BrandAmount.Count only, log the ledger entry with StockId = null.
                 decimal? unitCost = ba != null ? ba.PurchasedAmt : (decimal?)null;
-                if (anchorBill != null)
-                {
-                    var recreated = new Stock
-                    {
-                        BrandId = brandId,
-                        BillId = anchorBill.Id,
-                        Quantity = 1,
-                        OriginalQuantity = 0,
-                        StockAmount = unitCost ?? 0
-                    };
-                    _db.Stocks.Add(recreated);
-                    await _db.SaveChangesAsync();
-                    recreatedStockId = recreated.Id;
-                }
-                Log(doctorId, clinicId, brandId, recreatedStockId, null, null, 1, unitCost,
+                Log(doctorId, clinicId, brandId, null, null, null, 1, unitCost,
                     InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
             }
         }
@@ -561,37 +545,22 @@ namespace VaccineAPI.Services
             }
             else
             {
-                var anchorBill = _db.Bills
-                    .Where(b => b.ClinicId == clinicId && !b.BillNo.StartsWith("XFER-"))
-                    .OrderByDescending(b => b.BillDate).ThenByDescending(b => b.Id)
-                    .FirstOrDefault();
-                int? recreatedStockId = null;
+                // No live stock row exists at all — batch row was hard-deleted after hitting 0.
+                // Previously this fabricated a new Stock row anchored to the clinic's most
+                // recent unrelated posted bill (BillId = anchorBill.Id), misattributing the
+                // restored unit's provenance. Removed per explicit decision: a posted bill is
+                // immutable and has nothing to do with this restore. Matches
+                // UnadministerBulkSync's existing behavior in this exact case — restore
+                // BrandAmount.Count only, log the ledger entry with StockId = null.
                 decimal? unitCost = ba != null ? ba.PurchasedAmt : (decimal?)null;
-                if (anchorBill != null)
-                {
-                    var recreated = new Stock
-                    {
-                        BrandId = brandId,
-                        BillId = anchorBill.Id,
-                        Quantity = 1,
-                        OriginalQuantity = 0,
-                        StockAmount = unitCost ?? 0
-                    };
-                    _db.Stocks.Add(recreated);
-                    _db.SaveChanges();
-                    recreatedStockId = recreated.Id;
-                }
-                Log(doctorId, clinicId, brandId, recreatedStockId, null, null, 1, unitCost,
+                Log(doctorId, clinicId, brandId, null, null, null, 1, unitCost,
                     InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
             }
         }
 
-        // Bulk-ungive restore path (ScheduleController.UpdateBulkInjection). Deliberately
-        // narrower than UnadministerSync: the original bulk code never had an anchor-bill
-        // fallback for the hard-deleted-row case — it silently no-ops the Stock-level restore
-        // if no live row is found (BrandAmount.Count is still restored either way). Kept
-        // exactly as that pre-existing behavior; not "fixed" to match the single-give path,
-        // since that would be a behavior change beyond this refactor's scope.
+        // Bulk-ungive restore path (ScheduleController.UpdateBulkInjection). Same no-live-row
+        // behavior as UnadministerSync above — restores BrandAmount.Count only, no Stock row
+        // fabricated, ledger logs the event with StockId = null.
         public void UnadministerBulkSync(BrandAmount ba, long clinicId, long brandId, long scheduleId, long? createdByPaId = null)
         {
             ba.Count++;

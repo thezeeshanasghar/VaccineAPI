@@ -484,7 +484,10 @@ namespace VaccineAPI.Controllers
                 var adjBrands = await _db.AdjustStocks
                     .Where(a => a.ClinicId == clinicId)
                     .Select(a => a.BrandId).Distinct().ToListAsync();
-                brandIds = soldBrands.Concat(purchBrands).Concat(xferBrands).Concat(adjBrands).Distinct().ToList();
+                var directSaleBrands = await _db.DirectSales
+                    .Where(d => d.ClinicId == clinicId)
+                    .Select(d => d.BrandId).Distinct().ToListAsync();
+                brandIds = soldBrands.Concat(purchBrands).Concat(xferBrands).Concat(adjBrands).Concat(directSaleBrands).Distinct().ToList();
             }
 
             if (brandIds.Count == 0)
@@ -556,12 +559,18 @@ namespace VaccineAPI.Controllers
                                  && a.Date.Date >= from.Date && a.Date.Date <= to.Date)
                         .ToListAsync();
 
+                    var directSaleRows = await _db.DirectSales
+                        .Where(d => d.ClinicId == clinicId && d.BrandId == bid
+                                 && d.SaleDate.Date >= from.Date && d.SaleDate.Date <= to.Date)
+                        .ToListAsync();
+
                     // Collect all active dates
                     var activeDates = soldRows.Select(s => s.GivenDate.Value.Date)
                         .Concat(purchRows.Select(p => p.Bill.BillDate.Date))
                         .Concat(xferInRows.Select(t => t.TransferDate.Date))
                         .Concat(xferOutRows.Select(t => t.TransferDate.Date))
                         .Concat(adjRows.Select(a => a.Date.Date))
+                        .Concat(directSaleRows.Select(d => d.SaleDate.Date))
                         .Distinct().OrderBy(d => d).ToList();
 
                     if (activeDates.Count == 0) continue;
@@ -611,7 +620,7 @@ namespace VaccineAPI.Controllers
                             reconciling = true;
 
                         int sold         = soldRows.Count(s => s.GivenDate.Value.Date == d);
-                        int directSale   = 0; // placeholder — direct sale not yet in model
+                        int directSale   = directSaleRows.Where(ds => ds.SaleDate.Date == d).Sum(ds => ds.Quantity);
                         int purchased    = purchRows.Where(p => p.Bill.BillDate.Date == d).Sum(p => p.OriginalQuantity);
                         int xferNet      = xferInRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity)
                                          - xferOutRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity);
@@ -726,7 +735,12 @@ namespace VaccineAPI.Controllers
                          && a.Date.Date <= upTo.Date && a.Date.Date >= sinceDate)
                 .SumAsync(a => (int?)a.Adjustment) ?? 0;
 
-            return purchased + xferIn - sold - xferOut + adjusted;
+            int directSold = await db.DirectSales
+                .Where(d => d.ClinicId == clinicId && d.BrandId == brandId
+                         && d.SaleDate.Date <= upTo.Date && d.SaleDate.Date >= sinceDate)
+                .SumAsync(d => (int?)d.Quantity) ?? 0;
+
+            return purchased + xferIn - sold - directSold - xferOut + adjusted;
         }
 
         // First date this clinic received any units of this brand, via direct purchase bill

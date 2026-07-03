@@ -626,12 +626,6 @@ namespace VaccineAPI.Controllers
                                          - xferOutRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity);
                         int adjusted     = adjRows.Where(a => a.Date.Date == d).Sum(a => a.Adjustment);
 
-                        totSold       += sold;
-                        totDirectSale += directSale;
-                        totTransfer   += xferNet;
-                        totPurchased  += purchased;
-                        totAdjusted   += adjusted;
-
                         var bg = alt ? altBg : whiteBg;
                         alt = !alt;
 
@@ -639,7 +633,7 @@ namespace VaccineAPI.Controllers
 
                         if (!reconciling)
                         {
-                            // No purchase/transfer history yet — balance cannot be determined
+                            // Pre-cutoff rows: balance cannot be determined, don't count toward totals
                             tbl.AddCell(CellR("N/A", cellFont, bg, borderClr));
                             tbl.AddCell(CellR(sold.ToString(), cellFont, bg, borderClr));
                             tbl.AddCell(CellR(directSale.ToString(), cellFont, bg, borderClr));
@@ -650,6 +644,12 @@ namespace VaccineAPI.Controllers
                         }
                         else
                         {
+                            totSold       += sold;
+                            totDirectSale += directSale;
+                            totTransfer   += xferNet;
+                            totPurchased  += purchased;
+                            totAdjusted   += adjusted;
+
                             int dayOpening = running;
                             int closing    = dayOpening - sold - directSale + xferNet + purchased + adjusted;
                             running        = closing;

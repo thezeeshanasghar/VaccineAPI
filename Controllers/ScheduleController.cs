@@ -992,6 +992,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Expiry = stock.Expiry;
                 dbSchedule.VaccineCost = stock.StockAmount;
             }
+            dbSchedule.StockClinicId = clinicId;
         }
 
         private long ResolveClinicIdForStock(long actorId, long fallbackClinicId)

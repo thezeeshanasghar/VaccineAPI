@@ -717,7 +717,8 @@ namespace VaccineAPI.Controllers
 
             int sold = await db.Schedules
                 .Include(s => s.Child)
-                .Where(s => s.Child.ClinicId == clinicId && s.IsDone == true
+                .Where(s => (s.StockClinicId == clinicId || (s.StockClinicId == null && s.Child.ClinicId == clinicId))
+                         && s.IsDone == true
                          && s.BrandId == brandId && s.GivenDate.HasValue
                          && s.GivenDate.Value.Date <= upTo.Date
                          && s.GivenDate.Value.Date >= sinceDate)

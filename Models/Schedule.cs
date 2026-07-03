@@ -46,6 +46,7 @@ namespace VaccineAPI.Models
         public virtual Child Child { get; set; } = null!;
         public long DoseId { get; set; }
         public virtual Dose Dose { get; set; } = null!;
+        public long? StockClinicId { get; set; }
         // public virtual DateTime FromDate { get; set; }
         // public virtual DateTime ToDate { get; set; }
     }

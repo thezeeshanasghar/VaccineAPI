@@ -612,7 +612,7 @@ namespace VaccineAPI.Controllers
 
                         int sold         = soldRows.Count(s => s.GivenDate.Value.Date == d);
                         int directSale   = 0; // placeholder — direct sale not yet in model
-                        int purchased    = purchRows.Where(p => p.Bill.BillDate.Date == d).Sum(p => p.Quantity);
+                        int purchased    = purchRows.Where(p => p.Bill.BillDate.Date == d).Sum(p => p.OriginalQuantity);
                         int xferNet      = xferInRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity)
                                          - xferOutRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity);
                         int adjusted     = adjRows.Where(a => a.Date.Date == d).Sum(a => a.Adjustment);
@@ -701,7 +701,7 @@ namespace VaccineAPI.Controllers
                          && !s.Bill.BillNo.StartsWith("XFER-")
                          && s.BrandId == brandId && s.Bill.BillDate.Date <= upTo.Date
                          && s.Bill.BillDate.Date >= sinceDate)
-                .SumAsync(s => (int?)s.Quantity) ?? 0;
+                .SumAsync(s => (int?)s.OriginalQuantity) ?? 0;
 
             int sold = await db.Schedules
                 .Include(s => s.Child)

@@ -142,8 +142,8 @@ namespace VaccineAPI.Controllers
                     _db.StockTransfers.Add(transferRow);
                     await _db.SaveChangesAsync();
 
-                    await _inventory.TransferOut(dto.DoctorId, dto.FromClinicId, sourceStock, sourceBa, item.Quantity, transferRow.Id);
-                    await _inventory.TransferIn(dto.DoctorId, dto.ToClinicId, item.BrandId, bill.Id, item.Quantity, item.UnitPrice, item.BatchLot, item.ExpiryDate, transferRow.Id, sourceBa.Amount);
+                    await _inventory.TransferOut(dto.DoctorId, dto.FromClinicId, sourceStock, sourceBa, item.Quantity, transferRow.Id, dto.TransferDate);
+                    await _inventory.TransferIn(dto.DoctorId, dto.ToClinicId, item.BrandId, bill.Id, item.Quantity, item.UnitPrice, item.BatchLot, item.ExpiryDate, transferRow.Id, sourceBa.Amount, dto.TransferDate);
                 }
 
                 await _db.SaveChangesAsync();

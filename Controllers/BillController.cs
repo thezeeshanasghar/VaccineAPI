@@ -198,7 +198,7 @@ namespace VaccineAPI.Controllers
                 {
                     decimal stockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4);
                     await _inventory.PostPurchaseLine(dto.DoctorId, dto.ClinicId, bill.Id, line.BrandId,
-                        line.Quantity, stockAmount, line.BatchLot, line.Expiry);
+                        line.Quantity, stockAmount, line.BatchLot, line.Expiry, bill.BillDate);
                 }
 
                 await _db.SaveChangesAsync();
@@ -250,7 +250,7 @@ namespace VaccineAPI.Controllers
                 // Reverse old stock rows
                 foreach (var stock in bill.Stocks.ToList())
                 {
-                    await _inventory.ReverseBillLine(bill.DoctorId, bill.ClinicId, stock, bill.Id);
+                    await _inventory.ReverseBillLine(bill.DoctorId, bill.ClinicId, stock, bill.Id, bill.BillDate);
                 }
                 await _db.SaveChangesAsync();
 
@@ -289,7 +289,7 @@ namespace VaccineAPI.Controllers
                 {
                     decimal stockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4);
                     await _inventory.PostPurchaseLine(bill.DoctorId, bill.ClinicId, bill.Id, line.BrandId,
-                        line.Quantity, stockAmount, line.BatchLot, line.Expiry);
+                        line.Quantity, stockAmount, line.BatchLot, line.Expiry, bill.BillDate);
                 }
 
                 await _db.SaveChangesAsync();
@@ -482,7 +482,7 @@ namespace VaccineAPI.Controllers
                 stock.OriginalQuantity = stock.Quantity;
 
                 _inventory.LogSplitConsumed(bill.DoctorId, bill.ClinicId, stock.BrandId, stock.Id, newStock.Id,
-                    stock.BatchLot, stock.Expiry, consumed, stock.StockAmount, bill.Id, newBill.Id);
+                    stock.BatchLot, stock.Expiry, consumed, stock.StockAmount, bill.Id, newBill.Id, bill.BillDate);
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -534,7 +534,7 @@ namespace VaccineAPI.Controllers
             {
                 foreach (var stock in bill.Stocks.ToList())
                 {
-                    await _inventory.ReverseBillStock(bill.DoctorId, bill.ClinicId, stock, bill.Id);
+                    await _inventory.ReverseBillStock(bill.DoctorId, bill.ClinicId, stock, bill.Id, bill.BillDate);
                 }
 
                 var payments = await _db.SupplierPayments.Where(p => p.BillId == id).ToListAsync();

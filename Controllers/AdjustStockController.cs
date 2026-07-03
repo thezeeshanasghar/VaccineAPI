@@ -100,8 +100,8 @@ namespace VaccineAPI.Controllers
                 await _db.SaveChangesAsync(); // need row.Id for the ledger SourceId
 
                 InventoryOperationResult result = dto.Type == "Loss"
-                    ? await _inventory.AdjustLoss(dto.DoctorId, dto.ClinicId, dto.BrandId, dto.Quantity, row.Id, dto.BatchLot)
-                    : await _inventory.AdjustIncrease(dto.DoctorId, dto.ClinicId, dto.BrandId, dto.Quantity, dto.Price, row.Id, dto.BatchLot, dto.ExpiryDate);
+                    ? await _inventory.AdjustLoss(dto.DoctorId, dto.ClinicId, dto.BrandId, dto.Quantity, row.Id, dto.BatchLot, dto.Date)
+                    : await _inventory.AdjustIncrease(dto.DoctorId, dto.ClinicId, dto.BrandId, dto.Quantity, dto.Price, row.Id, dto.BatchLot, dto.ExpiryDate, dto.Date);
 
                 if (!result.IsSuccess)
                 {

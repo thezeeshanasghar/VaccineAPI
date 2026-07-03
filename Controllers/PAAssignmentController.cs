@@ -123,65 +123,75 @@ namespace VaccineAPI.Controllers
             if (assignment.DoctorId != doctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised" });
 
-            if (mode == "FullReset")
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
             {
-                var paId = assignment.PersonalAssistantId;
-                var childId = assignment.ChildId;
-
-                var invoiceIds = await _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == childId && i.PaId == paId)
-                    .Select(i => i.Id)
-                    .ToListAsync();
-
-                if (invoiceIds.Count > 0)
+                if (mode == "FullReset")
                 {
-                    var amendments = _db.InvoiceAmendments.Where(am => invoiceIds.Contains(am.InvoiceSubmissionId));
-                    _db.InvoiceAmendments.RemoveRange(amendments);
+                    var paId = assignment.PersonalAssistantId;
+                    var childId = assignment.ChildId;
 
-                    var invoices = _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id));
-                    _db.InvoiceSubmissions.RemoveRange(invoices);
-                }
+                    var invoiceIds = await _db.InvoiceSubmissions
+                        .Where(i => i.ChildId == childId && i.PaId == paId)
+                        .Select(i => i.Id)
+                        .ToListAsync();
 
-                var schedules = await _db.Schedules
-                    .Where(s => s.ChildId == childId && s.PaymentCollectorPaId == paId)
-                    .ToListAsync();
-
-                var inventoryEnabled = IsInventoryEnabledForDoctor(doctorId);
-
-                foreach (var s in schedules)
-                {
-                    if (inventoryEnabled && s.IsDone == true && s.BrandId.HasValue)
+                    if (invoiceIds.Count > 0)
                     {
-                        var clinicId = assignment.ClinicId ?? 0;
-                        var brandInventory = _db.BrandAmounts
-                            .Where(b => b.BrandId == s.BrandId && b.DoctorId == doctorId && b.ClinicId == clinicId)
-                            .FirstOrDefault();
+                        var amendments = _db.InvoiceAmendments.Where(am => invoiceIds.Contains(am.InvoiceSubmissionId));
+                        _db.InvoiceAmendments.RemoveRange(amendments);
 
-                        if (brandInventory != null)
-                            _inventory.UnadministerSync(doctorId, clinicId, s.BrandId.Value, s.Id, paId);
+                        var invoices = _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id));
+                        _db.InvoiceSubmissions.RemoveRange(invoices);
                     }
 
-                    s.IsDone = false;
-                    s.GivenDate = null;
-                    s.DoneAt = null;
-                    s.GivenByPaId = null;
-                    s.PaymentMode = "Cash";
-                    s.OnlineService = null;
-                    s.IsPaymentApproved = false;
-                    s.BrandId = null;
-                    s.Amount = null;
-                    s.PaymentCollectorPaId = null;
-                    s.IsPaymentCollected = false;
-                    s.IsSkip = false;
-                    s.SkippedByPaId = null;
-                    s.SkippedAt = null;
+                    var schedules = await _db.Schedules
+                        .Where(s => s.ChildId == childId && s.PaymentCollectorPaId == paId)
+                        .ToListAsync();
+
+                    var inventoryEnabled = IsInventoryEnabledForDoctor(doctorId);
+
+                    foreach (var s in schedules)
+                    {
+                        if (inventoryEnabled && s.IsDone == true && s.BrandId.HasValue)
+                        {
+                            var clinicId = assignment.ClinicId ?? 0;
+                            var brandInventory = _db.BrandAmounts
+                                .Where(b => b.BrandId == s.BrandId && b.DoctorId == doctorId && b.ClinicId == clinicId)
+                                .FirstOrDefault();
+
+                            if (brandInventory != null)
+                                _inventory.UnadministerSync(doctorId, clinicId, s.BrandId.Value, s.Id, s.GivenDate ?? DateTime.Today, paId);
+                        }
+
+                        s.IsDone = false;
+                        s.GivenDate = null;
+                        s.DoneAt = null;
+                        s.GivenByPaId = null;
+                        s.PaymentMode = "Cash";
+                        s.OnlineService = null;
+                        s.IsPaymentApproved = false;
+                        s.BrandId = null;
+                        s.Amount = null;
+                        s.PaymentCollectorPaId = null;
+                        s.IsPaymentCollected = false;
+                        s.IsSkip = false;
+                        s.SkippedByPaId = null;
+                        s.SkippedAt = null;
+                    }
                 }
+
+                _db.PAAssignments.Remove(assignment);
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return Ok(new { IsSuccess = true });
             }
-
-            _db.PAAssignments.Remove(assignment);
-
-            await _db.SaveChangesAsync();
-            return Ok(new { IsSuccess = true });
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return Ok(new { IsSuccess = false, Message = ex.Message });
+            }
         }
 
         private bool IsInventoryEnabledForDoctor(long doctorId)

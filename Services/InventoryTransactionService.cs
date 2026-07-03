@@ -31,7 +31,7 @@ namespace VaccineAPI.Services
 
         private void Log(long doctorId, long clinicId, long brandId, int? stockId, string? batchLot,
             DateTime? expiry, int quantityDelta, decimal? unitCost, InventoryTransactionType sourceType,
-            long sourceId, long? createdByPaId = null)
+            long sourceId, DateTime eventDate, long? createdByPaId = null)
         {
             _db.InventoryTransactions.Add(new InventoryTransaction
             {
@@ -45,6 +45,7 @@ namespace VaccineAPI.Services
                 UnitCost = unitCost,
                 SourceType = sourceType,
                 SourceId = sourceId,
+                EventDate = eventDate.Date,
                 CreatedByPaId = createdByPaId
             });
         }
@@ -53,7 +54,7 @@ namespace VaccineAPI.Services
         // Mirrors the existing same-bill-only consolidation: a line only merges into a Stock
         // row that already belongs to THIS bill (never another bill's row).
         public async Task<Stock> PostPurchaseLine(long doctorId, long clinicId, int billId, long brandId,
-            int quantity, decimal stockAmount, string? batchLot, DateTime? expiry)
+            int quantity, decimal stockAmount, string? batchLot, DateTime? expiry, DateTime billDate)
         {
             var existingStock = await _db.Stocks
                 .Where(s => s.BrandId == brandId && s.BillId == billId && s.BatchLot == batchLot && s.Expiry == expiry)
@@ -86,19 +87,19 @@ namespace VaccineAPI.Services
             if (ba != null) ba.Count += quantity;
 
             Log(doctorId, clinicId, brandId, stock.Id, batchLot, expiry, quantity, stockAmount,
-                InventoryTransactionType.Purchase, billId);
+                InventoryTransactionType.Purchase, billId, billDate);
 
             return stock;
         }
 
         // ----- Bill edit reversal of old lines (BillController.Update) -----
-        public async Task ReverseBillLine(long doctorId, long clinicId, Stock stock, int billId)
+        public async Task ReverseBillLine(long doctorId, long clinicId, Stock stock, int billId, DateTime billDate)
         {
             var ba = await GetOrNoOpBrandAmount(stock.BrandId, doctorId, clinicId);
             if (ba != null) ba.Count = Math.Max(0, ba.Count - stock.Quantity);
 
             Log(doctorId, clinicId, stock.BrandId, stock.Id, stock.BatchLot, stock.Expiry,
-                -stock.Quantity, stock.StockAmount, InventoryTransactionType.BillEdit, billId);
+                -stock.Quantity, stock.StockAmount, InventoryTransactionType.BillEdit, billId, billDate);
 
             _db.Stocks.Remove(stock);
         }
@@ -110,22 +111,22 @@ namespace VaccineAPI.Services
         // originally deducted it; this only re-labels which bill the cost history belongs to.
         public void LogSplitConsumed(long doctorId, long clinicId, long brandId, int originalStockId,
             int newStockId, string? batchLot, DateTime? expiry, int consumedQuantity, decimal unitCost,
-            int originalBillId, int newBillId)
+            int originalBillId, int newBillId, DateTime billDate)
         {
             Log(doctorId, clinicId, brandId, originalStockId, batchLot, expiry, -consumedQuantity,
-                unitCost, InventoryTransactionType.SplitConsumed, originalBillId);
+                unitCost, InventoryTransactionType.SplitConsumed, originalBillId, billDate);
             Log(doctorId, clinicId, brandId, newStockId, batchLot, expiry, consumedQuantity,
-                unitCost, InventoryTransactionType.SplitConsumed, newBillId);
+                unitCost, InventoryTransactionType.SplitConsumed, newBillId, billDate);
         }
 
         // ----- Bill reverse (BillController.Reverse) -----
-        public async Task ReverseBillStock(long doctorId, long clinicId, Stock stock, int billId)
+        public async Task ReverseBillStock(long doctorId, long clinicId, Stock stock, int billId, DateTime billDate)
         {
             var ba = await GetOrNoOpBrandAmount(stock.BrandId, doctorId, clinicId);
             if (ba != null) ba.Count = Math.Max(0, ba.Count - stock.Quantity);
 
             Log(doctorId, clinicId, stock.BrandId, stock.Id, stock.BatchLot, stock.Expiry,
-                -stock.Quantity, stock.StockAmount, InventoryTransactionType.BillReverse, billId);
+                -stock.Quantity, stock.StockAmount, InventoryTransactionType.BillReverse, billId, billDate);
 
             _db.Stocks.Remove(stock);
         }
@@ -134,22 +135,64 @@ namespace VaccineAPI.Services
         // Matches existing behavior exactly: brand-level only, no Stock row created, so
         // increase-adjusted stock has no batch/FEFO tracking (StockId stays null in the ledger).
         public async Task<InventoryOperationResult> AdjustIncrease(long doctorId, long clinicId, long brandId,
-            int quantity, decimal price, long adjustStockId, string? batchLot, DateTime? expiry)
+            int quantity, decimal price, long adjustStockId, string? batchLot, DateTime? expiry, DateTime eventDate)
         {
             var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
                 x.BrandId == brandId && x.DoctorId == doctorId && x.ClinicId == clinicId);
             if (ba == null)
                 return InventoryOperationResult.Fail("Brand not configured at this clinic");
 
+            // Find or create a Stock row for this batch so FEFO can deduct from it when doses are given.
+            // AdjustIncrease used to be brand-level only (no Stock row), causing FEFO to miss these units
+            // and roll back the ba.Count decrement silently while the dose was still physically given.
+            var existingStock = await _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId
+                         && s.BatchLot == batchLot && s.Expiry == expiry && s.Quantity > 0)
+                .FirstOrDefaultAsync();
+
+            int? stockId = null;
+            if (existingStock != null)
+            {
+                existingStock.Quantity += quantity;
+                existingStock.OriginalQuantity += quantity;
+                stockId = existingStock.Id;
+            }
+            else
+            {
+                // Anchor to the most recent non-XFER bill so FEFO joins (Stock->Bill->ClinicId) can find it
+                var anchorBill = await _db.Bills
+                    .Where(b => b.ClinicId == clinicId && b.DoctorId == doctorId && !b.BillNo.StartsWith("XFER-"))
+                    .OrderByDescending(b => b.BillDate).ThenByDescending(b => b.Id)
+                    .FirstOrDefaultAsync();
+
+                if (anchorBill != null)
+                {
+                    var newStock = new Stock
+                    {
+                        BrandId = brandId,
+                        BillId = anchorBill.Id,
+                        Quantity = quantity,
+                        OriginalQuantity = quantity,
+                        StockAmount = price,
+                        BatchLot = batchLot,
+                        Expiry = expiry
+                    };
+                    _db.Stocks.Add(newStock);
+                    await _db.SaveChangesAsync(); // need Id for the ledger row
+                    stockId = newStock.Id;
+                }
+            }
+
             ba.Count += quantity;
-            Log(doctorId, clinicId, brandId, null, batchLot, expiry, quantity, price,
-                InventoryTransactionType.AdjustIncrease, adjustStockId);
+            Log(doctorId, clinicId, brandId, stockId, batchLot, expiry, quantity, price,
+                InventoryTransactionType.AdjustIncrease, adjustStockId, eventDate);
             return InventoryOperationResult.Ok();
         }
 
         // ----- Adjust Stock: Loss (AdjustStockController.Create, Type == "Loss") -----
         public async Task<InventoryOperationResult> AdjustLoss(long doctorId, long clinicId, long brandId,
-            int quantity, long adjustStockId, string batchLot)
+            int quantity, long adjustStockId, string batchLot, DateTime eventDate)
         {
             var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
                 x.BrandId == brandId && x.DoctorId == doctorId && x.ClinicId == clinicId);
@@ -169,7 +212,7 @@ namespace VaccineAPI.Services
             ba.Count = Math.Max(0, ba.Count - quantity);
 
             Log(doctorId, clinicId, brandId, stockRow.Id, batchLot, stockRow.Expiry, -quantity,
-                stockRow.StockAmount, InventoryTransactionType.AdjustLoss, adjustStockId);
+                stockRow.StockAmount, InventoryTransactionType.AdjustLoss, adjustStockId, eventDate);
             return InventoryOperationResult.Ok();
         }
 
@@ -187,7 +230,25 @@ namespace VaccineAPI.Services
             int? affectedStockId = null;
             decimal? unitCost = null;
             DateTime? expiry = null;
-            if (adjustment < 0 && !string.IsNullOrEmpty(batchLot))
+            // For Increase reversal: undo the Stock row that AdjustIncrease now creates
+            if (adjustment > 0 && !string.IsNullOrEmpty(batchLot))
+            {
+                var stockRow = await _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.BatchLot == batchLot && s.Quantity > 0)
+                    .FirstOrDefaultAsync();
+                if (stockRow != null)
+                {
+                    int restoreQty = Math.Min(adjustment, stockRow.Quantity);
+                    stockRow.Quantity -= restoreQty;
+                    stockRow.OriginalQuantity -= restoreQty;
+                    affectedStockId = stockRow.Id;
+                    unitCost = stockRow.StockAmount;
+                    expiry = stockRow.Expiry;
+                }
+            }
+            // For Loss reversal: restore the Stock row that AdjustLoss decremented
+            else if (adjustment < 0 && !string.IsNullOrEmpty(batchLot))
             {
                 var stockRow = await _db.Stocks
                     .Include(s => s.Bill)
@@ -203,21 +264,21 @@ namespace VaccineAPI.Services
             }
 
             Log(doctorId, clinicId, brandId, affectedStockId, batchLot, expiry, -adjustment, unitCost,
-                InventoryTransactionType.AdjustReverse, adjustStockId);
+                InventoryTransactionType.AdjustReverse, adjustStockId, DateTime.Today);
         }
 
         // ----- Stock Transfer: out (source) + in (destination) (StockTransferController.Create) -----
         // sourceStock must already be validated/loaded by the caller (quantity check etc. stays
         // in the controller, same as today — this service performs the mutation only).
         public async Task<Stock> TransferOut(long doctorId, long fromClinicId, Stock sourceStock,
-            BrandAmount sourceBa, int quantity, long stockTransferId)
+            BrandAmount sourceBa, int quantity, long stockTransferId, DateTime eventDate)
         {
             sourceStock.Quantity -= quantity;
             sourceBa.Count = Math.Max(0, sourceBa.Count - quantity);
 
             Log(doctorId, fromClinicId, sourceStock.BrandId, sourceStock.Id, sourceStock.BatchLot,
                 sourceStock.Expiry, -quantity, sourceStock.StockAmount, InventoryTransactionType.TransferOut,
-                stockTransferId);
+                stockTransferId, eventDate);
 
             if (sourceStock.Quantity == 0 && sourceStock.BillId == null)
                 _db.Stocks.Remove(sourceStock);
@@ -229,7 +290,7 @@ namespace VaccineAPI.Services
 
         public async Task<Stock> TransferIn(long doctorId, long toClinicId, long brandId, int billId,
             int quantity, decimal unitPrice, string batchLot, DateTime? expiry, long stockTransferId,
-            decimal sourceSalePrice)
+            decimal sourceSalePrice, DateTime eventDate)
         {
             var destStock = new Stock
             {
@@ -268,7 +329,7 @@ namespace VaccineAPI.Services
             destBa.Count += quantity;
 
             Log(doctorId, toClinicId, brandId, destStock.Id, batchLot, expiry, quantity, unitPrice,
-                InventoryTransactionType.TransferIn, stockTransferId);
+                InventoryTransactionType.TransferIn, stockTransferId, eventDate);
 
             return destStock;
         }
@@ -325,7 +386,7 @@ namespace VaccineAPI.Services
             }
 
             Log(doctorId, fromClinicId, brandId, affectedStockId, batchLot, expiry, quantity, unitPrice,
-                InventoryTransactionType.TransferReverse, stockTransferId);
+                InventoryTransactionType.TransferReverse, stockTransferId, DateTime.Today);
         }
 
         public async Task ReverseTransferIn(long doctorId, long toClinicId, long brandId, int quantity,
@@ -335,19 +396,19 @@ namespace VaccineAPI.Services
             if (destBa != null) destBa.Count = Math.Max(0, destBa.Count - quantity);
 
             Log(doctorId, toClinicId, brandId, null, null, null, -quantity, null,
-                InventoryTransactionType.TransferReverse, stockTransferId);
+                InventoryTransactionType.TransferReverse, stockTransferId, DateTime.Today);
         }
 
         // ----- Direct Sale (DirectSaleController.Create) -----
         public async Task<Stock> SellDirect(long doctorId, long clinicId, Stock sourceStock, BrandAmount sourceBa,
-            int quantity, long directSaleId)
+            int quantity, long directSaleId, DateTime eventDate)
         {
             sourceStock.Quantity -= quantity;
             sourceBa.Count = Math.Max(0, sourceBa.Count - quantity);
 
             Log(doctorId, clinicId, sourceStock.BrandId, sourceStock.Id, sourceStock.BatchLot,
                 sourceStock.Expiry, -quantity, sourceStock.StockAmount, InventoryTransactionType.DirectSale,
-                directSaleId);
+                directSaleId, eventDate);
 
             if (sourceStock.Quantity == 0 && sourceStock.BillId == null)
                 _db.Stocks.Remove(sourceStock);
@@ -402,14 +463,14 @@ namespace VaccineAPI.Services
             }
 
             Log(doctorId, clinicId, brandId, affectedStockId, batchLot, expiry, quantity, unitPrice,
-                InventoryTransactionType.DirectSaleReverse, directSaleId);
+                InventoryTransactionType.DirectSaleReverse, directSaleId, DateTime.Today);
         }
 
         // ----- Vaccine Administration: give (ScheduleController, FEFO) -----
         // Returns false (with Message set) if there isn't enough stock; caller must treat this
         // exactly like today's `Count <= 0` / fill-remaining-not-reaching-zero checks.
         public async Task<InventoryOperationResult> Administer(long doctorId, long clinicId, long brandId,
-            long scheduleId, long? createdByPaId = null)
+            long scheduleId, DateTime eventDate, long? createdByPaId = null)
         {
             var ba = await _db.BrandAmounts.FirstOrDefaultAsync(b => b.BrandId == brandId && b.DoctorId == doctorId && b.ClinicId == clinicId);
             if (ba == null)
@@ -434,7 +495,7 @@ namespace VaccineAPI.Services
                 remaining -= deduct;
 
                 Log(doctorId, clinicId, brandId, src.Id, src.BatchLot, src.Expiry, -deduct, src.StockAmount,
-                    InventoryTransactionType.Administer, scheduleId, createdByPaId);
+                    InventoryTransactionType.Administer, scheduleId, eventDate, createdByPaId);
 
                 if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
                 else _db.Entry(src).State = EntityState.Modified;
@@ -450,7 +511,7 @@ namespace VaccineAPI.Services
 
         // ----- Vaccine Administration: ungive (ScheduleController rollback, FEFO restore) -----
         public async Task Unadminister(long doctorId, long clinicId, long brandId, long scheduleId,
-            long? createdByPaId = null)
+            DateTime eventDate, long? createdByPaId = null)
         {
             var ba = await GetOrNoOpBrandAmount(brandId, doctorId, clinicId);
             if (ba != null) ba.Count += 1;
@@ -468,20 +529,13 @@ namespace VaccineAPI.Services
                 restoreStock.Quantity += 1;
                 _db.Entry(restoreStock).State = EntityState.Modified;
                 Log(doctorId, clinicId, brandId, restoreStock.Id, restoreStock.BatchLot, restoreStock.Expiry,
-                    1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+                    1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
             }
             else
             {
-                // No live stock row exists at all — batch row was hard-deleted after hitting 0.
-                // Previously this fabricated a new Stock row anchored to the clinic's most
-                // recent unrelated posted bill (BillId = anchorBill.Id), misattributing the
-                // restored unit's provenance. Removed per explicit decision: a posted bill is
-                // immutable and has nothing to do with this restore. Matches
-                // UnadministerBulkSync's existing behavior in this exact case — restore
-                // BrandAmount.Count only, log the ledger entry with StockId = null.
                 decimal? unitCost = ba != null ? ba.PurchasedAmt : (decimal?)null;
                 Log(doctorId, clinicId, brandId, null, null, null, 1, unitCost,
-                    InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+                    InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
             }
         }
 
@@ -494,7 +548,7 @@ namespace VaccineAPI.Services
         // its own richer, context-specific error messages (BuildInventoryContextMessage) before
         // calling this — this overload trusts that and performs only the deduction, so we don't
         // end up with two different error strings for the same condition.
-        public void AdministerSync(BrandAmount ba, long clinicId, long scheduleId, long? createdByPaId = null)
+        public void AdministerSync(BrandAmount ba, long clinicId, long scheduleId, DateTime eventDate, long? createdByPaId = null)
         {
             long doctorId = ba.DoctorId;
             long brandId = ba.BrandId;
@@ -515,7 +569,7 @@ namespace VaccineAPI.Services
                 remaining -= deduct;
 
                 Log(doctorId, clinicId, brandId, src.Id, src.BatchLot, src.Expiry, -deduct, src.StockAmount,
-                    InventoryTransactionType.Administer, scheduleId, createdByPaId);
+                    InventoryTransactionType.Administer, scheduleId, eventDate, createdByPaId);
 
                 if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
                 else _db.Entry(src).State = EntityState.Modified;
@@ -525,7 +579,7 @@ namespace VaccineAPI.Services
         }
 
         public void UnadministerSync(long doctorId, long clinicId, long brandId, long scheduleId,
-            long? createdByPaId = null)
+            DateTime eventDate, long? createdByPaId = null)
         {
             var ba = _db.BrandAmounts.FirstOrDefault(x => x.BrandId == brandId && x.DoctorId == doctorId && x.ClinicId == clinicId);
             if (ba != null) ba.Count += 1;
@@ -541,27 +595,20 @@ namespace VaccineAPI.Services
                 restoreStock.Quantity += 1;
                 _db.Entry(restoreStock).State = EntityState.Modified;
                 Log(doctorId, clinicId, brandId, restoreStock.Id, restoreStock.BatchLot, restoreStock.Expiry,
-                    1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+                    1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
             }
             else
             {
-                // No live stock row exists at all — batch row was hard-deleted after hitting 0.
-                // Previously this fabricated a new Stock row anchored to the clinic's most
-                // recent unrelated posted bill (BillId = anchorBill.Id), misattributing the
-                // restored unit's provenance. Removed per explicit decision: a posted bill is
-                // immutable and has nothing to do with this restore. Matches
-                // UnadministerBulkSync's existing behavior in this exact case — restore
-                // BrandAmount.Count only, log the ledger entry with StockId = null.
                 decimal? unitCost = ba != null ? ba.PurchasedAmt : (decimal?)null;
                 Log(doctorId, clinicId, brandId, null, null, null, 1, unitCost,
-                    InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+                    InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
             }
         }
 
         // Bulk-ungive restore path (ScheduleController.UpdateBulkInjection). Same no-live-row
         // behavior as UnadministerSync above — restores BrandAmount.Count only, no Stock row
         // fabricated, ledger logs the event with StockId = null.
-        public void UnadministerBulkSync(BrandAmount ba, long clinicId, long brandId, long scheduleId, long? createdByPaId = null)
+        public void UnadministerBulkSync(BrandAmount ba, long clinicId, long brandId, long scheduleId, DateTime eventDate, long? createdByPaId = null)
         {
             ba.Count++;
 
@@ -576,12 +623,12 @@ namespace VaccineAPI.Services
                 restoreStock.Quantity++;
                 _db.Entry(restoreStock).State = EntityState.Modified;
                 Log(ba.DoctorId, clinicId, brandId, restoreStock.Id, restoreStock.BatchLot, restoreStock.Expiry,
-                    1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+                    1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
             }
             else
             {
                 Log(ba.DoctorId, clinicId, brandId, null, null, null, 1, null,
-                    InventoryTransactionType.Unadminister, scheduleId, createdByPaId);
+                    InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
             }
         }
 

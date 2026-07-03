@@ -430,7 +430,7 @@ namespace VaccineAPI.Controllers
                         if (wasGiven && previousBrandId.HasValue)
                         {
                             _inventory.UnadministerSync(dbBrandInventory2.DoctorId, rollbackClinicId,
-                                previousBrandId.Value, dbSchedule.Id, scheduleDTO.PaId);
+                                previousBrandId.Value, dbSchedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
                         }
                     }
                     using (var tx = _db.Database.BeginTransaction())
@@ -485,7 +485,7 @@ namespace VaccineAPI.Controllers
                             );
                         }
 
-                        _inventory.AdministerSync(dbBrandInventory, onlineClinicId, dbSchedule.Id, scheduleDTO.PaId);
+                        _inventory.AdministerSync(dbBrandInventory, onlineClinicId, dbSchedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
 
                         // Persist the inventory deduction in its own transaction, right here,
                         // rather than deferring to whichever SaveChanges() this method happens to
@@ -1705,7 +1705,7 @@ namespace VaccineAPI.Controllers
 
                                             if (ungiveInventory != null)
                                             {
-                                                _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, scheduleDTO.PaId);
+                                                _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
                                             }
                                         }
                                     }
@@ -1783,7 +1783,7 @@ namespace VaccineAPI.Controllers
                                         );
                                     }
 
-                                    _inventory.AdministerSync(brandInventory, onlineClinicId, schedule.Id, scheduleDTO.PaId);
+                                    _inventory.AdministerSync(brandInventory, onlineClinicId, schedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
                                 }
                             }
                         }

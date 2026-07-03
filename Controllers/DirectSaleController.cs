@@ -136,7 +136,7 @@ namespace VaccineAPI.Controllers
                     _db.DirectSales.Add(saleRow);
                     await _db.SaveChangesAsync(); // need saleRow.Id for the ledger SourceId
 
-                    await _inventory.SellDirect(dto.DoctorId, dto.ClinicId, sourceStock, sourceBa, item.Quantity, saleRow.Id);
+                    await _inventory.SellDirect(dto.DoctorId, dto.ClinicId, sourceStock, sourceBa, item.Quantity, saleRow.Id, dto.SaleDate);
                 }
 
                 await _db.SaveChangesAsync();

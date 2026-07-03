@@ -154,7 +154,8 @@ namespace VaccineAPI.Controllers
                     UnitCost = stock.StockAmount,
                     SourceType = isTransferIn ? InventoryTransactionType.TransferIn : InventoryTransactionType.Purchase,
                     SourceId = stock.BillId.Value,
-                    CreatedAt = stock.Bill.BillDate
+                    CreatedAt = stock.Bill.BillDate,
+                    EventDate = stock.Bill.BillDate.Date
                 });
                 count++;
 
@@ -186,14 +187,15 @@ namespace VaccineAPI.Controllers
                     DoctorId = row.DoctorId,
                     ClinicId = row.ClinicId,
                     BrandId = row.BrandId,
-                    StockId = null, // AdjustStock has no StockId FK either — brand-level only, matches AdjustIncrease's existing no-Stock-row behavior
+                    StockId = null,
                     BatchLot = row.BatchLot,
                     Expiry = row.ExpiryDate,
                     QuantityDelta = row.Adjustment,
                     UnitCost = row.Price > 0 ? row.Price : (decimal?)null,
                     SourceType = row.Adjustment >= 0 ? InventoryTransactionType.AdjustIncrease : InventoryTransactionType.AdjustLoss,
                     SourceId = row.Id,
-                    CreatedAt = row.Date
+                    CreatedAt = row.Date,
+                    EventDate = row.Date.Date
                 });
                 count++;
             }
@@ -215,14 +217,15 @@ namespace VaccineAPI.Controllers
                     DoctorId = row.DoctorId,
                     ClinicId = row.FromClinicId,
                     BrandId = row.BrandId,
-                    StockId = null, // source Stock row may have been mutated/deleted since; not safely resolvable in backfill
+                    StockId = null,
                     BatchLot = row.BatchLot,
                     Expiry = row.ExpiryDate,
                     QuantityDelta = -row.Quantity,
                     UnitCost = row.UnitPrice,
                     SourceType = InventoryTransactionType.TransferOut,
                     SourceId = row.Id,
-                    CreatedAt = row.CreatedAt
+                    CreatedAt = row.CreatedAt,
+                    EventDate = row.TransferDate.Date
                 });
                 count++;
             }
@@ -240,14 +243,15 @@ namespace VaccineAPI.Controllers
                     DoctorId = row.DoctorId,
                     ClinicId = row.ClinicId,
                     BrandId = row.BrandId,
-                    StockId = null, // source Stock row may have been mutated/deleted since; not safely resolvable in backfill
+                    StockId = null,
                     BatchLot = row.BatchLot,
                     Expiry = row.ExpiryDate,
                     QuantityDelta = -row.Quantity,
                     UnitCost = row.PurchasePricePerUnit,
                     SourceType = InventoryTransactionType.DirectSale,
                     SourceId = row.Id,
-                    CreatedAt = row.SaleDate
+                    CreatedAt = row.SaleDate,
+                    EventDate = row.SaleDate.Date
                 });
                 count++;
             }
@@ -319,6 +323,7 @@ namespace VaccineAPI.Controllers
                     SourceType = InventoryTransactionType.Administer,
                     SourceId = schedule.Id,
                     CreatedAt = givenAt,
+                    EventDate = givenAt.Date,
                     CreatedByPaId = schedule.GivenByPaId
                 });
                 count++;

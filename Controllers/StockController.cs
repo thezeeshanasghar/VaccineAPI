@@ -674,8 +674,8 @@ namespace VaccineAPI.Controllers
                 doc.Close();
                 writer.Close();
                 string itemsReportType = brandId > 0 && brandsLookup.ContainsKey(brandId)
-                    ? $"ItemsReport-{brandsLookup[brandId]}"
-                    : "ItemsReport-AllBrands";
+                    ? $"ItemStockReport-{brandsLookup[brandId]}"
+                    : "ItemStockReport-AllBrands";
                 string fname = ReportFileName.Build(itemsReportType, clinicName);
                 return File(ms.ToArray(), "application/pdf", fname);
             }

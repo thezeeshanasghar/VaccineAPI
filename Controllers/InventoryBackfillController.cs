@@ -80,6 +80,51 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = report });
         }
 
+        // Corrects BrandAmount.Count for every row that drifts from the ledger sum.
+        // Safe to call any time — only writes rows that are actually wrong, and only to
+        // the Count field. Does not touch Stock.Quantity, InventoryTransactions, or any
+        // other table. Call POST /verify after to confirm drift is gone.
+        [HttpPost("correct-drift")]
+        public async Task<IActionResult> CorrectDrift()
+        {
+            var report = await _reconciliation.Verify();
+            if (report.BrandAmountDrift.Count == 0)
+                return Ok(new { IsSuccess = true, Message = "No BrandAmount drift — nothing to correct", CorrectedCount = 0 });
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                int corrected = 0;
+                foreach (var drift in report.BrandAmountDrift)
+                {
+                    var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
+                        x.BrandId == drift.BrandId && x.DoctorId == drift.DoctorId && x.ClinicId == drift.ClinicId);
+                    if (ba == null) continue;
+                    ba.Count = drift.LedgerCount;
+                    corrected++;
+                }
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Message = $"Corrected {corrected} BrandAmount row(s)",
+                    CorrectedCount = corrected,
+                    Details = report.BrandAmountDrift.Select(d => new
+                    {
+                        BrandId = d.BrandId, DoctorId = d.DoctorId, ClinicId = d.ClinicId,
+                        WasCount = d.LiveCount, NowCount = d.LedgerCount, Drift = d.Drift
+                    })
+                });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return Ok(new { IsSuccess = false, Message = ex.Message });
+            }
+        }
+
         // Every Stock row's OriginalQuantity is what was originally purchased on that bill/line
         // (Transfer-in destination rows and Bill purchase rows alike — both go through
         // BillController.Create/StockTransferController.Create with the same OriginalQuantity

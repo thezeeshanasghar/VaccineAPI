@@ -696,51 +696,25 @@ namespace VaccineAPI.Controllers
         private static PdfPCell CellR(string text, Font font, BaseColor bg, BaseColor border) =>
             new PdfPCell(new Phrase(text, font)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = border, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT };
 
-        // Computes the running balance up to (and including) `upTo`. If `since` is provided,
-        // only movements on/after that date are counted — used to anchor the balance to the
-        // first date this clinic actually received the item, ignoring any pre-tracking
-        // "sold" backlog that predates all purchase/transfer history.
+        // Computes the running balance up to (and including) `upTo` by summing the
+        // InventoryTransaction ledger — the single source of truth for all stock mutations.
+        // Using the ledger avoids the bill-reversal mismatch that arises when reconstructing
+        // from raw tables: a reversed bill deletes its Stock rows (so OriginalQuantity
+        // disappears from a Stocks sum) but its previously-consumed units still appear as
+        // deductions in Schedules/DirectSales, causing an undercount. The ledger records every
+        // event with the correct signed delta so it always agrees with BrandAmount.Count.
+        // If `since` is provided, only transactions on/after that date are summed — used to
+        // anchor the balance to the first receipt date so pre-tracking "sold" backlog with no
+        // matching purchase history doesn't drag the balance negative.
         private static async Task<int> ComputeStockUpTo(Context db, long clinicId, long brandId, DateTime upTo, DateTime? since = null)
         {
             DateTime sinceDate = since?.Date ?? DateTime.MinValue;
 
-            int purchased = await db.Stocks
-                .Include(s => s.Bill)
-                .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId
-                         && !s.Bill.BillNo.StartsWith("XFER-")
-                         && s.BrandId == brandId && s.Bill.BillDate.Date <= upTo.Date
-                         && s.Bill.BillDate.Date >= sinceDate)
-                .SumAsync(s => (int?)s.OriginalQuantity) ?? 0;
-
-            int sold = await db.Schedules
-                .Include(s => s.Child)
-                .Where(s => s.Child.ClinicId == clinicId && s.IsDone == true
-                         && s.BrandId == brandId && s.GivenDate.HasValue
-                         && s.GivenDate.Value.Date <= upTo.Date
-                         && s.GivenDate.Value.Date >= sinceDate)
-                .CountAsync();
-
-            int xferIn = await db.StockTransfers
-                .Where(t => t.ToClinicId == clinicId && t.BrandId == brandId
-                         && t.TransferDate.Date <= upTo.Date && t.TransferDate.Date >= sinceDate)
-                .SumAsync(t => (int?)t.Quantity) ?? 0;
-
-            int xferOut = await db.StockTransfers
-                .Where(t => t.FromClinicId == clinicId && t.BrandId == brandId
-                         && t.TransferDate.Date <= upTo.Date && t.TransferDate.Date >= sinceDate)
-                .SumAsync(t => (int?)t.Quantity) ?? 0;
-
-            int adjusted = await db.AdjustStocks
-                .Where(a => a.ClinicId == clinicId && a.BrandId == brandId
-                         && a.Date.Date <= upTo.Date && a.Date.Date >= sinceDate)
-                .SumAsync(a => (int?)a.Adjustment) ?? 0;
-
-            int directSold = await db.DirectSales
-                .Where(d => d.ClinicId == clinicId && d.BrandId == brandId
-                         && d.SaleDate.Date <= upTo.Date && d.SaleDate.Date >= sinceDate)
-                .SumAsync(d => (int?)d.Quantity) ?? 0;
-
-            return purchased + xferIn - sold - directSold - xferOut + adjusted;
+            return await db.InventoryTransactions
+                .Where(t => t.ClinicId == clinicId && t.BrandId == brandId
+                         && t.CreatedAt.Date <= upTo.Date
+                         && t.CreatedAt.Date >= sinceDate)
+                .SumAsync(t => (int?)t.QuantityDelta) ?? 0;
         }
 
         // First date this clinic received any units of this brand, via direct purchase bill

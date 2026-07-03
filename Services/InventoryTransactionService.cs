@@ -138,8 +138,8 @@ namespace VaccineAPI.Services
         {
             var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
                 x.BrandId == brandId && x.DoctorId == doctorId && x.ClinicId == clinicId);
-            if (ba == null || ba.Count == 0)
-                return InventoryOperationResult.Fail("No stock available for this brand at this clinic");
+            if (ba == null)
+                return InventoryOperationResult.Fail("Brand not configured at this clinic");
 
             ba.Count += quantity;
             Log(doctorId, clinicId, brandId, null, batchLot, expiry, quantity, price,

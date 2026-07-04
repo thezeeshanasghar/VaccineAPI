@@ -51,6 +51,12 @@ namespace VaccineAPI.Controllers
             var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
             var dbClinic = _mapper.Map<Clinic>(clinicDTO);
             dbClinic.IsOnline = clinicList.Count == 0;
+            // Master switch wins: a clinic can only maintain inventory if the owning doctor is allowed to.
+            var doctorAllowsInventory = _db.Doctors
+                .Where(d => d.Id == clinicDTO.DoctorId)
+                .Select(d => (bool?)d.AllowInventory)
+                .FirstOrDefault() ?? false;
+            dbClinic.MaintainInventory = doctorAllowsInventory && clinicDTO.MaintainInventory;
             _db.Clinics.Add(dbClinic);
             _db.SaveChanges();
             clinicDTO.Id = dbClinic.Id;
@@ -94,6 +100,12 @@ namespace VaccineAPI.Controllers
                 dbClinic.Address = clinicDTO.Address;
                 dbClinic.MonogramImage = clinicDTO.MonogramImage;
                 dbClinic.RegNo = clinicDTO.RegNo;
+                // Master switch wins: only honor the per-clinic flag if the owning doctor is allowed inventory.
+                var doctorAllowsInventory = _db.Doctors
+                    .Where(d => d.Id == dbClinic.DoctorId)
+                    .Select(d => (bool?)d.AllowInventory)
+                    .FirstOrDefault() ?? false;
+                dbClinic.MaintainInventory = doctorAllowsInventory && clinicDTO.MaintainInventory;
                 _db.SaveChanges();
                 foreach (var clinicTiming in clinicDTO.ClinicTimings)
                 {

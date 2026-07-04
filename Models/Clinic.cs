@@ -26,6 +26,10 @@ namespace VaccineAPI.Models
         public string MonogramImage { get; set; } = "";
         public long DoctorId { get; set; }
         public string RegNo { get; set; } = "";
+        // Per-clinic inventory switch. When false, this clinic runs on brand pricing/names only
+        // (no batch/lot/expiry, no stock deduction) even if the owning doctor has AllowInventory.
+        // A clinic maintains full stock only when Doctor.AllowInventory && MaintainInventory.
+        public bool MaintainInventory { get; set; } = true;
         // [JsonIgnore]
         public virtual Doctor Doctor { get; set; } = null!;
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]

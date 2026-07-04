@@ -1092,12 +1092,19 @@ namespace VaccineAPI.Controllers
                 return true;
             }
 
-            var allowInventory = _db.Clinics
+            var row = _db.Clinics
                 .Where(c => c.Id == clinicId)
-                .Select(c => (bool?)c.Doctor.AllowInventory)
+                .Select(c => new { c.Doctor.AllowInventory, c.MaintainInventory })
                 .FirstOrDefault();
 
-            return allowInventory ?? true;
+            if (row == null)
+            {
+                return true;
+            }
+
+            // A clinic maintains stock only when the owning doctor allows inventory AND
+            // this clinic has opted in via its per-clinic MaintainInventory switch.
+            return row.AllowInventory && row.MaintainInventory;
         }
 
         private bool IsInventoryEnabledForActor(long actorId, long clinicId)
@@ -1111,7 +1118,10 @@ namespace VaccineAPI.Controllers
 
                 if (doctorAllowInventory.HasValue)
                 {
-                    return doctorAllowInventory.Value;
+                    // Doctor must allow inventory AND the clinic in play must have opted in.
+                    // The clinic-level check ANDs the doctor flag with MaintainInventory, so
+                    // defer to it for the resolved clinic rather than short-circuiting here.
+                    return doctorAllowInventory.Value && IsInventoryEnabledForClinic(clinicId);
                 }
 
                 var paOnlineClinicId = _db.PaAccess

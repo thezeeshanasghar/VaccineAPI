@@ -195,6 +195,12 @@ namespace VaccineAPI.Controllers
                 dbClinic.MonogramImage = request.MonogramImage;
                 dbClinic.RegNo = request.RegNo;
                 // dbClinic.IsOnline = request.IsOnline;
+                // Master switch wins: only honor the per-clinic flag if the owning doctor is allowed inventory.
+                var doctorAllowsInventory = await _db.Doctors
+                    .Where(d => d.Id == dbClinic.DoctorId)
+                    .Select(d => (bool?)d.AllowInventory)
+                    .FirstOrDefaultAsync() ?? false;
+                dbClinic.MaintainInventory = doctorAllowsInventory && request.MaintainInventory;
 
                 var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();
                 var existingTimings = await _db.ClinicTimings
@@ -238,6 +244,7 @@ namespace VaccineAPI.Controllers
                     PhoneNumber = dbClinic.PhoneNumber,
                     Address = dbClinic.Address,
                     MonogramImage = dbClinic.MonogramImage,
+                    MaintainInventory = dbClinic.MaintainInventory,
                     // IsOnline = dbClinic.IsOnline,
                     ClinicTimings = existingTimings.Select(t => new ClinicTimingDTO
                     {

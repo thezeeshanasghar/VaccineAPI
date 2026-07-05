@@ -11,6 +11,9 @@ namespace VaccineAPI.ModelDTO
         public string Name { get; set; } = "";
         public string Manufacturer { get; set; } = "";
         public int? MinAge { get; set; }
+        // §10: true when a case-only twin exists (HEXAXIM vs Hexaxim). Give-time UI echoes
+        // "⚠ This is <Name> — not its look-alike" so the operator picks the right one.
+        public bool HasCaseTwin { get; set; }
         public string Country { get; set; } = "";
         public string Type { get; set; } = "";
         public string Packaging { get; set; } = "";

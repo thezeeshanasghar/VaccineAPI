@@ -31,7 +31,8 @@ namespace VaccineAPI.Services
 
         private void Log(long doctorId, long clinicId, long brandId, int? stockId, string? batchLot,
             DateTime? expiry, int quantityDelta, decimal? unitCost, InventoryTransactionType sourceType,
-            long sourceId, DateTime eventDate, long? createdByPaId = null)
+            long sourceId, DateTime eventDate, long? createdByPaId = null,
+            bool consumesStock = true, string? decisionReason = null)
         {
             _db.InventoryTransactions.Add(new InventoryTransaction
             {
@@ -46,8 +47,37 @@ namespace VaccineAPI.Services
                 SourceType = sourceType,
                 SourceId = sourceId,
                 EventDate = eventDate.Date,
-                CreatedByPaId = createdByPaId
+                CreatedByPaId = createdByPaId,
+                ConsumesStock = consumesStock,
+                DecisionReason = decisionReason
             });
+        }
+
+        // v2 FEFO batch source: prefer the authoritative Stock.ClinicId; fall back to the bill's
+        // clinic for pre-v2 rows where Stock.ClinicId is still null (nothing backfilled it yet).
+        // Once all live rows carry ClinicId (post-reset), the Bill fallback becomes dead weight
+        // and can be dropped. Only rows with Quantity > 0 and not closed are eligible.
+        private IQueryable<Stock> FefoFillCandidates(long brandId, long clinicId)
+        {
+            return _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId
+                    && !s.IsClosed
+                    && s.Quantity > 0
+                    && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId)))
+                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id);
+        }
+
+        // Restore target for ungive: same clinic resolution as FEFO, but includes zero-quantity
+        // rows (a fully-consumed batch is a valid restore target) — reopens it if it was closed.
+        private IQueryable<Stock> FefoRestoreCandidates(long brandId, long clinicId)
+        {
+            return _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BrandId == brandId
+                    && s.Quantity >= 0
+                    && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId)))
+                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id);
         }
 
         // ----- Purchase (BillController.Create) -----
@@ -480,11 +510,7 @@ namespace VaccineAPI.Services
 
             ba.Count -= 1;
 
-            var fillStocks = await _db.Stocks
-                .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity > 0)
-                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id)
-                .ToListAsync();
+            var fillStocks = await FefoFillCandidates(brandId, clinicId).ToListAsync();
 
             int remaining = 1;
             foreach (var src in fillStocks)
@@ -495,10 +521,12 @@ namespace VaccineAPI.Services
                 remaining -= deduct;
 
                 Log(doctorId, clinicId, brandId, src.Id, src.BatchLot, src.Expiry, -deduct, src.StockAmount,
-                    InventoryTransactionType.Administer, scheduleId, eventDate, createdByPaId);
+                    InventoryTransactionType.Administer, scheduleId, eventDate, createdByPaId,
+                    consumesStock: true, decisionReason: InventoryDecisionReason.Normal);
 
-                if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
-                else _db.Entry(src).State = EntityState.Modified;
+                // v2: never hard-delete a batch — a depleted row stays and is marked closed.
+                if (src.Quantity == 0) src.IsClosed = true;
+                _db.Entry(src).State = EntityState.Modified;
             }
 
             // Matches existing bulk-path behavior: if FEFO couldn't fully satisfy the deduction
@@ -516,17 +544,13 @@ namespace VaccineAPI.Services
             var ba = await GetOrNoOpBrandAmount(brandId, doctorId, clinicId);
             if (ba != null) ba.Count += 1;
 
-            // s.Quantity >= 0 so a row at zero (fully consumed but not deleted) is still a
-            // valid restore target — mirrors the exact FEFO restore order used on give.
-            var restoreStock = await _db.Stocks
-                .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity >= 0)
-                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id)
-                .FirstOrDefaultAsync();
+            // Restore to the FEFO-first eligible batch (includes zero-qty rows; reopens if closed).
+            var restoreStock = await FefoRestoreCandidates(brandId, clinicId).FirstOrDefaultAsync();
 
             if (restoreStock != null)
             {
                 restoreStock.Quantity += 1;
+                if (restoreStock.IsClosed) restoreStock.IsClosed = false;
                 _db.Entry(restoreStock).State = EntityState.Modified;
                 Log(doctorId, clinicId, brandId, restoreStock.Id, restoreStock.BatchLot, restoreStock.Expiry,
                     1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
@@ -548,17 +572,83 @@ namespace VaccineAPI.Services
         // its own richer, context-specific error messages (BuildInventoryContextMessage) before
         // calling this — this overload trusts that and performs only the deduction, so we don't
         // end up with two different error strings for the same condition.
+        // ----- Give deduction-decision model (§6.2a) -----
+        // The single source of truth for "does this give move stock, and why." Both single and
+        // bulk give resolve their decision here so the two paths can never diverge.
+        //
+        //   brandId 0/null (OHF)                      -> no deduct, reason OHF
+        //   givenDate < stockPeriodStart (pre-reset)  -> no deduct, reason PRE_PERIOD
+        //   givenDate == today (PKT)                  -> deduct,    reason NORMAL   (no prompt)
+        //   givenDate < today, in-period, brand set   -> AMBIGUOUS: the caller must supply the
+        //                                                operator's choice via reRecordHistorical:
+        //                                                  null  -> caller must prompt first
+        //                                                  false -> deduct, reason LATE_RECORDING
+        //                                                  true  -> no deduct, reason HISTORICAL
+        public sealed class GiveDecision
+        {
+            public bool ConsumesStock { get; init; }
+            public string Reason { get; init; } = InventoryDecisionReason.Normal;
+            public bool NeedsPrompt { get; init; }   // true = caller must ask before proceeding
+        }
+
+        public static GiveDecision ResolveGiveDecision(long? brandId, DateTime givenDate,
+            DateTime? stockPeriodStart, bool? reRecordHistorical)
+        {
+            if (!brandId.HasValue || brandId.Value <= 0)
+                return new GiveDecision { ConsumesStock = false, Reason = InventoryDecisionReason.Ohf };
+
+            var giveDay = givenDate.Date;
+            if (stockPeriodStart.HasValue && giveDay < stockPeriodStart.Value.Date)
+                return new GiveDecision { ConsumesStock = false, Reason = InventoryDecisionReason.PrePeriod };
+
+            if (giveDay == ClinicClock.TodayPkt())
+                return new GiveDecision { ConsumesStock = true, Reason = InventoryDecisionReason.Normal };
+
+            // Backdated, in-period, brand tagged — the one ambiguous case.
+            if (reRecordHistorical == null)
+                return new GiveDecision { ConsumesStock = false, Reason = InventoryDecisionReason.Historical, NeedsPrompt = true };
+
+            return reRecordHistorical.Value
+                ? new GiveDecision { ConsumesStock = false, Reason = InventoryDecisionReason.Historical }
+                : new GiveDecision { ConsumesStock = true, Reason = InventoryDecisionReason.LateRecording };
+        }
+
+        // Legacy signature — a normal, stock-consuming give. Kept so existing callers compile
+        // unchanged; delegates to the v2 overload with consumesStock=true / reason NORMAL.
         public void AdministerSync(BrandAmount ba, long clinicId, long scheduleId, DateTime eventDate, long? createdByPaId = null)
+        {
+            AdministerSync(ba, clinicId, scheduleId, eventDate, createdByPaId,
+                consumesStock: true, decisionReason: InventoryDecisionReason.Normal, outStockId: out _);
+        }
+
+        // v2 give. `consumesStock` comes from the §6.2a decision model (resolved by the caller):
+        //   true  → deduct 1 via FEFO, log Administer(delta=-1) rows, set BrandAmount.Count-1.
+        //           If FEFO can't fully satisfy (stock shows 0 for a physically-given dose), we
+        //           still record the give, drive stock to 0, and flag the brand NeedsReconcile —
+        //           a real vaccination is always recordable (invariant §2.8 exception).
+        //   false → OHF / pre-period / historical: no stock touched, log a zero-delta Administer
+        //           row carrying the reason, so the dose is a recorded clinical fact only.
+        // `outStockId` returns the batch the dose consumed (for Schedule.StockId), or null.
+        public void AdministerSync(BrandAmount ba, long clinicId, long scheduleId, DateTime eventDate,
+            long? createdByPaId, bool consumesStock, string? decisionReason, out int? outStockId)
         {
             long doctorId = ba.DoctorId;
             long brandId = ba.BrandId;
+            outStockId = null;
+
+            if (!consumesStock)
+            {
+                // Recorded clinical fact only — no stock movement. Zero-delta ledger row keeps
+                // the decision auditable (reports sum QuantityDelta, so 0 is inert for stock math).
+                Log(doctorId, clinicId, brandId, null, null, null, 0, null,
+                    InventoryTransactionType.Administer, scheduleId, eventDate, createdByPaId,
+                    consumesStock: false, decisionReason: decisionReason);
+                return;
+            }
+
             ba.Count -= 1;
 
-            var fillStocks = _db.Stocks
-                .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity > 0)
-                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id)
-                .ToList();
+            var fillStocks = FefoFillCandidates(brandId, clinicId).ToList();
 
             int remaining = 1;
             foreach (var src in fillStocks)
@@ -567,32 +657,72 @@ namespace VaccineAPI.Services
                 int deduct = Math.Min(src.Quantity, remaining);
                 src.Quantity -= deduct;
                 remaining -= deduct;
+                outStockId = src.Id;
 
                 Log(doctorId, clinicId, brandId, src.Id, src.BatchLot, src.Expiry, -deduct, src.StockAmount,
-                    InventoryTransactionType.Administer, scheduleId, eventDate, createdByPaId);
+                    InventoryTransactionType.Administer, scheduleId, eventDate, createdByPaId,
+                    consumesStock: true, decisionReason: decisionReason);
 
-                if (src.Quantity == 0 && src.BillId == null) _db.Stocks.Remove(src);
-                else _db.Entry(src).State = EntityState.Modified;
+                // v2: never hard-delete a batch. A depleted row stays and is marked closed.
+                if (src.Quantity == 0) src.IsClosed = true;
+                _db.Entry(src).State = EntityState.Modified;
             }
 
-            if (remaining > 0) ba.Count += 1;
+            if (remaining > 0)
+            {
+                // FEFO couldn't fully satisfy — stock shows short for a dose that was physically
+                // given. Do NOT block or roll back: keep Count at its clamped floor, flag the
+                // brand for a physical recount, and log the shortfall on the ledger.
+                if (ba.Count < 0) ba.Count = 0;
+                ba.NeedsReconcile = true;
+                if (outStockId == null)
+                {
+                    // Nothing to deduct from at all — record a consuming give with no batch.
+                    Log(doctorId, clinicId, brandId, null, null, null, -1, ba.PurchasedAmt,
+                        InventoryTransactionType.Administer, scheduleId, eventDate, createdByPaId,
+                        consumesStock: true, decisionReason: decisionReason);
+                }
+            }
         }
 
+        // v2 ungive — MIRRORS what the give did (§6.5). Reads the schedule's original Administer
+        // ledger row: if that give consumed stock, restore +1 (to the exact StockId if known,
+        // else FEFO-first, reopening a closed batch); if it did NOT (OHF / pre-period / historical),
+        // restore nothing. Ungive never prompts and never invents a unit an OHF dose didn't take.
+        // A pre-reset dose's Administer row is consumesStock=false, so this correctly restores 0 —
+        // the doctor-only warning/guard for that case lives in the controller (§6.5a), not here.
         public void UnadministerSync(long doctorId, long clinicId, long brandId, long scheduleId,
             DateTime eventDate, long? createdByPaId = null)
         {
+            // What did the original give do? Look at the most recent Administer row for this schedule.
+            var giveRow = _db.InventoryTransactions
+                .Where(t => t.SourceType == InventoryTransactionType.Administer && t.SourceId == scheduleId)
+                .OrderByDescending(t => t.Id)
+                .FirstOrDefault();
+
+            // If the give recorded no stock movement, mirror it: no restore.
+            if (giveRow != null && !giveRow.ConsumesStock)
+            {
+                Log(doctorId, clinicId, brandId, null, null, null, 0, null,
+                    InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId,
+                    consumesStock: false, decisionReason: giveRow.DecisionReason);
+                return;
+            }
+
             var ba = _db.BrandAmounts.FirstOrDefault(x => x.BrandId == brandId && x.DoctorId == doctorId && x.ClinicId == clinicId);
             if (ba != null) ba.Count += 1;
 
-            var restoreStock = _db.Stocks
-                .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity >= 0)
-                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id)
-                .FirstOrDefault();
+            // Prefer restoring to the exact batch the give consumed (giveRow.StockId).
+            Stock? restoreStock = null;
+            if (giveRow?.StockId != null)
+                restoreStock = _db.Stocks.FirstOrDefault(s => s.Id == giveRow.StockId.Value);
+            if (restoreStock == null)
+                restoreStock = FefoRestoreCandidates(brandId, clinicId).FirstOrDefault();
 
             if (restoreStock != null)
             {
                 restoreStock.Quantity += 1;
+                if (restoreStock.IsClosed) restoreStock.IsClosed = false; // reopen an emptied batch
                 _db.Entry(restoreStock).State = EntityState.Modified;
                 Log(doctorId, clinicId, brandId, restoreStock.Id, restoreStock.BatchLot, restoreStock.Expiry,
                     1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
@@ -605,22 +735,36 @@ namespace VaccineAPI.Services
             }
         }
 
-        // Bulk-ungive restore path (ScheduleController.UpdateBulkInjection). Same no-live-row
-        // behavior as UnadministerSync above — restores BrandAmount.Count only, no Stock row
-        // fabricated, ledger logs the event with StockId = null.
+        // Bulk-ungive restore path (ScheduleController.UpdateBulkInjection). v2: mirrors the give
+        // exactly like UnadministerSync — reads the original Administer row's ConsumesStock and
+        // restores only if the give actually deducted; restores to the exact StockId when known.
         public void UnadministerBulkSync(BrandAmount ba, long clinicId, long brandId, long scheduleId, DateTime eventDate, long? createdByPaId = null)
         {
+            var giveRow = _db.InventoryTransactions
+                .Where(t => t.SourceType == InventoryTransactionType.Administer && t.SourceId == scheduleId)
+                .OrderByDescending(t => t.Id)
+                .FirstOrDefault();
+
+            if (giveRow != null && !giveRow.ConsumesStock)
+            {
+                Log(ba.DoctorId, clinicId, brandId, null, null, null, 0, null,
+                    InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId,
+                    consumesStock: false, decisionReason: giveRow.DecisionReason);
+                return;
+            }
+
             ba.Count++;
 
-            var restoreStock = _db.Stocks
-                .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.Quantity >= 0)
-                .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id)
-                .FirstOrDefault();
+            Stock? restoreStock = null;
+            if (giveRow?.StockId != null)
+                restoreStock = _db.Stocks.FirstOrDefault(s => s.Id == giveRow.StockId.Value);
+            if (restoreStock == null)
+                restoreStock = FefoRestoreCandidates(brandId, clinicId).FirstOrDefault();
 
             if (restoreStock != null)
             {
                 restoreStock.Quantity++;
+                if (restoreStock.IsClosed) restoreStock.IsClosed = false;
                 _db.Entry(restoreStock).State = EntityState.Modified;
                 Log(ba.DoctorId, clinicId, brandId, restoreStock.Id, restoreStock.BatchLot, restoreStock.Expiry,
                     1, restoreStock.StockAmount, InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);

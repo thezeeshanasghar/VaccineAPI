@@ -49,6 +49,9 @@ namespace VaccineAPI.Models
 
         public int? BillId { get; set; }
 
+        // v2: 0 = Active, 1 = Reversed. Never hard-deleted; a reverse flips this.
+        public byte Status { get; set; }
+
         [ForeignKey("BillId")]
         public virtual Bill? Bill { get; set; }
 

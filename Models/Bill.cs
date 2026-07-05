@@ -25,6 +25,16 @@ namespace VaccineAPI.Models
         public string? PaymentMethod { get; set; }
         [Column(TypeName = "decimal(18,2)")]
         public decimal CostPrice { get; set; } = 0;
+
+        // v2: financial totals frozen at post/edit time (never recomputed live from Stock rows).
+        // Backfilled from the current computed values at cutover.
+        public int? TotalQuantity { get; set; }
+        [Column(TypeName = "decimal(12,2)")]
+        public decimal? TotalPayable { get; set; }
+
+        // v2: 0 = Active, 1 = Reversed. Bills are never hard-deleted; a reverse flips this.
+        public byte Status { get; set; }
+
         public virtual ICollection<Stock> Stocks { get; set; } = new HashSet<Stock>();
     }
 }

@@ -30,6 +30,9 @@ namespace VaccineAPI.Models
 
         public long DoctorId { get; set; }
 
+        // v2: 0 = Active, 1 = Reversed. Never hard-deleted; a reverse flips this.
+        public byte Status { get; set; }
+
         // Navigation property
         // [ForeignKey("BrandId")]
         public virtual Brand Brand { get; set; } = null!;

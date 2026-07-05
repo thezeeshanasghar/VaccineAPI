@@ -78,6 +78,9 @@ namespace VaccineAPI.Models
 
         public DateTime? ConfirmedAt { get; set; }
 
+        // v2: 0 = Active, 1 = Reversed. Never hard-deleted; a reverse flips this.
+        public byte Status { get; set; }
+
         [ForeignKey("BrandId")]
         public virtual Brand Brand { get; set; } = null!;
 

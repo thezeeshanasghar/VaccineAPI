@@ -14,10 +14,21 @@ namespace VaccineAPI.Models
         public long BrandId { get; set; }
 
         [Required]
-        [Range(1, int.MaxValue)]
+        // v2: 0 is a valid live quantity — an emptied batch stays at 0 (IsClosed=1),
+        // it is never hard-deleted. (Was Range(1,..), which rejected 0.)
+        [Range(0, int.MaxValue)]
         public int Quantity { get; set; }
 
         public int OriginalQuantity { get; set; }
+
+        // v2: the clinic that physically holds this batch. Authoritative for FEFO and
+        // Stock Overview. Set on every insert (Purchase/TransferIn/AdjustIncrease/OpeningBalance).
+        // Nullable for historical rows created before this column existed.
+        public long? ClinicId { get; set; }
+
+        // v2: true = zero-quantity batch, hidden from pickers/FEFO but kept for history.
+        // A batch is closed, never hard-deleted.
+        public bool IsClosed { get; set; }
 
         [Required]
         [Column(TypeName = "decimal(18,2)")]

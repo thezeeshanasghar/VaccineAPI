@@ -30,6 +30,11 @@ namespace VaccineAPI.Models
         // (no batch/lot/expiry, no stock deduction) even if the owning doctor has AllowInventory.
         // A clinic maintains full stock only when Doctor.AllowInventory && MaintainInventory.
         public bool MaintainInventory { get; set; } = true;
+
+        // v2: admin-locked start of the current stock period (replaces the inferred
+        // firstReceiptDate cutoff). Set once at reset; all stock date-validation and report
+        // sums are floored at this date. NULL = clinic not yet cut over to v2.
+        public DateTime? StockPeriodStart { get; set; }
         // [JsonIgnore]
         public virtual Doctor Doctor { get; set; } = null!;
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]

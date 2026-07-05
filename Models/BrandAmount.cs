@@ -11,6 +11,10 @@ namespace VaccineAPI.Models
         public decimal Amount { get; set; }
         public int Count { get; set; }
 
+        // v2: set true when a give drove stock to/below 0 (a physically-given dose is always
+        // recordable — §6.3). Signals the owner to physically recount and post an AdjustIncrease.
+        public bool NeedsReconcile { get; set; }
+
         // Optimistic concurrency token — see Stock.RowVersion for the reasoning (no native
         // rowversion type on MySQL, so this is an app-incremented counter).
         [ConcurrencyCheck]

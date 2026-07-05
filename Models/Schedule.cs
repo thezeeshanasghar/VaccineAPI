@@ -47,6 +47,13 @@ namespace VaccineAPI.Models
         public long DoseId { get; set; }
         public virtual Dose Dose { get; set; } = null!;
         public long? StockClinicId { get; set; }
+
+        // v2: the exact Stock batch consumed at give-time. Enables precise ungive (restore the
+        // same batch) and batch-level reconciliation. Null for OHF / non-consuming / historical
+        // gives, and for doses given before this column existed.
+        // NOTE: distinct from Lot/Manufacturer/Expiry above — those are the permanent CERTIFICATE
+        // snapshot (never read from stock). StockId is an internal accounting link only.
+        public int? StockId { get; set; }
         // public virtual DateTime FromDate { get; set; }
         // public virtual DateTime ToDate { get; set; }
     }

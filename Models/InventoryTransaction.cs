@@ -20,7 +20,21 @@ namespace VaccineAPI.Models
         Administer,
         Unadminister,
         MigrationBackfill,
-        MigrationCorrection
+        MigrationCorrection,
+        // v2 (stock overhaul). Appended at the end so existing integer positions 0..15
+        // are preserved — historical ledger rows are keyed by position; never reorder.
+        OpeningBalance,   // = 16
+        TwinCorrection    // = 17
+    }
+
+    // Why an Administer/Unadminister row did or did not move stock (§6.2a deduction model).
+    public static class InventoryDecisionReason
+    {
+        public const string Normal        = "NORMAL";         // brand give, date = today → deducts
+        public const string Ohf           = "OHF";            // no brand / external stock → no deduct
+        public const string PrePeriod     = "PRE_PERIOD";     // dated before StockPeriodStart → no deduct
+        public const string Historical    = "HISTORICAL";     // re-recording a past dose → no deduct
+        public const string LateRecording = "LATE_RECORDING"; // home visit recorded late → deducts
     }
 
     // Append-only ledger row. One row per stock movement, ever — never updated or deleted
@@ -63,5 +77,15 @@ namespace VaccineAPI.Models
         public DateTime EventDate { get; set; } = DateTime.UtcNow.Date;
 
         public long? CreatedByPaId { get; set; }
+
+        // v2: for Administer/Unadminister rows, whether this movement actually touched stock.
+        // true  = stock was deducted/restored (QuantityDelta != 0).
+        // false = recorded clinical fact only, no stock change (OHF / pre-period / historical).
+        // Defaults true so all existing (purchase/adjust/transfer/sale) rows are unaffected.
+        public bool ConsumesStock { get; set; } = true;
+
+        // v2: why this give did/didn't move stock — one of InventoryDecisionReason.* for
+        // give/ungive rows; null for all other source types.
+        public string? DecisionReason { get; set; }
     }
 }

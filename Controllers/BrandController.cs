@@ -98,22 +98,52 @@ namespace VaccineAPI.Controllers
             // Update the DTO with the new brand's ID
             vaccineBrandDTO.Id = dbVaccineBrand.Id;
 
+            // Keep the case-twin flag accurate for this name group (§10 safeguard).
+            await RecomputeCaseTwins(dbVaccineBrand.Name);
+
             return new Response<BrandDTO>(true, null, vaccineBrandDTO);
+        }
+
+        // Recomputes HasCaseTwin for every brand whose Name case-insensitively matches
+        // `name` (before OR after a rename). Brands are a single global admin list with no
+        // DoctorId, so twin identity is scoped by Name alone. A brand has a twin when 2+ rows
+        // share the same LOWER(Name) — e.g. HEXAXIM and Hexaxim, distinct under utf8mb4_bin.
+        private async Task RecomputeCaseTwins(params string[] names)
+        {
+            var lowered = names.Where(n => !string.IsNullOrWhiteSpace(n))
+                               .Select(n => n.Trim().ToLower())
+                               .Distinct().ToList();
+            if (lowered.Count == 0) return;
+
+            // All brands in any affected name-group (case-insensitive).
+            var affected = await _db.Brands
+                .Where(b => lowered.Contains(b.Name.ToLower()))
+                .ToListAsync();
+
+            foreach (var grp in affected.GroupBy(b => (b.Name ?? "").Trim().ToLower()))
+            {
+                bool hasTwin = grp.Count() > 1;
+                foreach (var b in grp)
+                    b.HasCaseTwin = hasTwin;
+            }
+            await _db.SaveChangesAsync();
         }
 
 
         [HttpPut("{id}")]
-        public Response<BrandDTO> Put(int Id, BrandDTO vaccineBrandDTO)
+        public async Task<Response<BrandDTO>> Put(int Id, BrandDTO vaccineBrandDTO)
         {
             var dbVaccineBrand = _db.Brands.Where(c => c.Id == Id).FirstOrDefault();
             if (dbVaccineBrand == null)
             {
                 return new Response<BrandDTO>(false, "Brand not found", null);
             }
+            var oldName = dbVaccineBrand.Name;   // rename may change twin status on both name-groups
             dbVaccineBrand.Name = vaccineBrandDTO.Name;
             dbVaccineBrand.Manufacturer = vaccineBrandDTO.Manufacturer;
             dbVaccineBrand.MinAge = vaccineBrandDTO.MinAge;
             _db.SaveChanges();
+            await RecomputeCaseTwins(oldName, dbVaccineBrand.Name);
             return new Response<BrandDTO>(true, null, vaccineBrandDTO);
         }
 
@@ -128,10 +158,12 @@ namespace VaccineAPI.Controllers
 
             var brandAmounts = await _db.BrandAmounts.Where(ba => ba.BrandId == id).ToListAsync();
 
+            var deletedName = dbVaccineBrand.Name;   // deleting one twin may un-twin the survivor
             _db.BrandAmounts.RemoveRange(brandAmounts);
             _db.Brands.Remove(dbVaccineBrand);
 
             await _db.SaveChangesAsync();
+            await RecomputeCaseTwins(deletedName);
             return new Response<string>(true, null, "Brand and related BrandAmounts deleted");
         }
 

@@ -63,6 +63,10 @@ namespace VaccineAPI.ModelDTO
         // first attempt returns a Warning ("history only, no stock"); the client re-submits with
         // this = true to proceed. PAs can never ungive a pre-reset dose regardless of this flag.
         public bool ConfirmPreResetUngive { get; set; }
+
+        // §6.3a: acting PA when a batch correction is done by a PA (null = doctor did it).
+        // Recorded on the audit ledger row's CreatedByPaId. Doctor + PA both permitted.
+        public long? CorrectByPaId { get; set; }
         public DateTime? DoneAt { get; set; }
         public string PaymentMode { get; set; } = "Cash";
         public string? OnlineService { get; set; }

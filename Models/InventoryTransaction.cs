@@ -24,7 +24,12 @@ namespace VaccineAPI.Models
         // v2 (stock overhaul). Appended at the end so existing integer positions 0..15
         // are preserved — historical ledger rows are keyed by position; never reorder.
         OpeningBalance,   // = 16
-        TwinCorrection    // = 17
+        TwinCorrection,   // = 17
+        // §6.3a: label-only correction of a given dose's batch/expiry/manufacturer.
+        // Moves NO stock (QuantityDelta = 0, ConsumesStock = false). BatchLot/Expiry hold
+        // the NEW values; the previous values are recoverable from the dose's prior
+        // Administer row on the same SourceId (= ScheduleId). Pure audit trail.
+        BatchCorrection   // = 18
     }
 
     // Why an Administer/Unadminister row did or did not move stock (§6.2a deduction model).

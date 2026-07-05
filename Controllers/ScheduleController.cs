@@ -3947,6 +3947,45 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<ScheduleDTO>(true, "Payment recorded.", null));
         }
 
+        // PATCH /api/Schedule/{id}/correct-batch
+        // §6.3a — label-only correction of a GIVEN dose's batch/expiry/manufacturer. Used to fill
+        // in a give-at-zero dose's blank batch later, or fix a typo'd lot. Moves NO stock and
+        // writes NO stock-moving ledger row — only an audit BatchCorrection row (who/when/new).
+        // The certificate snapshot (Schedule.Lot/Expiry/Manufacturer) is what's edited; StockId
+        // is untouched. Permitted for doctor + PA.
+        [HttpPatch("{id}/correct-batch")]
+        public IActionResult CorrectBatch(long id, [FromBody] ScheduleDTO dto)
+        {
+            var schedule = _db.Schedules
+                .Include(s => s.Child)
+                .FirstOrDefault(s => s.Id == id);
+            if (schedule == null)
+                return Ok(new Response<ScheduleDTO>(false, "Schedule not found.", null));
+            if (!schedule.IsDone)
+                return Ok(new Response<ScheduleDTO>(false, "Batch details can only be corrected on a given dose.", null));
+            if (!schedule.BrandId.HasValue)
+                return Ok(new Response<ScheduleDTO>(false, "This dose was recorded as OHF (no brand); it has no batch to correct.", null));
+
+            var newLot = (dto.Lot ?? "").Trim();
+            var newManufacturer = (dto.Manufacturer ?? "").Trim();
+            var newExpiry = dto.Expiry;
+
+            // Label-only edit of the certificate snapshot — StockId and all stock counters untouched.
+            schedule.Lot = newLot;
+            schedule.Manufacturer = newManufacturer;
+            schedule.Expiry = newExpiry;
+
+            // Audit row (no stock movement). Best-effort clinic resolution; a give always has a child.
+            var childClinicId = schedule.Child != null ? schedule.Child.ClinicId : 0;
+            var clinicId = ResolveClinicIdForStock(dto.DoctorId, childClinicId);
+            var eventDate = schedule.GivenDate ?? ClinicClock.TodayPkt();
+            _inventory.LogBatchCorrection(dto.DoctorId, clinicId, schedule.BrandId.Value,
+                schedule.StockId, newLot, newExpiry, schedule.Id, eventDate, dto.CorrectByPaId);
+
+            _db.SaveChanges();
+            return Ok(new Response<ScheduleDTO>(true, "Batch details corrected.", null));
+        }
+
         // Keeps InvoiceSubmission.PaymentMode in sync with the schedule's actual
         // recorded mode, so the Doctor's reconciliation page reflects what was
         // really collected (invoice creation leaves PaymentMode null until then).

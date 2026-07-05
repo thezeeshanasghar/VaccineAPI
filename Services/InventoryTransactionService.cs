@@ -149,6 +149,19 @@ namespace VaccineAPI.Services
                 unitCost, InventoryTransactionType.SplitConsumed, newBillId, billDate);
         }
 
+        // ----- §6.3a Batch correction (ScheduleController.CorrectBatch) -----
+        // Label-only audit row for a manual edit of a given dose's batch/expiry. Moves NO stock
+        // (QuantityDelta = 0, ConsumesStock = false); it only records who/when set the NEW
+        // BatchLot/Expiry on schedule `scheduleId`. The previous values live on the dose's prior
+        // Administer row (same SourceId), so old→new is fully recoverable without a new column.
+        public void LogBatchCorrection(long doctorId, long clinicId, long brandId, int? stockId,
+            string? newBatchLot, DateTime? newExpiry, long scheduleId, DateTime eventDate, long? createdByPaId)
+        {
+            Log(doctorId, clinicId, brandId, stockId, newBatchLot, newExpiry, 0, null,
+                InventoryTransactionType.BatchCorrection, scheduleId, eventDate, createdByPaId,
+                consumesStock: false, decisionReason: null);
+        }
+
         // ----- Bill reverse (BillController.Reverse) -----
         public async Task ReverseBillStock(long doctorId, long clinicId, Stock stock, int billId, DateTime billDate)
         {

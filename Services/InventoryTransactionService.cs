@@ -233,6 +233,56 @@ namespace VaccineAPI.Services
             return InventoryOperationResult.Ok();
         }
 
+        // ----- §Opening Balance (StockController.PostOpeningBalance) -----
+        // Records physical stock already on the shelf at the reset as a real batch + ledger row,
+        // so the ledger equals reality from day one. Unlike AdjustIncrease this sets Stock.ClinicId
+        // directly and needs NO anchor bill — right after a reset a clinic may have zero bills.
+        // eventDate is the clinic's StockPeriodStart so it lands at (not before) the reset floor.
+        public async Task<InventoryOperationResult> PostOpeningBalance(long doctorId, long clinicId,
+            long brandId, int quantity, decimal unitCost, string? batchLot, DateTime? expiry, DateTime eventDate)
+        {
+            var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
+                x.BrandId == brandId && x.DoctorId == doctorId && x.ClinicId == clinicId);
+            if (ba == null)
+                return InventoryOperationResult.Fail("Brand not configured at this clinic");
+
+            // Merge into an existing open batch of the same lot/expiry at this clinic, else new row.
+            var existingStock = await _db.Stocks
+                .Where(s => s.BrandId == brandId && s.ClinicId == clinicId
+                         && s.BatchLot == batchLot && s.Expiry == expiry && !s.IsClosed)
+                .FirstOrDefaultAsync();
+
+            int stockId;
+            if (existingStock != null)
+            {
+                existingStock.Quantity += quantity;
+                existingStock.OriginalQuantity += quantity;
+                stockId = existingStock.Id;
+            }
+            else
+            {
+                var newStock = new Stock
+                {
+                    BrandId = brandId,
+                    ClinicId = clinicId,   // v2: FEFO reads Stock.ClinicId directly — no bill needed
+                    Quantity = quantity,
+                    OriginalQuantity = quantity,
+                    StockAmount = unitCost,
+                    BatchLot = batchLot,
+                    Expiry = expiry
+                };
+                _db.Stocks.Add(newStock);
+                await _db.SaveChangesAsync(); // need Id for the ledger row
+                stockId = newStock.Id;
+            }
+
+            ba.Count += quantity;
+            ba.NeedsReconcile = false;
+            Log(doctorId, clinicId, brandId, stockId, batchLot, expiry, quantity, unitCost,
+                InventoryTransactionType.OpeningBalance, stockId, eventDate);
+            return InventoryOperationResult.Ok();
+        }
+
         // ----- Adjust Stock: Loss (AdjustStockController.Create, Type == "Loss") -----
         public async Task<InventoryOperationResult> AdjustLoss(long doctorId, long clinicId, long brandId,
             int quantity, long adjustStockId, string batchLot, DateTime eventDate)

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using VaccineAPI.Models;
+using VaccineAPI.ModelDTO;
 using VaccineAPI.helper;
 
 namespace VaccineAPI.Controllers
@@ -16,7 +17,64 @@ namespace VaccineAPI.Controllers
     public class StockController : ControllerBase
     {
         private readonly Context _db;
-        public StockController(Context db) { _db = db; }
+        private readonly VaccineAPI.Services.InventoryTransactionService _inventory;
+        public StockController(Context db, VaccineAPI.Services.InventoryTransactionService inventory)
+        {
+            _db = db;
+            _inventory = inventory;
+        }
+
+        // POST /api/stock/opening-balance
+        // v2 — record physical on-hand at the reset. Body: doctorId, clinicId, and a list of
+        // { brandId, quantity, unitCost?, batchLot?, expiry? }. Each line becomes a real batch +
+        // an OpeningBalance ledger row dated at the clinic's StockPeriodStart, so the ledger equals
+        // reality from day one. Idempotency is the caller's job — running it twice doubles stock.
+        [HttpPost("opening-balance")]
+        public async Task<IActionResult> PostOpeningBalance([FromBody] OpeningBalanceDTO dto)
+        {
+            if (dto == null || dto.Lines == null || dto.Lines.Count == 0)
+                return Ok(new { IsSuccess = false, Message = "No opening-balance lines provided." });
+
+            var clinic = await _db.Clinics.FindAsync(dto.ClinicId);
+            if (clinic == null)
+                return Ok(new { IsSuccess = false, Message = "Clinic not found." });
+            if (!clinic.StockPeriodStart.HasValue)
+                return Ok(new { IsSuccess = false, Message = "This clinic has no stock reset date (StockPeriodStart) set; opening balance can only be recorded against a reset." });
+
+            DateTime eventDate = clinic.StockPeriodStart.Value.Date;
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                int posted = 0;
+                var errors = new System.Collections.Generic.List<string>();
+                foreach (var line in dto.Lines)
+                {
+                    if (line.Quantity <= 0) continue;
+                    var res = await _inventory.PostOpeningBalance(dto.DoctorId, dto.ClinicId,
+                        line.BrandId, line.Quantity, line.UnitCost ?? 0m, line.BatchLot, line.Expiry, eventDate);
+                    if (res.IsSuccess) posted++;
+                    else errors.Add($"Brand {line.BrandId}: {res.Message}");
+                }
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Ok(new
+                {
+                    IsSuccess = posted > 0,
+                    Message = posted > 0
+                        ? $"Recorded opening balance for {posted} item(s)" + (errors.Count > 0 ? $"; {errors.Count} skipped." : ".")
+                        : "No opening balance recorded. " + string.Join(" ", errors),
+                    PostedCount = posted,
+                    Errors = errors
+                });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return Ok(new { IsSuccess = false, Message = "Failed to record opening balance: " + ex.Message });
+            }
+        }
 
         // GET /api/stock/integrity?clinicId=X
         // v2 §7 — drift audit. The counter (BrandAmount.Count) is a transactional cache; the

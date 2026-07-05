@@ -327,9 +327,16 @@ namespace VaccineAPI.Controllers
                     // ledger row is consumesStock=false (PRE_PERIOD), so UnadministerSync mirrors it.
                     if (dbSchedule.IsDone == true && IsPreResetDose(dbSchedule))
                     {
+                        // PA: blocked outright.
                         if (scheduleDTO.PaId.HasValue)
                             return new Response<ScheduleDTO>(false,
                                 "This is a historical dose from before the current stock period. Ask the doctor to undo it.", null);
+
+                        // Doctor: warn once (no stock is returned; this removes a real vaccination
+                        // from the child's history). Client re-submits with ConfirmPreResetUngive=true.
+                        if (!scheduleDTO.ConfirmPreResetUngive)
+                            return Response<ScheduleDTO>.Warning(
+                                "This dose was given before the current stock period. Undoing it returns no stock and removes a real vaccination from this child's history. Undo anyway?");
                     }
 
                     // PA-only: own actions today only

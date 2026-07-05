@@ -58,6 +58,11 @@ namespace VaccineAPI.ModelDTO
         //   true  = "just recording"  → no deduct (reason HISTORICAL)
         // Ignored for OHF / today / pre-period gives (auto-decided, never prompt).
         public bool? ReRecordHistorical { get; set; }
+
+        // v2 §6.5a: doctor's explicit confirmation to ungive a PRE-RESET historical dose. The
+        // first attempt returns a Warning ("history only, no stock"); the client re-submits with
+        // this = true to proceed. PAs can never ungive a pre-reset dose regardless of this flag.
+        public bool ConfirmPreResetUngive { get; set; }
         public DateTime? DoneAt { get; set; }
         public string PaymentMode { get; set; } = "Cash";
         public string? OnlineService { get; set; }

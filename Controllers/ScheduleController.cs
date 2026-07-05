@@ -654,7 +654,11 @@ namespace VaccineAPI.Controllers
 
                     if (doseBrand != null)
                     {
-                        if (daysDifference > 729 && doseBrand.Name.Equals("MENACTRA"))
+                        // Match the trade name case-insensitively so the DB collation flip to
+                        // utf8mb4_bin (case-sensitive) can't silently break the dose-2 skip rule
+                        // when a brand is stored as "Menactra"/"Nimenrix" rather than upper-case.
+                        string brandName = (doseBrand.Name ?? "").Trim();
+                        if (daysDifference > 729 && brandName.Equals("MENACTRA", StringComparison.OrdinalIgnoreCase))
                         {
                             var nextDose = _db.Doses.FirstOrDefault(x =>
                                 x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2
@@ -672,7 +676,7 @@ namespace VaccineAPI.Controllers
                                 }
                             }
                         }
-                        else if (daysDifference > 364 && doseBrand.Name.Equals("NIMENRIX"))
+                        else if (daysDifference > 364 && brandName.Equals("NIMENRIX", StringComparison.OrdinalIgnoreCase))
                         {
                             var nextDose = _db.Doses.FirstOrDefault(x =>
                                 x.VaccineId == dbSchedule.Dose.VaccineId && x.DoseOrder == 2

@@ -18,6 +18,110 @@ namespace VaccineAPI.Controllers
         private readonly Context _db;
         public StockController(Context db) { _db = db; }
 
+        // GET /api/stock/integrity?clinicId=X
+        // v2 §7 — drift audit. The counter (BrandAmount.Count) is a transactional cache; the
+        // ledger (Σ InventoryTransaction.QuantityDelta on/after StockPeriodStart) is truth. This
+        // reports every brand where the two disagree, so drift is caught the moment it appears.
+        // Read-only; run it anytime, especially right after the reset to confirm a clean slate.
+        [HttpGet("integrity")]
+        public async Task<IActionResult> CheckIntegrity([FromQuery] long clinicId)
+        {
+            var clinic = await _db.Clinics.FindAsync(clinicId);
+            if (clinic == null)
+                return Ok(new { IsSuccess = false, Message = "Clinic not found." });
+
+            DateTime floor = clinic.StockPeriodStart?.Date ?? DateTime.MinValue;
+
+            var counters = await _db.BrandAmounts
+                .Include(b => b.Brand)
+                .Where(b => b.ClinicId == clinicId)
+                .Select(b => new { b.BrandId, BrandName = b.Brand.Name, b.Count, b.NeedsReconcile })
+                .ToListAsync();
+
+            // Ledger balance per brand for this clinic, floored at the reset.
+            var ledger = await _db.InventoryTransactions
+                .Where(t => t.ClinicId == clinicId && t.EventDate.Date >= floor)
+                .GroupBy(t => t.BrandId)
+                .Select(g => new { BrandId = g.Key, Balance = g.Sum(x => (int?)x.QuantityDelta) ?? 0 })
+                .ToDictionaryAsync(x => x.BrandId, x => x.Balance);
+
+            var mismatches = new System.Collections.Generic.List<object>();
+            foreach (var c in counters)
+            {
+                int ledgerBal = ledger.TryGetValue(c.BrandId, out var v) ? v : 0;
+                if (ledgerBal != c.Count || c.NeedsReconcile)
+                {
+                    mismatches.Add(new
+                    {
+                        c.BrandId,
+                        c.BrandName,
+                        CounterCount = c.Count,
+                        LedgerBalance = ledgerBal,
+                        Drift = c.Count - ledgerBal,
+                        c.NeedsReconcile
+                    });
+                }
+            }
+
+            return Ok(new
+            {
+                IsSuccess = true,
+                ClinicId = clinicId,
+                StockPeriodStart = clinic.StockPeriodStart,
+                IsClean = mismatches.Count == 0,
+                MismatchCount = mismatches.Count,
+                Mismatches = mismatches
+            });
+        }
+
+        // POST /api/stock/reconcile?clinicId=X[&brandId=Y]
+        // v2 §7 — repair. Rewrites BrandAmount.Count from the ledger (Σ QuantityDelta floored at
+        // StockPeriodStart) and clears NeedsReconcile. This is the ONLY sanctioned way to overwrite
+        // a counter: it makes the cache match truth, it never invents stock. Scope to one brand via
+        // brandId, or omit to reconcile the whole clinic. Doctor-triggered maintenance.
+        [HttpPost("reconcile")]
+        public async Task<IActionResult> Reconcile([FromQuery] long clinicId, [FromQuery] long brandId = 0)
+        {
+            var clinic = await _db.Clinics.FindAsync(clinicId);
+            if (clinic == null)
+                return Ok(new { IsSuccess = false, Message = "Clinic not found." });
+
+            DateTime floor = clinic.StockPeriodStart?.Date ?? DateTime.MinValue;
+
+            var counters = await _db.BrandAmounts
+                .Where(b => b.ClinicId == clinicId && (brandId == 0 || b.BrandId == brandId))
+                .ToListAsync();
+            if (counters.Count == 0)
+                return Ok(new { IsSuccess = false, Message = "No stock counters found for this clinic/brand." });
+
+            var ledger = await _db.InventoryTransactions
+                .Where(t => t.ClinicId == clinicId && t.EventDate.Date >= floor
+                         && (brandId == 0 || t.BrandId == brandId))
+                .GroupBy(t => t.BrandId)
+                .Select(g => new { BrandId = g.Key, Balance = g.Sum(x => (int?)x.QuantityDelta) ?? 0 })
+                .ToDictionaryAsync(x => x.BrandId, x => x.Balance);
+
+            int fixedCount = 0;
+            foreach (var c in counters)
+            {
+                int ledgerBal = ledger.TryGetValue(c.BrandId, out var v) ? v : 0;
+                if (c.Count != ledgerBal || c.NeedsReconcile)
+                {
+                    c.Count = ledgerBal;
+                    c.NeedsReconcile = false;
+                    fixedCount++;
+                }
+            }
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                IsSuccess = true,
+                Message = fixedCount == 0 ? "Already reconciled — no drift." : $"Reconciled {fixedCount} item(s) to the ledger.",
+                ReconciledCount = fixedCount
+            });
+        }
+
         // GET /api/stock/batch-lots?brandId=X&clinicId=Y
         [HttpGet("batch-lots")]
         public async Task<IActionResult> GetBatchLots([FromQuery] long brandId, [FromQuery] long clinicId)

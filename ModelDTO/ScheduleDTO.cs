@@ -49,6 +49,15 @@ namespace VaccineAPI.ModelDTO
         public int UnskipCount { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
         public System.DateTime GivenDate { get; set; }
+
+        // v2 deduction-decision (§6.2a). Only consulted for a backdated, in-period, brand give —
+        // the one ambiguous case where the frontend must have shown the prompt:
+        //   null  = not answered (frontend must prompt first; backend rejects if it reaches a
+        //           give that needs it — belt-and-suspenders so a bad client can't silently deduct)
+        //   false = "from our stock"  → deduct (reason LATE_RECORDING)
+        //   true  = "just recording"  → no deduct (reason HISTORICAL)
+        // Ignored for OHF / today / pre-period gives (auto-decided, never prompt).
+        public bool? ReRecordHistorical { get; set; }
         public DateTime? DoneAt { get; set; }
         public string PaymentMode { get; set; } = "Cash";
         public string? OnlineService { get; set; }

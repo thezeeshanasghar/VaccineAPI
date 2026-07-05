@@ -255,6 +255,10 @@ namespace VaccineAPI.Controllers
                 // whether inventory was actually deducted for this schedule, since BrandId can
                 // be persisted on a not-yet-given schedule by earlier partial saves.
                 var wasGiven = dbSchedule.IsDone;
+                // v2: the exact Stock batch the give consumed (from AdministerSync). Drives
+                // Schedule.StockId and the certificate lot/expiry. null = OHF / non-consuming /
+                // give-at-zero → lot/expiry stay blank (no fabricated fallback, §6.3).
+                int? giveConsumedStockId = null;
                 var onlineClinicId = ResolveClinicIdForStock(
                     scheduleDTO.DoctorId,
                     dbSchedule.Child?.ClinicId ?? 0
@@ -316,6 +320,18 @@ namespace VaccineAPI.Controllers
 
                 if (scheduleDTO.IsDone == false)
                 {
+                    // v2 §6.5a: ungiving a PRE-RESET historical dose (given before the clinic's
+                    // StockPeriodStart) is doctor-only and never returns stock. A PA is blocked
+                    // outright; the doctor is allowed (the frontend shows the "history only" warning
+                    // and only reaches here on confirm). Restore is 0 either way — the give's
+                    // ledger row is consumesStock=false (PRE_PERIOD), so UnadministerSync mirrors it.
+                    if (dbSchedule.IsDone == true && IsPreResetDose(dbSchedule))
+                    {
+                        if (scheduleDTO.PaId.HasValue)
+                            return new Response<ScheduleDTO>(false,
+                                "This is a historical dose from before the current stock period. Ask the doctor to undo it.", null);
+                    }
+
                     // PA-only: own actions today only
                     if (scheduleDTO.PaId.HasValue)
                     {
@@ -456,6 +472,30 @@ namespace VaccineAPI.Controllers
 
                 if (!wasGiven)
                 {
+                    // v2 date policy (§8): a dose can never be marked given with a FUTURE date,
+                    // on any path. Reject before any inventory/IsDone work.
+                    if (scheduleDTO.GivenDate.Date > ClinicClock.TodayPkt())
+                    {
+                        return new Response<ScheduleDTO>(false,
+                            "The given date cannot be in the future.", null);
+                    }
+
+                    // v2 deduction-decision model (§6.2a). Resolves whether this give consumes
+                    // stock and why. For a backdated, in-period, brand give the frontend must have
+                    // supplied ReRecordHistorical (the "from our stock / just recording" answer).
+                    var stockPeriodStart = _db.Clinics
+                        .Where(c => c.Id == onlineClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
+                    var decision = InventoryTransactionService.ResolveGiveDecision(
+                        scheduleDTO.BrandId, scheduleDTO.GivenDate, stockPeriodStart, scheduleDTO.ReRecordHistorical);
+
+                    if (decision.NeedsPrompt)
+                    {
+                        // Backdated in-period brand give with no answer — the client should have
+                        // prompted. Reject rather than silently deduct or silently skip.
+                        return new Response<ScheduleDTO>(false,
+                            "This dose is backdated. Choose whether it came from your stock before saving.", null);
+                    }
+
                     // Null brand means OHF/external source; do not consume inventory.
                     if (inventoryEnabled && scheduleDTO.BrandId.HasValue && scheduleDTO.BrandId.Value > 0)
                     {
@@ -472,29 +512,18 @@ namespace VaccineAPI.Controllers
                             );
                         }
 
-                        if (dbBrandInventory.Count <= 0)
-                        {
-                            return new Response<ScheduleDTO>(
-                                false,
-                                BuildInventoryContextMessage(
-                                    "Insufficient inventory for brand",
-                                    scheduleDTO.BrandId,
-                                    onlineClinicId
-                                ),
-                                null
-                            );
-                        }
-
-                        _inventory.AdministerSync(dbBrandInventory, onlineClinicId, dbSchedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
+                        // v2: a give never hard-blocks on zero stock — a physically-given dose is
+                        // always recordable (§2.8 exception). AdministerSync handles the give-at-zero
+                        // case (records, floors Count at 0, flags NeedsReconcile). The old
+                        // Count<=0 rejection is removed for the consuming path.
+                        _inventory.AdministerSync(dbBrandInventory, onlineClinicId, dbSchedule.Id,
+                            scheduleDTO.GivenDate, scheduleDTO.PaId,
+                            decision.ConsumesStock, decision.Reason, out giveConsumedStockId);
 
                         // Persist the inventory deduction in its own transaction, right here,
                         // rather than deferring to whichever SaveChanges() this method happens to
-                        // hit later (there are two further down, on different branches). This is
-                        // the same narrow-transaction-around-the-stock-write pattern already used
-                        // in BillController/AdjustStockController/etc. A concurrent give for the
-                        // same brand+clinic that read Count/Quantity before this commits will now
-                        // fail with DbUpdateConcurrencyException on its own SaveChanges() instead
-                        // of silently overwriting this deduction.
+                        // hit later (there are two further down, on different branches). Same
+                        // narrow-transaction pattern used across the stock controllers.
                         using (var tx = _db.Database.BeginTransaction())
                         {
                             try
@@ -587,7 +616,19 @@ namespace VaccineAPI.Controllers
                         dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                         dbSchedule.IsDisease = scheduleDTO.IsDisease;
                         var stockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
-                        ApplyStockSourceFields(dbSchedule, scheduleDTO, stockClinicId);
+                        var stockPeriodStartForStamp = _db.Clinics
+                            .Where(c => c.Id == onlineClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
+                        var stampDecision = InventoryTransactionService.ResolveGiveDecision(
+                            scheduleDTO.BrandId, scheduleDTO.GivenDate, stockPeriodStartForStamp, scheduleDTO.ReRecordHistorical);
+                        // v2 lot/expiry stamping:
+                        //  - consuming brand give that drew a batch → stamp that exact batch.
+                        //  - consuming brand give at ZERO stock (no batch) → blank (no fabrication).
+                        //  - non-consuming give (OHF / historical) → keep operator-typed lot if any.
+                        bool blankIfNoBatch = stampDecision.ConsumesStock
+                            && scheduleDTO.BrandId.HasValue && scheduleDTO.BrandId.Value > 0;
+                        dbSchedule.StockId = giveConsumedStockId;
+                        ApplyStockSourceFields(dbSchedule, scheduleDTO, stockClinicId,
+                            giveConsumedStockId, blankIfNoBatch);
                         dbSchedule.Validity = scheduleDTO.Validity;
 
                         ScheduleDTO newData1 = _mapper.Map<ScheduleDTO>(dbSchedule);
@@ -943,9 +984,85 @@ namespace VaccineAPI.Controllers
                 _db.PAAssignmentSchedules.Add(new PAAssignmentSchedule { AssignmentId = assignmentId, ScheduleId = scheduleId });
         }
 
-        private void ApplyStockSourceFields(Schedule dbSchedule, ScheduleDTO scheduleDTO, long clinicId)
+        // v2 §6.5a: a dose is "pre-reset" if it was given before its clinic's StockPeriodStart —
+        // frozen historical fact. Ungiving it must never move stock and is doctor-only. Uses the
+        // stock clinic the dose was debited against (StockClinicId), falling back to the child's
+        // clinic for older rows. If the clinic has no StockPeriodStart set (not cut over), nothing
+        // is pre-reset.
+        private bool IsPreResetDose(Schedule dbSchedule)
         {
+            if (!dbSchedule.GivenDate.HasValue) return false;
+            var stockClinicId = dbSchedule.StockClinicId ?? dbSchedule.Child?.ClinicId ?? 0;
+            if (stockClinicId <= 0) return false;
+            var periodStart = _db.Clinics
+                .Where(c => c.Id == stockClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
+            return periodStart.HasValue && dbSchedule.GivenDate.Value.Date < periodStart.Value.Date;
+        }
+
+        private void ApplyStockSourceFields(Schedule dbSchedule, ScheduleDTO scheduleDTO, long clinicId,
+            int? consumedStockId = null, bool blankIfNoBatch = false)
+        {
+            // v2: when the give consumed a specific batch, stamp the certificate lot/expiry from
+            // THAT exact batch.
+            if (consumedStockId.HasValue)
+            {
+                var consumed = _db.Stocks.FirstOrDefault(s => s.Id == consumedStockId.Value);
+                dbSchedule.Manufacturer = _db.Brands
+                    .Where(b => b.Id == (scheduleDTO.BrandId ?? 0)).Select(b => b.Manufacturer).FirstOrDefault() ?? "";
+                dbSchedule.StockClinicId = clinicId;
+                if (consumed != null)
+                {
+                    dbSchedule.Lot = consumed.BatchLot ?? "";
+                    dbSchedule.Expiry = consumed.Expiry;
+                    dbSchedule.VaccineCost = consumed.StockAmount;
+                }
+                return;
+            }
+
+            // v2 give-at-zero: a consuming brand give that drew from NO batch → leave lot/expiry
+            // blank rather than falling back to a depleted/latest batch (no fabrication, §6.3).
+            // The operator fills the real batch in later via the label-only correction (§6.3a).
+            if (blankIfNoBatch)
+            {
+                dbSchedule.Manufacturer = _db.Brands
+                    .Where(b => b.Id == (scheduleDTO.BrandId ?? 0)).Select(b => b.Manufacturer).FirstOrDefault() ?? "";
+                dbSchedule.Lot = "";
+                dbSchedule.Expiry = null;
+                dbSchedule.StockClinicId = clinicId;
+                return;
+            }
+
             ApplyStockSourceFields(dbSchedule, scheduleDTO.BrandId, scheduleDTO.Lot, scheduleDTO.Expiry, clinicId);
+        }
+
+        private void ApplyStockSourceFields(Schedule dbSchedule, long? brandId, string? lot, DateTime? expiry, long clinicId,
+            int? consumedStockId, bool blankIfNoBatch)
+        {
+            // v2 give path: stamp from the exact consumed batch, or blank at give-at-zero.
+            if (consumedStockId.HasValue)
+            {
+                var consumed = _db.Stocks.FirstOrDefault(s => s.Id == consumedStockId.Value);
+                dbSchedule.Manufacturer = _db.Brands
+                    .Where(b => b.Id == (brandId ?? 0)).Select(b => b.Manufacturer).FirstOrDefault() ?? "";
+                dbSchedule.StockClinicId = clinicId;
+                if (consumed != null)
+                {
+                    dbSchedule.Lot = consumed.BatchLot ?? "";
+                    dbSchedule.Expiry = consumed.Expiry;
+                    dbSchedule.VaccineCost = consumed.StockAmount;
+                }
+                return;
+            }
+            if (blankIfNoBatch)
+            {
+                dbSchedule.Manufacturer = _db.Brands
+                    .Where(b => b.Id == (brandId ?? 0)).Select(b => b.Manufacturer).FirstOrDefault() ?? "";
+                dbSchedule.Lot = "";
+                dbSchedule.Expiry = null;
+                dbSchedule.StockClinicId = clinicId;
+                return;
+            }
+            ApplyStockSourceFields(dbSchedule, brandId, lot, expiry, clinicId);
         }
 
         private void ApplyStockSourceFields(Schedule dbSchedule, long? brandId, string? lot, DateTime? expiry, long clinicId)
@@ -1578,8 +1695,27 @@ namespace VaccineAPI.Controllers
                 }
             }
 
+            // v2 date policy (§8): no give with a FUTURE date, on any path — reject the whole
+            // bulk request before any dose is marked done. Only applies when actually giving.
+            if (scheduleDTO.IsDone && scheduleDTO.GivenDate.Date > ClinicClock.TodayPkt())
+            {
+                return new Response<ScheduleDTO>(false, "The given date cannot be in the future.", null);
+            }
+
+            // v2 §6.5a: on a bulk UNGIVE, pre-reset historical doses are left untouched and
+            // reported — never silently un-recorded in a batch. (A PA can't ungive them at all;
+            // even the doctor must undo them one at a time via single ungive with its warning.)
+            int preResetSkipped = 0;
+
             foreach (var schedule in dbChildSchedules)
             {
+                // Bulk ungive of a pre-reset given dose → skip this schedule entirely and count it.
+                if (scheduleDTO.IsDone == false && schedule.IsDone == true && IsPreResetDose(schedule))
+                {
+                    preResetSkipped++;
+                    continue;
+                }
+
                 var wasIsDone = schedule.IsDone;
                 schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
                 schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
@@ -1682,122 +1818,138 @@ namespace VaccineAPI.Controllers
                             scheduleDTO.DoctorId,
                             schedule.Child?.ClinicId ?? 0
                         );
-                        ApplyStockSourceFields(schedule, scheduleBrand.BrandId, scheduleBrand.Lot, scheduleBrand.Expiry, bulkStockClinicId);
 
-                        if (scheduleDTO.GivenDate.Date == DateTime.UtcNow.AddHours(5).Date)
+                        // v2: the batch this dose consumed (for Schedule.StockId + certificate lot).
+                        int? bulkConsumedStockId = null;
+                        bool bulkBlankIfNoBatch = false;
+
+                        // v2: the old `GivenDate.Date == today` gate is REMOVED. The deduct/don't
+                        // decision is now the §6.2a model, uniform with single give. Backdated,
+                        // in-period, brand gives deduct unless the operator chose "just recording".
+
+                        // Ungive transition: dose was given before, now being ungiven. Restore
+                        // inventory for whatever brand was actually deducted (previousBrandId).
+                        if (wasIsDone == true && scheduleDTO.IsDone == false && previousBrandId.HasValue)
                         {
-                            // Ungive transition: dose was given before, now being ungiven.
-                            // Restore inventory for whatever brand was actually deducted (previousBrandId),
-                            // regardless of the brand now present in the request.
-                            if (wasIsDone == true && scheduleDTO.IsDone == false && previousBrandId.HasValue)
-                            {
-                                var ungiveClinicId = ResolveClinicIdForStock(
-                                    scheduleDTO.DoctorId,
-                                    dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0
-                                );
+                            var ungiveClinicId = ResolveClinicIdForStock(
+                                scheduleDTO.DoctorId,
+                                dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0
+                            );
 
-                                if (ungiveClinicId > 0)
+                            if (ungiveClinicId > 0)
+                            {
+                                var ungiveInventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, ungiveClinicId);
+                                if (ungiveInventoryEnabled)
                                 {
-                                    var ungiveInventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, ungiveClinicId);
-                                    if (ungiveInventoryEnabled)
+                                    var ungiveDoctorId = _db.Clinics
+                                        .Where(c => c.Id == ungiveClinicId)
+                                        .Select(c => c.DoctorId)
+                                        .FirstOrDefault();
+
+                                    if (ungiveDoctorId > 0)
                                     {
-                                        var ungiveDoctorId = _db.Clinics
-                                            .Where(c => c.Id == ungiveClinicId)
-                                            .Select(c => c.DoctorId)
+                                        var ungiveInventory = _db.BrandAmounts
+                                            .Where(b => b.BrandId == previousBrandId
+                                                     && b.DoctorId == ungiveDoctorId
+                                                     && b.ClinicId == ungiveClinicId)
                                             .FirstOrDefault();
 
-                                        if (ungiveDoctorId > 0)
+                                        // UnadministerBulkSync mirrors the original give (restores
+                                        // only if that give actually consumed); safe to call even
+                                        // for OHF/historical/pre-reset gives (it no-ops the stock).
+                                        if (ungiveInventory != null)
                                         {
-                                            var ungiveInventory = _db.BrandAmounts
-                                                .Where(b => b.BrandId == previousBrandId
-                                                         && b.DoctorId == ungiveDoctorId
-                                                         && b.ClinicId == ungiveClinicId)
-                                                .FirstOrDefault();
-
-                                            if (ungiveInventory != null)
-                                            {
-                                                _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
-                                            }
+                                            _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            // Give transition: dose was not given before, now being given.
-                            // Deduct inventory for the brand selected in this request.
-                            if (wasIsDone == false && scheduleDTO.IsDone == true
-                                && scheduleBrand.BrandId.HasValue && scheduleBrand.BrandId.Value > 0)
+                        // Give transition: dose was not given before, now being given.
+                        if (wasIsDone == false && scheduleDTO.IsDone == true
+                            && scheduleBrand.BrandId.HasValue && scheduleBrand.BrandId.Value > 0)
+                        {
+                            var onlineClinicId = ResolveClinicIdForStock(
+                                scheduleDTO.DoctorId,
+                                schedule.Child?.ClinicId ?? 0
+                            );
+
+                            if (onlineClinicId <= 0)
                             {
-                                var onlineClinicId = ResolveClinicIdForStock(
-                                    scheduleDTO.DoctorId,
-                                    schedule.Child?.ClinicId ?? 0
+                                return new Response<ScheduleDTO>(
+                                    false,
+                                    "Unable to resolve online clinic for inventory consumption.",
+                                    null
                                 );
+                            }
 
-                                if (onlineClinicId <= 0)
+                            // v2 deduction-decision (§6.2a), uniform with single give.
+                            var bulkPeriodStart = _db.Clinics
+                                .Where(c => c.Id == onlineClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
+                            var bulkDecision = InventoryTransactionService.ResolveGiveDecision(
+                                scheduleBrand.BrandId, scheduleDTO.GivenDate, bulkPeriodStart, scheduleDTO.ReRecordHistorical);
+                            if (bulkDecision.NeedsPrompt)
+                            {
+                                return new Response<ScheduleDTO>(false,
+                                    "This dose is backdated. Choose whether it came from your stock before saving.", null);
+                            }
+
+                            var inventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, onlineClinicId);
+                            if (inventoryEnabled)
+                            {
+                                var inventoryDoctorId = _db.Clinics
+                                    .Where(c => c.Id == onlineClinicId)
+                                    .Select(c => c.DoctorId)
+                                    .FirstOrDefault();
+
+                                if (inventoryDoctorId <= 0)
                                 {
                                     return new Response<ScheduleDTO>(
                                         false,
-                                        "Unable to resolve online clinic for inventory consumption.",
+                                        $"Unable to resolve inventory owner doctor for clinic {onlineClinicId}.",
                                         null
                                     );
                                 }
 
-                                var inventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, onlineClinicId);
-                                if (inventoryEnabled)
+                                var brandInventory = _db.BrandAmounts
+                                    .Where(
+                                        b =>
+                                            b.BrandId == scheduleBrand.BrandId.Value
+                                            && b.DoctorId == inventoryDoctorId
+                                            && b.ClinicId == onlineClinicId
+                                    )
+                                    .FirstOrDefault();
+
+                                if (brandInventory == null)
                                 {
-                                    var inventoryDoctorId = _db.Clinics
-                                        .Where(c => c.Id == onlineClinicId)
-                                        .Select(c => c.DoctorId)
-                                        .FirstOrDefault();
-
-                                    if (inventoryDoctorId <= 0)
-                                    {
-                                        return new Response<ScheduleDTO>(
-                                            false,
-                                            $"Unable to resolve inventory owner doctor for clinic {onlineClinicId}.",
-                                            null
-                                        );
-                                    }
-
-                                    var brandInventory = _db.BrandAmounts
-                                        .Where(
-                                            b =>
-                                                b.BrandId == scheduleBrand.BrandId.Value
-                                                && b.DoctorId == inventoryDoctorId
-                                                && b.ClinicId == onlineClinicId
-                                        )
-                                        .FirstOrDefault();
-
-                                    if (brandInventory == null)
-                                    {
-                                        return new Response<ScheduleDTO>(
-                                            false,
-                                            BuildInventoryContextMessage(
-                                                "Inventory row not found for brand",
-                                                scheduleBrand.BrandId.Value,
-                                                onlineClinicId
-                                            ),
-                                            null
-                                        );
-                                    }
-
-                                    if (brandInventory.Count <= 0)
-                                    {
-                                        return new Response<ScheduleDTO>(
-                                            false,
-                                            BuildInventoryContextMessage(
-                                                "Insufficient inventory for brand",
-                                                scheduleBrand.BrandId.Value,
-                                                onlineClinicId
-                                            ),
-                                            null
-                                        );
-                                    }
-
-                                    _inventory.AdministerSync(brandInventory, onlineClinicId, schedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
+                                    return new Response<ScheduleDTO>(
+                                        false,
+                                        BuildInventoryContextMessage(
+                                            "Inventory row not found for brand",
+                                            scheduleBrand.BrandId.Value,
+                                            onlineClinicId
+                                        ),
+                                        null
+                                    );
                                 }
+
+                                // v2: never hard-block on zero stock (§2.8 exception) — the give-at-zero
+                                // path records, floors Count at 0, and flags NeedsReconcile.
+                                _inventory.AdministerSync(brandInventory, onlineClinicId, schedule.Id,
+                                    scheduleDTO.GivenDate, scheduleDTO.PaId,
+                                    bulkDecision.ConsumesStock, bulkDecision.Reason, out bulkConsumedStockId);
+
+                                schedule.StockId = bulkConsumedStockId;
+                                bulkBlankIfNoBatch = bulkDecision.ConsumesStock;
                             }
                         }
+
+                        // Stamp certificate lot/expiry: from the consumed batch, or blank at
+                        // give-at-zero (no fabricated fallback, §6.3). Non-consuming gives keep
+                        // the operator-typed lot from scheduleBrand.
+                        ApplyStockSourceFields(schedule, scheduleBrand.BrandId, scheduleBrand.Lot,
+                            scheduleBrand.Expiry, bulkStockClinicId, bulkConsumedStockId, bulkBlankIfNoBatch);
                     }
                 }
 
@@ -1839,7 +1991,10 @@ namespace VaccineAPI.Controllers
                     throw;
                 }
             }
-            return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
+            var bulkMsg = preResetSkipped > 0
+                ? $"schedule updated successfully. {preResetSkipped} historical dose(s) from before the current stock period were left untouched — the doctor can undo them one at a time."
+                : "schedule updated successfully.";
+            return new Response<ScheduleDTO>(true, bulkMsg, null);
         }
 
         [HttpPut("update-bulk-invoice")]

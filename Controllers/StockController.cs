@@ -513,65 +513,27 @@ namespace VaccineAPI.Controllers
                 BaseColor whiteBg   = new BaseColor(255, 255, 255);
                 BaseColor borderClr = new BaseColor(200, 200, 200);
 
+                // v2 §7: reset floor. Only ledger rows on/after StockPeriodStart count, so a stock
+                // reset yields a clean opening with no pre-reset history double-counted.
+                DateTime? stockPeriodStart = clinic?.StockPeriodStart;
+                DateTime floorDate = stockPeriodStart?.Date ?? DateTime.MinValue;
+                // Effective window is clamped to the floor — nothing before the reset is reportable.
+                DateTime effFrom = from.Date < floorDate ? floorDate : from.Date;
+
                 foreach (var bid in brandIds)
                 {
                     string itemName = brandsLookup.TryGetValue(bid, out var n) ? n : $"Brand {bid}";
 
-                    // First date this clinic ever received this item, via direct purchase or incoming transfer
-                    DateTime? firstReceiptDate = await GetFirstReceiptDate(_db, clinicId, bid);
+                    // Opening = ledger balance the day before the window opens, floored at the reset.
+                    int openingStock = await ComputeStockUpTo(_db, clinicId, bid, effFrom.AddDays(-1), stockPeriodStart);
 
-                    // Opening stock can only be reconciled from the first receipt date onward.
-                    // Anchor the balance to that date so pre-tracking "sold" backlog (with no
-                    // matching purchase/transfer history) doesn't drag the balance negative.
-                    bool hasBaseline = firstReceiptDate.HasValue && from.Date >= firstReceiptDate.Value.Date;
-                    int openingStock = hasBaseline
-                        ? await ComputeStockUpTo(_db, clinicId, bid, from.Date.AddDays(-1), firstReceiptDate)
-                        : 0;
-
-                    // Fetch all events in range for this brand
-                    var soldRows = await _db.Schedules
-                        .Include(s => s.Child)
-                        .Where(s => s.Child.ClinicId == clinicId && s.IsDone == true
-                                 && s.BrandId == bid && s.GivenDate.HasValue
-                                 && s.GivenDate.Value.Date >= from.Date && s.GivenDate.Value.Date <= to.Date)
-                        .ToListAsync();
-
-                    var purchRows = await _db.Stocks
-                        .Include(s => s.Bill)
-                        .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId
-                                 && !s.Bill.BillNo.StartsWith("XFER-")
-                                 && s.BrandId == bid
-                                 && s.Bill.BillDate.Date >= from.Date && s.Bill.BillDate.Date <= to.Date)
-                        .ToListAsync();
-
-                    var xferInRows = await _db.StockTransfers
-                        .Where(t => t.ToClinicId == clinicId && t.BrandId == bid
-                                 && t.TransferDate.Date >= from.Date && t.TransferDate.Date <= to.Date)
-                        .ToListAsync();
-
-                    var xferOutRows = await _db.StockTransfers
-                        .Where(t => t.FromClinicId == clinicId && t.BrandId == bid
-                                 && t.TransferDate.Date >= from.Date && t.TransferDate.Date <= to.Date)
-                        .ToListAsync();
-
-                    var adjRows = await _db.AdjustStocks
-                        .Where(a => a.ClinicId == clinicId && a.BrandId == bid
-                                 && a.Date.Date >= from.Date && a.Date.Date <= to.Date)
-                        .ToListAsync();
-
-                    var directSaleRows = await _db.DirectSales
-                        .Where(d => d.ClinicId == clinicId && d.BrandId == bid
-                                 && d.SaleDate.Date >= from.Date && d.SaleDate.Date <= to.Date)
-                        .ToListAsync();
-
-                    // Collect all active dates
-                    var activeDates = soldRows.Select(s => s.GivenDate.Value.Date)
-                        .Concat(purchRows.Select(p => p.Bill.BillDate.Date))
-                        .Concat(xferInRows.Select(t => t.TransferDate.Date))
-                        .Concat(xferOutRows.Select(t => t.TransferDate.Date))
-                        .Concat(adjRows.Select(a => a.Date.Date))
-                        .Concat(directSaleRows.Select(d => d.SaleDate.Date))
-                        .Distinct().OrderBy(d => d).ToList();
+                    // All ledger event dates in range for this brand (single source — no 6-table union).
+                    var activeDates = await _db.InventoryTransactions
+                        .Where(t => t.ClinicId == clinicId && t.BrandId == bid
+                                 && t.EventDate.Date >= effFrom && t.EventDate.Date <= to.Date
+                                 && t.QuantityDelta != 0)
+                        .Select(t => t.EventDate.Date)
+                        .Distinct().OrderBy(d => d).ToListAsync();
 
                     if (activeDates.Count == 0) continue;
 
@@ -579,18 +541,14 @@ namespace VaccineAPI.Controllers
                     doc.Add(new Paragraph("ITEM REPORT", titleFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 6 });
                     doc.Add(new Paragraph($"ITEM: {itemName}", subFont) { Alignment = Element.ALIGN_CENTER });
                     doc.Add(new Paragraph(clinicName, subFont) { Alignment = Element.ALIGN_CENTER });
-                    doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
+                    doc.Add(new Paragraph($"FROM {effFrom:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
 
-                    if (!hasBaseline)
+                    if (stockPeriodStart.HasValue && from.Date < floorDate)
                     {
-                        string noteText = firstReceiptDate.HasValue
-                            ? $"Note: No purchase bill or incoming transfer is recorded for this item before {firstReceiptDate.Value:dd-MM-yyyy}. " +
-                              $"Opening Stock and Stock In Hand cannot be determined for dates before this. " +
-                              $"Figures below for dates prior to {firstReceiptDate.Value:dd-MM-yyyy} show units sold/consumed per available data only."
-                            : "Note: No purchase bill or incoming transfer has ever been recorded for this item at this clinic. " +
-                              "Opening Stock and Stock In Hand cannot be determined. " +
-                              "Figures below show units sold/consumed per available data only.";
-                        doc.Add(new Paragraph(noteText, footerFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 8 });
+                        doc.Add(new Paragraph(
+                            $"Note: Stock tracking for this clinic starts {stockPeriodStart.Value:dd-MM-yyyy}. " +
+                            $"Figures before this date are not shown.",
+                            footerFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 8 });
                     }
 
                     // Table: Date | Opening Stock | Sold | Direct Sale | Transfer | Purchased | Adjusted | Stock In Hand
@@ -611,68 +569,51 @@ namespace VaccineAPI.Controllers
                     int running = openingStock;
                     int totSold = 0, totDirectSale = 0, totTransfer = 0, totPurchased = 0, totAdjusted = 0;
                     bool alt = false;
-                    bool reconciling = hasBaseline;
 
                     foreach (var d in activeDates)
                     {
-                        // Once we reach the first receipt date, balances become reconcilable
-                        if (!reconciling && firstReceiptDate.HasValue && d >= firstReceiptDate.Value.Date)
-                            reconciling = true;
-
-                        int sold         = soldRows.Count(s => s.GivenDate.Value.Date == d);
-                        int directSale   = directSaleRows.Where(ds => ds.SaleDate.Date == d).Sum(ds => ds.Quantity);
-                        int purchased    = purchRows.Where(p => p.Bill.BillDate.Date == d).Sum(p => p.OriginalQuantity);
-                        int xferNet      = xferInRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity)
-                                         - xferOutRows.Where(t => t.TransferDate.Date == d).Sum(t => t.Quantity);
-                        int adjusted     = adjRows.Where(a => a.Date.Date == d).Sum(a => a.Adjustment);
+                        var mv = await ComputeDayMovement(_db, clinicId, bid, d);
+                        int sold       = mv.Sold;
+                        int directSale = mv.DirectSale;
+                        int xferNet    = mv.Transfer;
+                        int purchased  = mv.Purchased;
+                        int adjusted   = mv.Adjusted;
 
                         var bg = alt ? altBg : whiteBg;
                         alt = !alt;
 
                         tbl.AddCell(Cell(d.ToString("dd-MM-yyyy"), cellFont, bg, borderClr));
 
-                        if (!reconciling)
-                        {
-                            // Pre-cutoff rows: balance cannot be determined, don't count toward totals
-                            tbl.AddCell(CellR("N/A", cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(sold.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(directSale.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(xferNet.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(purchased.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(adjusted.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR("N/A", boldCell, bg, borderClr));
-                        }
-                        else
-                        {
-                            totSold       += sold;
-                            totDirectSale += directSale;
-                            totTransfer   += xferNet;
-                            totPurchased  += purchased;
-                            totAdjusted   += adjusted;
+                        totSold       += sold;
+                        totDirectSale += directSale;
+                        totTransfer   += xferNet;
+                        totPurchased  += purchased;
+                        totAdjusted   += adjusted;
 
-                            int dayOpening = running;
-                            int closing    = dayOpening - sold - directSale + xferNet + purchased + adjusted;
-                            running        = closing;
+                        int dayOpening = running;
+                        // Closing == running ledger balance through this day (all signs already
+                        // baked into QuantityDelta): opening - sold - directSale + xferNet + purchased + adjusted.
+                        int closing    = dayOpening - sold - directSale + xferNet + purchased + adjusted;
+                        running        = closing;
 
-                            tbl.AddCell(CellR(dayOpening.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(sold.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(directSale.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(xferNet.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(purchased.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(adjusted.ToString(), cellFont, bg, borderClr));
-                            tbl.AddCell(CellR(closing.ToString(), boldCell, bg, borderClr));
-                        }
+                        tbl.AddCell(CellR(dayOpening.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(sold.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(directSale.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(xferNet.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(purchased.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(adjusted.ToString(), cellFont, bg, borderClr));
+                        tbl.AddCell(CellR(closing.ToString(), boldCell, bg, borderClr));
                     }
 
                     // Totals row
                     tbl.AddCell(new PdfPCell(new Phrase("Totals", boldCell)) { BackgroundColor = totalsBg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4 });
-                    tbl.AddCell(CellR(hasBaseline ? openingStock.ToString() : "N/A", boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(openingStock.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totSold.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totDirectSale.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totTransfer.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totPurchased.ToString(), boldCell, totalsBg, borderClr));
                     tbl.AddCell(CellR(totAdjusted.ToString(), boldCell, totalsBg, borderClr));
-                    tbl.AddCell(CellR(reconciling ? running.ToString() : "N/A", boldCell, totalsBg, borderClr));
+                    tbl.AddCell(CellR(running.ToString(), boldCell, totalsBg, borderClr));
 
                     doc.Add(tbl);
                     doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8 });
@@ -696,80 +637,84 @@ namespace VaccineAPI.Controllers
         private static PdfPCell CellR(string text, Font font, BaseColor bg, BaseColor border) =>
             new PdfPCell(new Phrase(text, font)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = border, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT };
 
-        // Computes the running balance up to (and including) `upTo` from raw source tables.
-        // If `since` is provided, only movements on/after that date are counted — used to
-        // anchor the balance to the first receipt date so pre-tracking "sold" backlog with no
-        // matching purchase/transfer history doesn't drag the balance negative.
-        // NOTE: filters on EventDate (the user-entered business date) not CreatedAt (UTC audit
-        // timestamp) — see InventoryTransaction.EventDate. Raw tables are used here because
-        // EventDate is derived from each table's own date column, which is always in local time.
-        private static async Task<int> ComputeStockUpTo(Context db, long clinicId, long brandId, DateTime upTo, DateTime? since = null)
+        // v2 §7 — LEDGER-ONLY balance. Sums signed InventoryTransaction.QuantityDelta for the
+        // brand+clinic up to (and including) `upTo`. This is the SINGLE source of truth: purchases
+        // (+), gives (-1), ungives (+1), transfers (±), direct sales (-), adjustments (±) all land
+        // here as one signed number, so there is no 6-table drift to reconcile. Give/ungive rows
+        // that recorded a clinical fact without moving stock (OHF / historical / pre-period) carry
+        // QuantityDelta = 0, so they are automatically excluded from the balance.
+        //
+        // `floor` is the clinic's StockPeriodStart: only movements on/after it count, so a stock
+        // reset gives every item a clean opening of 0 with no pre-reset history bleeding through
+        // (this is what fixes the reset double-count). Passing DateTime.MinValue means "all time".
+        // Filters on EventDate (the business date), never CreatedAt (UTC audit stamp).
+        private static async Task<int> ComputeStockUpTo(Context db, long clinicId, long brandId, DateTime upTo, DateTime? floor = null)
         {
-            DateTime sinceDate = since?.Date ?? DateTime.MinValue;
+            DateTime floorDate = floor?.Date ?? DateTime.MinValue;
 
-            int purchased = await db.Stocks
-                .Include(s => s.Bill)
-                .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId
-                         && !s.Bill.BillNo.StartsWith("XFER-")
-                         && s.BrandId == brandId && s.Bill.BillDate.Date <= upTo.Date
-                         && s.Bill.BillDate.Date >= sinceDate)
-                .SumAsync(s => (int?)s.OriginalQuantity) ?? 0;
-
-            int sold = await db.Schedules
-                .Include(s => s.Child)
-                .Where(s => (s.StockClinicId == clinicId || (s.StockClinicId == null && s.Child.ClinicId == clinicId))
-                         && s.IsDone == true
-                         && s.BrandId == brandId && s.GivenDate.HasValue
-                         && s.GivenDate.Value.Date <= upTo.Date
-                         && s.GivenDate.Value.Date >= sinceDate)
-                .CountAsync();
-
-            int xferIn = await db.StockTransfers
-                .Where(t => t.ToClinicId == clinicId && t.BrandId == brandId
-                         && t.TransferDate.Date <= upTo.Date && t.TransferDate.Date >= sinceDate)
-                .SumAsync(t => (int?)t.Quantity) ?? 0;
-
-            int xferOut = await db.StockTransfers
-                .Where(t => t.FromClinicId == clinicId && t.BrandId == brandId
-                         && t.TransferDate.Date <= upTo.Date && t.TransferDate.Date >= sinceDate)
-                .SumAsync(t => (int?)t.Quantity) ?? 0;
-
-            int adjusted = await db.AdjustStocks
-                .Where(a => a.ClinicId == clinicId && a.BrandId == brandId
-                         && a.Date.Date <= upTo.Date && a.Date.Date >= sinceDate)
-                .SumAsync(a => (int?)a.Adjustment) ?? 0;
-
-            int directSold = await db.DirectSales
-                .Where(d => d.ClinicId == clinicId && d.BrandId == brandId
-                         && d.SaleDate.Date <= upTo.Date && d.SaleDate.Date >= sinceDate)
-                .SumAsync(d => (int?)d.Quantity) ?? 0;
-
-            return purchased + xferIn - sold - directSold - xferOut + adjusted;
+            return await db.InventoryTransactions
+                .Where(t => t.ClinicId == clinicId && t.BrandId == brandId
+                         && t.EventDate.Date <= upTo.Date
+                         && t.EventDate.Date >= floorDate)
+                .SumAsync(t => (int?)t.QuantityDelta) ?? 0;
         }
 
-        // First date this clinic received any units of this brand, via direct purchase bill
-        // (excluding XFER- bills) or incoming stock transfer. Null if never received.
-        private static async Task<DateTime?> GetFirstReceiptDate(Context db, long clinicId, long brandId)
+        // Movement totals for a single day, straight from the ledger, split by direction so the
+        // report's per-column figures (Sold / Direct Sale / Transfer / Purchased / Adjusted) stay
+        // reconcilable against the opening/closing balance. Signs match the ledger convention.
+        private static async Task<DayMovement> ComputeDayMovement(Context db, long clinicId, long brandId, DateTime day)
         {
-            DateTime? firstPurchase = await db.Stocks
-                .Include(s => s.Bill)
-                .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId
-                         && !s.Bill.BillNo.StartsWith("XFER-")
-                         && s.BrandId == brandId)
-                .Select(s => (DateTime?)s.Bill.BillDate)
-                .OrderBy(d => d)
-                .FirstOrDefaultAsync();
+            var rows = await db.InventoryTransactions
+                .Where(t => t.ClinicId == clinicId && t.BrandId == brandId && t.EventDate.Date == day.Date)
+                .Select(t => new { t.SourceType, t.QuantityDelta })
+                .ToListAsync();
 
-            DateTime? firstTransferIn = await db.StockTransfers
-                .Where(t => t.ToClinicId == clinicId && t.BrandId == brandId)
-                .Select(t => (DateTime?)t.TransferDate)
-                .OrderBy(d => d)
-                .FirstOrDefaultAsync();
+            var m = new DayMovement();
+            foreach (var r in rows)
+            {
+                switch (r.SourceType)
+                {
+                    case InventoryTransactionType.Administer:      // -1 per dose (0 if no-deduct)
+                    case InventoryTransactionType.Unadminister:    // +1 restore
+                        m.Sold -= r.QuantityDelta;                 // report shows "Sold" as a positive count
+                        break;
+                    case InventoryTransactionType.DirectSale:
+                    case InventoryTransactionType.DirectSaleReverse:
+                        m.DirectSale -= r.QuantityDelta;
+                        break;
+                    case InventoryTransactionType.TransferIn:
+                    case InventoryTransactionType.TransferOut:
+                    case InventoryTransactionType.TransferReverse:
+                        m.Transfer += r.QuantityDelta;             // net in(+)/out(-)
+                        break;
+                    case InventoryTransactionType.Purchase:
+                    case InventoryTransactionType.BillEdit:
+                    case InventoryTransactionType.BillReverse:
+                        m.Purchased += r.QuantityDelta;
+                        break;
+                    case InventoryTransactionType.AdjustIncrease:
+                    case InventoryTransactionType.AdjustLoss:
+                    case InventoryTransactionType.AdjustReverse:
+                    case InventoryTransactionType.OpeningBalance:
+                    case InventoryTransactionType.TwinCorrection:
+                        m.Adjusted += r.QuantityDelta;
+                        break;
+                    // SplitConsumed nets to zero (out of one batch, into another) → no report impact.
+                    // BatchCorrection / Migration* carry QuantityDelta = 0 → no impact.
+                    default:
+                        break;
+                }
+            }
+            return m;
+        }
 
-            if (firstPurchase.HasValue && firstTransferIn.HasValue)
-                return firstPurchase.Value < firstTransferIn.Value ? firstPurchase : firstTransferIn;
-
-            return firstPurchase ?? firstTransferIn;
+        private class DayMovement
+        {
+            public int Sold;
+            public int DirectSale;
+            public int Transfer;
+            public int Purchased;
+            public int Adjusted;
         }
 
         // GET /api/stock/items-purchase-report?clinicId=X&brandId=X&from=DATE&to=DATE

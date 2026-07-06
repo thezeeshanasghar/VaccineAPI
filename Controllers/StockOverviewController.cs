@@ -216,7 +216,7 @@ namespace VaccineAPI.Controllers
                     {
                         var s = brand.Batches[i];
                         bool expired = s.Expiry.HasValue && s.Expiry.Value < System.DateTime.Today;
-                        bool soon    = !expired && s.Expiry.HasValue && (s.Expiry.Value - System.DateTime.Today).TotalDays <= 90;
+                        bool soon    = !expired && s.Expiry.HasValue && s.Expiry.Value <= System.DateTime.Today.AddMonths(6);
 
                         BaseColor rowBg = expired ? expiredBg : soon ? soonBg : (alt ? oddBg : evenBg);
 

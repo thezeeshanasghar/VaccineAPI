@@ -336,6 +336,9 @@ namespace VaccineAPI.Migrations
                     b.Property<bool>("AllowFinancial")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("AllowSalesReport")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<bool>("AllowTravel")
                         .HasColumnType("tinyint(1)");
 

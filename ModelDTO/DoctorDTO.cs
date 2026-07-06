@@ -30,6 +30,7 @@ namespace VaccineAPI.ModelDTO
         public bool AllowInventory { get; set; }
         public bool AllowSupplier { get; set; }
         public bool AllowFinancial { get; set; }
+        public bool AllowSalesReport { get; set; }
         public bool AllowAgent { get; set; }
         public bool AllowTravel { get; set; }
         public bool AllowAdult { get; set; }

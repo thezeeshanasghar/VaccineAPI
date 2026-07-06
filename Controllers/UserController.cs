@@ -121,6 +121,7 @@ namespace VaccineAPI.Controllers
                 userDTO.AllowInventory = doctorDb.AllowInventory;
                 userDTO.AllowSupplier  = doctorDb.AllowSupplier;
                 userDTO.AllowFinancial = doctorDb.AllowFinancial;
+                userDTO.AllowSalesReport = doctorDb.AllowSalesReport;
                 userDTO.AllowInvoice = doctorDb.AllowInvoice;
                 userDTO.ProfileImage = doctorDb.ProfileImage;
                 userDTO.DoctorType = doctorDb.DoctorType;

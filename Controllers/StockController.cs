@@ -24,6 +24,20 @@ namespace VaccineAPI.Controllers
             _inventory = inventory;
         }
 
+        // Report endpoints expose a clinic's patients + revenue by clinicId. The API has no auth
+        // scheme, so the caller asserts its own doctorId and we enforce that it owns the clinic
+        // (or, for a PA, is assigned to it via PaAccess). This stops trivial clinicId enumeration.
+        // Returns true when access is allowed. doctorId <= 0 is treated as "not supplied" and
+        // rejected so the check can't be bypassed by omitting the param.
+        private async Task<bool> CallerOwnsClinicAsync(Clinic clinic, long doctorId)
+        {
+            if (clinic == null) return false;
+            if (doctorId > 0 && clinic.DoctorId == doctorId) return true;
+            // PA path: allow if the passed id belongs to a PA assigned to this clinic.
+            return await _db.PaAccess
+                .AnyAsync(a => a.ClinicId == clinic.Id && a.PersonalAssistantId == doctorId);
+        }
+
         // POST /api/stock/opening-balance
         // v2 — record physical on-hand at the reset. Body: doctorId, clinicId, and a list of
         // { brandId, quantity, unitCost?, batchLot?, expiry? }. Each line becomes a real batch +
@@ -208,11 +222,16 @@ namespace VaccineAPI.Controllers
         [HttpGet("sales-report")]
         public async Task<IActionResult> GetSalesReport(
             [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
             [FromQuery] DateTime from,
             [FromQuery] DateTime to)
         {
             var clinic = await _db.Clinics.FindAsync(clinicId);
-            string clinicName = clinic != null ? clinic.Name : $"Clinic {clinicId}";
+            if (clinic == null)
+                return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (!await CallerOwnsClinicAsync(clinic, doctorId))
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
+            string clinicName = clinic.Name;
 
             // Vaccinations given to patients
             var schedules = await _db.Schedules
@@ -374,12 +393,15 @@ namespace VaccineAPI.Controllers
         [HttpGet("sales-collection-report")]
         public async Task<IActionResult> GetSalesCollectionReport(
             [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
             [FromQuery] DateTime from,
             [FromQuery] DateTime to)
         {
             var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == clinicId);
             if (clinic == null)
                 return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (!await CallerOwnsClinicAsync(clinic, doctorId))
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
 
             var schedules = await _db.Schedules
                 .Include(s => s.Brand)
@@ -402,10 +424,10 @@ namespace VaccineAPI.Controllers
 
             // Vaccination fees — primary: InvoiceSubmissions; fallback: Fee table via Invoice
             var childIds = schedules.Select(s => s.ChildId).Distinct().ToList();
-            long doctorId = clinic.DoctorId;
+            long ownerDoctorId = clinic.DoctorId;
 
             var invoiceSubs = await _db.InvoiceSubmissions
-                .Where(x => x.DoctorId == doctorId
+                .Where(x => x.DoctorId == ownerDoctorId
                           && childIds.Contains(x.ChildId)
                           && x.InvoiceDate.Date >= from.Date
                           && x.InvoiceDate.Date <= to.Date)
@@ -620,12 +642,17 @@ namespace VaccineAPI.Controllers
         [HttpGet("items-report")]
         public async Task<IActionResult> GetItemsReport(
             [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
             [FromQuery] long brandId,
             [FromQuery] DateTime from,
             [FromQuery] DateTime to)
         {
             var clinic = await _db.Clinics.FindAsync(clinicId);
-            string clinicName = clinic != null ? clinic.Name : $"Clinic {clinicId}";
+            if (clinic == null)
+                return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (!await CallerOwnsClinicAsync(clinic, doctorId))
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
+            string clinicName = clinic.Name;
 
             // All brands in scope
             List<long> brandIds;
@@ -886,12 +913,17 @@ namespace VaccineAPI.Controllers
         [HttpGet("items-purchase-report")]
         public async Task<IActionResult> GetItemsPurchaseReport(
             [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
             [FromQuery] long brandId,
             [FromQuery] DateTime from,
             [FromQuery] DateTime to)
         {
             var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == clinicId);
-            string clinicName = clinic != null ? clinic.Name : $"Clinic {clinicId}";
+            if (clinic == null)
+                return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (!await CallerOwnsClinicAsync(clinic, doctorId))
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
+            string clinicName = clinic.Name;
 
             var query = _db.Stocks
                 .Include(s => s.Bill)
@@ -1014,12 +1046,17 @@ namespace VaccineAPI.Controllers
         [HttpGet("items-supplier-report")]
         public async Task<IActionResult> GetItemsSupplierReport(
             [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
             [FromQuery] string supplier,
             [FromQuery] DateTime from,
             [FromQuery] DateTime to)
         {
             var clinic = await _db.Clinics.FindAsync(clinicId);
-            string clinicName = clinic != null ? clinic.Name : $"Clinic {clinicId}";
+            if (clinic == null)
+                return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (!await CallerOwnsClinicAsync(clinic, doctorId))
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
+            string clinicName = clinic.Name;
 
             var bills = await _db.Bills
                 .Include(b => b.Stocks).ThenInclude(s => s.Brand)

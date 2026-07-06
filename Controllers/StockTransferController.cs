@@ -63,10 +63,9 @@ namespace VaccineAPI.Controllers
                     var sourceStock = await _db.Stocks
                         .Include(s => s.Bill)
                         .Where(s => s.BrandId == item.BrandId
-                                 && s.BillId != null
                                  && s.BatchLot == item.BatchLot
                                  && s.Quantity > 0
-                                 && s.Bill.ClinicId == dto.FromClinicId)
+                                 && (s.ClinicId == dto.FromClinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == dto.FromClinicId)))
                         .FirstOrDefaultAsync();
 
                     if (sourceStock == null)

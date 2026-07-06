@@ -186,7 +186,10 @@ namespace VaccineAPI.Controllers
         {
             var stocks = await _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Quantity > 0 && s.BillId != null && s.Bill.ClinicId == clinicId)
+                // v2: include opening-balance/transfer batches (Stock.ClinicId set, BillId NULL)
+                // as well as purchase batches (Bill.ClinicId). Same resolution FEFO uses.
+                .Where(s => s.BrandId == brandId && s.Quantity > 0
+                    && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId)))
                 .OrderBy(s => s.Expiry)
                 .Select(s => new
                 {

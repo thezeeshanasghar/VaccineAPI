@@ -190,7 +190,8 @@ namespace VaccineAPI.Services
             // and roll back the ba.Count decrement silently while the dose was still physically given.
             var existingStock = await _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId
+                .Where(s => s.BrandId == brandId
+                         && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId))
                          && s.BatchLot == batchLot && s.Expiry == expiry && s.Quantity > 0)
                 .FirstOrDefaultAsync();
 
@@ -294,7 +295,9 @@ namespace VaccineAPI.Services
 
             var stockRow = await _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.BatchLot == batchLot && s.Quantity > 0)
+                .Where(s => s.BrandId == brandId
+                         && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId))
+                         && s.BatchLot == batchLot && s.Quantity > 0)
                 .FirstOrDefaultAsync();
             if (stockRow == null)
                 return InventoryOperationResult.Fail("Batch not found or has no remaining stock");
@@ -328,7 +331,9 @@ namespace VaccineAPI.Services
             {
                 var stockRow = await _db.Stocks
                     .Include(s => s.Bill)
-                    .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.BatchLot == batchLot && s.Quantity > 0)
+                    .Where(s => s.BrandId == brandId
+                             && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId))
+                             && s.BatchLot == batchLot && s.Quantity > 0)
                     .FirstOrDefaultAsync();
                 if (stockRow != null)
                 {
@@ -345,7 +350,9 @@ namespace VaccineAPI.Services
             {
                 var stockRow = await _db.Stocks
                     .Include(s => s.Bill)
-                    .Where(s => s.BrandId == brandId && s.Bill.ClinicId == clinicId && s.BatchLot == batchLot)
+                    .Where(s => s.BrandId == brandId
+                             && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId))
+                             && s.BatchLot == batchLot)
                     .FirstOrDefaultAsync();
                 if (stockRow != null)
                 {
@@ -443,7 +450,8 @@ namespace VaccineAPI.Services
 
             var sourceStock = await _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.BillId != null && s.BatchLot == batchLot && s.Bill.ClinicId == fromClinicId)
+                .Where(s => s.BrandId == brandId && s.BatchLot == batchLot
+                         && (s.ClinicId == fromClinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == fromClinicId)))
                 .FirstOrDefaultAsync();
 
             int? affectedStockId;
@@ -520,7 +528,8 @@ namespace VaccineAPI.Services
 
             var sourceStock = await _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId && s.BillId != null && s.BatchLot == batchLot && s.Bill.ClinicId == clinicId)
+                .Where(s => s.BrandId == brandId && s.BatchLot == batchLot
+                         && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId)))
                 .FirstOrDefaultAsync();
 
             int? affectedStockId;

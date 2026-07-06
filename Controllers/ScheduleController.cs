@@ -916,7 +916,8 @@ namespace VaccineAPI.Controllers
 
             var stock = _db.Stocks
                 .Include(s => s.Bill)
-                .Where(s => s.BrandId == brandId.Value && s.BillId != null && s.Bill.ClinicId == clinicId);
+                .Where(s => s.BrandId == brandId.Value
+                    && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId)));
 
             var today = DateTime.UtcNow.Date;
 
@@ -1094,7 +1095,8 @@ namespace VaccineAPI.Controllers
             {
                 var selectedStockQuery = _db.Stocks
                     .Include(s => s.Bill)
-                    .Where(s => s.BrandId == (brandId ?? 0) && s.BillId != null && s.Bill.ClinicId == clinicId)
+                    .Where(s => s.BrandId == (brandId ?? 0)
+                        && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId)))
                     .Where(s => !string.IsNullOrWhiteSpace(s.BatchLot) && s.BatchLot.Trim() == selectedLot);
 
                 if (selectedExpiry.HasValue)
@@ -1160,7 +1162,8 @@ namespace VaccineAPI.Controllers
             {
                 var candidateStocks = _db.Stocks
                     .Include(s => s.Bill)
-                    .Where(s => s.BrandId == schedule.BrandId.Value && s.BillId != null);
+                    .Where(s => s.BrandId == schedule.BrandId.Value
+                        && (s.ClinicId != null || s.BillId != null));
 
                 if (!string.IsNullOrWhiteSpace(schedule.Lot))
                 {
@@ -1177,9 +1180,10 @@ namespace VaccineAPI.Controllers
                     candidateStocks = candidateStocks.Where(s => !s.Expiry.HasValue);
                 }
 
+                // v2: clinic is Stock.ClinicId (opening/transfer rows) else Bill.ClinicId (purchase rows).
                 var candidateClinicIds = candidateStocks
-                    .Where(s => s.BillId != null)
-                    .Select(s => s.Bill.ClinicId)
+                    .Select(s => s.ClinicId != null ? s.ClinicId.Value : (s.Bill != null ? s.Bill.ClinicId : 0))
+                    .Where(cid => cid != 0)
                     .Distinct()
                     .ToList();
 

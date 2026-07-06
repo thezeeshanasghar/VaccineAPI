@@ -4229,9 +4229,11 @@ namespace VaccineAPI.Controllers
 
                 var latestStockByBrand = _db.Stocks
                     .Include(s => s.Bill)
-                    .Where(s => brandIds.Contains(s.BrandId) && s.Bill.ClinicId == childDetails.ClinicId)
+                    // v2: include opening/transfer rows (Stock.ClinicId) and purchase rows (Bill.ClinicId).
+                    .Where(s => brandIds.Contains(s.BrandId)
+                        && (s.ClinicId == childDetails.ClinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == childDetails.ClinicId)))
                     .OrderByDescending(s => !string.IsNullOrWhiteSpace(s.BatchLot) || s.Expiry != null)
-                    .ThenByDescending(s => s.Bill.BillDate)
+                    .ThenByDescending(s => s.Bill != null ? s.Bill.BillDate : DateTime.MinValue)
                     .ThenByDescending(s => s.Id)
                     .AsEnumerable()
                     .GroupBy(s => s.BrandId)

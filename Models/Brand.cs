@@ -17,6 +17,13 @@ namespace VaccineAPI.Models
         public long Id { get; set; }
         public string Name { get; set; } = "";
         public string Manufacturer { get; set; } = "";
+        // Route of administration (IM/SC/ID/Oral/Intranasal). Fixed pharmacological property set by
+        // admin, entered via a constrained pick-list. Auto-loaded read-only at give-time and
+        // snapshotted onto Schedule.Route. No per-patient override anywhere.
+        public string Route { get; set; } = "";
+        // Admin-set SUGGESTED default site (a hint, not a lock). Valid for Route. Nurse overrides
+        // per dose at give-time. Distinct from Route: Site is a per-patient operational choice.
+        public string? SiteDefault { get; set; }
         public int? MinAge { get; set; }
 
         // v2: true when another brand of the same doctor collides case-insensitively

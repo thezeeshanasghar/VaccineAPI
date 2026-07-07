@@ -10,6 +10,12 @@ namespace VaccineAPI.ModelDTO
         public long Id { get; set; }
         public string Name { get; set; } = "";
         public string Manufacturer { get; set; } = "";
+        // Structured route of administration on the give-time Brand (IM/SC/ID/Oral/Intranasal).
+        // NOTE: distinct from the orphan free-text `routeofadministration` below, which belongs to
+        // the VaccineInfo education path and is NOT mapped to the Brand model.
+        public string Route { get; set; } = "";
+        // Admin-set suggested default site (a hint, not a lock). Must be valid for Route. Nullable.
+        public string? SiteDefault { get; set; }
         public int? MinAge { get; set; }
         // §10: true when a case-only twin exists (HEXAXIM vs Hexaxim). Give-time UI echoes
         // "⚠ This is <Name> — not its look-alike" so the operator picks the right one.

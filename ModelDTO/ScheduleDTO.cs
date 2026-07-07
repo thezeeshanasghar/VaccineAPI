@@ -31,6 +31,10 @@ namespace VaccineAPI.ModelDTO
         public long? BrandId { get; set; }
         public decimal? Amount { get; set; }
         public string Manufacturer { get; set; } = "";
+        // Route = server re-derived from BrandId at give-time (client value ignored). Site = the
+        // nurse-chosen site sent from the give-UI. See Route/Site module plan.
+        public string Route { get; set; } = "";
+        public string? Site { get; set; }
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }
         public int? Validity { get; set; }

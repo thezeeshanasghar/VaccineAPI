@@ -141,6 +141,8 @@ namespace VaccineAPI.Controllers
             var oldName = dbVaccineBrand.Name;   // rename may change twin status on both name-groups
             dbVaccineBrand.Name = vaccineBrandDTO.Name;
             dbVaccineBrand.Manufacturer = vaccineBrandDTO.Manufacturer;
+            dbVaccineBrand.Route = vaccineBrandDTO.Route;             // fixed route of administration
+            dbVaccineBrand.SiteDefault = vaccineBrandDTO.SiteDefault; // admin suggested default site
             dbVaccineBrand.MinAge = vaccineBrandDTO.MinAge;
             _db.SaveChanges();
             await RecomputeCaseTwins(oldName, dbVaccineBrand.Name);

@@ -1534,6 +1534,7 @@ namespace VaccineAPI.Controllers
                 <td>{status}</td>
                 <td>{schedule.Brand?.Name}</td>
                 <td>{schedule.Manufacturer}</td>
+                <td>{RouteSiteDisplay(schedule.Route, schedule.Site)}</td>
                 <td>{schedule.Lot}</td>
                 <td>{(schedule.IsDone == true ? schedule.GivenDate?.ToString("dd MMM yyyy") : schedule.Date.ToString("dd MMM yyyy"))}</td>
                 <td>{GetYearOrMonthFromDays((int?)schedule.Validity ?? 0)}</td>
@@ -1611,6 +1612,7 @@ namespace VaccineAPI.Controllers
                                 <th>Status</th>
                                 <th>Brand</th>
                                 <th>Manufacturer</th>
+                                <th>Route/Site</th>
                                 <th>Batch/Lot</th>
                                 <th>Date</th>
                                 <th>Validity</th>
@@ -4051,6 +4053,20 @@ namespace VaccineAPI.Controllers
             Console.WriteLine($"Error approving child: {ex.Message}");
             return StatusCode(500, new { success = false, message = "An error occurred while approving the child." });
             }
+        }
+
+        // Combined "Route/Site" display for certificates. Collapses when the route is single-site
+        // (Oral/Intranasal) or when site == route → prints one value, not the doubled form.
+        //   IM + "R Thigh" -> "IM / R Thigh";  Oral -> "Oral";  ID + "L Arm" -> "ID / L Arm".
+        private string RouteSiteDisplay(string? route, string? site)
+        {
+            var r = (route ?? "").Trim();
+            var s = (site ?? "").Trim();
+            if (string.IsNullOrEmpty(r) && string.IsNullOrEmpty(s)) return "-";
+            if (string.IsNullOrEmpty(s)) return r;
+            if (string.IsNullOrEmpty(r)) return s;
+            if (string.Equals(r, s, StringComparison.OrdinalIgnoreCase)) return r;   // e.g. Oral/Oral
+            return $"{r} / {s}";
         }
 
         private string GetYearOrMonthFromDays(int days)

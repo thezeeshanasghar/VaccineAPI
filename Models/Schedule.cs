@@ -28,6 +28,15 @@ namespace VaccineAPI.Models
         public decimal? Amount { get; set; }
         public decimal? VaccineCost { get; set; }
         public string Manufacturer { get; set; } = "";
+        // Route of administration (IM/SC/ID/Oral/Intranasal), copied from Brand.Route at give-time.
+        // Part of the permanent CERTIFICATE snapshot alongside Manufacturer/Lot/Expiry — fixed
+        // brand property, never a per-patient choice, no override at any role. Empty for OHF /
+        // no-brand gives and for doses given before this column existed.
+        public string Route { get; set; } = "";
+        // Site of administration actually used (e.g. "R Thigh"/"L Deltoid"/"Oral"). Per-patient,
+        // nurse-chosen at give-time (defaulted from Brand.SiteDefault / age, editable). Snapshotted
+        // like Route. Nullable — empty for no-site gives and for doses given before this existed.
+        public string? Site { get; set; }
         public string Lot { get; set; } = "";
         public DateTime? Expiry { get; set; }
         public int? Validity { get; set; }

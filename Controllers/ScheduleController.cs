@@ -611,6 +611,9 @@ namespace VaccineAPI.Controllers
 
                         // SAVE CURRENT DOSE
                         dbSchedule.BrandId = scheduleDTO.BrandId;
+                        // Site: nurse-chosen at give-time (not derived from Brand like Route). Validated
+                        // against the brand's route — forced-single routes coerce, invalid ones drop.
+                        dbSchedule.Site = NormalizeSiteForRoute(BrandRoute(scheduleDTO.BrandId), scheduleDTO.Site);
                         dbSchedule.Weight = scheduleDTO.Weight;
                         dbSchedule.Height = scheduleDTO.Height;
                         dbSchedule.Circle = scheduleDTO.Circle;
@@ -1011,6 +1014,40 @@ namespace VaccineAPI.Controllers
             return periodStart.HasValue && dbSchedule.GivenDate.Value.Date < periodStart.Value.Date;
         }
 
+        // Site of administration is constrained by the brand's Route (single source of truth,
+        // mirrored on the VacDoc give-UI). Server-authoritative: never trust a client site that is
+        // not valid for the route — coerce forced-single routes to their only site, and drop an
+        // invalid multi-site value rather than persisting a wrong vaccine→site record.
+        private static readonly Dictionary<string, string[]> RouteSites =
+            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Oral",       new[] { "Oral" } },
+            { "Intranasal", new[] { "Intranasal" } },
+            { "ID",         new[] { "R Arm", "L Arm" } },
+            { "IM",         new[] { "R Thigh", "L Thigh", "R Deltoid", "L Deltoid" } },
+            { "SC",         new[] { "R Thigh", "L Thigh", "R Deltoid", "L Deltoid" } },
+        };
+
+        // Returns the site to persist given a brand's route and the requested (client) site.
+        //  - unknown/empty route → keep whatever was requested (can't validate without a route).
+        //  - single-site route   → force the only valid site (ignore client).
+        //  - multi-site route    → keep the requested site only if valid, else null (no guessing).
+        private string? NormalizeSiteForRoute(string? route, string? requestedSite)
+        {
+            var site = string.IsNullOrWhiteSpace(requestedSite) ? null : requestedSite.Trim();
+            if (string.IsNullOrWhiteSpace(route) || !RouteSites.TryGetValue(route.Trim(), out var valid))
+                return site;
+            if (valid.Length == 1)
+                return valid[0];
+            return (site != null && valid.Contains(site, StringComparer.OrdinalIgnoreCase)) ? site : null;
+        }
+
+        // Route as stored on the brand (for site validation at give-time).
+        private string BrandRoute(long? brandId)
+        {
+            return _db.Brands.Where(b => b.Id == (brandId ?? 0)).Select(b => b.Route).FirstOrDefault() ?? "";
+        }
+
         private void ApplyStockSourceFields(Schedule dbSchedule, ScheduleDTO scheduleDTO, long clinicId,
             int? consumedStockId = null, bool blankIfNoBatch = false)
         {
@@ -1021,6 +1058,8 @@ namespace VaccineAPI.Controllers
                 var consumed = _db.Stocks.FirstOrDefault(s => s.Id == consumedStockId.Value);
                 dbSchedule.Manufacturer = _db.Brands
                     .Where(b => b.Id == (scheduleDTO.BrandId ?? 0)).Select(b => b.Manufacturer).FirstOrDefault() ?? "";
+                dbSchedule.Route = _db.Brands
+                    .Where(b => b.Id == (scheduleDTO.BrandId ?? 0)).Select(b => b.Route).FirstOrDefault() ?? "";
                 dbSchedule.StockClinicId = clinicId;
                 if (consumed != null)
                 {
@@ -1038,6 +1077,8 @@ namespace VaccineAPI.Controllers
             {
                 dbSchedule.Manufacturer = _db.Brands
                     .Where(b => b.Id == (scheduleDTO.BrandId ?? 0)).Select(b => b.Manufacturer).FirstOrDefault() ?? "";
+                dbSchedule.Route = _db.Brands
+                    .Where(b => b.Id == (scheduleDTO.BrandId ?? 0)).Select(b => b.Route).FirstOrDefault() ?? "";
                 dbSchedule.Lot = "";
                 dbSchedule.Expiry = null;
                 dbSchedule.StockClinicId = clinicId;
@@ -1056,6 +1097,8 @@ namespace VaccineAPI.Controllers
                 var consumed = _db.Stocks.FirstOrDefault(s => s.Id == consumedStockId.Value);
                 dbSchedule.Manufacturer = _db.Brands
                     .Where(b => b.Id == (brandId ?? 0)).Select(b => b.Manufacturer).FirstOrDefault() ?? "";
+                dbSchedule.Route = _db.Brands
+                    .Where(b => b.Id == (brandId ?? 0)).Select(b => b.Route).FirstOrDefault() ?? "";
                 dbSchedule.StockClinicId = clinicId;
                 if (consumed != null)
                 {
@@ -1069,6 +1112,8 @@ namespace VaccineAPI.Controllers
             {
                 dbSchedule.Manufacturer = _db.Brands
                     .Where(b => b.Id == (brandId ?? 0)).Select(b => b.Manufacturer).FirstOrDefault() ?? "";
+                dbSchedule.Route = _db.Brands
+                    .Where(b => b.Id == (brandId ?? 0)).Select(b => b.Route).FirstOrDefault() ?? "";
                 dbSchedule.Lot = "";
                 dbSchedule.Expiry = null;
                 dbSchedule.StockClinicId = clinicId;
@@ -1082,6 +1127,11 @@ namespace VaccineAPI.Controllers
             dbSchedule.Manufacturer = _db.Brands
                 .Where(b => b.Id == (brandId ?? 0))
                 .Select(b => b.Manufacturer)
+                .FirstOrDefault() ?? "";
+            // Route: server-authoritative, always derived from the Brand (client value never trusted).
+            dbSchedule.Route = _db.Brands
+                .Where(b => b.Id == (brandId ?? 0))
+                .Select(b => b.Route)
                 .FirstOrDefault() ?? "";
             dbSchedule.Lot = "";
             dbSchedule.Expiry = null;
@@ -1828,6 +1878,9 @@ namespace VaccineAPI.Controllers
 
                         var previousBrandId = schedule.BrandId;
                         schedule.BrandId = scheduleBrand.BrandId;
+                        // Site: nurse-chosen per dose (not derived from Brand like Route). Validated
+                        // against the brand's route — forced-single routes coerce, invalid ones drop.
+                        schedule.Site = NormalizeSiteForRoute(BrandRoute(scheduleBrand.BrandId), scheduleBrand.Site);
 
                         var bulkStockClinicId = ResolveClinicIdForStock(
                             scheduleDTO.DoctorId,

@@ -1365,6 +1365,16 @@ namespace VaccineAPI.Controllers
                     .FirstOrDefault();
                 if (TargetSchedule != null)
                 {
+                    // BUG-6: never rewrite the date of a dose that was already given. An
+                    // administered dose's date is history, not a plan. Skip it, and anchor the
+                    // next dose's gap off its real GivenDate (consistent with the give-time
+                    // MinGap check, which measures from the previous dose's GivenDate).
+                    if (TargetSchedule.IsDone)
+                    {
+                        previousdosedate = (TargetSchedule.GivenDate ?? TargetSchedule.Date).Date;
+                        continue;
+                    }
+
                     // BUG-2: compare DATES, not a raw day-count against a coded MinGap
                     // (406 = 6 months, not 406 days). Decode the floor first, then move the
                     // dose forward ONLY if it is genuinely earlier than that floor, and only

@@ -1639,12 +1639,13 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("{id}/CustomVerify")]
-        public IActionResult DownloadCustomPDF(int id)
+        public IActionResult DownloadCustomPDF(int id, bool includeFuture = true)
         {
             Child dbScheduleChild;
             { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
-            var stream = CreateCustomPdf(id);
-            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
+            var stream = CreateCustomPdf(id, includeFuture);
+            var suffix = includeFuture ? "" : "_Given";
+            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule" + suffix + "_" +
                            DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
@@ -1662,7 +1663,7 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf");
         }
 
-        private Stream CreateCustomPdf(int childId)
+        private Stream CreateCustomPdf(int childId, bool includeFuture = true)
         {
             var dbChild = _db.Childs
                                   .Include(x => x.User)
@@ -1683,6 +1684,9 @@ namespace VaccineAPI.Controllers
                                 .ThenInclude(x => x.Brand)
                                 .FirstOrDefault(c => c.Id == childId);
             var dbSchedules = child.Schedules.ToList();
+            // Optionally hide not-yet-administered ("future"/due) doses.
+            if (!includeFuture)
+                dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
             var Gender = 1;
             if (dbChild.Gender == "Girl") Gender = 2;
             foreach (var sch in dbSchedules)
@@ -3901,16 +3905,17 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("Travel-PDF-Download-verify/{childId}")]
-        public IActionResult GenerateTravelPdf(int childId)
+        public IActionResult GenerateTravelPdf(int childId, bool includeFuture = true)
         {
-            var output = CreateTravelPdf(childId);
+            var output = CreateTravelPdf(childId, includeFuture);
             if (output == null)
             {
                 return null;
             }
 
             var childDetails = _db.Childs.Where(x => x.Id == childId).FirstOrDefault();
-            var fileName = childDetails.Name.Replace(" ", "_") + "_Travel_Immunization_" +
+            var suffix = includeFuture ? "" : "Given_";
+            var fileName = childDetails.Name.Replace(" ", "_") + "_Travel_Immunization_" + suffix +
                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
             Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileName}\"");
             return File(output.ToArray(), "application/pdf");
@@ -4155,7 +4160,7 @@ namespace VaccineAPI.Controllers
         private static Font PlexCond(float size, bool bold = false) =>
             new Font(bold ? _plexCondBold : _plexCond, size);
 
-        private MemoryStream CreateTravelPdf(int childId)
+        private MemoryStream CreateTravelPdf(int childId, bool includeFuture = true)
         {
             EnsurePlexFonts();
             var childDetails = _db.Childs
@@ -4332,6 +4337,9 @@ namespace VaccineAPI.Controllers
                     return null;
                 }
                 var dbSchedules = child.Schedules.ToList();
+                // Optionally hide not-yet-administered ("future"/due) doses.
+                if (!includeFuture)
+                    dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
                 var brandIds = dbSchedules
                     .Where(s => s.BrandId.HasValue)
                     .Select(s => s.BrandId.Value)

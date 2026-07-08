@@ -221,7 +221,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 // Step 3 — MinGap check at give-time
-                if (scheduleDTO.IsDone == true && dbSchedule.Dose.DoseOrder > 1 && !scheduleDTO.IgnoreMinGapAtGiveTime)
+                if (scheduleDTO.IsDone == true && (dbSchedule.Dose.DoseOrder ?? 0) > 1 && !scheduleDTO.IgnoreMinGapAtGiveTime)
                 {
                     var dose = dbSchedule.Dose;
                     if (dose != null && dose.MinGap.HasValue)
@@ -1699,7 +1699,7 @@ namespace VaccineAPI.Controllers
                 }
             }
 
-            // Step 4 — MinAge and MinGap checks for bulk give (accumulate all errors)
+            // Step 4 — MinAge, MaxAge, Brand.MinAge and MinGap checks for bulk give (accumulate all errors)
             if (scheduleDTO.IsDone == true)
             {
                 var bulkErrors = new System.Collections.Generic.List<string>();
@@ -1726,8 +1726,52 @@ namespace VaccineAPI.Controllers
                         }
                     }
 
+                    // Dose.MaxAge — mirror single-give (PA = hard block, doctor = warning)
+                    if (!scheduleDTO.IgnoreMaxAgeAtGiveTime && chkDose.MaxAge.HasValue)
+                    {
+                        var child = _db.Childs.FirstOrDefault(x => x.Id == chk.ChildId);
+                        if (child != null)
+                        {
+                            var maxAgeDate = calculateDate(child.DOB, chkDose.MaxAge.Value).Date;
+                            if (scheduleDTO.GivenDate.Date > maxAgeDate)
+                            {
+                                var msg = (chkDose.Name ?? "A dose") + " cannot be given after " + maxAgeDate.ToString("dd-MM-yyyy") + " (maximum age exceeded).";
+                                if (scheduleDTO.PaId.HasValue)
+                                    bulkErrors.Add(msg);
+                                else if (!bulkErrors.Contains("[Warning] " + msg))
+                                    bulkErrors.Add("[Warning] " + msg);
+                            }
+                        }
+                    }
+
+                    // Brand.MinAge — mirror single-give (unconditional hard block for all actors,
+                    // no override flag). Resolve this dose's chosen brand from ScheduleBrands
+                    // (per-dose in a bulk give), falling back to the top-level BrandId.
+                    var chkBrandId = scheduleDTO.ScheduleBrands
+                        .Where(x => x.ScheduleId == chk.Id)
+                        .Select(x => x.BrandId)
+                        .FirstOrDefault() ?? scheduleDTO.BrandId;
+                    if (chkBrandId.HasValue && chkBrandId.Value > 0)
+                    {
+                        var chkBrand = _db.Brands.FirstOrDefault(b => b.Id == chkBrandId.Value);
+                        if (chkBrand != null && chkBrand.MinAge.HasValue)
+                        {
+                            var child = _db.Childs.FirstOrDefault(x => x.Id == chk.ChildId);
+                            if (child != null)
+                            {
+                                var brandMinAgeDate = calculateDate(child.DOB, chkBrand.MinAge.Value).Date;
+                                if (scheduleDTO.GivenDate.Date < brandMinAgeDate)
+                                {
+                                    var msg = chkBrand.Name + " cannot be given before " + brandMinAgeDate.ToString("dd-MM-yyyy") + ".";
+                                    if (!bulkErrors.Contains(msg))
+                                        bulkErrors.Add(msg);   // no [Warning] prefix → hard block for everyone
+                                }
+                            }
+                        }
+                    }
+
                     // MinGap
-                    if (!scheduleDTO.IgnoreMinGapAtGiveTime && chkDose.DoseOrder > 1 && chkDose.MinGap.HasValue)
+                    if (!scheduleDTO.IgnoreMinGapAtGiveTime && (chkDose.DoseOrder ?? 0) > 1 && chkDose.MinGap.HasValue)
                     {
                         var prevDoseChk = _db.Doses
                             .FirstOrDefault(x => x.VaccineId == chkDose.VaccineId && x.DoseOrder == (chkDose.DoseOrder - 1));
@@ -1752,9 +1796,14 @@ namespace VaccineAPI.Controllers
                 }
                 if (bulkErrors.Count > 0)
                 {
-                    var combined = string.Join(" | ", bulkErrors);
-                    bool anyHardBlock = scheduleDTO.PaId.HasValue || bulkErrors.Any(e => !e.StartsWith("[Warning]"));
-                    if (anyHardBlock && scheduleDTO.PaId.HasValue)
+                    // Any error NOT tagged [Warning] is a hard block: every PA error (added
+                    // plain above) plus Brand.MinAge for any actor. If only [Warning] errors
+                    // remain, the doctor gets a soft, overridable warning.
+                    bool anyHardBlock = bulkErrors.Any(e => !e.StartsWith("[Warning]"));
+                    // Strip the internal [Warning] marker from the user-facing text.
+                    var combined = string.Join(" | ",
+                        bulkErrors.Select(e => e.StartsWith("[Warning] ") ? e.Substring("[Warning] ".Length) : e));
+                    if (anyHardBlock)
                         return new Response<ScheduleDTO>(false, combined, null);
                     else
                         return Response<ScheduleDTO>.Warning(combined);
@@ -2576,6 +2625,18 @@ namespace VaccineAPI.Controllers
                                 "Cannot reschedule to your selected date: "
                                 + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
                                 + " because it is greater than the Max Age of dose.";
+                            return message;
+                        }
+
+                        // check for MinAge from DOB of the target dose — mirror the first-dose
+                        // branch above; a later dose must not be pulled below its own age floor.
+                        if (TargetSchedule != null && scheduleDTO.Date.Date < calculateDate(TargetSchedule.Child.DOB, lastDose.MinAge).Date && !ignoreMinAgeFromDOB)
+                        {
+                            message =
+                                "Cannot reschedule to your selected date: "
+                                + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
+                                + " because the minimum age of this vaccine from date of birth should be "
+                                + DescribeGapInDays(lastDose.MinAge) + ".";
                             return message;
                         }
 

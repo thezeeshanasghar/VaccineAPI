@@ -4209,9 +4209,11 @@ namespace VaccineAPI.Controllers
                     qrImage.ScaleAbsolute(52f, 52f);
                 }
 
-                var headerTable = new PdfPTable(2);
+                // Header: [doctor info | QR + MR No | clinic logo], the logo wide enough
+                // for the "Vaccine.pk" wordmark used across the app.
+                var headerTable = new PdfPTable(3);
                 headerTable.WidthPercentage = 100;
-                headerTable.SetWidths(new float[] { 3, 1 });
+                headerTable.SetWidths(new float[] { 3.0f, 1.1f, 2.0f });
                 headerTable.SpacingAfter = 3f;
 
                 PdfPCell headerCell = new PdfPCell();
@@ -4227,32 +4229,36 @@ namespace VaccineAPI.Controllers
                 headerCell.AddElement(clinicLine);
                 headerTable.AddCell(headerCell);
 
-                // Right column: QR + logo side by side, right-aligned.
-                var headerRight = new PdfPTable(2);
-                headerRight.WidthPercentage = 100;
-                headerRight.SetWidths(new float[] { 1, 1 });
-                headerRight.HorizontalAlignment = Element.ALIGN_RIGHT;
-
-                // QR with "MR No" directly beneath it (left of the logo).
+                // QR with "MR No" (single line) directly beneath it.
                 PdfPCell qrCell = new PdfPCell
                 {
                     Border = PdfPCell.NO_BORDER,
-                    HorizontalAlignment = Element.ALIGN_RIGHT,
+                    HorizontalAlignment = Element.ALIGN_CENTER,
                     VerticalAlignment = Element.ALIGN_TOP,
                     Padding = 0f,
                     PaddingTop = 2f,
+                    NoWrap = true,
                 };
-                qrCell.AddElement(new Paragraph(new Chunk(qrImage, 0, 0)) { Alignment = Element.ALIGN_RIGHT });
-                qrCell.AddElement(new Paragraph($"MR No: {mrNumber}", PlexSans(8, bold: true)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2f });
-                headerRight.AddCell(qrCell);
+                qrCell.AddElement(new Paragraph(new Chunk(qrImage, 0, 0)) { Alignment = Element.ALIGN_CENTER });
+                qrCell.AddElement(new Paragraph($"MR No: {mrNumber}", PlexSans(8, bold: true)) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f });
+                headerTable.AddCell(qrCell);
 
-                // Logo: use the existing transparent Vaccine.Pk logo as-is (do not re-export/flatten).
-                string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
-                if (System.IO.File.Exists(logoPath))
+                // Logo: the clinic's uploaded monogram (contains the "Vaccine.pk" wordmark),
+                // same source the regular schedule PDF uses. Falls back to the bundled logo.
+                Image logo = null;
+                string monogramPath = !string.IsNullOrWhiteSpace(childDetails.Clinic?.MonogramImage)
+                    ? Path.Combine(_host.ContentRootPath, childDetails.Clinic.MonogramImage) : null;
+                if (monogramPath != null && System.IO.File.Exists(monogramPath))
+                    logo = Image.GetInstance(monogramPath);
+                else
                 {
-                    var logo = Image.GetInstance(logoPath);
-                    logo.ScaleToFit(48f, 52f);
-                    PdfPCell logoCell = new PdfPCell(logo)
+                    string fallbackLogo = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
+                    if (System.IO.File.Exists(fallbackLogo)) logo = Image.GetInstance(fallbackLogo);
+                }
+                if (logo != null)
+                {
+                    logo.ScaleToFit(130f, 46f);
+                    headerTable.AddCell(new PdfPCell(logo, false)
                     {
                         Border = PdfPCell.NO_BORDER,
                         HorizontalAlignment = Element.ALIGN_RIGHT,
@@ -4260,21 +4266,23 @@ namespace VaccineAPI.Controllers
                         PaddingLeft = 4f,
                         PaddingRight = 0f,
                         PaddingTop = 2f,
-                    };
-                    headerRight.AddCell(logoCell);
+                    });
                 }
                 else
                 {
-                    headerRight.AddCell(new PdfPCell(new Phrase(" ")) { Border = PdfPCell.NO_BORDER });
+                    headerTable.AddCell(new PdfPCell(new Phrase(" ")) { Border = PdfPCell.NO_BORDER });
                 }
 
-                PdfPCell rightWrapper = new PdfPCell(headerRight)
+                // Wrap the whole header in a single rounded box (per the reference template).
+                var headerWrapper = new PdfPTable(1) { WidthPercentage = 100, SpacingAfter = 4f };
+                var headerBox = new PdfPCell(headerTable)
                 {
-                    Border = PdfPCell.NO_BORDER,
-                    Padding = 0f,
+                    Border = PdfPCell.NO_BORDER, // drawn by the rounded-corner cell event instead
+                    Padding = 8f,
+                    CellEvent = new RoundedBorderCellEvent(),
                 };
-                headerTable.AddCell(rightWrapper);
-                document.Add(headerTable);
+                headerWrapper.AddCell(headerBox);
+                document.Add(headerWrapper);
 
                 var title = new Paragraph("IMMUNIZATION RECORD", PlexSans(10, bold: true));
                 title.Alignment = Element.ALIGN_CENTER;
@@ -4404,7 +4412,9 @@ namespace VaccineAPI.Controllers
                         if (!string.IsNullOrWhiteSpace(schedule.Site)) parts.Add(schedule.Site.Trim());
                         routeSite = parts.Count > 0 ? string.Join(" / ", parts) : DASH;
                     }
-                    string dateGiven = (schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue) ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : DASH;
+                    // Not-yet-given doses show "Due" in the Date Given column (per the reference
+                    // template); all other empty cells use the en-dash.
+                    string dateGiven = (schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue) ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
                     string expiry = latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH;
                     string validity = schedule.Validity != null ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
 
@@ -4443,6 +4453,26 @@ namespace VaccineAPI.Controllers
             }
             output.Seek(0, SeekOrigin.Begin);
             return output;
+        }
+
+        // Draws a light-grey rounded rectangle around a cell — used for the header box.
+        private class RoundedBorderCellEvent : IPdfPCellEvent
+        {
+            public void CellLayout(PdfPCell cell, Rectangle position, PdfContentByte[] canvases)
+            {
+                PdfContentByte cb = canvases[PdfPTable.LINECANVAS];
+                cb.SaveState();
+                cb.SetLineWidth(0.7f);
+                cb.SetColorStroke(BaseColor.LightGray);
+                cb.RoundRectangle(
+                    position.Left + 1f,
+                    position.Bottom + 1f,
+                    position.Width - 2f,
+                    position.Height - 2f,
+                    5f);
+                cb.Stroke();
+                cb.RestoreState();
+            }
         }
 
         private class FooterPageEvent : PdfPageEventHelper

@@ -167,6 +167,16 @@ namespace VaccineAPI.Controllers
                     return new Response<ScheduleDTO>(false, "Schedule not found", null);
                 }
 
+                // BUG-16 — a give must carry a real GivenDate. A missing/default value
+                // (0001-01-01) or a date on/before the child's DOB is invalid and would slip
+                // past the age/future guards below. Reject it before any other give-time check.
+                if (scheduleDTO.IsDone == true)
+                {
+                    if (scheduleDTO.GivenDate.Date <= dbSchedule.Child.DOB.Date)
+                        return new Response<ScheduleDTO>(false,
+                            "The given date is invalid — it must be after the child's date of birth.", null);
+                }
+
                 if (scheduleDTO.IsDone == true && scheduleDTO.BrandId.HasValue)
                 {
                     var brand = _db.Brands.FirstOrDefault(b => b.Id == scheduleDTO.BrandId.Value);
@@ -232,19 +242,25 @@ namespace VaccineAPI.Controllers
                         {
                             var prevScheduleForGap = _db.Schedules
                                 .FirstOrDefault(x => x.ChildId == dbSchedule.ChildId && x.DoseId == prevDoseForGap.Id);
-                            if (prevScheduleForGap != null && prevScheduleForGap.IsDone && prevScheduleForGap.GivenDate.HasValue)
+                            var doseName = dose.Name ?? "This dose";
+                            // BUG-9 — the previous dose must be recorded as given first. This is a
+                            // hard block for everyone (no override): a later dose cannot be given
+                            // while its predecessor is unrecorded.
+                            if (prevScheduleForGap == null || !prevScheduleForGap.IsDone || !prevScheduleForGap.GivenDate.HasValue)
                             {
-                                var minGapDate = calculateDate(prevScheduleForGap.GivenDate.Value.Date, dose.MinGap.Value).Date;
-                                if (scheduleDTO.GivenDate.Date < minGapDate)
-                                {
-                                    var doseName = dose.Name ?? "This dose";
-                                    if (scheduleDTO.PaId.HasValue)
-                                        return new Response<ScheduleDTO>(false,
-                                            doseName + " cannot be given before " + minGapDate.ToString("dd-MM-yyyy") + " (minimum gap from previous dose not met).", null);
-                                    else
-                                        return Response<ScheduleDTO>.Warning(
-                                            doseName + " minimum gap is not met — earliest allowed date is " + minGapDate.ToString("dd-MM-yyyy") + ". Override?");
-                                }
+                                return new Response<ScheduleDTO>(false,
+                                    doseName + " cannot be given until the previous dose of this vaccine is recorded as given.", null);
+                            }
+
+                            var minGapDate = calculateDate(prevScheduleForGap.GivenDate.Value.Date, dose.MinGap.Value).Date;
+                            if (scheduleDTO.GivenDate.Date < minGapDate)
+                            {
+                                if (scheduleDTO.PaId.HasValue)
+                                    return new Response<ScheduleDTO>(false,
+                                        doseName + " cannot be given before " + minGapDate.ToString("dd-MM-yyyy") + " (minimum gap from previous dose not met).", null);
+                                else
+                                    return Response<ScheduleDTO>.Warning(
+                                        doseName + " minimum gap is not met — earliest allowed date is " + minGapDate.ToString("dd-MM-yyyy") + ". Override?");
                             }
                         }
                     }
@@ -1788,7 +1804,15 @@ namespace VaccineAPI.Controllers
                         {
                             var prevSchedChk = _db.Schedules
                                 .FirstOrDefault(x => x.ChildId == chk.ChildId && x.DoseId == prevDoseChk.Id);
-                            if (prevSchedChk != null && prevSchedChk.IsDone && prevSchedChk.GivenDate.HasValue)
+                            // BUG-9 — previous dose must be recorded as given first (hard block,
+                            // no override). Added plain (no [Warning] prefix) so it hard-blocks.
+                            if (prevSchedChk == null || !prevSchedChk.IsDone || !prevSchedChk.GivenDate.HasValue)
+                            {
+                                var blockMsg = (chkDose.Name ?? "A dose") + " cannot be given until the previous dose of this vaccine is recorded as given.";
+                                if (!bulkErrors.Contains(blockMsg))
+                                    bulkErrors.Add(blockMsg);
+                            }
+                            else
                             {
                                 var minGapDate = calculateDate(prevSchedChk.GivenDate.Value.Date, chkDose.MinGap.Value).Date;
                                 if (scheduleDTO.GivenDate.Date < minGapDate)
@@ -2474,6 +2498,36 @@ namespace VaccineAPI.Controllers
                 // for flu and typhoid
                 if (IsInfiniteDose(dbSchedule.Dose))
                 {
+                    // BUG-11 — an infinite dose (Flu/Typhoid/Vitamin A) was rescheduled with no
+                    // guards at all. It still cannot be moved before the child's DOB, or past its
+                    // MaxAge (MinAge/MinGap don't apply — these are single, repeatable doses).
+                    Dose infDose = dbSchedule.Dose;
+                    if (scheduleDTO.Date.Date < dbSchedule.Child.DOB.Date)
+                    {
+                        message =
+                            "Cannot reschedule to your selected date: "
+                            + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
+                            + " because it is less than date of birth of child.";
+                        return message;
+                    }
+                    if (infDose.MinAge > 0 && scheduleDTO.Date.Date < calculateDate(dbSchedule.Child.DOB, infDose.MinAge).Date && !ignoreMinAgeFromDOB)
+                    {
+                        message =
+                            "Cannot reschedule to your selected date: "
+                            + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
+                            + " because the minimum age of this vaccine from date of birth should be "
+                            + DescribeGapInDays(infDose.MinAge) + ".";
+                        return message;
+                    }
+                    if (infDose.MaxAge.HasValue && scheduleDTO.Date.Date > calculateDate(dbSchedule.Child.DOB, infDose.MaxAge.Value).Date && !ignoreMaxAgeRule)
+                    {
+                        message =
+                            "Cannot reschedule to your selected date: "
+                            + Convert.ToDateTime(scheduleDTO.Date.Date).ToString("dd-MM-yyyy")
+                            + " because it is greater than the Max Age of dose.";
+                        return message;
+                    }
+
                     var TargetSchedule1 = db.Schedules
                         .Where(x => x.Id == dbSchedule.Id)
                         .FirstOrDefault();

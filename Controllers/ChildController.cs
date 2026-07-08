@@ -4229,18 +4229,19 @@ namespace VaccineAPI.Controllers
                 headerCell.AddElement(clinicLine);
                 headerTable.AddCell(headerCell);
 
-                // QR with "MR No" (single line) directly beneath it.
+                // QR with "MR No" (single line) directly beneath it. Right-aligned so it sits
+                // toward the logo column rather than centered in its own cell.
                 PdfPCell qrCell = new PdfPCell
                 {
                     Border = PdfPCell.NO_BORDER,
-                    HorizontalAlignment = Element.ALIGN_CENTER,
+                    HorizontalAlignment = Element.ALIGN_RIGHT,
                     VerticalAlignment = Element.ALIGN_TOP,
                     Padding = 0f,
                     PaddingTop = 2f,
                     NoWrap = true,
                 };
-                qrCell.AddElement(new Paragraph(new Chunk(qrImage, 0, 0)) { Alignment = Element.ALIGN_CENTER });
-                qrCell.AddElement(new Paragraph($"MR No: {mrNumber}", PlexSans(8, bold: true)) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 2f });
+                qrCell.AddElement(new Paragraph(new Chunk(qrImage, 0, 0)) { Alignment = Element.ALIGN_RIGHT });
+                qrCell.AddElement(new Paragraph($"MR No: {mrNumber}", PlexSans(8, bold: true)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2f });
                 headerTable.AddCell(qrCell);
 
                 // Logo: the clinic's uploaded monogram (contains the "Vaccine.pk" wordmark),

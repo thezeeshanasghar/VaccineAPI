@@ -4434,9 +4434,11 @@ namespace VaccineAPI.Controllers
                     }
                     // Not-yet-given doses show "Due" in the Date Given column (per the reference
                     // template); all other empty cells use the en-dash.
-                    string dateGiven = (schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue) ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
+                    bool isGiven = schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue;
+                    string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
                     string expiry = latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH;
-                    string validity = schedule.Validity != null ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
+                    // Validity only applies once a dose is given; otherwise en-dash like the other cells.
+                    string validity = (isGiven && schedule.Validity != null) ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
 
                     // Full grid on every cell. Any cell whose text would wrap to a 2nd line is
                     // shrunk one step (per-cell), so no row ever grows taller than one line.

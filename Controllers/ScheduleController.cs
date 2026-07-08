@@ -1365,17 +1365,16 @@ namespace VaccineAPI.Controllers
                     .FirstOrDefault();
                 if (TargetSchedule != null)
                 {
-                    var Targetdosegap = Convert.ToInt32(
-                        (TargetSchedule.Date.Date - previousdosedate).TotalDays
-                    );
-                    if (Targetdosegap < minimumGap)
+                    // BUG-2: compare DATES, not a raw day-count against a coded MinGap
+                    // (406 = 6 months, not 406 days). Decode the floor first, then move the
+                    // dose forward ONLY if it is genuinely earlier than that floor, and only
+                    // as far as the floor. An already-valid (wider) gap is left untouched.
+                    var minGapFloor = calculateDate(previousdosedate, minimumGap).Date;
+                    if (TargetSchedule.Date.Date < minGapFloor)
                     {
-                        TargetSchedule.Date = calculateDate(
-                                previousdosedate,
-                                minimumGap
-                            );
-                        previousdosedate = TargetSchedule.Date.Date;
+                        TargetSchedule.Date = minGapFloor;
                     }
+                    previousdosedate = TargetSchedule.Date.Date;
                 }
             }
         }
@@ -2532,15 +2531,19 @@ namespace VaccineAPI.Controllers
                         {
                             if (i != 0)
                             {
-                                var doseDaysDifference = Convert.ToInt32(
-                                    (TargetSchedule.Date.Date - previousDate.Date).TotalDays
-                                );
-                                if (doseDaysDifference <= MinGap)
-                                    TargetSchedule.Date = TargetSchedule.Date.AddDays(
-                                        daysDifference
-                                    );
-                                // calculateDate(TargetSchedule.Date,
-                                // daysDifference); //
+                                // BUG-3: a null MinGap has no floor — advance the anchor and
+                                // leave this dose in place (mirrors the give-cascade guard).
+                                if (!MinGap.HasValue)
+                                {
+                                    previousDate = TargetSchedule.Date;
+                                    continue;
+                                }
+                                // BUG-2 + BUG-10: decode the coded MinGap to a real floor date,
+                                // then move the dose forward ONLY to that floor if it is genuinely
+                                // too close — not by a blanket AddDays(daysDifference) over-shift.
+                                var minGapFloor = calculateDate(previousDate.Date, MinGap.Value).Date;
+                                if (TargetSchedule.Date.Date < minGapFloor)
+                                    TargetSchedule.Date = minGapFloor;
                             }
                             else
                             {

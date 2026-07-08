@@ -4213,7 +4213,7 @@ namespace VaccineAPI.Controllers
                 // for the "Vaccine.pk" wordmark used across the app.
                 var headerTable = new PdfPTable(3);
                 headerTable.WidthPercentage = 100;
-                headerTable.SetWidths(new float[] { 3.0f, 1.1f, 2.0f });
+                headerTable.SetWidths(new float[] { 2.7f, 1.7f, 1.8f });
                 headerTable.SpacingAfter = 3f;
 
                 PdfPCell headerCell = new PdfPCell();
@@ -4229,19 +4229,19 @@ namespace VaccineAPI.Controllers
                 headerCell.AddElement(clinicLine);
                 headerTable.AddCell(headerCell);
 
-                // QR with "MR No" (single line) directly beneath it. Right-aligned so it sits
-                // toward the logo column rather than centered in its own cell.
+                // QR with "MR No" centered under it (text midpoint aligns with the QR midpoint,
+                // extending symmetrically past the QR edges).
                 PdfPCell qrCell = new PdfPCell
                 {
                     Border = PdfPCell.NO_BORDER,
-                    HorizontalAlignment = Element.ALIGN_RIGHT,
+                    HorizontalAlignment = Element.ALIGN_CENTER,
                     VerticalAlignment = Element.ALIGN_TOP,
                     Padding = 0f,
                     PaddingTop = 2f,
                     NoWrap = true,
                 };
-                qrCell.AddElement(new Paragraph(new Chunk(qrImage, 0, 0)) { Alignment = Element.ALIGN_RIGHT });
-                qrCell.AddElement(new Paragraph($"MR No: {mrNumber}", PlexSans(8, bold: true)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2f });
+                qrCell.AddElement(new Paragraph(new Chunk(qrImage, 0, 0)) { Alignment = Element.ALIGN_CENTER });
+                qrCell.AddElement(new Paragraph($"MR No: {mrNumber}", PlexSans(7, bold: true)) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 3f });
                 headerTable.AddCell(qrCell);
 
                 // Logo: the clinic's uploaded monogram (contains the "Vaccine.pk" wordmark),
@@ -4300,18 +4300,18 @@ namespace VaccineAPI.Controllers
                 var cellFontNormal = PlexSans(10);
                 // Single en-dash for any empty patient field.
                 string V(string s) => string.IsNullOrWhiteSpace(s) ? "–" : s;
-                patientTable.AddCell(CreateCell("Name:", cellFontBold, new BaseColor(235, 235, 235)));
+                patientTable.AddCell(CreateCell("Name:", cellFontBold, new BaseColor(205, 205, 205)));
                 patientTable.AddCell(CreateCell(V(patientName), cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("S/D/W/o:", cellFontBold, new BaseColor(235, 235, 235)));
+                patientTable.AddCell(CreateCell("S/D/W/o:", cellFontBold, new BaseColor(205, 205, 205)));
                 patientTable.AddCell(CreateCell(V(relation), cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("Date of Birth:", cellFontBold, new BaseColor(235, 235, 235)));
+                patientTable.AddCell(CreateCell("Date of Birth:", cellFontBold, new BaseColor(205, 205, 205)));
                 patientTable.AddCell(CreateCell(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("Passport/CNIC No:", cellFontBold, new BaseColor(235, 235, 235)));
+                patientTable.AddCell(CreateCell("Passport/CNIC No:", cellFontBold, new BaseColor(205, 205, 205)));
                 patientTable.AddCell(CreateCell(V(passport), cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("City:", cellFontBold, new BaseColor(235, 235, 235)));
+                patientTable.AddCell(CreateCell("City:", cellFontBold, new BaseColor(205, 205, 205)));
                 // City renders uppercase at the display layer only; stored value is untouched.
                 patientTable.AddCell(CreateCell(string.IsNullOrWhiteSpace(city) ? "–" : city.ToUpper(), cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("Nationality:", cellFontBold, new BaseColor(235, 235, 235)));
+                patientTable.AddCell(CreateCell("Nationality:", cellFontBold, new BaseColor(205, 205, 205)));
                 patientTable.AddCell(CreateCell(V(Nationality), cellFontNormal, BaseColor.White));
                 // MR No now lives under the QR (header), not here.
                 document.Add(new Paragraph(" ", PlexSans(10)) { SpacingBefore = -10f });
@@ -4367,16 +4367,34 @@ namespace VaccineAPI.Controllers
                     .GroupBy(s => s.BrandId)
                     .ToDictionary(g => g.Key, g => g.First());
 
-                // Dense mode: only when > 12 rows, shrink the WHOLE vaccine table (font + padding)
-                // so up to ~15 doses still fit on the single A5 page without hitting the footer.
-                // Header, patient info and footer are unaffected.
-                bool dense = dbSchedules.Count > 12;
-                float headFs = dense ? 6f : 7.2f;
-                float bodyFs = dense ? 6f : 7.2f;
-                float shrinkFs = dense ? 5f : 6f;   // long-brand shrink, relative to the mode
+                // Font tier by row count:
+                //   <=3  -> 9pt   (few rows, larger & more legible)
+                //   4-12 -> 7.2pt (normal)
+                //   >12  -> 6pt   (dense, so up to ~15 fit one A5 page clear of the footer)
+                int rowCount = dbSchedules.Count;
+                bool dense = rowCount > 12;
+                float bodyFs = rowCount <= 3 ? 9f : (dense ? 6f : 7.2f);
+                float headFs = bodyFs;
+                float shrinkFs = bodyFs - 1.2f;     // per-cell shrink when content would wrap
                 float padTop = dense ? 1f : 2f;
                 float padBot = dense ? 1.5f : 3f;
                 float headPad = dense ? 2f : 3f;
+                var labelGray = new BaseColor(205, 205, 205);
+
+                // Per-column inner widths (pt) so we can detect cell text that would wrap to 2 lines.
+                float tableW = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+                float[] colRatios = { 1.2f, 1f, 1.4f, 0.9f, 1.1f, 1f, 0.9f, 0.9f };
+                float ratioSum = 0f; foreach (var r in colRatios) ratioSum += r;
+                float cellPadX = 4f; // ~2pt left + 2pt right breathing room
+                float[] colInner = new float[colRatios.Length];
+                for (int i = 0; i < colRatios.Length; i++) colInner[i] = tableW * colRatios[i] / ratioSum - cellPadX;
+
+                // Pick a font for a cell: shrink one step if the text would exceed one line.
+                Font FitFont(string text, int col)
+                {
+                    float w = _plexCond.GetWidthPoint(text ?? "", bodyFs);
+                    return w > colInner[col] ? PlexCond(shrinkFs) : PlexCond(bodyFs);
+                }
 
                 string[] headers = { "Vaccine", "Brand", "Manufacturer", "Batch/Lot", "Route/Site", "Date Given", "Expiry", "Validity" };
                 void AddVaccineTableHeader(PdfPTable table)
@@ -4385,6 +4403,7 @@ namespace VaccineAPI.Controllers
                     {
                         table.AddCell(new PdfPCell(new Phrase(header, PlexCond(headFs, bold: true)))
                         {
+                            BackgroundColor = labelGray,
                             BorderColor = BaseColor.LightGray,
                             BorderWidth = 0.5f,
                             HorizontalAlignment = header == "Vaccine" ? PdfPCell.ALIGN_LEFT : PdfPCell.ALIGN_CENTER,
@@ -4419,14 +4438,11 @@ namespace VaccineAPI.Controllers
                     string expiry = latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH;
                     string validity = schedule.Validity != null ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
 
-                    // Brand auto-shrink: force any long brand back to a single line so no row wraps
-                    // to two lines (which would break alignment for every row below).
-                    Font brandFont = (brand != DASH && brand.Length > 12) ? PlexCond(shrinkFs) : PlexCond(bodyFs);
-
-                    // Full grid on every cell.
-                    PdfPCell Cell(string text, Font font, int align)
+                    // Full grid on every cell. Any cell whose text would wrap to a 2nd line is
+                    // shrunk one step (per-cell), so no row ever grows taller than one line.
+                    PdfPCell Cell(string text, int col, int align)
                     {
-                        return new PdfPCell(new Phrase(text, font))
+                        return new PdfPCell(new Phrase(text, FitFont(text, col)))
                         {
                             Border = Rectangle.BOX,
                             HorizontalAlignment = align,
@@ -4438,15 +4454,14 @@ namespace VaccineAPI.Controllers
                         };
                     }
 
-                    var bodyFont = PlexCond(bodyFs);
-                    vaccineTable.AddCell(Cell(vaccineName, bodyFont, PdfPCell.ALIGN_LEFT));
-                    vaccineTable.AddCell(Cell(brand, brandFont, PdfPCell.ALIGN_CENTER));
-                    vaccineTable.AddCell(Cell(manufacturer, bodyFont, PdfPCell.ALIGN_CENTER));
-                    vaccineTable.AddCell(Cell(batchLot, bodyFont, PdfPCell.ALIGN_CENTER));
-                    vaccineTable.AddCell(Cell(routeSite, bodyFont, PdfPCell.ALIGN_CENTER));
-                    vaccineTable.AddCell(Cell(dateGiven, bodyFont, PdfPCell.ALIGN_CENTER));
-                    vaccineTable.AddCell(Cell(expiry, bodyFont, PdfPCell.ALIGN_CENTER));
-                    vaccineTable.AddCell(Cell(validity, bodyFont, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(vaccineName, 0, PdfPCell.ALIGN_LEFT));
+                    vaccineTable.AddCell(Cell(brand, 1, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(manufacturer, 2, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(batchLot, 3, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(routeSite, 4, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(dateGiven, 5, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(expiry, 6, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(validity, 7, PdfPCell.ALIGN_CENTER));
                 }
                 document.Add(vaccineTable);
                 // QR is rendered in the header (beside the logo), so nothing further is drawn here.
@@ -4533,21 +4548,21 @@ namespace VaccineAPI.Controllers
             Border = Rectangle.NO_BORDER,
             HorizontalAlignment = Element.ALIGN_LEFT,
             Padding = 5,
-            BackgroundColor = new BaseColor(235, 235, 235)
+            BackgroundColor = new BaseColor(205, 205, 205)
         };
         PdfPCell phoneCell = new PdfPCell(new Phrase($"Phone: {phoneNumber}", contactFont))
         {
             Border = Rectangle.NO_BORDER,
             HorizontalAlignment = Element.ALIGN_CENTER,
             Padding = 5,
-            BackgroundColor = new BaseColor(235, 235, 235)
+            BackgroundColor = new BaseColor(205, 205, 205)
         };
         PdfPCell emailCell = new PdfPCell(new Phrase(email, contactFont))
         {
             Border = Rectangle.NO_BORDER,
             HorizontalAlignment = Element.ALIGN_RIGHT,
             Padding = 5,
-            BackgroundColor = new BaseColor(235, 235, 235)
+            BackgroundColor = new BaseColor(205, 205, 205)
         };
 
         contactTable.AddCell(addressCell);

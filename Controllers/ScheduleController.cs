@@ -1648,7 +1648,8 @@ namespace VaccineAPI.Controllers
                     ignoreMinGapFromPreviousDose
                 );
                 if (message != "ok")
-                    return new Response<ScheduleDTO>(false, message, null);
+                    return new Response<ScheduleDTO>(false, message, null)
+                    { RuleCode = RuleCodeForRescheduleMessage(message) };
             }
 
             return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
@@ -2354,6 +2355,25 @@ namespace VaccineAPI.Controllers
                 return date.AddDays(GapInDays);
         }
 
+        // Maps a reschedule rejection message (from ChangeDueDatesOfSchedule, which returns a
+        // human-worded string) to a stable code the client branches on. This keeps the last bit
+        // of prose-parsing on the server, where the wording is defined — the client no longer
+        // has to string-match the message (which silently broke when the casing/wording drifted).
+        // Codes: MAX_AGE, MIN_AGE_FROM_DOB, MIN_GAP_FROM_PREV, BEFORE_PREV_DOSE (no override).
+        private static string? RuleCodeForRescheduleMessage(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return null;
+            if (message.Contains("greater than the Max Age of dose"))
+                return "MAX_AGE";
+            if (message.Contains("minimum age of this vaccine from date of birth should be"))
+                return "MIN_AGE_FROM_DOB";
+            if (message.Contains("minimum gap from the previous dose of this vaccine should be"))
+                return "MIN_GAP_FROM_PREV";
+            if (message.Contains("before or on the same date as the previous dose"))
+                return "BEFORE_PREV_DOSE";
+            return null;
+        }
+
         private string BuildInventoryContextMessage(string prefix, long? brandId, long clinicId)
         {
             var brandName = _db.Brands
@@ -2646,7 +2666,8 @@ namespace VaccineAPI.Controllers
                 if (message == "ok")
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
                 else
-                    return new Response<ScheduleDTO>(false, message, null);
+                    return new Response<ScheduleDTO>(false, message, null)
+                    { RuleCode = RuleCodeForRescheduleMessage(message) };
             }
         }
 

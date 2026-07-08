@@ -31,4 +31,9 @@
     <PackageReference Include="System.Drawing.Common" Version="8.0.8" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- IBM Plex faces embedded into the Travel immunization certificate PDF. -->
+    <None Include="Resources\Fonts\*.ttf" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

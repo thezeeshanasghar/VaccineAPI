@@ -4559,6 +4559,16 @@ namespace VaccineAPI.Controllers
 
         float footerTextY = contactTableTopY + 6f;
 
+        // Horizontal separator line above the verification note (per the reference template).
+        float dividerY = footerTextY + 16f;
+        cb.SaveState();
+        cb.SetLineWidth(0.7f);
+        cb.SetColorStroke(BaseColor.LightGray);
+        cb.MoveTo(document.LeftMargin, dividerY);
+        cb.LineTo(document.PageSize.Width - document.RightMargin, dividerY);
+        cb.Stroke();
+        cb.RestoreState();
+
         Phrase verificationNote = new Phrase(
             "This is a computer generated verifiable certificate. It does not require physical stamp/signatures. " +
             "For verification, scan the QR code or visit https://vaccinationcentre.com/verify and enter MR number.",

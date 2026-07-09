@@ -167,6 +167,11 @@ namespace VaccineAPI.Controllers
                     return new Response<ScheduleDTO>(false, "Schedule not found", null);
                 }
 
+                // CDC 4-day grace outcome for this give (set in the MinGap check below, carried
+                // onto the success Response so the client can show the informational note).
+                bool graceApplied = false;
+                string? graceMessage = null;
+
                 // BUG-16 — a give must carry a real GivenDate. A missing/default value
                 // (0001-01-01) or a date on/before the child's DOB is invalid and would slip
                 // past the age/future guards below. Reject it before any other give-time check.
@@ -253,7 +258,11 @@ namespace VaccineAPI.Controllers
                             }
 
                             var minGapDate = calculateDate(prevScheduleForGap.GivenDate.Value.Date, dose.MinGap.Value).Date;
-                            if (scheduleDTO.GivenDate.Date < minGapDate)
+                            // CDC 4-day grace: unless this vaccine requires exact intervals
+                            // (cholera/rabies), a give within 4 days before the floor is valid.
+                            var exactInterval = dose.Vaccine != null && dose.Vaccine.ExactIntervalRequired;
+                            var enforcedGapDate = exactInterval ? minGapDate : minGapDate.AddDays(-CdcGraceDays);
+                            if (scheduleDTO.GivenDate.Date < enforcedGapDate)
                             {
                                 if (scheduleDTO.PaId.HasValue)
                                     return new Response<ScheduleDTO>(false,
@@ -261,6 +270,15 @@ namespace VaccineAPI.Controllers
                                 else
                                     return Response<ScheduleDTO>.Warning(
                                         doseName + " minimum gap is not met — earliest allowed date is " + minGapDate.ToString("dd-MM-yyyy") + ". Override?");
+                            }
+                            // Accepted, but inside the grace window (1–4 days early) → flag it so
+                            // the client shows the CDC note. Not set for exact-interval vaccines.
+                            else if (!exactInterval && scheduleDTO.GivenDate.Date < minGapDate)
+                            {
+                                graceApplied = true;
+                                graceMessage = doseName + " was given " + (minGapDate - scheduleDTO.GivenDate.Date).Days
+                                    + " day(s) before the " + minGapDate.ToString("dd-MM-yyyy")
+                                    + " minimum interval — accepted as valid under the CDC 4-day grace period.";
                             }
                         }
                     }
@@ -659,7 +677,8 @@ namespace VaccineAPI.Controllers
 
                         ScheduleDTO newData1 = _mapper.Map<ScheduleDTO>(dbSchedule);
                         _db.SaveChanges();
-                        return new Response<ScheduleDTO>(true, "congratulations", newData1);
+                        return new Response<ScheduleDTO>(true, "congratulations", newData1)
+                        { GraceApplied = graceApplied, GraceMessage = graceMessage };
                     }
                 }
 
@@ -853,7 +872,8 @@ namespace VaccineAPI.Controllers
                     LinkScheduleToAssignment(assignmentId, dbSchedule.Id);
                 }
                 _db.SaveChanges();
-                return new Response<ScheduleDTO>(true, "congratulations", newData);
+                return new Response<ScheduleDTO>(true, "congratulations", newData)
+                { GraceApplied = graceApplied, GraceMessage = graceMessage };
             }
         }
 
@@ -1725,6 +1745,8 @@ namespace VaccineAPI.Controllers
             }
 
             // Step 4 — MinAge, MaxAge, Brand.MinAge and MinGap checks for bulk give (accumulate all errors)
+            bool bulkGraceApplied = false;
+            var bulkGraceMessages = new System.Collections.Generic.List<string>();
             if (scheduleDTO.IsDone == true)
             {
                 var bulkErrors = new System.Collections.Generic.List<string>();
@@ -1815,13 +1837,29 @@ namespace VaccineAPI.Controllers
                             else
                             {
                                 var minGapDate = calculateDate(prevSchedChk.GivenDate.Value.Date, chkDose.MinGap.Value).Date;
-                                if (scheduleDTO.GivenDate.Date < minGapDate)
+                                // CDC 4-day grace (MinGap only), unless the vaccine requires exact
+                                // intervals (cholera/rabies). chkDose is loaded without the Vaccine
+                                // nav, so read the flag directly.
+                                var exactInterval = _db.Vaccines
+                                    .Where(v => v.Id == chkDose.VaccineId)
+                                    .Select(v => v.ExactIntervalRequired)
+                                    .FirstOrDefault();
+                                var enforcedGapDate = exactInterval ? minGapDate : minGapDate.AddDays(-CdcGraceDays);
+                                if (scheduleDTO.GivenDate.Date < enforcedGapDate)
                                 {
                                     var msg = (chkDose.Name ?? "A dose") + " cannot be given before " + minGapDate.ToString("dd-MM-yyyy") + " (minimum gap not met).";
                                     if (scheduleDTO.PaId.HasValue)
                                         bulkErrors.Add(msg);
                                     else if (!bulkErrors.Contains("[Warning] " + msg))
                                         bulkErrors.Add("[Warning] " + msg);
+                                }
+                                else if (!exactInterval && scheduleDTO.GivenDate.Date < minGapDate)
+                                {
+                                    bulkGraceApplied = true;
+                                    var gmsg = (chkDose.Name ?? "A dose") + " given " + (minGapDate - scheduleDTO.GivenDate.Date).Days
+                                        + " day(s) early — valid under the CDC 4-day grace period.";
+                                    if (!bulkGraceMessages.Contains(gmsg))
+                                        bulkGraceMessages.Add(gmsg);
                                 }
                             }
                         }
@@ -2145,7 +2183,11 @@ namespace VaccineAPI.Controllers
             var bulkMsg = preResetSkipped > 0
                 ? $"schedule updated successfully. {preResetSkipped} historical dose(s) from before the current stock period were left untouched — the doctor can undo them one at a time."
                 : "schedule updated successfully.";
-            return new Response<ScheduleDTO>(true, bulkMsg, null);
+            return new Response<ScheduleDTO>(true, bulkMsg, null)
+            {
+                GraceApplied = bulkGraceApplied,
+                GraceMessage = bulkGraceApplied ? string.Join(" ", bulkGraceMessages) : null
+            };
         }
 
         [HttpPut("update-bulk-invoice")]
@@ -2436,6 +2478,13 @@ namespace VaccineAPI.Controllers
             else
                 return date.AddDays(GapInDays);
         }
+
+        // CDC 4-day grace period: a dose given up to 4 days before its minimum INTERVAL
+        // (MinGap) still counts as valid. Applies to MinGap only (not MinAge/MaxAge), and
+        // never to vaccines flagged ExactIntervalRequired (cholera/rabies). Same day-count
+        // convention as calculateDate (day-of-dose = day 0), so we just subtract days.
+        private const int CdcGraceDays = 4;
+        private const string CdcGraceUrl = "https://www.cdc.gov/vaccines/hcp/imz-best-practices/timing-spacing-immunobiologics.html";
 
         // Maps a reschedule rejection message (from ChangeDueDatesOfSchedule, which returns a
         // human-worded string) to a stable code the client branches on. This keeps the last bit

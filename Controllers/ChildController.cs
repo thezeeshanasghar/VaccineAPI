@@ -3510,6 +3510,53 @@ namespace VaccineAPI.Controllers
                 dbChild.Agent = childDTO.Agent;
                 dbChild.CNIC = childDTO.CNIC;
                 var dbUser = dbChild.User;
+
+                // A patient's mobile number lives on its PARENT User account, not on the
+                // child. If the doctor changes the number to one that ALREADY belongs to a
+                // different PARENT account, we do not overwrite the number in place (that
+                // would leave two accounts sharing the same number and split the family).
+                // Instead we MERGE: move this patient onto the existing account and delete
+                // the now-empty old account. The existing account survives (its password &
+                // login/number are kept).
+                var targetUser = _db.Users
+                    .Include(x => x.Childs)
+                    .FirstOrDefault(x => x.MobileNumber == childDTO.MobileNumber
+                                      && x.UserType == "PARENT"
+                                      && x.Id != dbUser.Id);
+
+                if (targetUser != null)
+                {
+                    // Same-name guard: if the target account already has a patient with this
+                    // patient's name, warn once so the doctor can catch an accidental
+                    // double-register. Client re-sends with IsPAApprove-style confirm flag
+                    // (IsSkip) set true to proceed.
+                    bool nameClash = targetUser.Childs.Any(c =>
+                        c.Name.Equals(dbChild.Name, StringComparison.OrdinalIgnoreCase));
+                    if (nameClash && !childDTO.IsSkip)
+                    {
+                        return new Response<ChildDTO>(false,
+                            $"This number already belongs to an account that also has a patient named \"{dbChild.Name}\". Merging will show two patients with this name under the same login. Merge anyway?",
+                            childDTO)
+                        { IsWarning = true, RuleCode = "MergeNameClash" };
+                    }
+
+                    // Merge: re-point this patient to the existing account.
+                    var oldUser = dbUser;
+                    dbChild.UserId = targetUser.Id;
+                    dbChild.User = targetUser;
+                    // Remove the old account only if this child was its last patient.
+                    if (oldUser.Childs != null && oldUser.Childs.Count == 1
+                        || _db.Childs.Count(c => c.UserId == oldUser.Id && c.Id != dbChild.Id) == 0)
+                    {
+                        _db.Users.Remove(oldUser);
+                    }
+                    _db.SaveChanges();
+                    int total = _db.Childs.Count(c => c.UserId == targetUser.Id);
+                    return new Response<ChildDTO>(true,
+                        $"Patient attached to the existing account. This number now shows {total} patient(s).",
+                        childDTO);
+                }
+
                 dbUser.CountryCode = childDTO.CountryCode;
                 dbUser.MobileNumber = childDTO.MobileNumber;
                 _db.SaveChanges();

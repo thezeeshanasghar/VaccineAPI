@@ -14,6 +14,10 @@ namespace VaccineAPI.ModelDTO
         public long? ClinicId { get; set; }
         public string Title { get; set; } = "";
         public string Message { get; set; } = "";
+        public string? PaName { get; set; }
+        public string? PaPhone { get; set; }
+        public string? PaPhoneWhatsApp { get; set; }
+        public string? PaProfileImage { get; set; }
         public bool IsRead { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? ReadAt { get; set; }

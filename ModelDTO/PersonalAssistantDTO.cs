@@ -7,6 +7,7 @@ namespace VaccineAPI.ModelDTO
         public string Email { get; set; } = "";
         public long DoctorId { get; set; }
         public string MobileNumber { get; set; } = "";
+        public string ProfileImage { get; set; } = "";
         public string Password { get; set; } = "";
         public string CountryCode { get; set; } = "";
         public bool IsActive { get; set; } = true;

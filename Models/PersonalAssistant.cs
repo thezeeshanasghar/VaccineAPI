@@ -14,7 +14,8 @@ namespace VaccineAPI.Models
         public bool AllowChild { get; set; }
         public bool IsVerified { get; set; }
         public bool IsActive { get; set; } = true;
-        public long DoctorId { get; set; } 
+        public string ProfileImage { get; set; } = "Resources/Images/avatar.png";
+        public long DoctorId { get; set; }
         public long UserId { get; set; }
         public User User { get; set; } = null!;
         public Doctor Doctor { get; set; } = null!;

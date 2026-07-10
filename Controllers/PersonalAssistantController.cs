@@ -176,6 +176,12 @@ namespace VaccineAPI.Controllers
             pa.Name  = dto.Name?.Trim() ?? pa.Name;
             pa.Email = dto.Email?.Trim() ?? pa.Email;
 
+            // Only overwrite the photo when a new one was uploaded this save — the frontend
+            // uploads via UploadController first and sends back the returned filename here.
+            // Empty means "unchanged", so an edit that doesn't touch the picture keeps it.
+            if (!string.IsNullOrWhiteSpace(dto.ProfileImage))
+                pa.ProfileImage = dto.ProfileImage.Trim();
+
             if (pa.User != null && !string.IsNullOrWhiteSpace(dto.MobileNumber))
             {
                 pa.User.MobileNumber = dto.MobileNumber.Trim();

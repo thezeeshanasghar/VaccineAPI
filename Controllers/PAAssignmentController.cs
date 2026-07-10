@@ -549,7 +549,73 @@ namespace VaccineAPI.Controllers
                 ));
             }
 
+            // Notify the PARENT that their vaccine coordinator has changed. Fires on every
+            // reassignment (not just first assignment) — the parent needs to know who is
+            // coordinating now. Same helper as Create; passes isReassignment for the wording.
+            await NotifyParentOfAssignment(old.ChildId, dto.NewPaId, old.ClinicId, isReassignment: true);
+
             return Ok(new { IsSuccess = true, ResponseData = new { NewAssignmentId = newAssignment.Id } });
+        }
+
+        // Inserts an in-app PARENT notification announcing who is coordinating the child's
+        // vaccines. Reused by Create (first assignment) and Reassign (PA swap). Phone is read
+        // live from the PA's linked User (PersonalAssistant has no phone field of its own);
+        // the PA photo is delivered via ProfileImage on the PA record and rendered by VacParent.
+        private async Task NotifyParentOfAssignment(long childId, long paId, long? clinicId, bool isReassignment = false)
+        {
+            var child = await _db.Childs.Include(c => c.User)
+                                        .FirstOrDefaultAsync(c => c.Id == childId);
+            var assignedPa = await _db.PersonalAssistant.Include(p => p.User)
+                                        .FirstOrDefaultAsync(p => p.Id == paId);
+            if (child?.User == null || assignedPa == null)
+                return;
+
+            var paPhone = assignedPa.User?.MobileNumber ?? "";
+            var paCountryCode = assignedPa.User?.CountryCode ?? "";
+            var lead = isReassignment
+                ? $"{assignedPa.Name} is now your vaccine companion for {child.Name}'s upcoming vaccines."
+                : $"{assignedPa.Name} will be your vaccine companion for {child.Name}'s upcoming vaccines.";
+
+            _db.Notifications.Add(new Notification
+            {
+                Type            = "PaAssigned",
+                RecipientType   = "PARENT",
+                RecipientId     = child.UserId,          // the parent's User.Id
+                ChildId         = child.Id,
+                ClinicId        = clinicId,
+                Title           = isReassignment ? "Your vaccine companion has changed" : "Your vaccine companion",
+                Message         = lead + (string.IsNullOrEmpty(paPhone) ? "" : $" You can reach them at {paPhone}."),
+                PaName          = assignedPa.Name,
+                PaPhone         = paPhone,
+                PaPhoneWhatsApp = ToWhatsAppNumber(paPhone, paCountryCode),
+                PaProfileImage  = assignedPa.ProfileImage,   // filename; VacParent prefixes RESOURCE_URL
+                IsRead          = false,
+                CreatedAt       = DateTime.Now
+            });
+            await _db.SaveChangesAsync();
+        }
+
+        // Normalise a locally-stored mobile to wa.me international format: digits only, no
+        // leading 0, country code prefixed once. Stored numbers here are typically local
+        // ("03001234567") with CountryCode held separately ("92"). Returns "" if there's no
+        // usable number so the frontend can hide the WhatsApp button.
+        private static string ToWhatsAppNumber(string phone, string countryCode)
+        {
+            if (string.IsNullOrWhiteSpace(phone))
+                return "";
+
+            var digits = new string(phone.Where(char.IsDigit).ToArray());
+            var cc = new string((countryCode ?? "").Where(char.IsDigit).ToArray());
+
+            digits = digits.TrimStart('0');
+            if (digits.Length == 0)
+                return "";
+
+            // Already prefixed with the country code (number stored in international form)?
+            if (!string.IsNullOrEmpty(cc) && digits.StartsWith(cc))
+                return digits;
+
+            return (string.IsNullOrEmpty(cc) ? "" : cc) + digits;
         }
 
         // GET /api/PAAssignment/clinic/{clinicId}
@@ -704,6 +770,12 @@ namespace VaccineAPI.Controllers
                         "New Patient Assignment"
                     ));
                 }
+
+                // Notify the PARENT that a PA is now coordinating their child's vaccines.
+                // In-app notification only (VacParent already polls parent notifications on
+                // login). Kept synchronous — cheap DB row on the request's own _db context;
+                // backgrounding it would race a disposed context.
+                await NotifyParentOfAssignment(dto.ChildId, dto.PersonalAssistantId, dto.ClinicId);
 
                 return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id } });
             }

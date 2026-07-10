@@ -27,7 +27,11 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id:long}")]
         public ActionResult<PersonalAssistant> GetById(long id)
         {
-            var personalAssistant = _db.PersonalAssistant.Find(id);
+            // Include the linked User so callers (e.g. the PA self-profile screen)
+            // can read the login mobile number, which is the WhatsApp number.
+            var personalAssistant = _db.PersonalAssistant
+                .Include(p => p.User)
+                .FirstOrDefault(p => p.Id == id);
             if (personalAssistant == null)
             {
                 return NotFound(new { message = "Personal Assistant not found." });
@@ -182,11 +186,9 @@ namespace VaccineAPI.Controllers
             if (!string.IsNullOrWhiteSpace(dto.ProfileImage))
                 pa.ProfileImage = dto.ProfileImage.Trim();
 
-            if (pa.User != null && !string.IsNullOrWhiteSpace(dto.MobileNumber))
-            {
-                pa.User.MobileNumber = dto.MobileNumber.Trim();
-                _db.Entry(pa.User).State = EntityState.Modified;
-            }
+            // The PA's mobile number is intentionally NOT editable from the self-profile
+            // screen: it is the login number and is the WhatsApp number shown to parents,
+            // so it stays locked to whatever the doctor set at account creation.
 
             _db.Entry(pa).State = EntityState.Modified;
             _db.SaveChanges();

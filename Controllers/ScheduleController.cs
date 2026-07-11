@@ -29,12 +29,25 @@ namespace VaccineAPI.Controllers
 
         private readonly InventoryTransactionService _inventory;
 
-        public ScheduleController(Context context, IMapper mapper, IWebHostEnvironment host, InventoryTransactionService inventory)
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
+
+        public ScheduleController(Context context, IMapper mapper, IWebHostEnvironment host, InventoryTransactionService inventory, Microsoft.Extensions.Configuration.IConfiguration config)
         {
             _host = host;
             _db = context;
             _mapper = mapper;
             _inventory = inventory;
+            _config = config;
+        }
+
+        // Secret used to sign parent magic-link tokens. Comes from
+        // appsettings ("LinkLogin:Secret") with an env-var fallback, mirroring
+        // how DefaultConnection is resolved in Program.cs.
+        private string LinkLoginSecret()
+        {
+            return _config["LinkLogin:Secret"]
+                ?? Environment.GetEnvironmentVariable("LinkLoginSecret")
+                ?? "";
         }
 
         [HttpGet]
@@ -3523,6 +3536,16 @@ namespace VaccineAPI.Controllers
             if (!doseDtos.Any())
             {
                 return new Response<List<DoseDTO>>(false, $"No doses due on {selectedDate:yyyy-MM-dd} for the given child ID and clinic.", null);
+            }
+
+            // Stamp a signed magic-link token onto every dose so VacDoc can build
+            // a login-bypassing deep link into this child's vaccine page in the
+            // WhatsApp reminder. Keyed by the child's parent UserId + child Id.
+            var linkToken = LinkLoginToken.Generate(child.UserId, child.Id, LinkLoginSecret());
+            foreach (var d in doseDtos)
+            {
+                d.LinkToken = linkToken;
+                d.ChildId = child.Id;
             }
 
             // Prepare the response message

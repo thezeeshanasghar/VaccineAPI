@@ -16,11 +16,20 @@ namespace VaccineAPI.Controllers
     {
         private readonly Context _db;
         private readonly IMapper _mapper;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
 
-        public UserController(Context context, IMapper mapper)
+        public UserController(Context context, IMapper mapper, Microsoft.Extensions.Configuration.IConfiguration config)
         {
             _db = context;
             _mapper = mapper;
+            _config = config;
+        }
+
+        private string LinkLoginSecret()
+        {
+            return _config["LinkLogin:Secret"]
+                ?? Environment.GetEnvironmentVariable("LinkLoginSecret")
+                ?? "";
         }
 
         [HttpGet]
@@ -153,6 +162,36 @@ namespace VaccineAPI.Controllers
                 var doctorDb = _db.Doctors.Where(x => x.Id == paDb.DoctorId).FirstOrDefault();
                 userDTO.AllowInventory = doctorDb != null && doctorDb.AllowInventory;
             }
+
+            return new Response<UserDTO>(true, null, userDTO);
+        }
+
+        // Magic-link auto-login for the parent app (VacParent). VacParent opens
+        // .../child/vaccine/{childId}?t={token}; on load it posts the token here
+        // and, if valid, gets back the same PARENT UserDTO the normal login
+        // returns, which it stores as the session. The token is a stateless
+        // HMAC-signed blob (see LinkLoginToken) carrying UserId + childId +
+        // expiry, so there is nothing to store or migrate on the server.
+        [HttpGet("link-login")]
+        public Response<UserDTO> LinkLogin(string token)
+        {
+            if (!LinkLoginToken.Validate(token, LinkLoginSecret(), out long userId, out long childId))
+                return new Response<UserDTO>(false, "This link is invalid or has expired.", null);
+
+            var dbUser = _db.Users.FirstOrDefault(x => x.Id == userId && x.UserType == "PARENT");
+            if (dbUser == null)
+                return new Response<UserDTO>(false, "Account not found.", null);
+
+            // The child referenced by the link must actually belong to this parent.
+            var childDB = _db.Childs.FirstOrDefault(x => x.Id == childId && x.UserId == userId);
+            if (childDB == null)
+                return new Response<UserDTO>(false, "Child not found.", null);
+
+            var userDTO = _mapper.Map<UserDTO>(dbUser);
+            userDTO.Id = dbUser.Id;
+            userDTO.SecurityStamp = dbUser.SecurityStamp;
+            userDTO.ChildId = childDB.Id;
+            userDTO.Password = ""; // never echo the password back over a link login
 
             return new Response<UserDTO>(true, null, userDTO);
         }

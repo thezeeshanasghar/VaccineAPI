@@ -18,6 +18,12 @@ namespace VaccineAPI.ModelDTO
         public string PhoneNumber { get; set; } = "";
         public ClinicDTO Clinic { get; set; } = null!;
         public VaccineDTO Vaccine { get; set; } = null!;
+
+        // Signed magic-link token for the parent app, so VacDoc can build a
+        // login-bypassing deep link into the child's vaccine page. Same value on
+        // every dose in the response (it is keyed by child, not dose).
+        public string LinkToken { get; set; } = "";
+        public long ChildId { get; set; }
     }
 
 }

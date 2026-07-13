@@ -5027,23 +5027,25 @@ namespace VaccineAPI.Controllers
             var doctor = child.Clinic?.Doctor;
             var clinic = child.Clinic;
 
+            EnsurePlexFonts();
+
             using var ms = new MemoryStream();
             var doc = new Document(PageSize.A5, 18, 18, 18, 18);
             var writer = PdfWriter.GetInstance(doc, ms);
             writer.CloseStream = false;
             doc.Open();
 
-            // ── Fonts ────────────────────────────────────────────────────────
-            var normXs  = FontFactory.GetFont(FontFactory.HELVETICA, 8f);
-            var normSm  = FontFactory.GetFont(FontFactory.HELVETICA, 10f);
-            var boldSm  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 10f);
-            var normMd  = FontFactory.GetFont(FontFactory.HELVETICA, 10f);
-            var boldMd  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13f);
-            var boldLg  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 13f);
-            var titleFt = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14f);
-            var hdrWhite= FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11f, BaseColor.White);
+            // ── Fonts (IBM Plex Sans, embedded) ──────────────────────────────
+            var normXs  = PlexSans(8f);
+            var normSm  = PlexSans(10f);
+            var boldSm  = PlexSans(10f, true);
+            var normMd  = PlexSans(10f);
+            var boldMd  = PlexSans(13f, true);
+            var boldLg  = PlexSans(13f, true);
+            var titleFt = PlexSans(14f, true);
+            var hdrWhite= new Font(_plexSansBold, 11f, Font.NORMAL, BaseColor.White);
             var hdrBg   = new BaseColor(21, 101, 192);
-            var altBg   = new BaseColor(244, 246, 252);
+            var altBg   = new BaseColor(249, 250, 253);
 
             // ── TOP SECTION ──────────────────────────────────────────────────
             var topTable = new PdfPTable(2) { WidthPercentage = 100 };
@@ -5055,13 +5057,13 @@ namespace VaccineAPI.Controllers
             leftContent.WidthPercentage = 100;
             // value column ≈ 68% of half-page minus cell padding on both sides
             float valColPt = ((doc.PageSize.Width - 36f) * 0.5f - 8f) * 0.68f - 10f;
-            var infoValBf  = BaseFont.CreateFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+            var infoValBf  = _plexSans;
             Font FitFont(string text) {
                 float maxSize = 10f;
                 if (string.IsNullOrEmpty(text)) return normSm;
                 float w = infoValBf.GetWidthPoint(text, maxSize);
                 if (w <= valColPt) return normSm;
-                return FontFactory.GetFont(FontFactory.HELVETICA, Math.Max(maxSize * valColPt / w, 6f));
+                return PlexSans(Math.Max(maxSize * valColPt / w, 6f));
             }
             void InfoRow(string label, string val) {
                 leftContent.AddCell(new PdfPCell(new Phrase(label, boldSm)) { Border = Rectangle.BOX, Padding = 5 });
@@ -5137,7 +5139,7 @@ namespace VaccineAPI.Controllers
             SRow("14-24 Weeks",   "OPV/IPV, DPT, HBV, Hib, PCV",               true);
             SRow("6 & 7 Months",  "Influenza");
             SRow("9 Months",      "MR, TCV, IPV, MenACWY",                      true);
-            SRow("12-15 Months",  "Chickenpox, Hepatitis A, MenACWY, MMR, PCV");
+            SRow("12-15 Months",  "Chickenpox, Hepatitis A, MenACWY, MMR, PCV, Cholera");
             SRow("18-21 Months",  "Hepatitis A, IPV, DPT, HBV, Hib",            true);
             SRow("3-4 Years",     "MMR, Chickenpox, Typhoid");
             SRow("5 Years",       "PPSV, Covid19",                               true);
@@ -5166,15 +5168,16 @@ namespace VaccineAPI.Controllers
             cb.RestoreState();
             ColumnText.ShowTextAligned(cb, Element.ALIGN_CENTER,
                 new Phrase(footerLine.ToString(),
-                    FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8f, BaseColor.White)),
+                    new Font(_plexSansBold, 8f, Font.NORMAL, BaseColor.White)),
                 pageW / 2f, bm + 7f, 0f);
 
-            // Disclaimer text just above footer
-            float disclaimerBottom = bm + footerH + 4f;
-            float disclaimerTop    = disclaimerBottom + 60f;
+            // Disclaimer text just above footer (half-line gap above the bar)
+            float disclaimerBottom = bm + footerH + 5f;
+            float disclaimerTop    = disclaimerBottom + 36f;
             var disclaimerCt = new ColumnText(cb);
             disclaimerCt.SetSimpleColumn(lm, disclaimerBottom, pageW - lm, disclaimerTop);
-            disclaimerCt.AddText(new Phrase(9.5f,
+            disclaimerCt.Leading = 9f;   // tight single-spacing (ColumnText.Leading governs, not Phrase leading)
+            disclaimerCt.AddText(new Phrase(
                 "Vaccines can cause fever, redness, rashes and pain. Rotarix vaccine can have loose " +
                 "motions and intestinal complications. Pertussis vaccine may cause excessive crying " +
                 "episodes and fits also rarely. This immunization card is valid to produce on demand at " +

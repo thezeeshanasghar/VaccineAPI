@@ -2209,7 +2209,12 @@ namespace VaccineAPI.Controllers
                 {
                     Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x => x.Doctor).FirstOrDefault();
                     Doctor doctor = clinic.Doctor;
-                    List<DoctorSchedule> dss = _db.DoctorSchedules.Where(x => x.DoctorId == doctor.Id).ToList();
+                    // Order by DoseOrder so an earlier dose of a vaccine is always inserted
+                    // before its successors — the MinGap floor below reads the predecessor's
+                    // already-persisted Schedule row.
+                    List<DoctorSchedule> dss = _db.DoctorSchedules.Where(x => x.DoctorId == doctor.Id)
+                        .Include(x => x.Dose).ToList()
+                        .OrderBy(x => x.Dose.VaccineId).ThenBy(x => x.Dose.DoseOrder ?? 0).ToList();
                     foreach (DoctorSchedule ds in dss)
                     {
                         var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).Include(x => x.Vaccine).FirstOrDefault();
@@ -2272,6 +2277,27 @@ namespace VaccineAPI.Controllers
                             }
                             if (ds.Dose.Name.StartsWith("HPV") && ds.Dose.DoseOrder == 3) cvd.IsSkip = true;
                             cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
+
+                            // MinGap floor at registration: a later dose of a vaccine may not be
+                            // due before (previous dose's due date + MinGap). Take the later of the
+                            // age-based date and the gap-based date. Purely additive — never pulls a
+                            // date earlier, and doses with no MinGap / DoseOrder 1 are unaffected.
+                            if (dbDose != null && dbDose.MinGap.HasValue && (dbDose.DoseOrder ?? 0) > 1)
+                            {
+                                var prevDose = _db.Doses.FirstOrDefault(x =>
+                                    x.VaccineId == dbDose.VaccineId && x.DoseOrder == (dbDose.DoseOrder - 1));
+                                if (prevDose != null)
+                                {
+                                    var prevSchedule = _db.Schedules.FirstOrDefault(x =>
+                                        x.ChildId == childDTO.Id && x.DoseId == prevDose.Id);
+                                    if (prevSchedule != null)
+                                    {
+                                        var gapDate = calculateDate(prevSchedule.Date, dbDose.MinGap.Value);
+                                        if (gapDate > cvd.Date)
+                                            cvd.Date = gapDate;
+                                    }
+                                }
+                            }
                             cvd.DiseaseYear = "";
                             _db.Schedules.Add(cvd);
                             _db.SaveChanges();
@@ -3624,6 +3650,9 @@ namespace VaccineAPI.Controllers
             // Years: codes 3001-3020 = 1-20 years
             else if (GapInDays >= 3001 && GapInDays <= 3020)
                 return date.AddYears(GapInDays - 3000);
+            // Composite: 3101 = 1 Year + 2 Weeks (exact across leap years)
+            else if (GapInDays == 3101)
+                return date.AddYears(1).AddDays(14);
             // Days and weeks: raw AddDays
             else
                 return date.AddDays(GapInDays);

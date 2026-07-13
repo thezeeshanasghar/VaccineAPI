@@ -2220,7 +2220,10 @@ namespace VaccineAPI.Controllers
                             if (childDTO.Gender == "Boy" && ds.Dose.Name.StartsWith("HPV"))
                                 continue;
 
-                            if (childDTO.IsSkip == true && ds.IsActive != true)
+                            // Only an explicit "off" (false) is skipped. A NULL IsActive
+                            // (legacy rows saved before the frontend sent the flag) counts as
+                            // active — matching how the schedule page displays them as checked.
+                            if (childDTO.IsSkip == true && ds.IsActive == false)
                                 continue;
 
                             if (childDTO.IsEPIDone)

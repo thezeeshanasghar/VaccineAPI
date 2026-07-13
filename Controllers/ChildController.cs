@@ -5201,18 +5201,20 @@ namespace VaccineAPI.Controllers
                 .FirstOrDefault(c => c.Id == id);
             if (dbChild == null) return NotFound("Child not found");
 
+            EnsurePlexFonts();
+
             using var ms = new MemoryStream();
             var doc = new Document(PageSize.A5, 15, 15, 15, 15);
             PdfWriter.GetInstance(doc, ms).CloseStream = false;
             doc.Open();
 
-            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8f);
-            var normSm = FontFactory.GetFont(FontFactory.HELVETICA, 7.5f);
-            var boldMd = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11f);
-            var normTy = FontFactory.GetFont(FontFactory.HELVETICA, 7f);
-            var normNm = FontFactory.GetFont(FontFactory.HELVETICA, 8f);
+            var boldSm = PlexSans(8f, true);
+            var normSm = PlexSans(7.5f);
+            var boldMd = PlexSans(11f, true);
+            var normTy = PlexSans(7f);
+            var normNm = PlexSans(8f);
             var hBg    = new BaseColor(21, 101, 192);
-            var altBg  = new BaseColor(244, 246, 252);
+            var altBg  = new BaseColor(249, 250, 253);
 
             // ── Header: two centred lines ────────────────────────────────────
             doc.Add(new Paragraph("IMMUNIZATION RECORD", boldMd)
@@ -5264,7 +5266,7 @@ namespace VaccineAPI.Controllers
             tbl.SetWidths(new float[] { 22f, 5f, 14f, 14f, 10f, 10f, 14f, 10f });
 
             PdfPCell Hdr(string t) => new PdfPCell(
-                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7f, BaseColor.White)))
+                new Phrase(t, new Font(_plexSansBold, 7f, Font.NORMAL, BaseColor.White)))
                 { BackgroundColor = hBg, Padding = 4, HorizontalAlignment = Element.ALIGN_CENTER };
             tbl.AddCell(Hdr("VACCINES")); tbl.AddCell(Hdr("#")); tbl.AddCell(Hdr("AGE"));
             tbl.AddCell(Hdr("GIVEN")); tbl.AddCell(Hdr("Wt(kg)")); tbl.AddCell(Hdr("OFC"));
@@ -5315,17 +5317,19 @@ namespace VaccineAPI.Controllers
                 .FirstOrDefault(c => c.Id == id);
             if (dbChild == null) return NotFound("Child not found");
 
+            EnsurePlexFonts();
+
             using var ms = new MemoryStream();
             var doc = new Document(PageSize.A5, 15, 15, 15, 15);
             PdfWriter.GetInstance(doc, ms).CloseStream = false;
             doc.Open();
 
-            var boldSm = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8f);
-            var normSm = FontFactory.GetFont(FontFactory.HELVETICA, 7.5f);
-            var boldMd = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11f);
-            var normTy = FontFactory.GetFont(FontFactory.HELVETICA, 7f);
+            var boldSm = PlexSans(8f, true);
+            var normSm = PlexSans(7.5f);
+            var boldMd = PlexSans(11f, true);
+            var normTy = PlexSans(7f);
             var hBg    = new BaseColor(21, 101, 192);
-            var altBg  = new BaseColor(244, 246, 252);
+            var altBg  = new BaseColor(249, 250, 253);
 
             // ── Header: two centred lines ────────────────────────────────────
             doc.Add(new Paragraph("IMMUNIZATION RECORD", boldMd)
@@ -5380,7 +5384,7 @@ namespace VaccineAPI.Controllers
             tbl.SetWidths(new float[] { 16f, 28f, 14f, 10f, 10f, 12f, 10f });
 
             PdfPCell Hdr(string t) => new PdfPCell(
-                new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7f, BaseColor.White)))
+                new Phrase(t, new Font(_plexSansBold, 7f, Font.NORMAL, BaseColor.White)))
                 { BackgroundColor = hBg, Padding = 4, HorizontalAlignment = Element.ALIGN_CENTER };
             tbl.AddCell(Hdr("AGE")); tbl.AddCell(Hdr("VACCINES")); tbl.AddCell(Hdr("GIVEN"));
             tbl.AddCell(Hdr("Wt(kg)")); tbl.AddCell(Hdr("OFC")); tbl.AddCell(Hdr("BRAND")); tbl.AddCell(Hdr("Sign."));
@@ -5422,7 +5426,7 @@ namespace VaccineAPI.Controllers
         {
             var footTbl = new PdfPTable(6) { WidthPercentage = 100 };
             var hBg = new BaseColor(21, 101, 192);
-            PdfPCell FHdr(string t) => new PdfPCell(new Phrase(t, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 6, BaseColor.White)))
+            PdfPCell FHdr(string t) => new PdfPCell(new Phrase(t, new Font(_plexSansBold, 6f, Font.NORMAL, BaseColor.White)))
                 { BackgroundColor = hBg, Padding = 2, HorizontalAlignment = Element.ALIGN_CENTER };
             PdfPCell FCell(string t = "") => new PdfPCell(new Phrase(t, normFont))
                 { Padding = 2, MinimumHeight = 14f, HorizontalAlignment = Element.ALIGN_CENTER };

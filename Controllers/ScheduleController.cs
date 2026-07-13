@@ -3059,7 +3059,8 @@ namespace VaccineAPI.Controllers
                 Email = c.Email,
                 ClinicId = c.ClinicId,
                 MobileNumber = c.User?.MobileNumber,
-                Password = c.User?.Password
+                Password = c.User?.Password,
+                UserId = c.UserId
             }).ToList();
 
             foreach (var child in childInfoDTOs)
@@ -3084,9 +3085,11 @@ namespace VaccineAPI.Controllers
                 if (dbSchedules.Any())
                 {
                     var doseNames = string.Join(", ", dbSchedules.Select(s => s.Dose.Name));
+                    var linkToken = LinkLoginToken.Generate(child.UserId, child.Id, LinkLoginSecret());
+                    var recordLink = "https://client.vaccinationcentre.com/child/vaccine/" + child.Id + "?t=" + Uri.EscapeDataString(linkToken);
                     body = $"Reminder: Vaccination {doseNames} for Child: {child.Name} is due today.\n" +
                         $"Kindly book an appointment at Clinic: {clinics?.Name}, with Doctor: {doctor?.FirstName}, at Phone: {clinics?.PhoneNumber}\n" +
-                         $"Login and check your record at https://client.vaccinationcentre.com\n" +
+                         $"View your child's vaccination record: {recordLink}\n" +
                         $"Mobile Number: {child.MobileNumber ?? "N/A"}\n" +
                         $"Password: {child.Password ?? "N/A"}";
                 }
@@ -3132,11 +3135,13 @@ namespace VaccineAPI.Controllers
             {
                 var clinic = _db.Clinics.Include(x => x.Doctor).FirstOrDefault(x => x.Id == child.ClinicId);
                 var doseDetails = todaySchedules.Select(s => $" {s.Dose.Name},").ToList();
+                var linkToken = LinkLoginToken.Generate(child.UserId, child.Id, LinkLoginSecret());
+                var recordLink = "https://client.vaccinationcentre.com/child/vaccine/" + child.Id + "?t=" + Uri.EscapeDataString(linkToken);
 
                 body = $"Reminder: Vaccination {string.Join(" ", doseDetails)} of {child.Name} is due.\n" +
                     $"Please confirm your appointment. Thanks! Dr {clinic?.Doctor?.FirstName} {clinic?.Name}\n" +
                     $"Phone Number: {clinic?.PhoneNumber}\n" +
-                    $"Login and check your record at https://client.vaccinationcentre.com\n" +
+                    $"View your child's vaccination record: {recordLink}\n" +
                     $"Mobile Number: {child.User?.MobileNumber ?? "N/A"}\n" +
                     $"Password: {child.User?.Password ?? "N/A"}";
             }
@@ -3271,7 +3276,8 @@ namespace VaccineAPI.Controllers
                             doseName += schedule.Dose.Name + ", ";
                             scheduleDate = schedule.Date;
                         }
-                        UserEmail.ParentAlertEmail(doseName, scheduleDate, child);
+                        var linkToken = LinkLoginToken.Generate(child.UserId, child.Id, LinkLoginSecret());
+                        UserEmail.ParentAlertEmail(doseName, scheduleDate, child, linkToken);
                     }
                 }
                 List<ScheduleDTO> scheduleDtos = _mapper.Map<List<ScheduleDTO>>(Schedules);

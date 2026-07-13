@@ -39,11 +39,12 @@ namespace VaccineAPI
 
 
 
-        public static void ParentAlertEmail(string doseName, DateTime scheduleDate, Child child)
+        public static void ParentAlertEmail(string doseName, DateTime scheduleDate, Child child, string linkToken)
         {
             string body = "Reminder: Vaccination for " + child.Name + " is due on " + scheduleDate;
-            body += " (" + doseName + ")";
-            //TODO: website and android link
+            body += " (" + doseName + ")\n";
+            string recordLink = "https://client.vaccinationcentre.com/child/vaccine/" + child.Id + "?t=" + Uri.EscapeDataString(linkToken);
+            body += "View your child's vaccination record: " + recordLink;
             SendEmail(child.Email, body);
         }
 

@@ -109,6 +109,13 @@ namespace VaccineAPI.Controllers
 
                 existing.ViewAnalytics = incoming.ViewAnalytics;
 
+                existing.ViewPaAssignmentStatus = incoming.ViewPaAssignmentStatus;
+                existing.ReassignPaTask = incoming.ReassignPaTask;
+                existing.ViewFeedbackResponseTracker = incoming.ViewFeedbackResponseTracker;
+                existing.SendFeedbackEmail = incoming.SendFeedbackEmail;
+                existing.SendFeedbackWhatsApp = incoming.SendFeedbackWhatsApp;
+                existing.ManagePaClinicAssignments = incoming.ManagePaClinicAssignments;
+
                 _db.Entry(existing).State = EntityState.Modified;
             }
 

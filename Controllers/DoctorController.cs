@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.AspNetCore.Hosting;
@@ -384,7 +385,9 @@ namespace VaccineAPI.Controllers
             if (string.IsNullOrEmpty(phoneNumber))
                 return string.Empty;
 
-            phoneNumber = phoneNumber.Trim();
+            // Strip all whitespace and dashes, not just leading/trailing
+            phoneNumber = Regex.Replace(phoneNumber, @"[\s-]", "");
+
             if (phoneNumber.StartsWith("+"))
                 phoneNumber = phoneNumber.Substring(1);
             if (phoneNumber.StartsWith("00"))

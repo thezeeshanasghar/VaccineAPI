@@ -18,6 +18,8 @@ namespace VaccineAPI.ModelDTO
         public bool AllowSalesReport { get; set; }
         public bool AllowAgent { get; set; }
         public bool AllowInvoice { get; set; }
+        public bool AllowTravel { get; set; }
+        public bool AllowAdult { get; set; }
         public long ChildId { get; set; }
         public string CountryCode { get; set; } = "";
         public string Email { get; set; } = "";

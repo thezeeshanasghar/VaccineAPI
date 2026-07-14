@@ -132,6 +132,8 @@ namespace VaccineAPI.Controllers
                 userDTO.AllowFinancial = doctorDb.AllowFinancial;
                 userDTO.AllowSalesReport = doctorDb.AllowSalesReport;
                 userDTO.AllowInvoice = doctorDb.AllowInvoice;
+                userDTO.AllowTravel = doctorDb.AllowTravel;
+                userDTO.AllowAdult = doctorDb.AllowAdult;
                 userDTO.ProfileImage = doctorDb.ProfileImage;
                 userDTO.DoctorType = doctorDb.DoctorType;
                 userDTO.Name = !string.IsNullOrEmpty(doctorDb.DisplayName) ? doctorDb.DisplayName : doctorDb.FirstName;

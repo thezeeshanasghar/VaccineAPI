@@ -82,6 +82,10 @@ namespace VaccineAPI.ModelDTO
         // FOR INVOICE
         [JsonConverter(typeof(OnlyDateConverter))]
         public System.DateTime? InvoiceDate { get; set; }
+        // Direct FK to the InvoiceSubmission this dose is billed on — the reliable way to
+        // tell "is this dose invoiced" (see Schedule.InvoiceSubmissionId). Null = not invoiced,
+        // or invoiced before this column existed (falls back to date-matching client-side).
+        public long? InvoiceSubmissionId { get; set; }
         public List<ClinicDTO> Clinics { get; set; } = new List<ClinicDTO>();
         public bool IgnoreMinAgeAtGiveTime { get; set; } = false;
         public bool IgnoreMinGapAtGiveTime { get; set; } = false;

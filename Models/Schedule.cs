@@ -63,6 +63,15 @@ namespace VaccineAPI.Models
         // NOTE: distinct from Lot/Manufacturer/Expiry above — those are the permanent CERTIFICATE
         // snapshot (never read from stock). StockId is an internal accounting link only.
         public int? StockId { get; set; }
+
+        // Direct link to the InvoiceSubmission this dose was billed on, stamped at
+        // invoice-creation time (update-bulk-invoice). This is the source of truth for
+        // "is this dose invoiced" — a stable ID, not a date match against InvoiceDate,
+        // which broke repeatedly (timezone/format drift, due-date vs given-date buckets)
+        // because dates can legitimately diverge or be recomputed while an ID cannot.
+        // Null for doses never invoiced, and for historical doses invoiced before this
+        // column existed (see backfill migration).
+        public long? InvoiceSubmissionId { get; set; }
         // public virtual DateTime FromDate { get; set; }
         // public virtual DateTime ToDate { get; set; }
     }

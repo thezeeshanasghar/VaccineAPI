@@ -142,6 +142,25 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<decimal>(true, "Total found.", submission.TotalAmount));
         }
 
+        // Direct-by-ID counterpart to GetInvoiceTotal above — used once a dose carries
+        // Schedule.InvoiceSubmissionId, so lookup is a primary-key read instead of a date
+        // match. Still excludes Cancelled/UngiveReversal so a voided invoice doesn't show
+        // as a live total.
+        [HttpGet("invoice-total-by-id")]
+        public ActionResult<Response<decimal>> GetInvoiceTotalById([FromQuery] long invoiceSubmissionId)
+        {
+            var submission = _db.InvoiceSubmissions
+                .Where(x => x.Id == invoiceSubmissionId
+                         && x.InvoiceStatus != "Cancelled"
+                         && x.InvoiceStatus != "UngiveReversal")
+                .FirstOrDefault();
+
+            if (submission == null)
+                return Ok(new Response<decimal>(false, "No active invoice found.", 0));
+
+            return Ok(new Response<decimal>(true, "Total found.", submission.TotalAmount));
+        }
+
        [HttpGet("consultation-fee/{invoiceId}")]
         public ActionResult<decimal> GetConsultationFeeByInvoiceId(string invoiceId)
         {

@@ -2332,11 +2332,24 @@ namespace VaccineAPI.Controllers
                 SyncInvoicePaToActiveAssignment(newInvoice, dto.ChildId, allowPaIdOverwrite: !dto.PaId.HasValue);
             }
 
+            // The invoice this submission is (existing, being edited) or just became (newInvoice).
+            var invoiceSubmissionId = existing?.Id ?? _db.InvoiceSubmissions
+                .Where(x => x.ChildId == dto.ChildId && x.InvoiceDate.Date == dto.InvoiceDate.Date)
+                .OrderByDescending(x => x.Id)
+                .Select(x => x.Id)
+                .FirstOrDefault();
+
             foreach (var item in dto.Schedules)
             {
                 var schedulec = _db.Schedules.FirstOrDefault(x => x.Id == item.Id);
                 if (schedulec != null)
+                {
                     schedulec.Amount = item.Amount;
+                    // Stamp the direct link every download/edit — this is the source of truth for
+                    // "is this dose invoiced" from here on, not a date match against InvoiceDate.
+                    if (invoiceSubmissionId != 0)
+                        schedulec.InvoiceSubmissionId = invoiceSubmissionId;
+                }
             }
 
             _db.SaveChanges();

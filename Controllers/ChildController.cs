@@ -2318,8 +2318,13 @@ namespace VaccineAPI.Controllers
                                 }
                             }
                             cvd.DiseaseYear = "";
-                            _db.Schedules.Add(cvd);
-                            _db.SaveChanges();
+                            bool alreadyExists = _db.Schedules.Any(x =>
+                                x.ChildId == cvd.ChildId && x.DoseId == cvd.DoseId);
+                            if (!alreadyExists)
+                            {
+                                _db.Schedules.Add(cvd);
+                                _db.SaveChanges();
+                            }
                         }
                     }
                     var dob2 = childDTO.DOB.Date;
@@ -2330,33 +2335,42 @@ namespace VaccineAPI.Controllers
                     {
                         if (dob2 > comparisonDate2020)
                         {
-                            Schedule cvd3 = new Schedule();
-                            cvd3.DoseId = 136;
-                            var mingap = 0;
-                            cvd3.DiseaseYear = "";
-                            cvd3.Date = calculateDate(childDTO.DOB, mingap);
-                            cvd3.ChildId = childDTO.Id;
-                            _db.Schedules.Add(cvd3);
+                            if (!_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == 136))
+                            {
+                                Schedule cvd3 = new Schedule();
+                                cvd3.DoseId = 136;
+                                var mingap = 0;
+                                cvd3.DiseaseYear = "";
+                                cvd3.Date = calculateDate(childDTO.DOB, mingap);
+                                cvd3.ChildId = childDTO.Id;
+                                _db.Schedules.Add(cvd3);
+                            }
                         }
                         else if (dob2 > comparisonDate2018)
                         {
-                            Schedule cvd2 = new Schedule();
-                            cvd2.DoseId = 134;
-                            var mingap = 0;
-                            cvd2.DiseaseYear = "";
-                            cvd2.Date = calculateDate(childDTO.DOB, mingap);
-                            cvd2.ChildId = childDTO.Id;
-                            _db.Schedules.Add(cvd2);
+                            if (!_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == 134))
+                            {
+                                Schedule cvd2 = new Schedule();
+                                cvd2.DoseId = 134;
+                                var mingap = 0;
+                                cvd2.DiseaseYear = "";
+                                cvd2.Date = calculateDate(childDTO.DOB, mingap);
+                                cvd2.ChildId = childDTO.Id;
+                                _db.Schedules.Add(cvd2);
+                            }
                         }
                         else if (dob2 > comparisonDate2012)
                         {
-                            Schedule cvd1 = new Schedule();
-                            cvd1.DoseId = 133;
-                            var mingap = 0;
-                            cvd1.DiseaseYear = "";
-                            cvd1.Date = calculateDate(childDTO.DOB, mingap);
-                            cvd1.ChildId = childDTO.Id;
-                            _db.Schedules.Add(cvd1);
+                            if (!_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == 133))
+                            {
+                                Schedule cvd1 = new Schedule();
+                                cvd1.DoseId = 133;
+                                var mingap = 0;
+                                cvd1.DiseaseYear = "";
+                                cvd1.Date = calculateDate(childDTO.DOB, mingap);
+                                cvd1.ChildId = childDTO.Id;
+                                _db.Schedules.Add(cvd1);
+                            }
                         }
                         else
                         {

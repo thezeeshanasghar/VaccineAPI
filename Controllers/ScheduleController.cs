@@ -3004,19 +3004,12 @@ namespace VaccineAPI.Controllers
 
         // Confirms the requesting PA/doctor is actually assigned to (PA: PaAccess row) or owns
         // (Doctor: Clinics.DoctorId) OnlineClinicId, before any alert view/send endpoint acts on
-        // it. Both paId/doctorId are optional so existing callers that omit them keep today's
-        // behavior (unrestricted) until every frontend call site is updated to pass one.
+        // it. Delegates to the shared ClinicAccessGuard (also used by FollowUpController and
+        // BirthdayController) — kept as a thin wrapper here so existing call sites in this file
+        // don't need to change.
         private bool CallerOwnsClinic(long clinicId, long? paId, long? doctorId)
         {
-            if (paId.HasValue)
-            {
-                return _db.PaAccess.Any(pa => pa.PersonalAssistantId == paId.Value && pa.ClinicId == clinicId);
-            }
-            if (doctorId.HasValue)
-            {
-                return _db.Clinics.Any(c => c.Id == clinicId && c.DoctorId == doctorId.Value);
-            }
-            return true;
+            return ClinicAccessGuard.CallerOwnsClinic(_db, clinicId, paId, doctorId);
         }
 
         private static List<Schedule> GetAlertData(DateTime inputDate, int GapDays, long OnlineClinicId, Context db)

@@ -75,6 +75,53 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // Correctly single-clinic-scoped follow-up alert fetch, used by the clinic filter on
+        // follow-up.page.ts (one request per accessible clinic, merged client-side — same
+        // pattern as ScheduleController's alert endpoint). NOTE: this is distinct from the
+        // legacy alert/{GapDays}/{OnlineClinicId} endpoint below, which despite taking a single
+        // OnlineClinicId actually resolves and returns every clinic belonging to that clinic's
+        // doctor — kept as-is for any other caller, not reused here.
+        [HttpGet("clinic-alert/{GapDays}/{OnlineClinicId}")]
+        public Response<IEnumerable<FollowUpDTO>> GetClinicAlert(DateTime inputDate, int GapDays, long OnlineClinicId, long? paId = null, long? doctorId = null)
+        {
+            if (!ClinicAccessGuard.CallerOwnsClinic(_db, OnlineClinicId, paId, doctorId))
+            {
+                return new Response<IEnumerable<FollowUpDTO>>(false, "Not authorized for this clinic.", null);
+            }
+
+            DateTime AddedDateTime = DateTime.UtcNow.AddHours(5).AddDays(GapDays);
+            DateTime pakistanTime = DateTime.UtcNow.AddHours(5);
+            IEnumerable<FollowUp> followups = new List<FollowUp>();
+
+            if (GapDays == 0)
+                followups = _db.FollowUps.Include(x => x.Child).ThenInclude(x => x.User)
+                    .Where(c => c.Child.ClinicId == OnlineClinicId)
+                    .Where(c => c.NextVisitDate == inputDate.Date)
+                    .Where(c => c.Child.IsInactive == false)
+                    .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate).ToList<FollowUp>();
+            else if (GapDays > 0)
+            {
+                AddedDateTime = AddedDateTime.AddDays(1);
+                followups = _db.FollowUps.Include(x => x.Child).ThenInclude(x => x.User)
+                    .Where(c => c.Child.ClinicId == OnlineClinicId)
+                    .Where(c => c.NextVisitDate > pakistanTime && c.NextVisitDate <= AddedDateTime)
+                    .Where(c => c.Child.IsInactive == false)
+                    .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate).ToList<FollowUp>();
+            }
+            else
+            {
+                followups = _db.FollowUps.Include(x => x.Child).ThenInclude(x => x.User)
+                    .Where(c => c.Child.ClinicId == OnlineClinicId)
+                    .Where(c => c.NextVisitDate < pakistanTime.Date && c.NextVisitDate >= AddedDateTime)
+                    .Where(c => c.Child.IsInactive == false)
+                    .OrderBy(x => x.Child.Id).ThenBy(x => x.NextVisitDate).ToList<FollowUp>();
+            }
+
+            var grouped = followups.GroupBy(f => f.ChildId).Select(g => g.First()).ToList();
+            IEnumerable<FollowUpDTO> followUpDTO = _mapper.Map<IEnumerable<FollowUpDTO>>(grouped);
+            return new Response<IEnumerable<FollowUpDTO>>(true, null, followUpDTO);
+        }
+
         [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<FollowUpDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId)
         {

@@ -255,6 +255,34 @@ Website: https://vaccinationcentre.com";
             }
         }
 
+        // Single-clinic-scoped birthday alert fetch, used by the clinic filter on
+        // birthday-alert.page.ts (one request per accessible clinic, merged client-side —
+        // same pattern as ScheduleController/FollowUpController's clinic-alert endpoints).
+        [HttpGet("clinic-alert/{OnlineClinicId}")]
+        public Response<IEnumerable<ChildDTO>> GetBirthdayAlertByClinic(DateTime inputDate, long OnlineClinicId, long? paId = null, long? doctorId = null)
+        {
+            if (!ClinicAccessGuard.CallerOwnsClinic(_db, OnlineClinicId, paId, doctorId))
+            {
+                return new Response<IEnumerable<ChildDTO>>(false, "Not authorized for this clinic.", null);
+            }
+
+            List<Child> childs = _db
+                .Childs.Include(c => c.User)
+                .Include(c => c.Clinic)
+                .ThenInclude(cl => cl.Doctor)
+                .Where(c =>
+                    c.DOB.Month == inputDate.Month
+                    && c.DOB.Day == inputDate.Day
+                    && c.ClinicId == OnlineClinicId
+                    && c.IsInactive == false
+                )
+                .ToList();
+
+            IEnumerable<ChildDTO> childDTOs = _mapper.Map<IEnumerable<ChildDTO>>(childs);
+
+            return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
+        }
+
         [HttpGet("{doctorId}")]
         public Response<IEnumerable<ChildDTO>> GetBirthdayAlertByDoctor(DateTime inputDate,long doctorId)
         {

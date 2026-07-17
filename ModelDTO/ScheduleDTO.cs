@@ -90,6 +90,7 @@ namespace VaccineAPI.ModelDTO
         public bool IgnoreMinAgeAtGiveTime { get; set; } = false;
         public bool IgnoreMinGapAtGiveTime { get; set; } = false;
         public bool IgnoreMaxAgeAtGiveTime { get; set; } = false;
+        public DateTime? AlertSentAt { get; set; }
     }
 
 }

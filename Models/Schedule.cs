@@ -72,6 +72,12 @@ namespace VaccineAPI.Models
         // Null for doses never invoiced, and for historical doses invoiced before this
         // column existed (see backfill migration).
         public long? InvoiceSubmissionId { get; set; }
+
+        // Persisted "WhatsApp alert already sent" status, set by mark-alert-sent whenever a
+        // doctor/PA opens the WhatsApp deep link from the alert pages. Survives reloads and
+        // logout/login (unlike the old frontend-only isMessageSent flag). Overwritten on every
+        // resend — last-sent timestamp, not a send log/audit history.
+        public DateTime? AlertSentAt { get; set; }
         // public virtual DateTime FromDate { get; set; }
         // public virtual DateTime ToDate { get; set; }
     }

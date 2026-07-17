@@ -29,6 +29,7 @@ namespace VaccineAPI.ModelDTO
         public ChildDTO Child { get; set; } = null!;
         public long DoctorId { get; set; }
         public DoctorDTO Doctor { get; set; } = null!;
+        public DateTime? AlertSentAt { get; set; }
     }
 
 }

@@ -2987,15 +2987,36 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
-        public Response<IEnumerable<ScheduleDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId)
+        public Response<IEnumerable<ScheduleDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId, long? paId = null, long? doctorId = null)
         {
             {
+                if (!CallerOwnsClinic(OnlineClinicId, paId, doctorId))
+                {
+                    return new Response<IEnumerable<ScheduleDTO>>(false, "Not authorized for this clinic.", null);
+                }
                 List<Schedule> schedules = GetAlertData(inputDate, GapDays, OnlineClinicId, _db);
                 IEnumerable<ScheduleDTO> scheduleDTO = _mapper.Map<IEnumerable<ScheduleDTO>>(
                         schedules
                     );
                 return new Response<IEnumerable<ScheduleDTO>>(true, null, scheduleDTO);
             }
+        }
+
+        // Confirms the requesting PA/doctor is actually assigned to (PA: PaAccess row) or owns
+        // (Doctor: Clinics.DoctorId) OnlineClinicId, before any alert view/send endpoint acts on
+        // it. Both paId/doctorId are optional so existing callers that omit them keep today's
+        // behavior (unrestricted) until every frontend call site is updated to pass one.
+        private bool CallerOwnsClinic(long clinicId, long? paId, long? doctorId)
+        {
+            if (paId.HasValue)
+            {
+                return _db.PaAccess.Any(pa => pa.PersonalAssistantId == paId.Value && pa.ClinicId == clinicId);
+            }
+            if (doctorId.HasValue)
+            {
+                return _db.Clinics.Any(c => c.Id == clinicId && c.DoctorId == doctorId.Value);
+            }
+            return true;
         }
 
         private static List<Schedule> GetAlertData(DateTime inputDate, int GapDays, long OnlineClinicId, Context db)
@@ -3133,16 +3154,21 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("alertone/{ChildId}")]
-        public Response<object> SendAlertEmail(long ChildId)
+        public Response<object> SendAlertEmail(long ChildId, long? paId = null, long? doctorId = null)
         {
             var child = _db.Childs
                 .Include(c => c.Clinic)
-                .Include(c => c.User) 
+                .Include(c => c.User)
                 .FirstOrDefault(c => c.Id == ChildId);
 
             if (child == null || string.IsNullOrEmpty(child.Email))
             {
                 return new Response<object>(false, "Child not found or email is missing.", null);
+            }
+
+            if (!CallerOwnsClinic(child.ClinicId, paId, doctorId))
+            {
+                return new Response<object>(false, "Not authorized for this clinic.", null);
             }
 
             var specificDate = DateTime.Today;
@@ -3279,10 +3305,16 @@ namespace VaccineAPI.Controllers
         public Response<IEnumerable<ScheduleDTO>> SendSMSAlertToParent(
             DateTime inputDate,
             int GapDays,
-            int OnlineClinicId
+            int OnlineClinicId,
+            long? paId = null,
+            long? doctorId = null
         )
         {
             {
+                if (!CallerOwnsClinic(OnlineClinicId, paId, doctorId))
+                {
+                    return new Response<IEnumerable<ScheduleDTO>>(false, "Not authorized for this clinic.", null);
+                }
                 List<Schedule> Schedules = GetAlertData(inputDate, GapDays, OnlineClinicId, _db);
                 var dbChildren = Schedules.Select(x => x.Child).Distinct().ToList();
                 foreach (var child in dbChildren)
@@ -3307,9 +3339,15 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("individual-sms-alert/{GapDays}/{childId}")]
-        public Response<IEnumerable<ScheduleDTO>> SendSMSAlertToOneChild(int GapDays, int childId)
+        public Response<IEnumerable<ScheduleDTO>> SendSMSAlertToOneChild(int GapDays, int childId, long? paId = null, long? doctorId = null)
         {
             {
+                var ownerCheckChild = _db.Childs.FirstOrDefault(c => c.Id == childId);
+                if (ownerCheckChild == null || !CallerOwnsClinic(ownerCheckChild.ClinicId, paId, doctorId))
+                {
+                    return new Response<IEnumerable<ScheduleDTO>>(false, "Not authorized for this clinic.", null);
+                }
+
                 IEnumerable<Schedule> Schedules = new List<Schedule>();
                 DateTime AddedDateTime = DateTime.UtcNow.AddHours(5).AddDays(GapDays);
                 DateTime pakistanDate = DateTime.UtcNow.AddHours(5).Date;
@@ -3515,7 +3553,7 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("doses-for-child/{childId}/{onlineClinicId}")]
-        public Response<List<DoseDTO>> GetAllDosesDueForChild(int childId, long onlineClinicId, DateTime? date = null)
+        public Response<List<DoseDTO>> GetAllDosesDueForChild(int childId, long onlineClinicId, DateTime? date = null, long? paId = null, long? doctorId = null)
         {
             DateTime selectedDate = date?.Date ?? DateTime.Today;
 
@@ -3531,13 +3569,18 @@ namespace VaccineAPI.Controllers
                 return new Response<List<DoseDTO>>(false, "Child not found.", null);
             }
 
+            if (!CallerOwnsClinic(onlineClinicId, paId, doctorId))
+            {
+                return new Response<List<DoseDTO>>(false, "Not authorized for this clinic.", null);
+            }
+
             // Fetch schedules for the child on the selected date and for the specific clinic
             var schedules = _db.Schedules
                 .Include(s => s.Dose)
                 .ThenInclude(dose => dose.Vaccine) // Include vaccine details
                 .Include(s => s.Child.Clinic.Doctor) // Include clinic and doctor details
                 .Where(s => s.ChildId == childId &&
-                            //s.Child.ClinicId == onlineClinicId && // Filter by the current online clinic
+                            s.Child.ClinicId == onlineClinicId && // Filter by the current online clinic
                             (s.IsDone == false || s.IsDone == null) &&
                             (s.IsSkip == false || s.IsSkip == null) &&
                             s.Date.Date == selectedDate)
@@ -3585,6 +3628,23 @@ namespace VaccineAPI.Controllers
             var message = $"Doses due for {child.Name} at {clinicName} (Phone: {clinicPhoneNumber}) by Dr. {doctorName}.";
 
             return new Response<List<DoseDTO>>(true, message, doseDtos);
+        }
+
+        // Persists "alert sent" status so the WhatsApp tick on the alert pages survives
+        // reload/logout-login instead of living only in frontend memory. Called fire-and-forget
+        // right after the WhatsApp deep link is opened; overwrites AlertSentAt on every resend
+        // (no send history/log — see Schedule.AlertSentAt).
+        [HttpPost("{id}/mark-alert-sent")]
+        public Response<object> MarkAlertSent(long id)
+        {
+            var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
+            if (schedule == null)
+            {
+                return new Response<object>(false, "Schedule not found.", null);
+            }
+            schedule.AlertSentAt = DateTime.UtcNow;
+            _db.SaveChanges();
+            return new Response<object>(true, null, new { schedule.Id, schedule.AlertSentAt });
         }
 
         [HttpGet("doctor-sales-pdf/{doctorId}")]

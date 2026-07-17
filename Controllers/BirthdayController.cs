@@ -275,6 +275,23 @@ Website: https://vaccinationcentre.com";
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
 
+        // Persists "birthday WhatsApp wish sent" for this year, so the tick badge on
+        // birthday-alert.page.ts survives reload/logout-login. Annual, not one-time — the
+        // frontend only treats the tick as current if LastBirthdayAlertSentAt falls within
+        // the current year, so it naturally resets each birthday with no reset job needed.
+        [HttpPost("{childId}/mark-alert-sent")]
+        public Response<object> MarkBirthdayAlertSent(long childId)
+        {
+            var child = _db.Childs.FirstOrDefault(c => c.Id == childId);
+            if (child == null)
+            {
+                return new Response<object>(false, "Child not found.", null);
+            }
+            child.LastBirthdayAlertSentAt = DateTime.UtcNow;
+            _db.SaveChanges();
+            return new Response<object>(true, null, new { child.Id, child.LastBirthdayAlertSentAt });
+        }
+
         private static List<Child> GetBirthdayAlertData(int GapDays,long OnlineClinicId,Context db)
         {
             return db

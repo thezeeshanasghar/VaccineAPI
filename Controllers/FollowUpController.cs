@@ -118,6 +118,22 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // Persists "alert sent" status so the WhatsApp tick on follow-up.page.ts survives
+        // reload/logout-login instead of living only in frontend memory. Same pattern as
+        // ScheduleController.MarkAlertSent.
+        [HttpPost("{id}/mark-alert-sent")]
+        public Response<object> MarkAlertSent(long id)
+        {
+            var followUp = _db.FollowUps.FirstOrDefault(f => f.Id == id);
+            if (followUp == null)
+            {
+                return new Response<object>(false, "Follow-up not found.", null);
+            }
+            followUp.AlertSentAt = DateTime.UtcNow;
+            _db.SaveChanges();
+            return new Response<object>(true, null, new { followUp.Id, followUp.AlertSentAt });
+        }
+
         [HttpGet("followupmail/{ChildId}")]
         public Response<object> SendAlertEmail(long ChildId)
         {

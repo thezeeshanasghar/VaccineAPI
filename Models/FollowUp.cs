@@ -23,6 +23,9 @@ namespace VaccineAPI.Models
         public virtual Child Child { get; set; } = null!;
         public long DoctorId { get; set; }
         public virtual Doctor Doctor { get; set; } = null!;
+
+        // Persisted "WhatsApp alert already sent" status, same pattern as Schedule.AlertSentAt.
+        public DateTime? AlertSentAt { get; set; }
     }
 
 }

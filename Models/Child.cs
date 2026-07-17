@@ -33,6 +33,12 @@ namespace VaccineAPI.Models
         public long ClinicId { get; set; }
         public virtual Clinic Clinic { get; set; } = null!;
 
+        // Persisted "birthday WhatsApp wish already sent" status for the current year, shown as
+        // a tick badge on birthday-alert.page.ts's WhatsApp icon. Annual, not one-time: the
+        // frontend only treats the tick as "sent" if this timestamp falls within the current
+        // year, so it naturally resets each birthday instead of needing a scheduled reset job.
+        public DateTime? LastBirthdayAlertSentAt { get; set; }
+
         public long UserId { get; set; }
         public long? AddedByPaId { get; set; }
         public DateTime? CreatedAt { get; set; }

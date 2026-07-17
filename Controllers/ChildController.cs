@@ -4387,11 +4387,11 @@ namespace VaccineAPI.Controllers
                 }
 
                 // Wrap the whole header in a single rounded box (per the reference template).
-                var headerWrapper = new PdfPTable(1) { WidthPercentage = 100, SpacingAfter = 4f };
+                var headerWrapper = new PdfPTable(1) { WidthPercentage = 100, SpacingAfter = 2f };
                 var headerBox = new PdfPCell(headerTable)
                 {
                     Border = PdfPCell.NO_BORDER, // drawn by the rounded-corner cell event instead
-                    Padding = 8f,
+                    Padding = 4f,
                     CellEvent = new RoundedBorderCellEvent(),
                 };
                 headerWrapper.AddCell(headerBox);

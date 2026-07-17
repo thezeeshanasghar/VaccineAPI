@@ -337,8 +337,9 @@ namespace VaccineAPI.Controllers
                             .ToList();
                         if (!String.IsNullOrEmpty(searchKeyword))
                         {
-                            // Normalize the search keyword
-                            searchKeyword = NormalizePhoneNumber(searchKeyword);
+                            var searchKeywordLower = searchKeyword.Trim().ToLower();
+                            // Normalize a separate copy for phone-number matching; do not mutate searchKeyword itself
+                            var normalizedPhoneKeyword = NormalizePhoneNumber(searchKeyword);
 
                             childDTOs.AddRange(
                                 _mapper.Map<List<ChildDTO>>(
@@ -346,15 +347,15 @@ namespace VaccineAPI.Controllers
                                         .Childs.Where(x =>
                                             x.Name.Trim()
                                                 .ToLower()
-                                                .Contains(searchKeyword.ToLower())
+                                                .Contains(searchKeywordLower)
                                             || x.FatherName.Trim()
                                                 .ToLower()
-                                                .Contains(searchKeyword.ToLower())
-                                            || x.Email.Trim().Contains(searchKeyword.ToLower())
+                                                .Contains(searchKeywordLower)
+                                            || x.Email.Trim().ToLower().Contains(searchKeywordLower)
                                             || NormalizePhoneNumber(
                                                     x.User.CountryCode + x.User.MobileNumber
                                                 )
-                                                .Contains(searchKeyword) // Normalize phone number
+                                                .Contains(normalizedPhoneKeyword) // Normalize phone number
                                         )
                                         .ToList<Child>()
                                 )

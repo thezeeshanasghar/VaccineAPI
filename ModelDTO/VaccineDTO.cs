@@ -13,6 +13,7 @@ namespace VaccineAPI.ModelDTO
         public int NumOfBrands { get; set; }
         public bool isInfinite { get; set; }
         public int Validity { get; set; }
+        public int? Type { get; set; }
     }
 
 }

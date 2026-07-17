@@ -18,6 +18,13 @@ namespace VaccineAPI.Models
         public bool isInfinite { get; set; }
         public int Validity { get; set; }
 
+        // Vaccine platform/classification: 1=Live, 2=Inactivated (Non-Live),
+        // 3=Subunit/Conjugate/Polysaccharide (Non-Live), 4=Toxoid (Non-Live),
+        // 5=mRNA (Non-Live), 6=Viral Vector (Non-Live).
+        // Optional (0/null = not set). Metadata only today; not read by any
+        // scheduling/rule logic yet.
+        public int? Type { get; set; }
+
         // CDC 4-day grace period exclusion. When true, this vaccine's minimum dose
         // interval is enforced as an EXACT floor at give-time (no 4-day grace) —
         // for accelerated/precise schedules CDC excludes from the grace rule.

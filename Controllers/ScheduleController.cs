@@ -3409,17 +3409,15 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpGet("send-msg/{GapDays}/{OnlineClinicId}")]
-        public Response<List<Messages>> SendMessages(int GapDays, long OnlineClinicId)
+        public Response<List<Messages>> SendMessages(int GapDays, long OnlineClinicId, long? paId = null, long? doctorId = null)
         {
-            List<Schedule> schedules = new List<Schedule>();
-            var doctor = _db.Clinics
-                .Where(x => x.Id == OnlineClinicId)
-                .Include(x => x.Doctor)
-                .First<Clinic>()
-                .Doctor;
-            var clinics = _db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
+            if (!CallerOwnsClinic(OnlineClinicId, paId, doctorId))
+            {
+                return new Response<List<Messages>>(false, "Not authorized for this clinic.", null);
+            }
 
-            long[] ClinicIDs = clinics.Select(x => x.Id).ToArray<long>();
+            List<Schedule> schedules = new List<Schedule>();
+            long[] ClinicIDs = new long[] { OnlineClinicId };
             DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
             DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
             DateTime NextDayTime = (CurrentPakDateTime.AddDays(1)).Date;

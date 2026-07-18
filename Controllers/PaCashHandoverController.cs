@@ -311,10 +311,13 @@ namespace VaccineAPI.Controllers
             {
                 var paSchedules = paRows.Where(s => s.PaymentCollectorPaId == paId).ToList();
                 var firstClinicId = paSchedules.FirstOrDefault()?.Child?.ClinicId ?? 0;
-                var cashTotal = paSchedules
+                // Collectable total: everything this PA is assigned to collect on, whether or
+                // not the money has actually changed hands yet. Do NOT rename this back to
+                // "cash total" — it is a responsibility figure, not proof cash is in hand.
+                var cashCollectableTotal = paSchedules
                     .Where(s => s.PaymentMode == "Cash")
                     .Sum(s => (decimal?)s.Amount) ?? 0m;
-                var onlineTotal = paSchedules
+                var onlineCollectableTotal = paSchedules
                     .Where(s => s.PaymentMode != "Cash")
                     .Sum(s => (decimal?)s.Amount) ?? 0m;
                 var breakdown = paSchedules.Select(s => new {
@@ -331,8 +334,11 @@ namespace VaccineAPI.Controllers
                 return new {
                     PaId = paId,
                     PaName = paNames.ContainsKey(paId) ? paNames[paId] : "",
-                    CashTotal = cashTotal,
-                    OnlineTotal = onlineTotal,
+                    // Named "Collectable" — this PA's assigned responsibility for the date, not a
+                    // claim that the cash/online payment has actually been received yet. See
+                    // per-row IsPaymentCollected in Schedules below for what's actually been paid.
+                    CashCollectableTotal = cashCollectableTotal,
+                    OnlineCollectableTotal = onlineCollectableTotal,
                     // Labelled "Lifetime" so callers know this is not today-only
                     LifetimeHandedOver = lifetimeHandedOver.ContainsKey(paId) ? lifetimeHandedOver[paId] : 0m,
                     PendingCash = cashInHandMap.ContainsKey((paId, firstClinicId)) ? cashInHandMap[(paId, firstClinicId)] : 0m,
@@ -358,8 +364,8 @@ namespace VaccineAPI.Controllers
                 doctorEntry = new {
                     PaId = (long?)null,
                     PaName = "Doctor",
-                    CashTotal = doctorRows.Where(s => s.PaymentMode == "Cash").Sum(s => (decimal?)s.Amount) ?? 0m,
-                    OnlineTotal = doctorRows.Where(s => s.PaymentMode != "Cash").Sum(s => (decimal?)s.Amount) ?? 0m,
+                    CashCollectableTotal = doctorRows.Where(s => s.PaymentMode == "Cash").Sum(s => (decimal?)s.Amount) ?? 0m,
+                    OnlineCollectableTotal = doctorRows.Where(s => s.PaymentMode != "Cash").Sum(s => (decimal?)s.Amount) ?? 0m,
                     LifetimeHandedOver = 0m,
                     PendingCash = 0m,
                     Schedules = doctorBreakdown

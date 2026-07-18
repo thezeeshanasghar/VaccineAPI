@@ -472,6 +472,28 @@ namespace VaccineAPI.Controllers
                         );
                     }
 
+                    // PA reversing a dose that was already invoiced/paid is a total cancellation
+                    // (dose + amount both void) and is allowed — but the doctor needs visibility
+                    // into which PA reversed billed work, so log it before the fields below are
+                    // wiped. PaActivityLogController.ApproveReversal already knows how to read this
+                    // ActionCode; it was just never being written.
+                    if (scheduleDTO.PaId.HasValue && wasGiven
+                        && (dbSchedule.InvoiceSubmissionId.HasValue || dbSchedule.IsPaymentCollected))
+                    {
+                        _db.PaActivityLogs.Add(new PaActivityLog
+                        {
+                            PaId = scheduleDTO.PaId.Value,
+                            DoctorId = scheduleDTO.DoctorId,
+                            ClinicId = null,
+                            PatientId = dbSchedule.ChildId,
+                            ActionCode = "UngiveAfterPayment",
+                            Description = $"{(dbSchedule.Dose?.Name ?? dbSchedule.Dose?.Vaccine?.Name ?? $"Dose {dbSchedule.DoseId}")} ungiven after invoicing for patient {dbSchedule.ChildId}",
+                            Notes = $"Amount pending reversal: {dbSchedule.Amount ?? 0} | ScheduleId: {dbSchedule.Id}",
+                            IsReversal = true,
+                            ActionDate = DateTime.UtcNow
+                        });
+                    }
+
                     dbSchedule.IsDone = scheduleDTO.IsDone;
                     dbSchedule.GivenDate = null;
                     dbSchedule.DoneAt = null;
@@ -479,6 +501,8 @@ namespace VaccineAPI.Controllers
                     dbSchedule.PaymentMode = "Cash";
                     dbSchedule.OnlineService = null;
                     dbSchedule.IsPaymentApproved = false;
+                    dbSchedule.PaymentCollectorPaId = null;
+                    dbSchedule.IsPaymentCollected = false;
                     dbSchedule.BrandId = null;
                     dbSchedule.Amount = null;
                     dbSchedule.VaccineCost = null;
@@ -2347,6 +2371,11 @@ namespace VaccineAPI.Controllers
                 .Select(x => x.Id)
                 .FirstOrDefault();
 
+            var activeAssignmentForPin = _db.PAAssignments
+                .Where(a => a.ChildId == dto.ChildId && !a.IsCancelled && !a.IsCompleted)
+                .OrderByDescending(a => a.AssignedAt)
+                .FirstOrDefault();
+
             foreach (var item in dto.Schedules)
             {
                 var schedulec = _db.Schedules.FirstOrDefault(x => x.Id == item.Id);
@@ -2357,6 +2386,16 @@ namespace VaccineAPI.Controllers
                     // "is this dose invoiced" from here on, not a date match against InvoiceDate.
                     if (invoiceSubmissionId != 0)
                         schedulec.InvoiceSubmissionId = invoiceSubmissionId;
+
+                    // Backfill the collector to whoever is actively assigned, scoped to exactly
+                    // the schedules on THIS invoice (dto.Schedules) — never a date match against
+                    // other doses that merely share this invoice's date but were never billed on it.
+                    if (activeAssignmentForPin != null
+                        && schedulec.PaymentCollectorPaId != activeAssignmentForPin.PersonalAssistantId)
+                    {
+                        schedulec.PaymentCollectorPaId = activeAssignmentForPin.PersonalAssistantId;
+                        LinkScheduleToAssignment(activeAssignmentForPin.Id, schedulec.Id);
+                    }
                 }
             }
 
@@ -2410,14 +2449,15 @@ namespace VaccineAPI.Controllers
 
             // Pin this invoice's own schedules to the assignment too — covers a dose the
             // doctor already gave (so it was excluded from any earlier undone-doses pinning)
-            // before its invoice was downloaded. Matched by GivenDate falling on the invoice's
-            // own InvoiceDate, same convention used everywhere else this invoice is matched.
-            var schedulesOnInvoice = _db.Schedules
-                .Where(s => s.ChildId == childId
-                         && s.IsDone == true
-                         && s.GivenDate.HasValue
-                         && s.GivenDate.Value.Date == invoice.InvoiceDate.Date)
-                .ToList();
+            // before its invoice was downloaded. Matched via Schedule.InvoiceSubmissionId, the
+            // FK stamped on exactly the doses submitted on this invoice (update-bulk-invoice's
+            // per-item loop) — never a date match, which would also catch an unrelated dose
+            // that merely shares this invoice's calendar date but was never billed on it.
+            var schedulesOnInvoice = invoice.Id > 0
+                ? _db.Schedules
+                    .Where(s => s.ChildId == childId && s.InvoiceSubmissionId == invoice.Id)
+                    .ToList()
+                : new List<Schedule>();
             foreach (var s in schedulesOnInvoice)
             {
                 LinkScheduleToAssignment(activeAssignment.Id, s.Id);

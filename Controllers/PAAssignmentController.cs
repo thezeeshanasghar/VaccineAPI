@@ -784,14 +784,13 @@ namespace VaccineAPI.Controllers
                     // Pin this invoice's own schedules too — covers the doctor-gave-it-then-
                     // assigned-a-PA ordering, where the dose was already done before the
                     // assignment existed and so was excluded from the undone-doses pinning
-                    // above. Matched the same way the invoice itself was just identified as
-                    // "orphaned" for this child — by GivenDate falling on the invoice's own
-                    // InvoiceDate — not a blind ChildId-only scan.
+                    // above. Matched via Schedule.InvoiceSubmissionId, the FK stamped on exactly
+                    // the doses submitted on this invoice — not by GivenDate falling on the
+                    // invoice's InvoiceDate, which would also sweep in an unrelated same-day
+                    // dose (e.g. one the parent declined and was never actually billed).
                     var schedulesOnInvoice = await _db.Schedules
                         .Where(s => s.ChildId == dto.ChildId
-                                 && s.IsDone == true
-                                 && s.GivenDate.HasValue
-                                 && s.GivenDate.Value.Date == orphanInvoice.InvoiceDate.Date)
+                                 && s.InvoiceSubmissionId == orphanInvoice.Id)
                         .ToListAsync();
                     foreach (var s in schedulesOnInvoice)
                     {

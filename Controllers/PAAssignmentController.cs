@@ -660,6 +660,31 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = pas });
         }
 
+        // PATCH /api/PAAssignment/{id}/target-date
+        // Doctor-only: set/change/clear the target date on an existing assignment — the
+        // in-place edit from PA Assignment Tracking's "No date set" pill, for assignments
+        // that were created without one (or need a correction) after the fact.
+        [HttpPatch("{id}/target-date")]
+        public async Task<IActionResult> SetTargetDate(long id, [FromBody] SetTargetDateDto dto)
+        {
+            var assignment = await _db.PAAssignments.FindAsync(id);
+            if (assignment == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+
+            if (assignment.DoctorId != dto.DoctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised" });
+
+            assignment.TargetDate = dto.TargetDate;
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            return Ok(new { IsSuccess = true });
+        }
+
         // POST /api/PAAssignment
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateAssignmentDto dto)
@@ -1042,6 +1067,12 @@ namespace VaccineAPI.Controllers
     {
         public long NewPaId { get; set; }
         public string? Notes { get; set; }
+        public DateTime? TargetDate { get; set; }
+    }
+
+    public class SetTargetDateDto
+    {
+        public long DoctorId { get; set; }
         public DateTime? TargetDate { get; set; }
     }
 

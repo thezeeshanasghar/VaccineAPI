@@ -49,6 +49,18 @@ namespace VaccineAPI.Controllers
                 ? await _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id)
                 : new Dictionary<long, InvoiceSubmission>();
 
+            // Booking.Comments (parent) / DoctorComment for assignments that originated from
+            // a booking — read-only reference for the PA, same fields already shown together
+            // on the doctor's own Bookings page.
+            var bookingIds = rawAssignments
+                .Select(a => a.BookingId)
+                .Where(id => id.HasValue)
+                .Select(id => id.GetValueOrDefault())
+                .Distinct().ToList();
+            var bookings = bookingIds.Any()
+                ? await _db.Bookings.Where(b => bookingIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id)
+                : new Dictionary<long, Booking>();
+
             // Enrich each assignment with child info, schedules, and invoice
             var result = rawAssignments.Select(a =>
             {
@@ -71,6 +83,7 @@ namespace VaccineAPI.Controllers
                         {
                             s.Id,
                             DoseName           = d.Name,
+                            s.Date,
                             s.IsDone,
                             s.IsPaymentCollected,
                             s.Amount,
@@ -86,11 +99,16 @@ namespace VaccineAPI.Controllers
                     ? invoices[a.InvoiceSubmissionId.Value]
                     : null;
 
+                var booking = a.BookingId.HasValue && bookings.ContainsKey(a.BookingId.Value)
+                    ? bookings[a.BookingId.Value]
+                    : null;
+
                 return new
                 {
                     AssignmentId  = a.Id,
                     a.AssignedAt,
                     a.Notes,
+                    a.TargetDate,
                     ChildId       = a.ChildId,
                     Name          = child != null ? child.Name      : "",
                     Gender        = child != null ? child.Gender    : "",
@@ -100,6 +118,9 @@ namespace VaccineAPI.Controllers
                     a.AssignmentStatus,
                     InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
                     HasInvoice    = invoice != null,
+                    BookingId     = a.BookingId,
+                    ParentComment = booking?.Comments ?? "",
+                    DoctorComment = booking?.DoctorComment ?? "",
                     Schedules     = schedules
                 };
             }).ToList();
@@ -501,7 +522,9 @@ namespace VaccineAPI.Controllers
                 AssignedAt                  = DateTime.UtcNow,
                 IsCompleted                 = false,
                 ReassignedFromAssignmentId  = old.Id,
-                InvoiceSubmissionId         = old.InvoiceSubmissionId
+                InvoiceSubmissionId         = old.InvoiceSubmissionId,
+                TargetDate                  = dto.TargetDate ?? old.TargetDate,
+                BookingId                   = old.BookingId
             };
 
             _db.PAAssignments.Add(newAssignment);
@@ -677,7 +700,9 @@ namespace VaccineAPI.Controllers
                     AssignedAt          = DateTime.UtcNow,
                     IsCompleted         = false,
                     IsCancelled         = false,
-                    IsAutoCreated       = false
+                    IsAutoCreated       = false,
+                    TargetDate          = dto.TargetDate,
+                    BookingId           = dto.BookingId
                 };
 
                 _db.PAAssignments.Add(assignment);
@@ -877,6 +902,133 @@ namespace VaccineAPI.Controllers
 
             return Ok(new { IsSuccess = true, ResponseData = assignments });
         }
+
+        // GET /api/PAAssignment/doctor/{doctorId}?clinicId=&paId=&status=&fromDate=&toDate=
+        // Doctor-facing tracking list — the gap GetByPA (PA-only, excludes completed) and
+        // GetActiveForDoctor (today-only, unfiltered) both leave open. Scoped through the
+        // doctor's own clinics (multi-clinic safe, same pattern as
+        // PaCashHandoverController.GetReconciliation), with clinic/PA/status/date-range
+        // filters all optional. status defaults to "Active" to match the doctor's usual
+        // "what's outstanding" view; pass "All" for full history.
+        [HttpGet("doctor/{doctorId}")]
+        public async Task<IActionResult> GetForDoctor(
+            long doctorId,
+            [FromQuery] long? clinicId = null,
+            [FromQuery] long? paId = null,
+            [FromQuery] string status = "Active",
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null)
+        {
+            var clinicIds = await _db.Clinics
+                .Where(c => c.DoctorId == doctorId)
+                .Select(c => c.Id)
+                .ToListAsync();
+
+            var query = _db.PAAssignments.Where(a =>
+                a.DoctorId == doctorId &&
+                (a.ClinicId == null || clinicIds.Contains(a.ClinicId.Value)));
+
+            if (clinicId.HasValue)
+                query = query.Where(a => a.ClinicId == clinicId.Value);
+
+            if (paId.HasValue)
+                query = query.Where(a => a.PersonalAssistantId == paId.Value);
+
+            if (fromDate.HasValue)
+                query = query.Where(a => a.AssignedAt >= fromDate.Value.Date);
+
+            if (toDate.HasValue)
+                query = query.Where(a => a.AssignedAt < toDate.Value.Date.AddDays(1));
+
+            switch (status)
+            {
+                case "Active":
+                    query = query.Where(a => !a.IsCompleted && !a.IsCancelled && a.AssignmentStatus != "PendingHandover");
+                    break;
+                case "PendingHandover":
+                    query = query.Where(a => !a.IsCompleted && !a.IsCancelled && a.AssignmentStatus == "PendingHandover");
+                    break;
+                case "Completed":
+                    query = query.Where(a => a.IsCompleted);
+                    break;
+                case "Cancelled":
+                    query = query.Where(a => a.IsCancelled);
+                    break;
+                case "All":
+                default:
+                    break;
+            }
+
+            var raw = await query.OrderByDescending(a => a.AssignedAt).ToListAsync();
+
+            var childIds = raw.Select(a => a.ChildId).Distinct().ToList();
+            var paIds    = raw.Select(a => a.PersonalAssistantId).Distinct().ToList();
+            var clinicNameIds = raw.Where(a => a.ClinicId.HasValue).Select(a => a.ClinicId!.Value).Distinct().ToList();
+
+            var children = childIds.Any()
+                ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
+                : new Dictionary<long, VaccineAPI.Models.Child>();
+
+            var pas = paIds.Any()
+                ? await _db.PersonalAssistant.Where(p => paIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id)
+                : new Dictionary<long, VaccineAPI.Models.PersonalAssistant>();
+
+            var clinicNames = clinicNameIds.Any()
+                ? await _db.Clinics.Where(c => clinicNameIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name)
+                : new Dictionary<long, string>();
+
+            var assignmentIds = raw.Select(a => a.Id).ToList();
+            var scheduleLinks = assignmentIds.Any()
+                ? await _db.PAAssignmentSchedules.Where(l => assignmentIds.Contains(l.AssignmentId)).ToListAsync()
+                : new List<PAAssignmentSchedule>();
+            var scheduleIds = scheduleLinks.Select(l => l.ScheduleId).Distinct().ToList();
+            var scheduleRows = scheduleIds.Any()
+                ? await _db.Schedules.Where(s => scheduleIds.Contains(s.Id))
+                    .Join(_db.Doses, s => s.DoseId, d => d.Id,
+                        (s, d) => new DoseRow { ScheduleId = s.Id, DoseName = d.Name, Date = s.Date, IsDone = s.IsDone, GivenByPaId = s.GivenByPaId })
+                    .ToListAsync()
+                : new List<DoseRow>();
+            var schedulesById = scheduleRows.ToDictionary(s => s.ScheduleId);
+
+            var result = raw.Select(a =>
+            {
+                var child = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
+                var pa    = pas.ContainsKey(a.PersonalAssistantId) ? pas[a.PersonalAssistantId] : null;
+
+                var doses = scheduleLinks
+                    .Where(l => l.AssignmentId == a.Id)
+                    .Where(l => schedulesById.ContainsKey(l.ScheduleId))
+                    .Select(l => schedulesById[l.ScheduleId])
+                    .ToList();
+
+                return new
+                {
+                    AssignmentId  = a.Id,
+                    a.AssignedAt,
+                    a.TargetDate,
+                    a.Notes,
+                    a.AssignmentStatus,
+                    a.IsCompleted,
+                    a.IsCancelled,
+                    a.IsAutoCreated,
+                    a.CompletedAt,
+                    a.CancelledAt,
+                    a.CancelReason,
+                    ChildId    = a.ChildId,
+                    ChildName  = child?.Name ?? "",
+                    DOB        = child?.DOB ?? (DateTime?)null,
+                    PaId       = a.PersonalAssistantId,
+                    PaName     = pa?.Name ?? "",
+                    ClinicId   = a.ClinicId,
+                    ClinicName = a.ClinicId.HasValue && clinicNames.ContainsKey(a.ClinicId.Value) ? clinicNames[a.ClinicId.Value] : "",
+                    DosesTotal = doses.Count,
+                    DosesGiven = doses.Count(d => d.IsDone),
+                    Doses      = doses
+                };
+            }).ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
+        }
     }
 
     public class CancelAssignmentDto
@@ -890,6 +1042,7 @@ namespace VaccineAPI.Controllers
     {
         public long NewPaId { get; set; }
         public string? Notes { get; set; }
+        public DateTime? TargetDate { get; set; }
     }
 
     public class RejectCancelDto
@@ -906,5 +1059,16 @@ namespace VaccineAPI.Controllers
         public long ChildId { get; set; }
         public string? Notes { get; set; }
         public List<long> ScheduleIds { get; set; } = new List<long>();
+        public DateTime? TargetDate { get; set; }
+        public long? BookingId { get; set; }
+    }
+
+    public class DoseRow
+    {
+        public long ScheduleId { get; set; }
+        public string DoseName { get; set; } = "";
+        public DateTime Date { get; set; }
+        public bool IsDone { get; set; }
+        public long? GivenByPaId { get; set; }
     }
 }

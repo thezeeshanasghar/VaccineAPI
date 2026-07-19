@@ -4426,7 +4426,10 @@ namespace VaccineAPI.Controllers
         }
 
         // PATCH /api/Schedule/confirm-invoice/{id}?doctorId=X
-        // Doctor confirms receipt of a full invoice (InvoiceSubmission row).
+        // Doctor confirms receipt of a full invoice (InvoiceSubmission row). This is the
+        // cash-handover-confirmed moment: also stamps the linked PAAssignment (if any) so
+        // PA Assignment Tracking can drop it out of Active immediately, regardless of how
+        // old the assignment is or whether the PA's own IsCompleted flag is set.
         [HttpPatch("confirm-invoice/{id}")]
         public IActionResult ConfirmInvoice(long id, [FromQuery] long doctorId)
         {
@@ -4438,6 +4441,14 @@ namespace VaccineAPI.Controllers
 
             inv.IsConfirmedByDoctor = true;
             inv.ConfirmedAt = DateTime.UtcNow;
+
+            var linkedAssignment = _db.PAAssignments.FirstOrDefault(a => a.InvoiceSubmissionId == inv.Id);
+            if (linkedAssignment != null)
+            {
+                linkedAssignment.IsCashConfirmedByDoctor = true;
+                linkedAssignment.CashConfirmedAt = DateTime.UtcNow;
+            }
+
             _db.SaveChanges();
             return Ok(new { IsSuccess = true, Message = "Invoice confirmed." });
         }

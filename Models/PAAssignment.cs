@@ -36,6 +36,14 @@ namespace VaccineAPI.Models
         public DateTime? HandoverDoneAt { get; set; }
         public long? InvoiceSubmissionId { get; set; }
 
+        // Set when the doctor confirms they've physically received the cash for this
+        // assignment's invoice (ScheduleController.ConfirmInvoice). Distinct from
+        // IsCompleted, which the PA sets when they finish the clinical/dosing work —
+        // an assignment can be IsCompleted long before the doctor gets around to
+        // confirming the cash handover.
+        public bool IsCashConfirmedByDoctor { get; set; } = false;
+        public DateTime? CashConfirmedAt { get; set; }
+
         // PA's cancellation request — set on RequestCancel, cleared/finalized on doctor approve/reject
         public DateTime? CancelRequestedAt { get; set; }
         public string? CancelRequestReason { get; set; }

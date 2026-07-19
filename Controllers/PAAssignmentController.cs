@@ -967,10 +967,15 @@ namespace VaccineAPI.Controllers
             switch (status)
             {
                 case "Active":
-                    query = query.Where(a => !a.IsCompleted && !a.IsCancelled && a.AssignmentStatus != "PendingHandover");
+                    query = query.Where(a => !a.IsCancelled && !a.IsCashConfirmedByDoctor
+                                           && !a.IsCompleted && a.AssignmentStatus != "PendingHandover");
                     break;
                 case "PendingHandover":
-                    query = query.Where(a => !a.IsCompleted && !a.IsCancelled && a.AssignmentStatus == "PendingHandover");
+                    query = query.Where(a => !a.IsCancelled && !a.IsCashConfirmedByDoctor
+                                           && !a.IsCompleted && a.AssignmentStatus == "PendingHandover");
+                    break;
+                case "CashConfirmed":
+                    query = query.Where(a => a.IsCashConfirmedByDoctor);
                     break;
                 case "Completed":
                     query = query.Where(a => a.IsCompleted);
@@ -1014,6 +1019,11 @@ namespace VaccineAPI.Controllers
                 : new List<DoseRow>();
             var schedulesById = scheduleRows.ToDictionary(s => s.ScheduleId);
 
+            var invoiceIds = raw.Where(a => a.InvoiceSubmissionId.HasValue).Select(a => a.InvoiceSubmissionId!.Value).Distinct().ToList();
+            var invoiceAmounts = invoiceIds.Any()
+                ? await _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.TotalAmount)
+                : new Dictionary<long, decimal>();
+
             var result = raw.Select(a =>
             {
                 var child = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
@@ -1038,6 +1048,8 @@ namespace VaccineAPI.Controllers
                     a.CompletedAt,
                     a.CancelledAt,
                     a.CancelReason,
+                    a.IsCashConfirmedByDoctor,
+                    a.CashConfirmedAt,
                     ChildId    = a.ChildId,
                     ChildName  = child?.Name ?? "",
                     DOB        = child?.DOB ?? (DateTime?)null,
@@ -1047,7 +1059,9 @@ namespace VaccineAPI.Controllers
                     ClinicName = a.ClinicId.HasValue && clinicNames.ContainsKey(a.ClinicId.Value) ? clinicNames[a.ClinicId.Value] : "",
                     DosesTotal = doses.Count,
                     DosesGiven = doses.Count(d => d.IsDone),
-                    Doses      = doses
+                    Doses      = doses,
+                    CashAmount = a.InvoiceSubmissionId.HasValue && invoiceAmounts.ContainsKey(a.InvoiceSubmissionId.Value)
+                        ? invoiceAmounts[a.InvoiceSubmissionId.Value] : (decimal?)null
                 };
             }).ToList();
 

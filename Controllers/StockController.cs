@@ -1033,15 +1033,15 @@ namespace VaccineAPI.Controllers
 
             using (var ms = new MemoryStream())
             {
-                var doc = new Document(PageSize.A4.Rotate(), 30, 30, 40, 30);
+                var doc = new Document(PageSize.A4, 24, 24, 40, 30);
                 var writer = PdfWriter.GetInstance(doc, ms);
                 doc.Open();
 
                 var titleFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
                 var subFont    = FontFactory.GetFont(FontFactory.HELVETICA, 10, new BaseColor(50, 50, 50));
-                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(255, 255, 255));
-                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 9, new BaseColor(26, 26, 46));
-                var boldCell   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(26, 26, 46));
+                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 7.5f, new BaseColor(255, 255, 255));
+                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 8, new BaseColor(26, 26, 46));
+                var boldCell   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8, new BaseColor(26, 26, 46));
                 var footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8, new BaseColor(120, 120, 120));
                 BaseColor headerBg  = new BaseColor(21, 101, 192);
                 BaseColor totalsBg  = new BaseColor(230, 240, 255);
@@ -1053,8 +1053,10 @@ namespace VaccineAPI.Controllers
                 doc.Add(new Paragraph(clinic.Name, subFont) { Alignment = Element.ALIGN_CENTER });
                 doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
 
+                // Widths tuned to fit portrait A4's ~527pt usable width (page 595pt - 24pt*2 margins)
+                // at font size 8 without wrapping: Item gets the most room, numeric columns are even.
                 var tbl = new PdfPTable(8) { WidthPercentage = 100, SpacingBefore = 4 };
-                tbl.SetWidths(new float[] { 2.2f, 1.1f, 1.1f, 1.2f, 1.1f, 1.1f, 1.1f, 1.2f });
+                tbl.SetWidths(new float[] { 2.4f, 1f, 1.05f, 1.05f, 0.9f, 1f, 1f, 1.05f });
 
                 string[] colHeaders = { "Item", "Opening", "Purchase", "Direct Sale", "Given", "Adjusted", "Transfer", "Closing" };
                 foreach (var h in colHeaders)
@@ -1063,7 +1065,7 @@ namespace VaccineAPI.Controllers
                     tbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
                     {
                         BackgroundColor = headerBg, Border = Rectangle.NO_BORDER,
-                        Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
+                        Padding = 4, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
                     });
                 }
 

@@ -909,6 +909,202 @@ namespace VaccineAPI.Controllers
             public int Adjusted;
         }
 
+        // Shared by the JSON and PDF stock-position endpoints: one row per brand covering the
+        // whole [from, to] window (no day-by-day breakdown), listing only brands where opening
+        // or closing stock is non-zero — dead/never-stocked items are omitted by the caller.
+        private async Task<(Clinic clinic, List<VaccineAPI.ModelDTO.StockPositionRowDTO> rows)> BuildStockPositionRows(
+            long clinicId, long doctorId, DateTime from, DateTime to)
+        {
+            var clinic = await _db.Clinics.FindAsync(clinicId);
+            if (clinic == null || !await CallerOwnsClinicAsync(clinic, doctorId))
+                return (clinic, null);
+
+            var soldBrands = await _db.Schedules
+                .Include(s => s.Child)
+                .Where(s => s.Child.ClinicId == clinicId && s.IsDone == true && s.BrandId != null)
+                .Select(s => s.BrandId.Value).Distinct().ToListAsync();
+            var purchBrands = await _db.Stocks
+                .Include(s => s.Bill)
+                .Where(s => s.BillId != null && s.Bill.ClinicId == clinicId && !s.Bill.BillNo.StartsWith("XFER-"))
+                .Select(s => s.BrandId).Distinct().ToListAsync();
+            var xferBrands = await _db.StockTransfers
+                .Where(t => t.ToClinicId == clinicId || t.FromClinicId == clinicId)
+                .Select(t => t.BrandId).Distinct().ToListAsync();
+            var adjBrands = await _db.AdjustStocks
+                .Where(a => a.ClinicId == clinicId)
+                .Select(a => a.BrandId).Distinct().ToListAsync();
+            var directSaleBrands = await _db.DirectSales
+                .Where(d => d.ClinicId == clinicId)
+                .Select(d => d.BrandId).Distinct().ToListAsync();
+            var brandIds = soldBrands.Concat(purchBrands).Concat(xferBrands).Concat(adjBrands).Concat(directSaleBrands).Distinct().ToList();
+
+            var rows = new List<VaccineAPI.ModelDTO.StockPositionRowDTO>();
+            if (brandIds.Count == 0)
+                return (clinic, rows);
+
+            var brandsLookup = await _db.Brands.Where(b => brandIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.Name);
+
+            DateTime? stockPeriodStart = clinic.StockPeriodStart;
+            DateTime floorDate = stockPeriodStart?.Date ?? DateTime.MinValue;
+            DateTime effFrom = from.Date < floorDate ? floorDate : from.Date;
+
+            foreach (var bid in brandIds)
+            {
+                int opening = await ComputeStockUpTo(_db, clinicId, bid, effFrom.AddDays(-1), stockPeriodStart);
+
+                var activeDates = await _db.InventoryTransactions
+                    .Where(t => t.ClinicId == clinicId && t.BrandId == bid
+                             && t.EventDate.Date >= effFrom && t.EventDate.Date <= to.Date
+                             && t.QuantityDelta != 0)
+                    .Select(t => t.EventDate.Date)
+                    .Distinct().ToListAsync();
+
+                int totSold = 0, totDirectSale = 0, totTransfer = 0, totPurchased = 0, totAdjusted = 0;
+                foreach (var d in activeDates)
+                {
+                    var mv = await ComputeDayMovement(_db, clinicId, bid, d);
+                    totSold       += mv.Sold;
+                    totDirectSale += mv.DirectSale;
+                    totTransfer   += mv.Transfer;
+                    totPurchased  += mv.Purchased;
+                    totAdjusted   += mv.Adjusted;
+                }
+
+                int closing = opening - totSold - totDirectSale + totTransfer + totPurchased + totAdjusted;
+                if (opening == 0 && closing == 0) continue;
+
+                rows.Add(new VaccineAPI.ModelDTO.StockPositionRowDTO
+                {
+                    BrandId = bid,
+                    BrandName = brandsLookup.TryGetValue(bid, out var n) ? n : $"Brand {bid}",
+                    Opening = opening,
+                    Purchased = totPurchased,
+                    DirectSale = totDirectSale,
+                    Given = totSold,
+                    Adjusted = totAdjusted,
+                    Transfer = totTransfer,
+                    Closing = closing
+                });
+            }
+
+            return (clinic, rows.OrderBy(r => r.BrandName).ToList());
+        }
+
+        // GET /api/stock/stock-position-report?clinicId=X&from=DATE&to=DATE
+        // One row per brand with opening/closing stock > 0 across the whole window — for the
+        // on-screen "Stock Position Report" table (multi-brand, not the single-brand items-report).
+        [HttpGet("stock-position-report")]
+        public async Task<IActionResult> GetStockPositionReport(
+            [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
+            [FromQuery] DateTime from,
+            [FromQuery] DateTime to)
+        {
+            var (clinic, rows) = await BuildStockPositionRows(clinicId, doctorId, from, to);
+            if (clinic == null)
+                return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (rows == null)
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
+
+            return Ok(new VaccineAPI.ModelDTO.StockPositionReportDTO
+            {
+                ClinicName = clinic.Name,
+                FromDate = from.ToString("dd-MM-yyyy"),
+                ToDate = to.ToString("dd-MM-yyyy"),
+                Rows = rows
+            });
+        }
+
+        // GET /api/stock/stock-position-report/pdf?clinicId=X&from=DATE&to=DATE
+        [HttpGet("stock-position-report/pdf")]
+        public async Task<IActionResult> GetStockPositionReportPdf(
+            [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
+            [FromQuery] DateTime from,
+            [FromQuery] DateTime to)
+        {
+            var (clinic, rows) = await BuildStockPositionRows(clinicId, doctorId, from, to);
+            if (clinic == null)
+                return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (rows == null)
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
+            if (rows.Count == 0)
+                return NotFound(new { IsSuccess = false, Message = "No stock movement data for the selected period" });
+
+            using (var ms = new MemoryStream())
+            {
+                var doc = new Document(PageSize.A4.Rotate(), 30, 30, 40, 30);
+                var writer = PdfWriter.GetInstance(doc, ms);
+                doc.Open();
+
+                var titleFont  = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, new BaseColor(21, 101, 192));
+                var subFont    = FontFactory.GetFont(FontFactory.HELVETICA, 10, new BaseColor(50, 50, 50));
+                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(255, 255, 255));
+                var cellFont   = FontFactory.GetFont(FontFactory.HELVETICA, 9, new BaseColor(26, 26, 46));
+                var boldCell   = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 9, new BaseColor(26, 26, 46));
+                var footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8, new BaseColor(120, 120, 120));
+                BaseColor headerBg  = new BaseColor(21, 101, 192);
+                BaseColor totalsBg  = new BaseColor(230, 240, 255);
+                BaseColor altBg     = new BaseColor(245, 248, 255);
+                BaseColor whiteBg   = new BaseColor(255, 255, 255);
+                BaseColor borderClr = new BaseColor(200, 200, 200);
+
+                doc.Add(new Paragraph("STOCK POSITION REPORT", titleFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 6 });
+                doc.Add(new Paragraph(clinic.Name, subFont) { Alignment = Element.ALIGN_CENTER });
+                doc.Add(new Paragraph($"FROM {from:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
+
+                var tbl = new PdfPTable(8) { WidthPercentage = 100, SpacingBefore = 4 };
+                tbl.SetWidths(new float[] { 2.2f, 1.1f, 1.1f, 1.2f, 1.1f, 1.1f, 1.1f, 1.2f });
+
+                string[] colHeaders = { "Item", "Opening", "Purchase", "Direct Sale", "Given", "Adjusted", "Transfer", "Closing" };
+                foreach (var h in colHeaders)
+                {
+                    bool right = h != "Item";
+                    tbl.AddCell(new PdfPCell(new Phrase(h, headerFont))
+                    {
+                        BackgroundColor = headerBg, Border = Rectangle.NO_BORDER,
+                        Padding = 5, HorizontalAlignment = right ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT
+                    });
+                }
+
+                bool alt = false;
+                int sOpen = 0, sPurch = 0, sDirect = 0, sGiven = 0, sAdj = 0, sXfer = 0, sClose = 0;
+                foreach (var r in rows)
+                {
+                    var bg = alt ? altBg : whiteBg;
+                    alt = !alt;
+
+                    tbl.AddCell(Cell(r.BrandName, cellFont, bg, borderClr));
+                    tbl.AddCell(CellR(r.Opening.ToString(), cellFont, bg, borderClr));
+                    tbl.AddCell(CellR(r.Purchased.ToString(), cellFont, bg, borderClr));
+                    tbl.AddCell(CellR(r.DirectSale.ToString(), cellFont, bg, borderClr));
+                    tbl.AddCell(CellR(r.Given.ToString(), cellFont, bg, borderClr));
+                    tbl.AddCell(CellR(r.Adjusted.ToString(), cellFont, bg, borderClr));
+                    tbl.AddCell(CellR(r.Transfer.ToString(), cellFont, bg, borderClr));
+                    tbl.AddCell(CellR(r.Closing.ToString(), boldCell, bg, borderClr));
+
+                    sOpen += r.Opening; sPurch += r.Purchased; sDirect += r.DirectSale;
+                    sGiven += r.Given; sAdj += r.Adjusted; sXfer += r.Transfer; sClose += r.Closing;
+                }
+
+                tbl.AddCell(new PdfPCell(new Phrase("Total", boldCell)) { BackgroundColor = totalsBg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4 });
+                tbl.AddCell(CellR(sOpen.ToString(), boldCell, totalsBg, borderClr));
+                tbl.AddCell(CellR(sPurch.ToString(), boldCell, totalsBg, borderClr));
+                tbl.AddCell(CellR(sDirect.ToString(), boldCell, totalsBg, borderClr));
+                tbl.AddCell(CellR(sGiven.ToString(), boldCell, totalsBg, borderClr));
+                tbl.AddCell(CellR(sAdj.ToString(), boldCell, totalsBg, borderClr));
+                tbl.AddCell(CellR(sXfer.ToString(), boldCell, totalsBg, borderClr));
+                tbl.AddCell(CellR(sClose.ToString(), boldCell, totalsBg, borderClr));
+
+                doc.Add(tbl);
+                doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8 });
+
+                doc.Close();
+                writer.Close();
+                return File(ms.ToArray(), "application/pdf", ReportFileName.Build("StockPositionReport", clinic.Name));
+            }
+        }
+
         // GET /api/stock/items-purchase-report?clinicId=X&brandId=X&from=DATE&to=DATE
         [HttpGet("items-purchase-report")]
         public async Task<IActionResult> GetItemsPurchaseReport(

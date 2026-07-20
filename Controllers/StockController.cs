@@ -948,13 +948,59 @@ namespace VaccineAPI.Controllers
             DateTime floorDate = stockPeriodStart?.Date ?? DateTime.MinValue;
             DateTime effFrom = from.Date < floorDate ? floorDate : from.Date;
 
+            // A brand's own first stock-adding event (Purchase/AdjustIncrease/TransferIn/
+            // OpeningBalance) — a give recorded before this date happened when the brand had no
+            // stock in the ledger yet, so it must not be treated as consuming a pre-window
+            // opening balance that didn't exist. Brands with no such event ever (only
+            // Administer/Unadminister rows, e.g. given via OHF-mistagged or never-restocked
+            // brands) get no floor at all — see HasNoRecord below.
+            var firstStockDates = await _db.InventoryTransactions
+                .Where(t => t.ClinicId == clinicId && brandIds.Contains(t.BrandId)
+                         && (t.SourceType == InventoryTransactionType.Purchase
+                          || t.SourceType == InventoryTransactionType.AdjustIncrease
+                          || t.SourceType == InventoryTransactionType.TransferIn
+                          || t.SourceType == InventoryTransactionType.OpeningBalance))
+                .GroupBy(t => t.BrandId)
+                .Select(g => new { BrandId = g.Key, FirstDate = g.Min(t => t.EventDate.Date) })
+                .ToDictionaryAsync(x => x.BrandId, x => x.FirstDate);
+
             foreach (var bid in brandIds)
             {
-                int opening = await ComputeStockUpTo(_db, clinicId, bid, effFrom.AddDays(-1), stockPeriodStart);
+                string brandName = brandsLookup.TryGetValue(bid, out var n) ? n : $"Brand {bid}";
+
+                if (!firstStockDates.TryGetValue(bid, out var brandFirstStockDate))
+                {
+                    // Never stocked at this clinic — every Administer/Unadminister row for this
+                    // brand happened with no opening balance or purchase behind it. No valid
+                    // Opening/Closing exists for any window.
+                    rows.Add(new VaccineAPI.ModelDTO.StockPositionRowDTO
+                    {
+                        BrandId = bid,
+                        BrandName = brandName,
+                        HasNoRecord = true
+                    });
+                    continue;
+                }
+
+                if (to.Date < brandFirstStockDate)
+                {
+                    // The requested window ends before this brand's stock ever existed.
+                    rows.Add(new VaccineAPI.ModelDTO.StockPositionRowDTO
+                    {
+                        BrandId = bid,
+                        BrandName = brandName,
+                        HasNoRecord = true
+                    });
+                    continue;
+                }
+
+                DateTime brandEffFrom = effFrom < brandFirstStockDate ? brandFirstStockDate : effFrom;
+
+                int opening = await ComputeStockUpTo(_db, clinicId, bid, brandEffFrom.AddDays(-1), stockPeriodStart);
 
                 var activeDates = await _db.InventoryTransactions
                     .Where(t => t.ClinicId == clinicId && t.BrandId == bid
-                             && t.EventDate.Date >= effFrom && t.EventDate.Date <= to.Date
+                             && t.EventDate.Date >= brandEffFrom && t.EventDate.Date <= to.Date
                              && t.QuantityDelta != 0)
                     .Select(t => t.EventDate.Date)
                     .Distinct().ToListAsync();
@@ -976,7 +1022,7 @@ namespace VaccineAPI.Controllers
                 rows.Add(new VaccineAPI.ModelDTO.StockPositionRowDTO
                 {
                     BrandId = bid,
-                    BrandName = brandsLookup.TryGetValue(bid, out var n) ? n : $"Brand {bid}",
+                    BrandName = brandName,
                     Opening = opening,
                     Purchased = totPurchased,
                     DirectSale = totDirectSale,
@@ -1069,6 +1115,8 @@ namespace VaccineAPI.Controllers
                     });
                 }
 
+                var noRecordFont = FontFactory.GetFont(FontFactory.HELVETICA_OBLIQUE, 8, new BaseColor(120, 120, 120));
+
                 bool alt = false;
                 int sOpen = 0, sPurch = 0, sDirect = 0, sGiven = 0, sAdj = 0, sXfer = 0, sClose = 0;
                 foreach (var r in rows)
@@ -1077,6 +1125,17 @@ namespace VaccineAPI.Controllers
                     alt = !alt;
 
                     tbl.AddCell(Cell(r.BrandName, cellFont, bg, borderClr));
+
+                    if (r.HasNoRecord)
+                    {
+                        tbl.AddCell(new PdfPCell(new Phrase("No record — stock not yet added at this clinic", noRecordFont))
+                        {
+                            Colspan = 6, BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4
+                        });
+                        tbl.AddCell(new PdfPCell(new Phrase("—", noRecordFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = borderClr, Padding = 4, HorizontalAlignment = Element.ALIGN_RIGHT });
+                        continue;
+                    }
+
                     tbl.AddCell(CellR(r.Opening.ToString(), cellFont, bg, borderClr));
                     tbl.AddCell(CellR(r.Purchased.ToString(), cellFont, bg, borderClr));
                     tbl.AddCell(CellR(r.DirectSale.ToString(), cellFont, bg, borderClr));

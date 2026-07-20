@@ -712,17 +712,49 @@ namespace VaccineAPI.Controllers
                 // Effective window is clamped to the floor — nothing before the reset is reportable.
                 DateTime effFrom = from.Date < floorDate ? floorDate : from.Date;
 
+                var firstStockDates = await GetFirstStockEventDates(clinicId, brandIds);
+
                 foreach (var bid in brandIds)
                 {
                     string itemName = brandsLookup.TryGetValue(bid, out var n) ? n : $"Brand {bid}";
 
+                    if (!firstStockDates.TryGetValue(bid, out var brandFirstStockDate))
+                    {
+                        // Never stocked at this clinic — no valid Opening/Closing exists at all.
+                        doc.Add(new Paragraph("ITEM REPORT", titleFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 6 });
+                        doc.Add(new Paragraph($"ITEM: {itemName}", subFont) { Alignment = Element.ALIGN_CENTER });
+                        doc.Add(new Paragraph(clinicName, subFont) { Alignment = Element.ALIGN_CENTER });
+                        doc.Add(new Paragraph($"FROM {effFrom:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
+                        doc.Add(new Paragraph("No record — stock not yet added at this clinic.", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 8 });
+                        if (bid != brandIds.Last()) doc.NewPage();
+                        continue;
+                    }
+
+                    if (to.Date < brandFirstStockDate)
+                    {
+                        // The requested window ends before this brand's stock ever existed.
+                        doc.Add(new Paragraph("ITEM REPORT", titleFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 6 });
+                        doc.Add(new Paragraph($"ITEM: {itemName}", subFont) { Alignment = Element.ALIGN_CENTER });
+                        doc.Add(new Paragraph(clinicName, subFont) { Alignment = Element.ALIGN_CENTER });
+                        doc.Add(new Paragraph($"FROM {effFrom:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
+                        doc.Add(new Paragraph("No record — stock not yet added at this clinic.", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 8 });
+                        if (bid != brandIds.Last()) doc.NewPage();
+                        continue;
+                    }
+
+                    // Floor at the LATER of the clinic-wide reset and this brand's own first
+                    // stock-adding event — a give before the brand had any stock in the ledger
+                    // must not be treated as consuming a pre-window opening balance that didn't
+                    // exist yet (see project_stock_management memory / HAVRIX investigation).
+                    DateTime brandEffFrom = effFrom < brandFirstStockDate ? brandFirstStockDate : effFrom;
+
                     // Opening = ledger balance the day before the window opens, floored at the reset.
-                    int openingStock = await ComputeStockUpTo(_db, clinicId, bid, effFrom.AddDays(-1), stockPeriodStart);
+                    int openingStock = await ComputeStockUpTo(_db, clinicId, bid, brandEffFrom.AddDays(-1), stockPeriodStart);
 
                     // All ledger event dates in range for this brand (single source — no 6-table union).
                     var activeDates = await _db.InventoryTransactions
                         .Where(t => t.ClinicId == clinicId && t.BrandId == bid
-                                 && t.EventDate.Date >= effFrom && t.EventDate.Date <= to.Date
+                                 && t.EventDate.Date >= brandEffFrom && t.EventDate.Date <= to.Date
                                  && t.QuantityDelta != 0)
                         .Select(t => t.EventDate.Date)
                         .Distinct().OrderBy(d => d).ToListAsync();
@@ -733,12 +765,12 @@ namespace VaccineAPI.Controllers
                     doc.Add(new Paragraph("ITEM REPORT", titleFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 6 });
                     doc.Add(new Paragraph($"ITEM: {itemName}", subFont) { Alignment = Element.ALIGN_CENTER });
                     doc.Add(new Paragraph(clinicName, subFont) { Alignment = Element.ALIGN_CENTER });
-                    doc.Add(new Paragraph($"FROM {effFrom:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
+                    doc.Add(new Paragraph($"FROM {brandEffFrom:dd-MM-yyyy}  TO  {to:dd-MM-yyyy}", subFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
 
-                    if (stockPeriodStart.HasValue && from.Date < floorDate)
+                    if (brandEffFrom > from.Date)
                     {
                         doc.Add(new Paragraph(
-                            $"Note: Stock tracking for this clinic starts {stockPeriodStart.Value:dd-MM-yyyy}. " +
+                            $"Note: Stock tracking for {itemName} starts {brandEffFrom:dd-MM-yyyy}. " +
                             $"Figures before this date are not shown.",
                             footerFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 8 });
                     }
@@ -821,6 +853,25 @@ namespace VaccineAPI.Controllers
                 string fname = ReportFileName.Build(itemsReportType, clinicName);
                 return File(ms.ToArray(), "application/pdf", fname);
             }
+        }
+
+        // A brand's own first stock-adding event (Purchase/AdjustIncrease/TransferIn/
+        // OpeningBalance) — a give recorded before this date happened when the brand had no
+        // stock in the ledger yet, so it must not be treated as consuming a pre-window opening
+        // balance that didn't exist. Brands with no such event ever (only Administer/
+        // Unadminister rows — e.g. an OHF-mistagged or never-restocked brand) are simply absent
+        // from the returned dictionary; callers must handle that as "no valid floor exists."
+        private async Task<Dictionary<long, DateTime>> GetFirstStockEventDates(long clinicId, List<long> brandIds)
+        {
+            return await _db.InventoryTransactions
+                .Where(t => t.ClinicId == clinicId && brandIds.Contains(t.BrandId)
+                         && (t.SourceType == InventoryTransactionType.Purchase
+                          || t.SourceType == InventoryTransactionType.AdjustIncrease
+                          || t.SourceType == InventoryTransactionType.TransferIn
+                          || t.SourceType == InventoryTransactionType.OpeningBalance))
+                .GroupBy(t => t.BrandId)
+                .Select(g => new { BrandId = g.Key, FirstDate = g.Min(t => t.EventDate.Date) })
+                .ToDictionaryAsync(x => x.BrandId, x => x.FirstDate);
         }
 
         private static PdfPCell Cell(string text, Font font, BaseColor bg, BaseColor border) =>
@@ -948,21 +999,7 @@ namespace VaccineAPI.Controllers
             DateTime floorDate = stockPeriodStart?.Date ?? DateTime.MinValue;
             DateTime effFrom = from.Date < floorDate ? floorDate : from.Date;
 
-            // A brand's own first stock-adding event (Purchase/AdjustIncrease/TransferIn/
-            // OpeningBalance) — a give recorded before this date happened when the brand had no
-            // stock in the ledger yet, so it must not be treated as consuming a pre-window
-            // opening balance that didn't exist. Brands with no such event ever (only
-            // Administer/Unadminister rows, e.g. given via OHF-mistagged or never-restocked
-            // brands) get no floor at all — see HasNoRecord below.
-            var firstStockDates = await _db.InventoryTransactions
-                .Where(t => t.ClinicId == clinicId && brandIds.Contains(t.BrandId)
-                         && (t.SourceType == InventoryTransactionType.Purchase
-                          || t.SourceType == InventoryTransactionType.AdjustIncrease
-                          || t.SourceType == InventoryTransactionType.TransferIn
-                          || t.SourceType == InventoryTransactionType.OpeningBalance))
-                .GroupBy(t => t.BrandId)
-                .Select(g => new { BrandId = g.Key, FirstDate = g.Min(t => t.EventDate.Date) })
-                .ToDictionaryAsync(x => x.BrandId, x => x.FirstDate);
+            var firstStockDates = await GetFirstStockEventDates(clinicId, brandIds);
 
             foreach (var bid in brandIds)
             {

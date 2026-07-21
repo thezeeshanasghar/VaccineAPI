@@ -4653,9 +4653,11 @@ namespace VaccineAPI.Controllers
         // verification note + contact strip (no duplicate clinic line / MR No here).
 
         // 3-column table for address, phone, email
+        Font phoneFont = PlexSans(8, bold: true);
+
         PdfPTable contactTable = new PdfPTable(3);
         contactTable.TotalWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
-        contactTable.SetWidths(new float[] { 2, 1, 2 });
+        contactTable.SetWidths(new float[] { 2, 1.6f, 2 });
 
         PdfPCell addressCell = new PdfPCell(new Phrase(address, contactFont))
         {
@@ -4664,11 +4666,12 @@ namespace VaccineAPI.Controllers
             Padding = 5,
             BackgroundColor = new BaseColor(205, 205, 205)
         };
-        PdfPCell phoneCell = new PdfPCell(new Phrase($"Phone: {phoneNumber}", contactFont))
+        PdfPCell phoneCell = new PdfPCell(new Phrase($"Phone: {phoneNumber}", phoneFont))
         {
             Border = Rectangle.NO_BORDER,
             HorizontalAlignment = Element.ALIGN_CENTER,
             Padding = 5,
+            NoWrap = true,
             BackgroundColor = new BaseColor(205, 205, 205)
         };
         PdfPCell emailCell = new PdfPCell(new Phrase(email, contactFont))

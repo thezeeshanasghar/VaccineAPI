@@ -2063,12 +2063,21 @@ namespace VaccineAPI.Controllers
 
                         // Ungive transition: dose was given before, now being ungiven. Restore
                         // inventory for whatever brand was actually deducted (previousBrandId).
+                        //
+                        // Uses ResolveClinicIdForUngive (the SAME resolver the single-give path
+                        // uses), not ResolveClinicIdForStock — the latter answers "what clinic is
+                        // this actor currently working from," which is right for a GIVE but wrong
+                        // for an UNGIVE: if the actor's online-clinic assignment changed since the
+                        // original give, it silently points the BrandAmount lookup below at the
+                        // wrong clinic. ResolveClinicIdForUngive instead prefers matching the real
+                        // Stock batch (brand+lot+expiry) the give actually consumed. A missed
+                        // lookup here used to just skip the restore silently while schedule.IsDone
+                        // was still flipped above as if the ungive fully happened — this is now a
+                        // hard failure instead, matching the single-give/ungive path's own contract.
                         if (wasIsDone == true && scheduleDTO.IsDone == false && previousBrandId.HasValue)
                         {
-                            var ungiveClinicId = ResolveClinicIdForStock(
-                                scheduleDTO.DoctorId,
-                                dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0
-                            );
+                            var ungiveClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId,
+                                dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0);
 
                             if (ungiveClinicId > 0)
                             {
@@ -2080,22 +2089,30 @@ namespace VaccineAPI.Controllers
                                         .Select(c => c.DoctorId)
                                         .FirstOrDefault();
 
-                                    if (ungiveDoctorId > 0)
+                                    if (ungiveDoctorId <= 0)
                                     {
-                                        var ungiveInventory = _db.BrandAmounts
-                                            .Where(b => b.BrandId == previousBrandId
-                                                     && b.DoctorId == ungiveDoctorId
-                                                     && b.ClinicId == ungiveClinicId)
-                                            .FirstOrDefault();
-
-                                        // UnadministerBulkSync mirrors the original give (restores
-                                        // only if that give actually consumed); safe to call even
-                                        // for OHF/historical/pre-reset gives (it no-ops the stock).
-                                        if (ungiveInventory != null)
-                                        {
-                                            _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
-                                        }
+                                        return new Response<ScheduleDTO>(false,
+                                            $"Unable to resolve inventory owner doctor for rollback clinic {ungiveClinicId} (schedule {schedule.Id}).", null);
                                     }
+
+                                    var ungiveInventory = _db.BrandAmounts
+                                        .Where(b => b.BrandId == previousBrandId
+                                                 && b.DoctorId == ungiveDoctorId
+                                                 && b.ClinicId == ungiveClinicId)
+                                        .FirstOrDefault();
+
+                                    if (ungiveInventory == null)
+                                    {
+                                        // Never silently skip a stock restore — that leaves the dose
+                                        // ungiven with nothing credited back, a permanent invisible gap.
+                                        return new Response<ScheduleDTO>(false,
+                                            $"Inventory row not found for brand {previousBrandId} at clinic {ungiveClinicId} (schedule {schedule.Id}).", null);
+                                    }
+
+                                    // UnadministerBulkSync mirrors the original give (restores
+                                    // only if that give actually consumed); safe to call even
+                                    // for OHF/historical/pre-reset gives (it no-ops the stock).
+                                    _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
                                 }
                             }
                         }

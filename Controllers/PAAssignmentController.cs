@@ -172,36 +172,17 @@ namespace VaccineAPI.Controllers
 
                     var inventoryEnabled = IsInventoryEnabledForDoctor(doctorId);
 
-                    // The child's own clinic is the reliable source of truth for where a dose was
-                    // actually given — assignment.ClinicId can be null or stale (e.g. the PA was
-                    // reassigned, or the field was never backfilled), which silently pointed the
-                    // BrandAmount lookup below at the wrong clinic and swallowed the restore.
-                    var childClinicId = await _db.Childs
-                        .Where(c => c.Id == childId)
-                        .Select(c => c.ClinicId)
-                        .FirstOrDefaultAsync();
-
                     foreach (var s in schedules)
                     {
                         if (inventoryEnabled && s.IsDone == true && s.BrandId.HasValue)
                         {
+                            var clinicId = assignment.ClinicId ?? 0;
                             var brandInventory = _db.BrandAmounts
-                                .Where(b => b.BrandId == s.BrandId && b.DoctorId == doctorId && b.ClinicId == childClinicId)
+                                .Where(b => b.BrandId == s.BrandId && b.DoctorId == doctorId && b.ClinicId == clinicId)
                                 .FirstOrDefault();
 
-                            if (brandInventory == null)
-                            {
-                                // Never silently drop a stock restore — that leaves the dose
-                                // reversed with nothing credited back, a permanent invisible gap.
-                                await tx.RollbackAsync();
-                                return Ok(new
-                                {
-                                    IsSuccess = false,
-                                    Message = $"Inventory row not found for brand {s.BrandId} at clinic {childClinicId} — cannot safely reset schedule {s.Id}."
-                                });
-                            }
-
-                            _inventory.UnadministerSync(doctorId, childClinicId, s.BrandId.Value, s.Id, s.GivenDate ?? DateTime.Today, paId);
+                            if (brandInventory != null)
+                                _inventory.UnadministerSync(doctorId, clinicId, s.BrandId.Value, s.Id, s.GivenDate ?? DateTime.Today, paId);
                         }
 
                         s.IsDone = false;

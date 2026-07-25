@@ -331,6 +331,9 @@ namespace VaccineAPI.Controllers
 
                    foreach (var clinic in doctorClinics)
                     {
+                        // Load the clinic's children WITH their parent User so the phone-number
+                        // clause below can read User.CountryCode/MobileNumber. (clinic.Childs
+                        // from the Clinics query has no User loaded and must not be filtered on.)
                         var doctorChilds = _db
                             .Childs.Include(x => x.User)
                             .Where(x => x.ClinicId == clinic.Id)
@@ -340,11 +343,15 @@ namespace VaccineAPI.Controllers
                             var searchKeywordLower = searchKeyword.Trim().ToLower();
                             // Normalize a separate copy for phone-number matching; do not mutate searchKeyword itself
                             var normalizedPhoneKeyword = NormalizePhoneNumber(searchKeyword);
+                            // Only match on phone when the keyword actually normalizes to digits.
+                            // Otherwise NormalizePhoneNumber("") -> "" and Contains("") is true for
+                            // EVERY child, turning a name search into a match-all.
+                            bool hasPhoneKeyword = !String.IsNullOrEmpty(normalizedPhoneKeyword);
 
                             childDTOs.AddRange(
                                 _mapper.Map<List<ChildDTO>>(
-                                    clinic
-                                        .Childs.Where(x =>
+                                    doctorChilds
+                                        .Where(x =>
                                             x.Name.Trim()
                                                 .ToLower()
                                                 .Contains(searchKeywordLower)
@@ -352,10 +359,12 @@ namespace VaccineAPI.Controllers
                                                 .ToLower()
                                                 .Contains(searchKeywordLower)
                                             || x.Email.Trim().ToLower().Contains(searchKeywordLower)
-                                            || NormalizePhoneNumber(
-                                                    x.User.CountryCode + x.User.MobileNumber
-                                                )
-                                                .Contains(normalizedPhoneKeyword) // Normalize phone number
+                                            || (hasPhoneKeyword
+                                                && x.User != null
+                                                && NormalizePhoneNumber(
+                                                        x.User.CountryCode + x.User.MobileNumber
+                                                    )
+                                                    .Contains(normalizedPhoneKeyword)) // Normalize phone number
                                         )
                                         .ToList<Child>()
                                 )
@@ -364,7 +373,7 @@ namespace VaccineAPI.Controllers
                         else
                         {
                             childDTOs.AddRange(
-                                _mapper.Map<List<ChildDTO>>(clinic.Childs.ToList<Child>())
+                                _mapper.Map<List<ChildDTO>>(doctorChilds.ToList<Child>())
                             );
                         }
                     }

@@ -2102,6 +2102,7 @@ namespace VaccineAPI.Controllers
                 List<ChildDTO> childDTOs = new List<ChildDTO>();
 
                 dbChildrenResults = _db.Childs
+                                        .Include(x => x.User)
                                         .Where(c => c.Name.ToLower().Contains(keyword.ToLower()) ||
                                                     c.FatherName.ToLower().Contains(keyword.ToLower()))
                                         .ToList();
@@ -2109,7 +2110,8 @@ namespace VaccineAPI.Controllers
 
                 foreach (var item in childDTOs)
                 {
-                    item.MobileNumber = dbChildrenResults.Where(x => x.Id == item.Id).FirstOrDefault().User.MobileNumber;
+                    var match = dbChildrenResults.Where(x => x.Id == item.Id).FirstOrDefault();
+                    item.MobileNumber = match?.User?.MobileNumber;
                 }
 
                 return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
@@ -2179,7 +2181,8 @@ namespace VaccineAPI.Controllers
 
             foreach (var item in childDTOs)
             {
-                item.MobileNumber = dbChildrenResults.Where(x => x.Id == item.Id).FirstOrDefault().User.MobileNumber;
+                var match = dbChildrenResults.Where(x => x.Id == item.Id).FirstOrDefault();
+                item.MobileNumber = match?.User?.MobileNumber;
             }
 
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);

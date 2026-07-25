@@ -177,10 +177,16 @@ namespace VaccineAPI.Controllers
             foreach (var c in counters)
             {
                 int ledgerBal = ledger.TryGetValue(c.BrandId, out var v) ? v : 0;
-                if (c.Count != ledgerBal || c.NeedsReconcile)
+                // v2: floor at zero like every other write path (InventoryTransactionService.cs
+                // lines 169/308/322) — a raw negative ledger sum must never be written verbatim.
+                int flooredBal = Math.Max(0, ledgerBal);
+                if (c.Count != flooredBal || c.NeedsReconcile)
                 {
-                    c.Count = ledgerBal;
-                    c.NeedsReconcile = false;
+                    c.Count = flooredBal;
+                    // Only clear the flag once the floored value actually matches the ledger —
+                    // if flooring masked real drift (ledgerBal was negative), leave NeedsReconcile
+                    // true so the purchase-time backlog prompt still fires for this brand.
+                    c.NeedsReconcile = flooredBal == ledgerBal ? false : true;
                     fixedCount++;
                 }
             }

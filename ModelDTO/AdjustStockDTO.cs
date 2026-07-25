@@ -14,6 +14,14 @@ namespace VaccineAPI.ModelDTO
         public string BatchLot { get; set; } = "";
         public DateTime? ExpiryDate { get; set; }
         public DateTime Date { get; set; }
+
+        // v2: purchase-time unbatched-backlog prompt. Only consulted for Type=="Increase":
+        //   null  = not answered — backend rejects with the outstanding count if a backlog
+        //           exists, frontend must show "clear backlog" / "skip" and resubmit.
+        //   true  = "clear backlog" — outstanding unbatched Administer rows for this brand
+        //           are marked reconciled against this purchase (see ReconciledByTransactionId).
+        //   false = "skip" — purchase proceeds normally, backlog stays open.
+        public bool? ClearUnbatchedBacklog { get; set; }
     }
 
     public class AdjustStockListDTO

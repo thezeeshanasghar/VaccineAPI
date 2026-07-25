@@ -79,6 +79,30 @@ namespace VaccineAPI.Controllers
             if (dto.Type == "Increase" && dto.Price <= 0)
                 return Ok(new { IsSuccess = false, Message = "Price per unit is required for Increase" });
 
+            // v2: purchase-time unbatched-backlog prompt — only for Increase (adding stock).
+            // One query, all four conditions together (StockId IS NULL, SourceType=Administer,
+            // ConsumesStock=true, ReconciledByTransactionId IS NULL) — omitting the "not yet
+            // claimed" filter here is exactly how a second small purchase would re-offer an
+            // already-claimed backlog and risk double-counting.
+            if (dto.Type == "Increase" && dto.ClearUnbatchedBacklog == null)
+            {
+                var backlogCount = await _db.InventoryTransactions
+                    .Where(t => t.BrandId == dto.BrandId && t.ClinicId == dto.ClinicId
+                             && t.StockId == null
+                             && t.SourceType == InventoryTransactionType.Administer
+                             && t.ConsumesStock == true
+                             && t.ReconciledByTransactionId == null)
+                    .CountAsync();
+                if (backlogCount > 0)
+                {
+                    return Ok(new
+                    {
+                        IsSuccess = false,
+                        Message = $"You have {backlogCount} dose(s) recorded as given with no batch. Clear this backlog with this purchase?"
+                    });
+                }
+            }
+
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
@@ -107,6 +131,41 @@ namespace VaccineAPI.Controllers
                 {
                     await tx.RollbackAsync();
                     return Ok(new { IsSuccess = false, Message = result.Message });
+                }
+
+                // v2: if the doctor/PA confirmed clearing the backlog, claim those outstanding
+                // unbatched Administer rows against this purchase — plain note only, no rewriting
+                // of StockId/BatchLot/Expiry on the old rows (that detail was already lost when
+                // they were recorded unbatched; retroactive lot attribution would be a fiction the
+                // data can't support).
+                if (dto.Type == "Increase" && dto.ClearUnbatchedBacklog == true)
+                {
+                    var backlogRows = await _db.InventoryTransactions
+                        .Where(t => t.BrandId == dto.BrandId && t.ClinicId == dto.ClinicId
+                                 && t.StockId == null
+                                 && t.SourceType == InventoryTransactionType.Administer
+                                 && t.ConsumesStock == true
+                                 && t.ReconciledByTransactionId == null)
+                        .ToListAsync();
+                    foreach (var backlogRow in backlogRows)
+                        backlogRow.ReconciledByTransactionId = row.Id;
+
+                    if (backlogRows.Count > 0)
+                    {
+                        _db.InventoryTransactions.Add(new InventoryTransaction
+                        {
+                            DoctorId = dto.DoctorId,
+                            ClinicId = dto.ClinicId,
+                            BrandId = dto.BrandId,
+                            StockId = null,
+                            QuantityDelta = 0,
+                            SourceType = InventoryTransactionType.AdjustIncrease,
+                            SourceId = row.Id,
+                            EventDate = dto.Date,
+                            ConsumesStock = false,
+                            DecisionReason = $"{backlogRows.Count} unbatched dose(s) absorbed by this purchase."
+                        });
+                    }
                 }
 
                 await _db.SaveChangesAsync();

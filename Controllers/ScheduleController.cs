@@ -590,6 +590,19 @@ namespace VaccineAPI.Controllers
                             );
                         }
 
+                        // v2: unbatched-give confirmation. Only relevant when this give would
+                        // actually consume stock — gated on decision.ConsumesStock so a
+                        // pre-period/OHF/historical give (which never needed a batch) is never
+                        // asked about a missing one. Belt-and-suspenders: reject rather than
+                        // silently record unbatched if the client hasn't answered yet.
+                        if (decision.ConsumesStock
+                            && !_inventory.HasFillableBatch(scheduleDTO.BrandId.Value, onlineClinicId)
+                            && scheduleDTO.ConfirmUnbatchedGive == null)
+                        {
+                            return new Response<ScheduleDTO>(false,
+                                "No stock batch found for this vaccine. Choose whether to record it as unbatched.", null);
+                        }
+
                         // v2: a give never hard-blocks on zero stock — a physically-given dose is
                         // always recordable (§2.8 exception). AdministerSync handles the give-at-zero
                         // case (records, floors Count at 0, flags NeedsReconcile). The old
@@ -1923,6 +1936,50 @@ namespace VaccineAPI.Controllers
                         return new Response<ScheduleDTO>(false, combined, null);
                     else
                         return Response<ScheduleDTO>.Warning(combined);
+                }
+            }
+
+            // Step 4b — unbatched-stock dry-run for bulk give (one aggregate confirmation, not a
+            // popup per dose — this method is one request/one transaction, there's no round-trip
+            // per item). Only checks doses that would actually consume stock (ResolveGiveDecision
+            // .ConsumesStock == true) — a pre-period/OHF/historical dose never needed a batch, so
+            // it's never flagged here. All schedules in dbChildSchedules share dbSchedule.Child
+            // (same ChildId, same date), so clinic resolution is done once, not per item.
+            if (scheduleDTO.IsDone == true && scheduleDTO.ConfirmUnbatchedGive == null)
+            {
+                var chkClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
+                if (chkClinicId > 0 && IsInventoryEnabledForActor(scheduleDTO.DoctorId, chkClinicId))
+                {
+                    var chkPeriodStart = _db.Clinics
+                        .Where(c => c.Id == chkClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
+
+                    var unbatchedNames = new System.Collections.Generic.List<string>();
+                    foreach (var chk in dbChildSchedules)
+                    {
+                        if (chk.IsDone == true) continue; // already given, not part of this transition
+
+                        var chkBrandId2 = scheduleDTO.ScheduleBrands
+                            .Where(x => x.ScheduleId == chk.Id)
+                            .Select(x => x.BrandId)
+                            .FirstOrDefault() ?? scheduleDTO.BrandId;
+                        if (!chkBrandId2.HasValue || chkBrandId2.Value <= 0) continue;
+
+                        var chkDecision = InventoryTransactionService.ResolveGiveDecision(
+                            chkBrandId2, scheduleDTO.GivenDate, chkPeriodStart, scheduleDTO.ReRecordHistorical);
+                        if (!chkDecision.ConsumesStock) continue;
+
+                        if (!_inventory.HasFillableBatch(chkBrandId2.Value, chkClinicId))
+                        {
+                            var chkBrandName = _db.Brands.Where(b => b.Id == chkBrandId2.Value).Select(b => b.Name).FirstOrDefault();
+                            unbatchedNames.Add($"{chkBrandName} ({chk.Dose?.Name ?? chk.Dose?.Vaccine?.Name ?? "dose"})");
+                        }
+                    }
+                    if (unbatchedNames.Count > 0)
+                    {
+                        return new Response<ScheduleDTO>(false,
+                            $"{unbatchedNames.Count} of these {dbChildSchedules.Count} doses have no stock batch: {string.Join(", ", unbatchedNames)}. " +
+                            "Cancel to add stock first, or resubmit to record them as unbatched.", null);
+                    }
                 }
             }
 

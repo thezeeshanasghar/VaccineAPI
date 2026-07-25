@@ -77,6 +77,10 @@ namespace VaccineAPI.Controllers
                         .ThenBy(b => b.Expiry)
                         .ToList();
 
+                    // v2: TotalCount (BrandAmount.Count) and the batch table below it come from
+                    // two independent sources with no shared origin — surface a disagreement
+                    // instead of letting the page silently print two different numbers.
+                    var batchSum = batches.Sum(b => b.Quantity);
                     return new
                     {
                         BrandId = ba.BrandId,
@@ -84,7 +88,8 @@ namespace VaccineAPI.Controllers
                         VaccineName = vb != null && vb.Vaccine != null ? vb.Vaccine.Name : "",
                         TotalCount = ba.Count,
                         SalePrice = ba.Amount,
-                        Batches = batches
+                        Batches = batches,
+                        IsOutOfSync = ba.Count != batchSum
                     };
                 })
                 .Where(x => x.TotalCount > 0 || x.Batches.Count > 0)
@@ -161,11 +166,16 @@ namespace VaccineAPI.Controllers
                             .OrderBy(b => b.Expiry == null ? 1 : 0)
                             .ThenBy(b => b.Expiry)
                             .ToList();
+                        // v2: same out-of-sync check as the JSON endpoint — surface a mismatch
+                        // between the cached brand counter and the batch table instead of
+                        // printing two disagreeing numbers on the same page silently.
+                        var batchSum = batches.Sum(b => b.Quantity);
                         return new
                         {
                             BrandName  = ba.Brand != null ? ba.Brand.Name : "",
                             TotalCount = ba.Count,
-                            Batches    = batches
+                            Batches    = batches,
+                            IsOutOfSync = ba.Count != batchSum
                         };
                     })
                     .Where(x => x.TotalCount > 0 || x.Batches.Count > 0)
@@ -199,8 +209,10 @@ namespace VaccineAPI.Controllers
                 {
                     if (brand.Batches.Count == 0)
                     {
+                        string zeroBrandLabel = brand.BrandName + (brand.IsOutOfSync ? "  ⚠ needs recount" : "");
+                        Font zeroBrandFont = brand.IsOutOfSync ? redFont : brandFont;
                         // Brand name cell spanning Brand column, dash for rest
-                        tbl.AddCell(new PdfPCell(new Phrase(brand.BrandName, brandFont))
+                        tbl.AddCell(new PdfPCell(new Phrase(zeroBrandLabel, zeroBrandFont))
                             { BackgroundColor = brandRowBg, Border = Rectangle.NO_BORDER, Padding = 4, PaddingLeft = 4 });
                         tbl.AddCell(new PdfPCell(new Phrase("—", cellFont))
                             { BackgroundColor = brandRowBg, Border = Rectangle.NO_BORDER, Padding = 4 });
@@ -227,8 +239,13 @@ namespace VaccineAPI.Controllers
 
                         // Brand name only on first batch row of this brand
                         if (i == 0)
-                            tbl.AddCell(new PdfPCell(new Phrase(brand.BrandName + " (" + brand.TotalCount + ")", brandFont))
+                        {
+                            string brandLabel = brand.BrandName + " (" + brand.TotalCount + ")"
+                                + (brand.IsOutOfSync ? "  ⚠ needs recount" : "");
+                            Font brandLabelFont = brand.IsOutOfSync ? redFont : brandFont;
+                            tbl.AddCell(new PdfPCell(new Phrase(brandLabel, brandLabelFont))
                                 { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4, PaddingLeft = 4, Rowspan = 1 });
+                        }
                         else
                             tbl.AddCell(new PdfPCell(new Phrase("", cellFont))
                                 { BackgroundColor = rowBg, Border = Rectangle.NO_BORDER, Padding = 4 });

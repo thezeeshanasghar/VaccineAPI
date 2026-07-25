@@ -68,6 +68,15 @@ namespace VaccineAPI.Services
                 .OrderBy(s => s.Expiry.HasValue ? 0 : 1).ThenBy(s => s.Expiry).ThenBy(s => s.Id);
         }
 
+        // v2: read-only dry-run for the give-time unbatched-stock confirmation prompt. Callers
+        // must only invoke this when the give would actually consume stock (decision.ConsumesStock
+        // == true) — a pre-period/OHF/historical give never needed a batch, so asking here would
+        // be a spurious prompt for a give that was never going to touch stock at all.
+        public bool HasFillableBatch(long brandId, long clinicId)
+        {
+            return FefoFillCandidates(brandId, clinicId).Any();
+        }
+
         // Restore target for ungive: same clinic resolution as FEFO, but includes zero-quantity
         // rows (a fully-consumed batch is a valid restore target) — reopens it if it was closed.
         private IQueryable<Stock> FefoRestoreCandidates(long brandId, long clinicId)
@@ -188,11 +197,16 @@ namespace VaccineAPI.Services
             // Find or create a Stock row for this batch so FEFO can deduct from it when doses are given.
             // AdjustIncrease used to be brand-level only (no Stock row), causing FEFO to miss these units
             // and roll back the ba.Count decrement silently while the dose was still physically given.
+            //
+            // v2: match by identity (BrandId+ClinicId+BatchLot+Expiry), not by Quantity > 0 — a batch
+            // drawn down to zero (or negative, pre-fix) by gives is still the SAME real batch and must
+            // be topped up, not forked into a second row. Matching on Quantity > 0 was the bug behind
+            // a purchase creating a duplicate "same batch" row while the real one sat empty/negative.
             var existingStock = await _db.Stocks
                 .Include(s => s.Bill)
                 .Where(s => s.BrandId == brandId
                          && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId))
-                         && s.BatchLot == batchLot && s.Expiry == expiry && s.Quantity > 0)
+                         && s.BatchLot == batchLot && s.Expiry == expiry)
                 .FirstOrDefaultAsync();
 
             int? stockId = null;
@@ -200,6 +214,7 @@ namespace VaccineAPI.Services
             {
                 existingStock.Quantity += quantity;
                 existingStock.OriginalQuantity += quantity;
+                if (existingStock.IsClosed) existingStock.IsClosed = false; // reopen if a purchase revives it
                 stockId = existingStock.Id;
             }
             else
@@ -782,6 +797,20 @@ namespace VaccineAPI.Services
             }
 
             var ba = _db.BrandAmounts.FirstOrDefault(x => x.BrandId == brandId && x.DoctorId == doctorId && x.ClinicId == clinicId);
+
+            // v2: the give consumed stock (ConsumesStock=true) but never touched a real batch
+            // (StockId=null) — an unbatched give. Restoring via FEFO here would donate a phantom
+            // unit into an unrelated real batch that this give never took from. Restore the brand
+            // counter only, unclaim any purchase that had marked this dose reconciled, and stop.
+            if (giveRow != null && giveRow.StockId == null)
+            {
+                if (ba != null) ba.Count += 1;
+                if (giveRow.ReconciledByTransactionId != null) giveRow.ReconciledByTransactionId = null;
+                Log(doctorId, clinicId, brandId, null, null, null, 0, null,
+                    InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
+                return;
+            }
+
             if (ba != null) ba.Count += 1;
 
             // Prefer restoring to the exact batch the give consumed (giveRow.StockId).
@@ -822,6 +851,18 @@ namespace VaccineAPI.Services
                 Log(ba.DoctorId, clinicId, brandId, null, null, null, 0, null,
                     InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId,
                     consumesStock: false, decisionReason: giveRow.DecisionReason);
+                return;
+            }
+
+            // v2: unbatched give (ConsumesStock=true, StockId=null) — same reasoning as
+            // UnadministerSync above. Restore the brand counter only, unclaim any purchase
+            // that had marked this dose reconciled, and stop before touching any Stock row.
+            if (giveRow != null && giveRow.StockId == null)
+            {
+                ba.Count++;
+                if (giveRow.ReconciledByTransactionId != null) giveRow.ReconciledByTransactionId = null;
+                Log(ba.DoctorId, clinicId, brandId, null, null, null, 0, null,
+                    InventoryTransactionType.Unadminister, scheduleId, eventDate, createdByPaId);
                 return;
             }
 

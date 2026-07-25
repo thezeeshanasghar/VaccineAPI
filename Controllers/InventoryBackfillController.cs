@@ -100,7 +100,11 @@ namespace VaccineAPI.Controllers
                     var ba = await _db.BrandAmounts.FirstOrDefaultAsync(x =>
                         x.BrandId == drift.BrandId && x.DoctorId == drift.DoctorId && x.ClinicId == drift.ClinicId);
                     if (ba == null) continue;
-                    ba.Count = drift.LedgerCount;
+                    // v2: floor at zero, same as StockController.Reconcile — a raw negative
+                    // ledger sum must never be written verbatim to Count.
+                    int flooredCount = Math.Max(0, drift.LedgerCount);
+                    ba.Count = flooredCount;
+                    ba.NeedsReconcile = flooredCount == drift.LedgerCount ? false : true;
                     corrected++;
                 }
                 await _db.SaveChangesAsync();

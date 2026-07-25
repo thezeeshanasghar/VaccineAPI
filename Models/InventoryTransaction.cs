@@ -92,5 +92,11 @@ namespace VaccineAPI.Models
         // v2: why this give did/didn't move stock — one of InventoryDecisionReason.* for
         // give/ungive rows; null for all other source types.
         public string? DecisionReason { get; set; }
+
+        // v2: set on an unbatched Administer row (StockId=null, ConsumesStock=true) when a
+        // later purchase's backlog-clearing prompt claims credit for it. Null while
+        // outstanding. Cleared back to null if the give is ever ungiven, so the purchase
+        // that claimed it stops overclaiming a dose that no longer exists as given.
+        public long? ReconciledByTransactionId { get; set; }
     }
 }

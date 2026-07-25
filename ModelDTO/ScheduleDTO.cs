@@ -68,6 +68,15 @@ namespace VaccineAPI.ModelDTO
         // this = true to proceed. PAs can never ungive a pre-reset dose regardless of this flag.
         public bool ConfirmPreResetUngive { get; set; }
 
+        // v2: unbatched-give confirmation. Only consulted when the give would actually consume
+        // stock (ConsumesStock=true per ResolveGiveDecision) and FEFO finds no batch to fill from:
+        //   null  = not answered — backend rejects, frontend must show "add stock now" / "record
+        //           as unbatched" and resubmit with this set.
+        //   true  = "record as unbatched" — give proceeds, ledger logs it with no batch attached.
+        // Ignored entirely for gives that don't consume stock (OHF/pre-period/historical) or that
+        // already found a real batch — never a spurious prompt for a give that never needed one.
+        public bool? ConfirmUnbatchedGive { get; set; }
+
         // §6.3a: acting PA when a batch correction is done by a PA (null = doctor did it).
         // Recorded on the audit ledger row's CreatedByPaId. Doctor + PA both permitted.
         public long? CorrectByPaId { get; set; }

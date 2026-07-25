@@ -352,13 +352,13 @@ namespace VaccineAPI.Controllers
                                 _mapper.Map<List<ChildDTO>>(
                                     doctorChilds
                                         .Where(x =>
-                                            x.Name.Trim()
+                                            (x.Name ?? "").Trim()
                                                 .ToLower()
                                                 .Contains(searchKeywordLower)
-                                            || x.FatherName.Trim()
+                                            || (x.FatherName ?? "").Trim()
                                                 .ToLower()
                                                 .Contains(searchKeywordLower)
-                                            || x.Email.Trim().ToLower().Contains(searchKeywordLower)
+                                            || (x.Email ?? "").Trim().ToLower().Contains(searchKeywordLower)
                                             || (hasPhoneKeyword
                                                 && x.User != null
                                                 && NormalizePhoneNumber(

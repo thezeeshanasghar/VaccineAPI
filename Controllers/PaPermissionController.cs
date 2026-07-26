@@ -21,8 +21,9 @@ namespace VaccineAPI.Controllers
             var perm = _db.PaPermissions.FirstOrDefault(p => p.PaId == paId);
             if (perm == null)
             {
-                // Return a blank permission object so frontend knows none are set yet
-                return Ok(new PaPermission { PaId = paId });
+                // Return a blank permission object so frontend knows none are set yet.
+                // RescheduleVaccine defaults true: single-dose reschedule is available to all PAs.
+                return Ok(new PaPermission { PaId = paId, RescheduleVaccine = true });
             }
             return Ok(perm);
         }

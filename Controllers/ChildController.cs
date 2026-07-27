@@ -4760,8 +4760,9 @@ namespace VaccineAPI.Controllers
                 document.Add(new Paragraph(" ", PlexSans(10)) { SpacingBefore = -10f });
                 document.Add(patientTable);
 
-                // Custom schedule's own columns (Vaccine/Status/Date/Brand/Weight/Height/OFC-BMI),
-                // rendered with the Travel PDF's condensed-font grid styling.
+                // Vaccine table: identical columns/data-sourcing to CreateTravelPdf
+                // (Vaccine/Brand/Manufacturer/Batch-Lot/Route-Site/Date Given/Expiry/Validity),
+                // applied to this (Custom-type) child's own schedules.
                 var child = _db.Childs
                     .Include(x => x.Schedules.Where(s => s.IsSkip != true))
                         .ThenInclude(s => s.Dose)
@@ -4775,25 +4776,50 @@ namespace VaccineAPI.Controllers
                 var dbSchedules = child.Schedules.ToList();
                 if (!includeFuture)
                     dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
-                foreach (var sch in dbSchedules)
-                {
-                    if (sch.IsDone == true) sch.Date = sch.GivenDate ?? DateTime.Now;
-                }
-                dbSchedules = dbSchedules.OrderBy(x => x.Date).ToList();
+                var brandIds = dbSchedules
+                    .Where(s => s.BrandId.HasValue)
+                    .Select(s => s.BrandId.Value)
+                    .Distinct()
+                    .ToList();
 
-                var vaccineTable = new PdfPTable(7) { WidthPercentage = 100 };
-                vaccineTable.SetWidths(new float[] { 0.5f, 2f, 1.1f, 1.3f, 1.6f, 1f, 1f });
+                var latestStockByBrand = _db.Stocks
+                    .Include(s => s.Bill)
+                    .Where(s => brandIds.Contains(s.BrandId)
+                        && (s.ClinicId == dbChild.ClinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == dbChild.ClinicId)))
+                    .OrderByDescending(s => !string.IsNullOrWhiteSpace(s.BatchLot) || s.Expiry != null)
+                    .ThenByDescending(s => s.Bill != null ? s.Bill.BillDate : DateTime.MinValue)
+                    .ThenByDescending(s => s.Id)
+                    .AsEnumerable()
+                    .GroupBy(s => s.BrandId)
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                var vaccineTable = new PdfPTable(8) { WidthPercentage = 100 };
+                vaccineTable.SetWidths(new float[] { 1.2f, 1f, 1.4f, 0.9f, 1.1f, 1f, 0.9f, 0.9f });
                 vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
 
                 int rowCount = dbSchedules.Count;
                 bool dense = rowCount > 12;
                 float bodyFs = rowCount <= 3 ? 9f : (dense ? 6f : 7.2f);
                 float headFs = bodyFs;
+                float shrinkFs = bodyFs - 1.2f;
                 float padTop = dense ? 1f : 2f;
                 float padBot = dense ? 1.5f : 3f;
                 float headPad = dense ? 2f : 3f;
 
-                string[] headers = { "Sr", "Vaccine", "Status", "Date", "Brand", "Weight", "Height" };
+                float tableW = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+                float[] colRatios = { 1.2f, 1f, 1.4f, 0.9f, 1.1f, 1f, 0.9f, 0.9f };
+                float ratioSum = 0f; foreach (var r in colRatios) ratioSum += r;
+                float cellPadX = 4f;
+                float[] colInner = new float[colRatios.Length];
+                for (int i = 0; i < colRatios.Length; i++) colInner[i] = tableW * colRatios[i] / ratioSum - cellPadX;
+
+                Font FitFont(string text, int col)
+                {
+                    float w = _plexCond.GetWidthPoint(text ?? "", bodyFs);
+                    return w > colInner[col] ? PlexCond(shrinkFs) : PlexCond(bodyFs);
+                }
+
+                string[] headers = { "Vaccine", "Brand", "Manufacturer", "Batch/Lot", "Route/Site", "Date Given", "Expiry", "Validity" };
                 foreach (string header in headers)
                 {
                     vaccineTable.AddCell(new PdfPCell(new Phrase(header, PlexCond(headFs, bold: true)))
@@ -4809,13 +4835,28 @@ namespace VaccineAPI.Controllers
                 }
 
                 const string DASH = "–";
-                int count = 0;
-                foreach (var dbSchedule in dbSchedules)
+                foreach (var schedule in dbSchedules)
                 {
-                    count++;
-                    PdfPCell Cell(string text, int align, Font font)
+                    string vaccineName = string.IsNullOrWhiteSpace(schedule.Dose?.Name) ? DASH : schedule.Dose.Name;
+                    string brand = string.IsNullOrWhiteSpace(schedule.Brand?.Name) ? DASH : schedule.Brand.Name;
+                    string manufacturer = string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer;
+                    latestStockByBrand.TryGetValue(schedule.BrandId ?? 0, out var latestStock);
+                    string batchLot = string.IsNullOrWhiteSpace(latestStock?.BatchLot) ? DASH : latestStock.BatchLot;
+                    string routeSite;
                     {
-                        return new PdfPCell(new Phrase(text ?? DASH, font))
+                        var parts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(schedule.Route)) parts.Add(schedule.Route.Trim());
+                        if (!string.IsNullOrWhiteSpace(schedule.Site)) parts.Add(schedule.Site.Trim());
+                        routeSite = parts.Count > 0 ? string.Join(" / ", parts) : DASH;
+                    }
+                    bool isGiven = schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue;
+                    string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
+                    string expiry = latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH;
+                    string validity = (isGiven && schedule.Validity != null) ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
+
+                    PdfPCell Cell(string text, int col, int align)
+                    {
+                        return new PdfPCell(new Phrase(text, FitFont(text, col)))
                         {
                             Border = Rectangle.BOX,
                             HorizontalAlignment = align,
@@ -4823,47 +4864,18 @@ namespace VaccineAPI.Controllers
                             BorderWidth = 0.5f,
                             PaddingTop = padTop,
                             PaddingBottom = padBot,
+                            NoWrap = true
                         };
                     }
 
-                    string vaccineName = System.Text.RegularExpressions.Regex.Replace(dbSchedule.Dose?.Name ?? DASH, @"\s+\d+$", "");
-
-                    string status;
-                    if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                        status = "Given";
-                    else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)
-                        status = "By EPI";
-                    else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
-                        status = "Due";
-                    else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
-                        status = "Missed";
-                    else
-                        status = "Diseased";
-
-                    string dateText;
-                    if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
-                        dateText = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy") ?? DASH;
-                    else if (dbSchedule.IsDisease == true)
-                        dateText = dbSchedule.Date.Date.ToString("yyyy") + " Y";
-                    else
-                        dateText = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
-
-                    string brandName = DASH;
-                    if (dbSchedule.BrandId != null && dbSchedule.IsDone != false)
-                        brandName = dbSchedule.Brand?.Name ?? DASH;
-                    else if (dbSchedule.BrandId == null && dbSchedule.IsDone != false && dbSchedule.IsDisease != true)
-                        brandName = "OHF*";
-
-                    string weightText = (dbSchedule.IsDone == true && dbSchedule.Weight > 0) ? dbSchedule.Weight.ToString() : DASH;
-                    string heightText = (dbSchedule.IsDone == true && dbSchedule.Height > 0) ? dbSchedule.Height.ToString() : DASH;
-
-                    vaccineTable.AddCell(Cell(count.ToString(), PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
-                    vaccineTable.AddCell(Cell(vaccineName, PdfPCell.ALIGN_LEFT, PlexCond(bodyFs)));
-                    vaccineTable.AddCell(Cell(status, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
-                    vaccineTable.AddCell(Cell(dateText, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
-                    vaccineTable.AddCell(Cell(brandName, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
-                    vaccineTable.AddCell(Cell(weightText, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
-                    vaccineTable.AddCell(Cell(heightText, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
+                    vaccineTable.AddCell(Cell(vaccineName, 0, PdfPCell.ALIGN_LEFT));
+                    vaccineTable.AddCell(Cell(brand, 1, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(manufacturer, 2, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(batchLot, 3, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(routeSite, 4, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(dateGiven, 5, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(expiry, 6, PdfPCell.ALIGN_CENTER));
+                    vaccineTable.AddCell(Cell(validity, 7, PdfPCell.ALIGN_CENTER));
                 }
                 document.Add(vaccineTable);
                 document.Close();

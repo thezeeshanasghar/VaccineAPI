@@ -1682,6 +1682,21 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf");
         }
 
+        [HttpGet("{id}/CustomLandscapeVerify")]
+        public IActionResult DownloadCustomLandscapePDF(int id, bool includeFuture = true)
+        {
+            var dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault();
+            var output = CreateCustomLandscapePdf(id, includeFuture);
+            if (output == null)
+            {
+                return null;
+            }
+            var suffix = includeFuture ? "" : "_Given";
+            var fileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule" + suffix + "_" +
+                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+            return File(output.ToArray(), "application/pdf", fileName);
+        }
+
         private Stream CreateCustomPdf(int childId, bool includeFuture = true)
         {
             var dbChild = _db.Childs
@@ -4582,6 +4597,275 @@ namespace VaccineAPI.Controllers
                 }
                 document.Add(vaccineTable);
                 // QR is rendered in the header (beside the logo), so nothing further is drawn here.
+                document.Close();
+            }
+            output.Seek(0, SeekOrigin.Begin);
+            return output;
+        }
+
+        // Landscape-styled Custom schedule PDF: same visual style as CreateTravelPdf
+        // (A5 rotated, Plex fonts, header box with QR + logo) but keeps the Custom
+        // schedule's own data — Vaccine/Status/Date/Brand/Weight/Height/OFC-BMI —
+        // instead of Travel's Brand/Manufacturer/Batch-Lot/Route-Site/Expiry/Validity.
+        private MemoryStream CreateCustomLandscapePdf(int childId, bool includeFuture = true)
+        {
+            EnsurePlexFonts();
+            var dbChild = _db.Childs
+                .Include(x => x.User)
+                .Include(x => x.Clinic)
+                .ThenInclude(x => x.Doctor)
+                .FirstOrDefault(x => x.Id == childId);
+            if (dbChild == null)
+            {
+                return null;
+            }
+
+            string patientName = dbChild.Name;
+            string relation = dbChild.FatherName;
+            DateTime dob = dbChild.DOB;
+            string passport = dbChild.CNIC;
+            string city = dbChild.City;
+            string Nationality = dbChild.Nationality;
+            string mrNumber = $"{DateTime.Now.Year}-{childId}";
+            string clinicName = dbChild.Clinic.Name;
+            string clinicRegNo = dbChild.Clinic.RegNo;
+            string doctorDetails = dbChild.Clinic.Doctor.DisplayName;
+            string additionalInfo = dbChild.Clinic.Doctor.AdditionalInfo;
+
+            var output = new MemoryStream();
+            using (var document = new Document(PageSize.A5.Rotate(), 18f, 18f, 18f, 18f))
+            {
+                PdfWriter writer = PdfWriter.GetInstance(document, output);
+                writer.PageEvent = new FooterPageEvent(_db, childId);
+                document.Open();
+
+                Image qrImage = null;
+                var baseUrl = "https://myapi.vaccinationcentre.com/api";
+                var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Custom-PDF";
+                using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+                using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
+                {
+                    var qrCode = new BitmapByteQRCode(qrCodeData);
+                    byte[] qrCodeImage = qrCode.GetGraphic(18);
+                    qrImage = iTextSharp.text.Image.GetInstance(qrCodeImage);
+                    qrImage.ScaleAbsolute(52f, 52f);
+                }
+
+                var headerTable = new PdfPTable(3);
+                headerTable.WidthPercentage = 100;
+                headerTable.SetWidths(new float[] { 2.7f, 1.7f, 1.8f });
+                headerTable.SpacingAfter = 3f;
+
+                PdfPCell headerCell = new PdfPCell();
+                headerCell.Border = PdfPCell.NO_BORDER;
+                headerCell.Padding = 0f;
+                headerCell.AddElement(new Paragraph(doctorDetails, PlexSans(10, bold: true)) { SpacingAfter = 1f });
+                headerCell.AddElement(new Paragraph(additionalInfo, PlexSans(6)) { SpacingAfter = 1f });
+                var clinicLine = new Paragraph { SpacingAfter = 0f };
+                clinicLine.Add(new Chunk(clinicName + " ", PlexSans(8, bold: true)));
+                if (!string.IsNullOrWhiteSpace(clinicRegNo))
+                    clinicLine.Add(new Chunk($"({clinicRegNo})", PlexSans(8)));
+                headerCell.AddElement(clinicLine);
+                headerTable.AddCell(headerCell);
+
+                PdfPCell qrCell = new PdfPCell
+                {
+                    Border = PdfPCell.NO_BORDER,
+                    HorizontalAlignment = Element.ALIGN_CENTER,
+                    VerticalAlignment = Element.ALIGN_TOP,
+                    Padding = 0f,
+                    PaddingTop = 2f,
+                    NoWrap = true,
+                };
+                qrCell.AddElement(new Paragraph(new Chunk(qrImage, 0, 0)) { Alignment = Element.ALIGN_CENTER });
+                qrCell.AddElement(new Paragraph($"MR No: {mrNumber}", PlexSans(7, bold: true)) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 3f });
+                headerTable.AddCell(qrCell);
+
+                Image logo = null;
+                string monogramPath = !string.IsNullOrWhiteSpace(dbChild.Clinic?.MonogramImage)
+                    ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
+                if (monogramPath != null && System.IO.File.Exists(monogramPath))
+                    logo = Image.GetInstance(monogramPath);
+                else
+                {
+                    string fallbackLogo = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
+                    if (System.IO.File.Exists(fallbackLogo)) logo = Image.GetInstance(fallbackLogo);
+                }
+                if (logo != null)
+                {
+                    logo.ScaleToFit(130f, 46f);
+                    headerTable.AddCell(new PdfPCell(logo, false)
+                    {
+                        Border = PdfPCell.NO_BORDER,
+                        HorizontalAlignment = Element.ALIGN_RIGHT,
+                        VerticalAlignment = Element.ALIGN_TOP,
+                        PaddingLeft = 4f,
+                        PaddingRight = 0f,
+                        PaddingTop = 2f,
+                    });
+                }
+                else
+                {
+                    headerTable.AddCell(new PdfPCell(new Phrase(" ")) { Border = PdfPCell.NO_BORDER });
+                }
+
+                var headerWrapper = new PdfPTable(1) { WidthPercentage = 100, SpacingAfter = 2f };
+                var headerBox = new PdfPCell(headerTable)
+                {
+                    Border = PdfPCell.NO_BORDER,
+                    Padding = 4f,
+                    CellEvent = new RoundedBorderCellEvent(),
+                };
+                headerWrapper.AddCell(headerBox);
+                document.Add(headerWrapper);
+
+                var title = new Paragraph("IMMUNIZATION RECORD", PlexSans(10, bold: true));
+                title.Alignment = Element.ALIGN_CENTER;
+                title.SpacingBefore = 0f;
+                title.SpacingAfter = 2f;
+                document.Add(title);
+
+                var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
+                patientTable.SetWidths(new float[] { 1.5f, 2.5f, 1.5f, 2.5f });
+                patientTable.SpacingAfter = 3f;
+                patientTable.DefaultCell.BorderColor = BaseColor.LightGray;
+                patientTable.DefaultCell.BorderWidth = 0.5f;
+                var cellFontBold = PlexSans(10, bold: true);
+                var cellFontNormal = PlexSans(10);
+                string V(string s) => string.IsNullOrWhiteSpace(s) ? "–" : s;
+                PdfPCell CreateCell(string text, Font font, BaseColor backgroundColor)
+                {
+                    return new PdfPCell(new Phrase(text, font))
+                    {
+                        BackgroundColor = backgroundColor,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
+                        PaddingTop = 2f,
+                        PaddingBottom = 2f
+                    };
+                }
+                var labelGray = new BaseColor(205, 205, 205);
+                patientTable.AddCell(CreateCell("Name:", cellFontBold, labelGray));
+                patientTable.AddCell(CreateCell(V(patientName), cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell("S/D/W/o:", cellFontBold, labelGray));
+                patientTable.AddCell(CreateCell(V(relation), cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell("Date of Birth:", cellFontBold, labelGray));
+                patientTable.AddCell(CreateCell(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell("Passport/CNIC No:", cellFontBold, labelGray));
+                patientTable.AddCell(CreateCell(V(passport), cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell("City:", cellFontBold, labelGray));
+                patientTable.AddCell(CreateCell(string.IsNullOrWhiteSpace(city) ? "–" : city.ToUpper(), cellFontNormal, BaseColor.White));
+                patientTable.AddCell(CreateCell("Nationality:", cellFontBold, labelGray));
+                patientTable.AddCell(CreateCell(V(Nationality), cellFontNormal, BaseColor.White));
+                document.Add(new Paragraph(" ", PlexSans(10)) { SpacingBefore = -10f });
+                document.Add(patientTable);
+
+                // Custom schedule's own columns (Vaccine/Status/Date/Brand/Weight/Height/OFC-BMI),
+                // rendered with the Travel PDF's condensed-font grid styling.
+                var child = _db.Childs
+                    .Include(x => x.Schedules.Where(s => s.IsSkip != true))
+                        .ThenInclude(s => s.Dose)
+                    .Include(x => x.Schedules.Where(s => s.IsSkip != true))
+                        .ThenInclude(s => s.Brand)
+                    .FirstOrDefault(c => c.Id == childId);
+                if (child == null)
+                {
+                    return null;
+                }
+                var dbSchedules = child.Schedules.ToList();
+                if (!includeFuture)
+                    dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
+                foreach (var sch in dbSchedules)
+                {
+                    if (sch.IsDone == true) sch.Date = sch.GivenDate ?? DateTime.Now;
+                }
+                dbSchedules = dbSchedules.OrderBy(x => x.Date).ToList();
+
+                var vaccineTable = new PdfPTable(7) { WidthPercentage = 100 };
+                vaccineTable.SetWidths(new float[] { 0.5f, 2f, 1.1f, 1.3f, 1.6f, 1f, 1f });
+                vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
+
+                int rowCount = dbSchedules.Count;
+                bool dense = rowCount > 12;
+                float bodyFs = rowCount <= 3 ? 9f : (dense ? 6f : 7.2f);
+                float headFs = bodyFs;
+                float padTop = dense ? 1f : 2f;
+                float padBot = dense ? 1.5f : 3f;
+                float headPad = dense ? 2f : 3f;
+
+                string[] headers = { "Sr", "Vaccine", "Status", "Date", "Brand", "Weight", "Height" };
+                foreach (string header in headers)
+                {
+                    vaccineTable.AddCell(new PdfPCell(new Phrase(header, PlexCond(headFs, bold: true)))
+                    {
+                        BackgroundColor = labelGray,
+                        BorderColor = BaseColor.LightGray,
+                        BorderWidth = 0.5f,
+                        HorizontalAlignment = header == "Vaccine" ? PdfPCell.ALIGN_LEFT : PdfPCell.ALIGN_CENTER,
+                        PaddingTop = headPad,
+                        PaddingBottom = headPad,
+                        Border = Rectangle.BOX
+                    });
+                }
+
+                const string DASH = "–";
+                int count = 0;
+                foreach (var dbSchedule in dbSchedules)
+                {
+                    count++;
+                    PdfPCell Cell(string text, int align, Font font)
+                    {
+                        return new PdfPCell(new Phrase(text ?? DASH, font))
+                        {
+                            Border = Rectangle.BOX,
+                            HorizontalAlignment = align,
+                            BorderColor = BaseColor.LightGray,
+                            BorderWidth = 0.5f,
+                            PaddingTop = padTop,
+                            PaddingBottom = padBot,
+                        };
+                    }
+
+                    string vaccineName = System.Text.RegularExpressions.Regex.Replace(dbSchedule.Dose?.Name ?? DASH, @"\s+\d+$", "");
+
+                    string status;
+                    if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                        status = "Given";
+                    else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)
+                        status = "By EPI";
+                    else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && !checkForMissed(dbSchedule.Date))
+                        status = "Due";
+                    else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
+                        status = "Missed";
+                    else
+                        status = "Diseased";
+
+                    string dateText;
+                    if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
+                        dateText = dbSchedule.GivenDate?.Date.ToString("dd/MM/yyyy") ?? DASH;
+                    else if (dbSchedule.IsDisease == true)
+                        dateText = dbSchedule.Date.Date.ToString("yyyy") + " Y";
+                    else
+                        dateText = dbSchedule.Date.Date.ToString("dd/MM/yyyy");
+
+                    string brandName = DASH;
+                    if (dbSchedule.BrandId != null && dbSchedule.IsDone != false)
+                        brandName = dbSchedule.Brand?.Name ?? DASH;
+                    else if (dbSchedule.BrandId == null && dbSchedule.IsDone != false && dbSchedule.IsDisease != true)
+                        brandName = "OHF*";
+
+                    string weightText = (dbSchedule.IsDone == true && dbSchedule.Weight > 0) ? dbSchedule.Weight.ToString() : DASH;
+                    string heightText = (dbSchedule.IsDone == true && dbSchedule.Height > 0) ? dbSchedule.Height.ToString() : DASH;
+
+                    vaccineTable.AddCell(Cell(count.ToString(), PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
+                    vaccineTable.AddCell(Cell(vaccineName, PdfPCell.ALIGN_LEFT, PlexCond(bodyFs)));
+                    vaccineTable.AddCell(Cell(status, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
+                    vaccineTable.AddCell(Cell(dateText, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
+                    vaccineTable.AddCell(Cell(brandName, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
+                    vaccineTable.AddCell(Cell(weightText, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
+                    vaccineTable.AddCell(Cell(heightText, PdfPCell.ALIGN_CENTER, PlexCond(bodyFs)));
+                }
+                document.Add(vaccineTable);
                 document.Close();
             }
             output.Seek(0, SeekOrigin.Begin);

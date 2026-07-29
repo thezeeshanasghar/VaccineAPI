@@ -32,7 +32,7 @@ namespace VaccineAPI.Controllers
 
             var childIds = rawAssignments.Select(a => a.ChildId).Distinct().ToList();
             var children = childIds.Any()
-                ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
+                ? await _db.Childs.Include(c => c.User).Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
                 : new Dictionary<long, VaccineAPI.Models.Child>();
 
             // Look up each assignment's linked invoice directly via the InvoiceSubmissionId FK —
@@ -114,6 +114,12 @@ namespace VaccineAPI.Controllers
                     Gender        = child != null ? child.Gender    : "",
                     DOB           = child != null ? child.DOB       : (DateTime?)null,
                     FatherName    = child != null ? child.FatherName: "",
+                    ParentMobile  = child?.User != null ? child.User.MobileNumber : "",
+                    // Same normalizer NotifyParentOfAssignment already uses for the parent-facing
+                    // notification, reused here so the PA can tap straight into WhatsApp with the
+                    // parent instead of a 4th hand-rolled formatter. Empty string if unusable —
+                    // frontend hides the chip in that case.
+                    ParentWhatsApp = child?.User != null ? ToWhatsAppNumber(child.User.MobileNumber, child.User.CountryCode) : "",
                     a.IsAutoCreated,
                     a.AssignmentStatus,
                     InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,

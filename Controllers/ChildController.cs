@@ -1113,7 +1113,8 @@ namespace VaccineAPI.Controllers
                                 brandName = "OHF*";
                             }
 
-                            Font brandFont = FontFactory.GetFont(FontFactory.HELVETICA, ShrinkToFit(brandName, 10f, 86f));
+                            // widths[] are ratios scaled to TotalWidth=510f (90/595*510 ≈ 77pt), not literal points.
+                            Font brandFont = FontFactory.GetFont(FontFactory.HELVETICA, ShrinkToFit(brandName, 10f, 73f));
                             PdfPCell brandCell = new PdfPCell(new Phrase(brandName, brandFont));
                             brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             brandCell.BorderColor = GrayColor.LightGray;

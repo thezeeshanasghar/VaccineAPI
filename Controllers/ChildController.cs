@@ -1113,9 +1113,11 @@ namespace VaccineAPI.Controllers
                                 brandName = "OHF*";
                             }
 
-                            PdfPCell brandCell = new PdfPCell(new Phrase(brandName, font));
+                            Font brandFont = FontFactory.GetFont(FontFactory.HELVETICA, ShrinkToFit(brandName, 10f, 76f));
+                            PdfPCell brandCell = new PdfPCell(new Phrase(brandName, brandFont));
                             brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             brandCell.BorderColor = GrayColor.LightGray;
+                            brandCell.NoWrap = true;
                             table.AddCell(brandCell);
 
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
@@ -1403,7 +1405,7 @@ namespace VaccineAPI.Controllers
                     BorderWidth = 1f
                 });
                 lowertable2.AddCell(CreateCell(flu1GivenDate, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell(flu1Brand, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(CreateBrandCell(flu1Brand, 81f));
                 }
                 else
                 {
@@ -1437,7 +1439,7 @@ namespace VaccineAPI.Controllers
                         // BorderWidth = 1f              
                     });
                 lowertable2.AddCell(CreateCell(type1GivenDate, "", 1, "center", "scheduleRecords"));
-                lowertable2.AddCell(CreateCell(type1Brand, "", 1, "center", "scheduleRecords"));
+                lowertable2.AddCell(CreateBrandCell(type1Brand, 81f));
                 }
                 else
                 {
@@ -1471,7 +1473,7 @@ namespace VaccineAPI.Controllers
                         BorderColor = GrayColor.LightGray, 
                     });
                     lowertable2.AddCell(CreateCell(vit1GivenDate, "", 1, "center", "scheduleRecords"));
-                    lowertable2.AddCell(CreateCell(vit1Brand, "", 1, "center", "scheduleRecords"));
+                    lowertable2.AddCell(CreateBrandCell(vit1Brand, 81f));
                     }
                     else
                     {
@@ -1994,9 +1996,11 @@ namespace VaccineAPI.Controllers
                             {
                                 brandName = "OHF*";
                             }
-                            PdfPCell brandCell = new PdfPCell(new Phrase(brandName, font));
+                            Font brandFont = FontFactory.GetFont(FontFactory.HELVETICA, ShrinkToFit(brandName, 10f, 46f));
+                            PdfPCell brandCell = new PdfPCell(new Phrase(brandName, brandFont));
                             brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             brandCell.BorderColor = GrayColor.LightGray;
+                            brandCell.NoWrap = true;
                             table.AddCell(brandCell);
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
@@ -2547,6 +2551,23 @@ namespace VaccineAPI.Controllers
                 cell.FixedHeight = 18f;
             }
 
+            return cell;
+        }
+
+        // Brand-name cell for the "Last Dose"/"Next Dose" recurring-vaccine row (lowertable2):
+        // same look as CreateCell(..., "scheduleRecords") but shrinks the font one step at a
+        // time so a long brand name (e.g. "EUVICHOL-PLUS") stays on one line instead of
+        // wrapping and getting clipped by the fixed row height.
+        protected PdfPCell CreateBrandCell(string value, float innerWidth)
+        {
+            Font font = FontFactory.GetFont(FontFactory.HELVETICA, ShrinkToFit(value, 11f, innerWidth));
+            PdfPCell cell = new PdfPCell(new Phrase(value, font))
+            {
+                BorderColor = GrayColor.LightGray,
+                HorizontalAlignment = Element.ALIGN_CENTER,
+                FixedHeight = 15f,
+                NoWrap = true
+            };
             return cell;
         }
 
@@ -4283,6 +4304,23 @@ namespace VaccineAPI.Controllers
                 _plexCondBold = Load("IBMPlexSansCondensed-Bold.ttf", BaseFont.HELVETICA_BOLD);
                 _plexLoaded = true;
             }
+        }
+
+        // Plain Helvetica metrics (standard-14, never embedded) purely for measuring whether a
+        // string fits a column width in one line. Kept separate from _plexCond since the
+        // schedule/custom PDF tables use FontFactory Helvetica, not the Plex fonts above.
+        private static readonly BaseFont _helveticaMetrics =
+            BaseFont.CreateFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+
+        // Returns fontSize, or one point smaller (down to a floor) if text would not fit
+        // maxWidth at fontSize — so a cell's content shrinks to stay on one line instead of
+        // wrapping to two.
+        private static float ShrinkToFit(string text, float fontSize, float maxWidth, float floor = 6f)
+        {
+            float size = fontSize;
+            while (size > floor && _helveticaMetrics.GetWidthPoint(text ?? "", size) > maxWidth)
+                size -= 0.5f;
+            return size;
         }
 
         private static Font PlexSans(float size, bool bold = false) =>

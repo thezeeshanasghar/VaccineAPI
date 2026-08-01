@@ -860,7 +860,7 @@ namespace VaccineAPI.Controllers
                     return cell;
                 }
                
-                float[] widths = new float[] { 60f, 135f, 80f, 60f, 70f,70f,60f,60f };
+                float[] widths = new float[] { 60f, 135f, 90f, 50f, 70f,70f,60f,60f };
 
                 PdfPTable table = new PdfPTable(8);
                 table.HorizontalAlignment = 0;
@@ -1113,7 +1113,7 @@ namespace VaccineAPI.Controllers
                                 brandName = "OHF*";
                             }
 
-                            Font brandFont = FontFactory.GetFont(FontFactory.HELVETICA, ShrinkToFit(brandName, 10f, 76f));
+                            Font brandFont = FontFactory.GetFont(FontFactory.HELVETICA, ShrinkToFit(brandName, 10f, 86f));
                             PdfPCell brandCell = new PdfPCell(new Phrase(brandName, brandFont));
                             brandCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             brandCell.BorderColor = GrayColor.LightGray;
@@ -1125,6 +1125,7 @@ namespace VaccineAPI.Controllers
                                 PdfPCell statusCell = new PdfPCell(new Phrase("Given", boldfont1));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
+                                statusCell.NoWrap = true;
                                 table.AddCell(statusCell);
                             }
                             else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)
@@ -1132,6 +1133,7 @@ namespace VaccineAPI.Controllers
                                 PdfPCell statusCell = new PdfPCell(new Phrase("By EPI", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
+                                statusCell.NoWrap = true;
                                 table.AddCell(statusCell);
                             }
                             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
@@ -1140,6 +1142,7 @@ namespace VaccineAPI.Controllers
                                 PdfPCell statusCell = new PdfPCell(new Phrase("Due", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
+                                statusCell.NoWrap = true;
                                 table.AddCell(statusCell);
                             }
                             else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true &&
@@ -1148,6 +1151,7 @@ namespace VaccineAPI.Controllers
                                 PdfPCell statusCell = new PdfPCell(new Phrase("Missed", italicfont1));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
+                                statusCell.NoWrap = true;
                                 table.AddCell(statusCell);
                             }
                             else
@@ -1155,6 +1159,7 @@ namespace VaccineAPI.Controllers
                                 PdfPCell statusCell = new PdfPCell(new Phrase("Diseased", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
+                                statusCell.NoWrap = true;
                                 table.AddCell(statusCell);
                             }
 

@@ -2414,7 +2414,7 @@ namespace VaccineAPI.Controllers
                               .FirstOrDefault();
                 try
                 {
-                    if (c.Email != "") UserEmail.ParentEmail(c);
+                    if (c.Email != "") UserEmail.ParentEmail(c, _host.ContentRootPath);
                 }
                 catch (Exception e)
                 {

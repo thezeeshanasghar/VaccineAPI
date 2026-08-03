@@ -3185,6 +3185,41 @@ namespace VaccineAPI.Controllers
             return listOfSchedules;
         }
 
+        // Same date-window filters as GetAlertData, but returns one row per due dose (not
+        // collapsed to one row per child) and includes Clinic/Doctor so ParentAlertEmail can
+        // show each dose's own date and the clinic's branding, instead of the single
+        // last-iterated date GetAlertData's collapsed rows would give it.
+        private static List<Schedule> GetRawAlertSchedules(DateTime inputDate, int GapDays, long OnlineClinicId, Context db)
+        {
+            DateTime AddedDateTime = inputDate.AddDays(GapDays);
+            IQueryable<Schedule> query = db.Schedules
+                .Include(x => x.Child)
+                .ThenInclude(x => x.User)
+                .Include(x => x.Child)
+                .ThenInclude(x => x.Clinic)
+                .ThenInclude(x => x.Doctor)
+                .ThenInclude(x => x.User)
+                .Include(x => x.Dose)
+                .Where(c => c.Child.ClinicId == OnlineClinicId)
+                .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true);
+
+            if (GapDays == 0)
+            {
+                query = query.Where(c => c.Date.Date == inputDate.Date);
+            }
+            else if (GapDays > 0)
+            {
+                AddedDateTime = AddedDateTime.AddDays(1);
+                query = query.Where(c => c.Date.Date > inputDate.Date && c.Date.Date <= AddedDateTime.Date);
+            }
+            else
+            {
+                query = query.Where(c => c.Date < inputDate.Date && c.Date >= AddedDateTime);
+            }
+
+            return query.OrderBy(x => x.Child.Name).ThenBy(x => x.Date).ToList();
+        }
+
         ///////////////
        [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
@@ -3423,21 +3458,18 @@ namespace VaccineAPI.Controllers
                     return new Response<IEnumerable<ScheduleDTO>>(false, "Not authorized for this clinic.", null);
                 }
                 List<Schedule> Schedules = GetAlertData(inputDate, GapDays, OnlineClinicId, _db);
-                var dbChildren = Schedules.Select(x => x.Child).Distinct().ToList();
-                foreach (var child in dbChildren)
+                List<Schedule> rawSchedules = GetRawAlertSchedules(inputDate, GapDays, OnlineClinicId, _db);
+                var rawChildren = rawSchedules.Select(x => x.Child).Distinct().ToList();
+                foreach (var child in rawChildren)
                 {
                     if (child.Email != "")
                     {
-                        var dbSchedules = Schedules.Where(x => x.ChildId == child.Id).ToList();
-                        var doseName = "";
-                        DateTime scheduleDate = new DateTime();
-                        foreach (var schedule in dbSchedules)
-                        {
-                            doseName += schedule.Dose.Name + ", ";
-                            scheduleDate = schedule.Date;
-                        }
+                        var dueDoses = rawSchedules
+                            .Where(x => x.ChildId == child.Id)
+                            .Select(x => (DoseName: x.Dose.Name, Date: x.Date))
+                            .ToList();
                         var linkToken = LinkLoginToken.Generate(child.UserId, child.Id, LinkLoginSecret());
-                        UserEmail.ParentAlertEmail(doseName, scheduleDate, child, linkToken);
+                        UserEmail.ParentAlertEmail(dueDoses, child, linkToken, _host.ContentRootPath);
                     }
                 }
                 List<ScheduleDTO> scheduleDtos = _mapper.Map<List<ScheduleDTO>>(Schedules);

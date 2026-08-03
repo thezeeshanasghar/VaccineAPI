@@ -2410,7 +2410,8 @@ namespace VaccineAPI.Controllers
                 Child c = _db.Childs.Where(x => x.Id == childDTO.Id)
                               .Include(x => x.User)
                               .Include(x => x.Clinic)
-                              .Include(x => x.Clinic.Doctor.User)
+                                  .ThenInclude(cl => cl.Doctor)
+                                      .ThenInclude(d => d.User)
                               .FirstOrDefault();
                 try
                 {

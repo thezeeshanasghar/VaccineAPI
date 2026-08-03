@@ -20,13 +20,13 @@ namespace VaccineAPI
         public static void ParentEmail(Child child, string contentRootPath)
         {
             string honorific = child.Gender == "Girl" ? "Miss." : "Mr.";
-            string doctorMobile = child.Clinic.Doctor.User.MobileNumber ?? "";
+            string doctorMobile = child.Clinic?.Doctor?.User?.MobileNumber ?? "";
             string doctorPhone = doctorMobile.StartsWith("92") || doctorMobile.StartsWith("+92")
                 ? doctorMobile.TrimStart('+')
                 : "92" + doctorMobile.TrimStart('0');
             string schedulePdfUrl = "http://myapi.vaccinationcentre.com/api/child/" + child.Id + "/Download-Schedule-PDF";
             string logoTag = BuildLogoImgTag(child.Clinic?.MonogramImage, contentRootPath);
-            bool isVaccinePkBranded = child.Clinic.Doctor.Id == 1;
+            bool isVaccinePkBranded = child.Clinic?.Doctor?.Id == 1;
             string poweredByLine = isVaccinePkBranded
                 ? @"<div style=""font-size:11.5px;color:#5B7480;"">Powered by Vaccine.pk</div>"
                 : "";
@@ -135,7 +135,7 @@ namespace VaccineAPI
             DateTime today = DateTime.UtcNow.AddHours(5).Date;
             string recordLink = "https://client.vaccinationcentre.com/child/vaccine/" + child.Id + "?t=" + Uri.EscapeDataString(linkToken);
             string logoTag = BuildLogoImgTag(child.Clinic?.MonogramImage, contentRootPath);
-            bool isVaccinePkBranded = child.Clinic.Doctor.Id == 1;
+            bool isVaccinePkBranded = child.Clinic?.Doctor?.Id == 1;
             string poweredByLine = isVaccinePkBranded
                 ? @"<div style=""font-size:11.5px;color:#5B7480;"">Powered by Vaccine.pk</div>"
                 : "";

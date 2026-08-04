@@ -1098,7 +1098,10 @@ namespace VaccineAPI.Controllers
                                   isFirstRow = false;
                               }
                            
-                            PdfPCell dosenameCell = new PdfPCell(new Phrase(System.Text.RegularExpressions.Regex.Replace(dbSchedule.Dose.Name, @"\s+\d+$", ""), rangevaluefont));
+                            string doseDisplayName = (dbChild.IsEPIDone == true && dbSchedule.DoseId == 30)
+                                ? "TCV"
+                                : System.Text.RegularExpressions.Regex.Replace(dbSchedule.Dose.Name, @"\s+\d+$", "");
+                            PdfPCell dosenameCell = new PdfPCell(new Phrase(doseDisplayName, rangevaluefont));
                             dosenameCell.HorizontalAlignment = Element.ALIGN_LEFT;
                             dosenameCell.BorderColor = GrayColor.LightGray;
                             table.AddCell(dosenameCell);

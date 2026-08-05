@@ -491,10 +491,10 @@ namespace VaccineAPI.Controllers
             // actually owns this invoice if the same child was ever assigned to the same PA more than once.
             var assignmentByInvoiceId = _db.PAAssignments
                 .Where(a => a.DoctorId == doctorId && a.InvoiceSubmissionId.HasValue)
-                .Select(a => new { a.Id, InvoiceSubmissionId = a.InvoiceSubmissionId!.Value })
+                .Select(a => new { a.Id, InvoiceSubmissionId = a.InvoiceSubmissionId!.Value, a.AssignedAt })
                 .ToList()
                 .GroupBy(a => a.InvoiceSubmissionId)
-                .ToDictionary(g => g.Key, g => g.First().Id);
+                .ToDictionary(g => g.Key, g => g.First());
 
             var invoiceRows = invoices.Select(i => new
             {
@@ -502,8 +502,9 @@ namespace VaccineAPI.Controllers
                 InvoiceSubmissionId = i.Id,
                 ScheduleId          = i.Id,
                 AmendmentId         = (long?)null,
-                AssignmentId        = assignmentByInvoiceId.ContainsKey(i.Id) ? (long?)assignmentByInvoiceId[i.Id] : (long?)null,
+                AssignmentId        = assignmentByInvoiceId.ContainsKey(i.Id) ? (long?)assignmentByInvoiceId[i.Id].Id : (long?)null,
                 Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
+                AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? assignmentByInvoiceId[i.Id].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
                 Amount              = i.TotalAmount,
                 PaymentMode         = i.PaymentMode ?? "",
@@ -593,6 +594,7 @@ namespace VaccineAPI.Controllers
                 AmendmentId         = (long?)null,
                 AssignmentId        = (long?)a.Id,
                 Date                = a.AssignedAt.AddHours(5).ToString("yyyy-MM-dd"),
+                AssignedAt          = a.AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
                 PatientName         = pendingChildNames.ContainsKey(a.ChildId) ? pendingChildNames[a.ChildId] : "",
                 Amount              = 0m,
                 PaymentMode         = "",
@@ -644,8 +646,10 @@ namespace VaccineAPI.Controllers
                 ScheduleId          = a.InvoiceSubmissionId,
                 AmendmentId         = (long?)a.Id,
                 AssignmentId        = assignmentByInvoiceId.ContainsKey(a.InvoiceSubmissionId)
-                                        ? (long?)assignmentByInvoiceId[a.InvoiceSubmissionId] : (long?)null,
+                                        ? (long?)assignmentByInvoiceId[a.InvoiceSubmissionId].Id : (long?)null,
                 Date                = a.CreatedAt.ToString("yyyy-MM-dd"),
+                AssignedAt          = assignmentByInvoiceId.ContainsKey(a.InvoiceSubmissionId)
+                                        ? assignmentByInvoiceId[a.InvoiceSubmissionId].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                 PatientName         = (a.InvoiceSubmission != null && amendChildNames.ContainsKey(a.InvoiceSubmission.ChildId))
                                         ? amendChildNames[a.InvoiceSubmission.ChildId] : "",
                 Amount              = a.OldAmount,

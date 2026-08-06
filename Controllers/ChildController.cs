@@ -2259,6 +2259,24 @@ namespace VaccineAPI.Controllers
                 {
                     Clinic clinic = _db.Clinics.Where(x => x.Id == childDTO.ClinicId).Include(x => x.Doctor).FirstOrDefault();
                     Doctor doctor = clinic.Doctor;
+
+                    // EPI Plus: insert the child's real government-EPI history (batched, single
+                    // SaveChanges, wrapped in try/catch) BEFORE the doctor's own clinic-template
+                    // loop below — that loop's MinGap floor reads these rows once persisted.
+                    if (childDTO.IsEPIDone)
+                    {
+                        try
+                        {
+                            InsertEpiHistoryDoses(childDTO);
+                            InsertEpiClinicTopUps(childDTO);
+                            _db.SaveChanges();
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine("EPI Plus history insert failed: " + e);
+                        }
+                    }
+
                     // Order by DoseOrder so an earlier dose of a vaccine is always inserted
                     // before its successors — the MinGap floor below reads the predecessor's
                     // already-persisted Schedule row.
@@ -2281,50 +2299,6 @@ namespace VaccineAPI.Controllers
                             if (childDTO.IsSkip == true && ds.IsActive == false)
                                 continue;
 
-                            if (childDTO.IsEPIDone)
-                            {
-                                var dob = childDTO.DOB.Date;
-                                DateTime comparisonDate2002 = DateTime.Parse("01/01/2002");
-                                DateTime comparisonDate2009 = DateTime.Parse("01/01/2009");
-                                DateTime comparisonDate2015 = DateTime.Parse("01/01/2015");
-                                DateTime comparisonDate2021 = DateTime.Parse("01/04/2021");
-                                if (dob < comparisonDate2002)
-                                {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
-                                    {
-                                        cvd.DoseId = 130;
-                                        ds.GapInDays = 0;
-                                    }
-                                }
-                                else if (dob > comparisonDate2021)
-                                {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
-                                    {
-                                        cvd.DoseId = 135;
-                                        ds.GapInDays = 0;
-                                    }
-                                }
-                                else if (dob > comparisonDate2002 && dob < comparisonDate2009)
-                                {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
-                                    {
-                                        cvd.DoseId = 131;
-                                        ds.GapInDays = 0;
-                                    }
-                                }
-                                else if (dob > comparisonDate2009 && dob < comparisonDate2015)
-                                {
-                                    if (ds.Dose.Name.Equals("OPV/IPV+HBV+DPT+Hib 1"))
-                                    {
-                                        cvd.DoseId = 132;
-                                        ds.GapInDays = 0;
-                                    }
-                                }
-                                else
-                                {
-                                    cvd.DoseId = ds.DoseId;
-                                }
-                            }
                             if (ds.Dose.Name.StartsWith("HPV") && ds.Dose.DoseOrder == 3) cvd.IsSkip = true;
                             cvd.Date = calculateDate(childDTO.DOB, ds.GapInDays);
 
@@ -2356,56 +2330,6 @@ namespace VaccineAPI.Controllers
                                 _db.Schedules.Add(cvd);
                                 _db.SaveChanges();
                             }
-                        }
-                    }
-                    var dob2 = childDTO.DOB.Date;
-                    DateTime comparisonDate2012 = DateTime.Parse("01/01/2012");
-                    DateTime comparisonDate2018 = DateTime.Parse("01/01/2018");
-                    DateTime comparisonDate2020 = DateTime.Parse("01/01/2020");
-                    if (childDTO.IsEPIDone)
-                    {
-                        if (dob2 > comparisonDate2020)
-                        {
-                            if (!_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == 136))
-                            {
-                                Schedule cvd3 = new Schedule();
-                                cvd3.DoseId = 136;
-                                var mingap = 0;
-                                cvd3.DiseaseYear = "";
-                                cvd3.Date = calculateDate(childDTO.DOB, mingap);
-                                cvd3.ChildId = childDTO.Id;
-                                _db.Schedules.Add(cvd3);
-                            }
-                        }
-                        else if (dob2 > comparisonDate2018)
-                        {
-                            if (!_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == 134))
-                            {
-                                Schedule cvd2 = new Schedule();
-                                cvd2.DoseId = 134;
-                                var mingap = 0;
-                                cvd2.DiseaseYear = "";
-                                cvd2.Date = calculateDate(childDTO.DOB, mingap);
-                                cvd2.ChildId = childDTO.Id;
-                                _db.Schedules.Add(cvd2);
-                            }
-                        }
-                        else if (dob2 > comparisonDate2012)
-                        {
-                            if (!_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == 133))
-                            {
-                                Schedule cvd1 = new Schedule();
-                                cvd1.DoseId = 133;
-                                var mingap = 0;
-                                cvd1.DiseaseYear = "";
-                                cvd1.Date = calculateDate(childDTO.DOB, mingap);
-                                cvd1.ChildId = childDTO.Id;
-                                _db.Schedules.Add(cvd1);
-                            }
-                        }
-                        else
-                        {
-                            ;
                         }
                     }
                     _db.SaveChanges();
@@ -3708,6 +3632,185 @@ namespace VaccineAPI.Controllers
             _db.Childs.Remove(dbChild);
             _db.SaveChanges();
             return new Response<string>(true, "Child is deleted successfully", null);
+        }
+
+        // EPI Plus: inserts the child's historical government-EPI doses as already-Done rows,
+        // dated at the real EPI-programme age offsets, BEFORE the doctor's own clinic-template
+        // loop runs (that loop's MinGap floor reads these rows once persisted). Every rule below
+        // is an independent DOB check — EPI's own vaccine composition changed at different dates
+        // for different antigens, so bracket membership alone never decides more than one antigen.
+        // Batches all inserts into ONE SaveChanges() call, wrapped by the caller in try/catch —
+        // this replaces the old per-row SaveChanges() that let a single bad DoseId (134/135, which
+        // never existed in this DB) abort the whole registration mid-loop for DOB>2018 children.
+        private void InsertEpiHistoryDoses(ChildDTO childDTO)
+        {
+            var dob = childDTO.DOB.Date;
+            var now = DateTime.UtcNow;
+
+            void AddEpiDose(long doseId, DateTime date)
+            {
+                if (_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == doseId)) return;
+                _db.Schedules.Add(new Schedule
+                {
+                    ChildId = childDTO.Id,
+                    DoseId = doseId,
+                    Date = date,
+                    IsDone = true,
+                    GivenDate = date,
+                    DoneAt = now,
+                    DiseaseYear = "",
+                });
+            }
+
+            // At Birth — BCG, OPV 0, Hep B birth dose. Universal for every EPI Plus child.
+            AddEpiDose(1, dob);
+            AddEpiDose(3, dob);
+            AddEpiDose(102, dob);
+
+            // Combo dose (Hib/HBV/DPT/OPV, ± IPV bundled into the name) at 6/10/14 weeks.
+            // Bracket 1 (DOB < 1 Jan 2002) used a no-Hib formulation — real DoseIds 159/160/161
+            // (confirmed live via VacAdmin, 2026-08-05), NOT the 148/149/150 the original spec
+            // assumed. Every later bracket uses the standard Hib-inclusive combo, 34/35/36.
+            var comboDoseIds = dob < new DateTime(2002, 1, 1)
+                ? new[] { 159L, 160L, 161L }
+                : new[] { 34L, 35L, 36L };
+            AddEpiDose(comboDoseIds[0], dob.AddDays(42));
+            AddEpiDose(comboDoseIds[1], dob.AddDays(70));
+            AddEpiDose(comboDoseIds[2], dob.AddDays(98));
+
+            // IPV — two independent introduction dates, tracked as its own standalone dose
+            // (153/154, VaccineId 87) separate from whatever the combo dose above already implies.
+            // IPV1: EPI introduced it 24 Aug 2015; a child counts if they were already 6 weeks old
+            // on/after that date, i.e. DOB >= 24 Aug 2015 - 42 days = 13 Jul 2015.
+            // IPV2: EPI introduced a second dose ~2021 (SAGE Oct 2020 rec); a child counts only if
+            // they were still 14 weeks old or younger when IPV2 rolled out, i.e. DOB >= (IPV2 intro
+            // date - 98 days). Placeholder IPV2 intro date of 1 Jan 2021 used pending an exact date.
+            if (dob >= new DateTime(2015, 7, 13))
+            {
+                AddEpiDose(153, dob.AddDays(42));
+                if (dob >= new DateTime(2020, 9, 25))
+                    AddEpiDose(154, dob.AddDays(70));
+            }
+
+            // Rota — EPI introduced 1 Jan 2018. A child counts as long as they were 6 weeks old
+            // on/after that date (DOB >= 1 Jan 2018 - 42 days = 20 Nov 2017), REGARDLESS of the
+            // child's age at registration today — this is a historical-fact backfill, never gated
+            // by Rota dose 1's own 111-day MaxAge safety ceiling (that ceiling only applies to a
+            // fresh, today-administered dose in the ordinary non-EPI clinic flow).
+            if (dob >= new DateTime(2017, 11, 20))
+            {
+                AddEpiDose(64, dob.AddDays(42));
+                AddEpiDose(65, dob.AddDays(70));
+            }
+
+            // Measles vs MR — EPI switched to the MR combo 1 Jul 2021; a child gets MR only if they
+            // turned 9 months old on/after that date, i.e. DOB >= 1 Jul 2021 - 9 months = 1 Oct 2020.
+            // Dose 2 sits in the 12-15 month bracket (DOB+395 days), not the older 15/18-month slot.
+            if (dob >= new DateTime(2020, 10, 1))
+            {
+                AddEpiDose(113, dob.AddMonths(9));
+                AddEpiDose(114, dob.AddDays(395));
+            }
+            else
+            {
+                AddEpiDose(151, dob.AddMonths(9));
+                AddEpiDose(152, dob.AddDays(395));
+            }
+
+            // TCV — EPI had no typhoid vaccine at all until Sindh's Nov 2019 catch-up campaign /
+            // early-2020 routine introduction. A child counts only if they turned 9 months old
+            // on/after 1 Jan 2021, i.e. DOB >= 1 Jan 2021 - 9 months = 1 Apr 2020. Uses the same
+            // DoseId as regular Typhoid (30) — TCV is not a separate row in this DB; the PDF layer
+            // is responsible for the "TCV" display label, not this insert.
+            if (dob >= new DateTime(2020, 4, 1))
+            {
+                AddEpiDose(30, dob.AddMonths(9));
+            }
+
+            // PCV — brackets before EPI added PCV (DOB < 1 Jan 2009) get nothing here; the
+            // age-at-registration clinic tiering for those children is handled by the caller
+            // (ordinary clinic-dose loop), not this EPI-history insert.
+            if (dob >= new DateTime(2009, 1, 1))
+            {
+                AddEpiDose(41, dob.AddDays(70));
+                AddEpiDose(42, dob.AddDays(98));
+                AddEpiDose(43, dob.AddDays(112));
+            }
+        }
+
+        // EPI Plus: PCV, toddler-booster/Tdap, and Cholera clinic top-ups added on top of the
+        // EPI-history rows above — every one of these depends on EITHER what EPI already gave
+        // (PCV) OR the child's age at registration TODAY (toddler booster/Tdap), never on the
+        // doctor's generic DoctorSchedules template, since none of these are simple unconditional
+        // adds. Cholera is included here NOT because EPI ever gave it (it never did — this is a
+        // supplementary/outbreak vaccine, not routine EPI) but because every EPI Plus child still
+        // needs it scheduled like any regular child; it must never be marked Done via this path.
+        private void InsertEpiClinicTopUps(ChildDTO childDTO)
+        {
+            var dob = childDTO.DOB.Date;
+            var today = DateTime.UtcNow.Date;
+            var ageDays = (today - dob).Days;
+
+            void AddScheduled(long doseId, DateTime date)
+            {
+                if (_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == doseId)) return;
+                _db.Schedules.Add(new Schedule
+                {
+                    ChildId = childDTO.Id,
+                    DoseId = doseId,
+                    Date = date,
+                    IsDone = false,
+                    DiseaseYear = "",
+                });
+            }
+
+            // PCV clinic top-up: EPI already gave dose 1 for DOB >= 1 Jan 2009 (see
+            // InsertEpiHistoryDoses) — those children need only the booster. Everyone born before
+            // that got no PCV from EPI at all, so the clinic adds a age-appropriate catch-up series.
+            if (dob >= new DateTime(2009, 1, 1))
+            {
+                AddScheduled(66, today);
+            }
+            else if (ageDays < 180) // < 6 months
+            {
+                AddScheduled(41, today);
+                AddScheduled(42, today.AddDays(28));
+                AddScheduled(43, today.AddDays(56));
+                AddScheduled(66, today.AddMonths(6));
+            }
+            else if (ageDays < 365) // 6-12 months
+            {
+                AddScheduled(41, today);
+                AddScheduled(42, today.AddDays(28));
+                AddScheduled(66, today.AddMonths(6));
+            }
+            else if (ageDays < 730) // 12-24 months
+            {
+                AddScheduled(41, today);
+                AddScheduled(42, today.AddDays(28));
+            }
+            else // > 24 months
+            {
+                AddScheduled(41, today);
+            }
+
+            // Toddler booster vs Tdap — cutoff at 7 years (user decision, 2026-08-04; supersedes
+            // the live code's old, unrelated, buggy one-off insert this replaces).
+            if (ageDays < 2555) // < 7 years
+            {
+                AddScheduled(57, dob.AddMonths(18));
+            }
+            else
+            {
+                AddScheduled(136, today);
+            }
+
+            // Cholera — never an EPI dose (supplementary/outbreak vaccine, not routine EPI), but
+            // still scheduled for every EPI Plus child at the same standard dates as a regular
+            // child. Always IsDone=false via AddScheduled above — never marked Done through this
+            // EPI path, since the government programme never actually administered it.
+            AddScheduled(157, dob.AddMonths(12));
+            AddScheduled(158, dob.AddMonths(13));
         }
 
         // Date Function

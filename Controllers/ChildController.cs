@@ -922,6 +922,15 @@ namespace VaccineAPI.Controllers
                 bool hasTyphoidDone = false;
                 bool hasVitaminA = false; // Track if any non-skipped Vitamin A exists
                 bool type = false;
+                // EPI Plus children never use the doctor's generic per-clinic template dates for
+                // grouping/ordering/labeling schedule rows — every row was already dated correctly
+                // (real EPI-programme age offset, or today/today+Nd for clinic top-ups) by
+                // InsertEpiHistoryDoses/InsertEpiClinicTopUps. Falling back to the doctor template's
+                // GapInDays here (as regular children do) mislabels rows under whatever generic age
+                // bracket the doctor's own template happens to use for the same DoseId — e.g. a
+                // same-day PCV clinic top-up getting bucketed under "10 Weeks" because that's when
+                // the doctor's template schedules PCV for a newborn.
+                bool isEpiPlus = dbChild.IsEPIDone == true;
                 HashSet<string> addedAges = new HashSet<string>();
                 string previousAgeLabel = null;
                 var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A" };
@@ -961,8 +970,8 @@ namespace VaccineAPI.Controllers
                         return true;
                     })
                     .OrderBy(s => {
-                        var ds = child1?.Clinic?.Doctor?.DoctorSchedules
-                            ?.FirstOrDefault(x => x.DoseId == s.DoseId);
+                        var ds = !isEpiPlus ? child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(x => x.DoseId == s.DoseId) : null;
                         return ds != null ? calculateDate(child1.DOB, ds.GapInDays) : s.Date;
                     })
                     .ToList();
@@ -1031,8 +1040,8 @@ namespace VaccineAPI.Controllers
 
                 var groupedSchedules = orderedDbSchedules
                     .GroupBy(s => {
-                        var ds = child1?.Clinic?.Doctor?.DoctorSchedules
-                            ?.FirstOrDefault(x => x.DoseId == s.DoseId);
+                        var ds = !isEpiPlus ? child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(x => x.DoseId == s.DoseId) : null;
                         if (ds != null)
                             return GetYearOrMonthFromDaysSchedule(ds.GapInDays);
                         var ageDays = (s.Date - child1.DOB).Days;
@@ -1040,8 +1049,8 @@ namespace VaccineAPI.Controllers
                     })
                     .OrderBy(g => {
                         var first = g.First();
-                        var ds = child1?.Clinic?.Doctor?.DoctorSchedules
-                            ?.FirstOrDefault(x => x.DoseId == first.DoseId);
+                        var ds = !isEpiPlus ? child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(x => x.DoseId == first.DoseId) : null;
                         return ds != null ? calculateDate(child1.DOB, ds.GapInDays) : first.Date;
                     });
                  Console.WriteLine($"Dose Name: {groupedSchedules.Select(g => g.Key).FirstOrDefault()}");
@@ -2287,12 +2296,19 @@ namespace VaccineAPI.Controllers
                         }
                     }
 
-                    // Order by DoseOrder so an earlier dose of a vaccine is always inserted
-                    // before its successors — the MinGap floor below reads the predecessor's
-                    // already-persisted Schedule row.
-                    List<DoctorSchedule> dss = _db.DoctorSchedules.Where(x => x.DoctorId == doctor.Id)
-                        .Include(x => x.Dose).ToList()
-                        .OrderBy(x => x.Dose.VaccineId).ThenBy(x => x.Dose.DoseOrder ?? 0).ToList();
+                    // EPI Plus children get their entire schedule from InsertEpiHistoryDoses +
+                    // InsertEpiClinicTopUps above — that pair is the complete, guaranteed dose set
+                    // per the approved spec. The doctor's own generic DoctorSchedules template below
+                    // is for regular (non-EPI) registrations only: running it for an EPI Plus child
+                    // would silently layer in whatever else the doctor's template happens to contain
+                    // (e.g. PPSV/PCV, DTaP) that was never part of the EPI Plus rule set, and — since
+                    // its "already exists" check is DoseId-only — anything not already inserted by
+                    // the EPI methods sails straight through at the template's own generic date.
+                    List<DoctorSchedule> dss = childDTO.IsEPIDone
+                        ? new List<DoctorSchedule>()
+                        : _db.DoctorSchedules.Where(x => x.DoctorId == doctor.Id)
+                            .Include(x => x.Dose).ToList()
+                            .OrderBy(x => x.Dose.VaccineId).ThenBy(x => x.Dose.DoseOrder ?? 0).ToList();
                     foreach (DoctorSchedule ds in dss)
                     {
                         var dbDose = _db.Doses.Where(x => x.Id == ds.DoseId).Include(x => x.Vaccine).FirstOrDefault();

@@ -513,6 +513,7 @@ namespace VaccineAPI.Controllers
                 InvoiceStatus       = i.InvoiceStatus,
                 HasPendingAmendment = i.HasPendingAmendment,
                 PendingHandover     = i.PendingHandover,
+                HandoverDoneAt      = i.HandoverDoneAt.HasValue ? i.HandoverDoneAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                 PaId                = i.PaId.Value,
                 PaName              = i.SubmittedByLabel ?? (paNames.ContainsKey(i.PaId.Value) ? paNames[i.PaId.Value] : ""),
                 ClinicId            = i.ClinicId ?? 0,

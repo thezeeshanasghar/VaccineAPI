@@ -2350,6 +2350,11 @@ namespace VaccineAPI.Controllers
                                   .ThenInclude(cl => cl.Doctor)
                                       .ThenInclude(d => d.User)
                               .FirstOrDefault();
+                // TEMP DIAGNOSTIC: registration emails have been silently failing with no
+                // server log access to debug them. Surface the exception in the API response
+                // instead of only Console.WriteLine, so it's visible from the client. Revert
+                // this once the root cause is confirmed and fixed.
+                string emailDebugMessage = null;
                 try
                 {
                     if (c.Email != "") UserEmail.ParentEmail(c, _host.ContentRootPath);
@@ -2357,8 +2362,10 @@ namespace VaccineAPI.Controllers
                 catch (Exception e)
                 {
                     Console.WriteLine(e);
+                    emailDebugMessage = "EMAIL_DEBUG: " + e.GetType().Name + ": " + e.Message
+                        + " | StackTrace: " + e.StackTrace;
                 }
-                return new Response<ChildDTO>(true, null, childDTO);
+                return new Response<ChildDTO>(true, emailDebugMessage, childDTO);
             }
         }
 

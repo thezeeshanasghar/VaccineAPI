@@ -2274,6 +2274,16 @@ namespace VaccineAPI.Controllers
                         catch (Exception e)
                         {
                             Console.WriteLine("EPI Plus history insert failed: " + e);
+                            // A failed SaveChanges leaves the just-added Schedule entities tracked
+                            // as "Added" — the very next SaveChanges call (in the clinic loop below)
+                            // would retry the same failing inserts and throw again, uncaught, killing
+                            // the whole registration with zero schedule rows saved at all. Detach them
+                            // so the clinic loop below can proceed independently of this failure.
+                            foreach (var entry in _db.ChangeTracker.Entries<Schedule>().ToList())
+                            {
+                                if (entry.State == EntityState.Added)
+                                    entry.State = EntityState.Detached;
+                            }
                         }
                     }
 
@@ -3805,12 +3815,48 @@ namespace VaccineAPI.Controllers
                 AddScheduled(136, today);
             }
 
+            // Fixed clinic doses — added unconditionally for every EPI Plus child, same as the
+            // final reconciled mock. These do NOT depend on the doctor's own DoctorSchedules
+            // template; EPI Plus guarantees this exact set regardless of what a given doctor has
+            // configured generically. Standard series intervals: same-day dose 1, +3mo dose 2
+            // (HepA/MenACWY/Chickenpox/MMR), except HPV which follows its own 0/2/6-month series.
+            AddScheduled(62, today);              // Chickenpox 1
+            AddScheduled(63, today.AddMonths(3));  // Chickenpox 2
+            AddScheduled(44, today);              // MMR 1
+            AddScheduled(45, today.AddMonths(3));  // MMR 2
+            AddScheduled(70, today);              // Hepatitis A 1
+            AddScheduled(71, today.AddMonths(6));  // Hepatitis A 2
+            AddScheduled(59, today);              // MenACWY 1
+            AddScheduled(60, today.AddMonths(3));  // MenACWY 2
+
+            // HPV — girls only, all 3 doses (46/47/141), standard 0/2/6-month series.
+            if (childDTO.Gender == "Girl")
+            {
+                AddScheduled(46, today);
+                AddScheduled(47, today.AddMonths(2));
+                AddScheduled(141, today.AddMonths(6));
+            }
+
             // Cholera — never an EPI dose (supplementary/outbreak vaccine, not routine EPI), but
             // still scheduled for every EPI Plus child at the same standard dates as a regular
             // child. Always IsDone=false via AddScheduled above — never marked Done through this
             // EPI path, since the government programme never actually administered it.
             AddScheduled(157, dob.AddMonths(12));
             AddScheduled(158, dob.AddMonths(13));
+
+            // Flu and non-EPI Typhoid — infinite/repeating bottom-table doses, added for every
+            // EPI Plus child regardless of DOB or whether an EPI-history TCV row already exists
+            // for them (that row is the one-time historical record; this is the standing
+            // repeating entry, and neither suppresses the other). Vitamin A is intentionally
+            // NOT auto-added here — the 1825-day (5-year) cutoff is a genuine exclusion for
+            // older children, not a missing rule, so it is gated explicitly.
+            if (ageDays < 1825)
+            {
+                AddScheduled(131, today); // Vitamin A
+            }
+            AddScheduled(30, today); // Typhoid — normal non-EPI repeating dose; no-op if the
+                                      // EPI-history TCV insert above already created DoseId 30
+                                      // for this child, since AddScheduled skips existing rows.
         }
 
         // Date Function

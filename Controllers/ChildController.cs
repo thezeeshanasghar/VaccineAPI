@@ -3800,12 +3800,14 @@ namespace VaccineAPI.Controllers
 
             // PCV — brackets before EPI added PCV (DOB < 1 Jan 2009) get nothing here; the
             // age-at-registration clinic tiering for those children is handled by the caller
-            // (ordinary clinic-dose loop), not this EPI-history insert.
+            // (ordinary clinic-dose loop), not this EPI-history insert. Given alongside the
+            // combo dose at the same 6/10/14-week visits (was wrongly offset one visit late —
+            // 70/98/112 — landing PCV 1 on the 10-week visit instead of 6-week; fixed 2026-08-07).
             if (dob >= new DateTime(2009, 1, 1))
             {
-                AddEpiDose(41, dob.AddDays(70));
-                AddEpiDose(42, dob.AddDays(98));
-                AddEpiDose(43, dob.AddDays(112));
+                AddEpiDose(41, dob.AddDays(42));
+                AddEpiDose(42, dob.AddDays(70));
+                AddEpiDose(43, dob.AddDays(98));
             }
         }
 

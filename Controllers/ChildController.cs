@@ -1038,20 +1038,50 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                // EPI Plus history rows always print under one of these six fixed age labels,
+                // never a dynamically computed one - this age skeleton has been the same for
+                // decades regardless of which antigens a given DOB bracket actually received
+                // (user, 2026-08-07). Everything NOT in this list (i.e. every clinic top-up /
+                // catch-up row) collapses into a single "Catch Up Vaccines" bucket below them,
+                // one merged Age cell spanning every catch-up visit - not a per-dose age lookup.
+                var epiFixedAgeDays = new (int Days, string Label)[]
+                {
+                    (0, "At Birth"), (42, "6 Weeks"), (70, "10 Weeks"),
+                    (98, "14 Weeks"), (274, "9 Months"), (395, "15 Months"),
+                };
+                const string catchUpLabel = "Catch Up Vaccines";
+                string NearestEpiFixedLabel(int ageDays)
+                {
+                    return epiFixedAgeDays
+                        .OrderBy(a => Math.Abs(a.Days - ageDays))
+                        .First().Label;
+                }
+
                 var groupedSchedules = orderedDbSchedules
                     .GroupBy(s => {
-                        var ds = !isEpiPlus ? child1?.Clinic?.Doctor?.DoctorSchedules
-                            ?.FirstOrDefault(x => x.DoseId == s.DoseId) : null;
+                        if (isEpiPlus)
+                        {
+                            if (s.IsDone != true) return catchUpLabel;
+                            var histAgeDays = ((s.GivenDate ?? s.Date) - child1.DOB).Days;
+                            return NearestEpiFixedLabel(histAgeDays);
+                        }
+                        var ds = child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(x => x.DoseId == s.DoseId);
                         if (ds != null)
                             return GetYearOrMonthFromDaysSchedule(ds.GapInDays);
                         var ageDays = (s.Date - child1.DOB).Days;
                         return GetYearOrMonthFromDaysSchedule(ageDays);
                     })
                     .OrderBy(g => {
+                        if (isEpiPlus)
+                        {
+                            if (g.Key == catchUpLabel) return (double)int.MaxValue;
+                            return (double)Array.FindIndex(epiFixedAgeDays, a => a.Label == g.Key);
+                        }
                         var first = g.First();
-                        var ds = !isEpiPlus ? child1?.Clinic?.Doctor?.DoctorSchedules
-                            ?.FirstOrDefault(x => x.DoseId == first.DoseId) : null;
-                        return ds != null ? calculateDate(child1.DOB, ds.GapInDays) : first.Date;
+                        var ds = child1?.Clinic?.Doctor?.DoctorSchedules
+                            ?.FirstOrDefault(x => x.DoseId == first.DoseId);
+                        return ds != null ? (double)calculateDate(child1.DOB, ds.GapInDays).Ticks : (double)first.Date.Ticks;
                     });
                  Console.WriteLine($"Dose Name: {groupedSchedules.Select(g => g.Key).FirstOrDefault()}");
                 

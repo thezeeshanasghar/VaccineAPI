@@ -1173,7 +1173,14 @@ namespace VaccineAPI.Controllers
 
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
-                                PdfPCell statusCell = new PdfPCell(new Phrase("Given", boldfont1));
+                                // For EPI Plus children, every IsDone==true row in this main
+                                // history table was set that way by InsertEpiHistoryDoses -
+                                // InsertEpiClinicTopUps never marks anything Done. So any such row
+                                // here is by construction real EPI-programme history, not a dose
+                                // this clinic administered - label it "EPI-given" instead of
+                                // "Given" so the two are never confused on the printed record.
+                                string givenLabel = isEpiPlus ? "EPI-given" : "Given";
+                                PdfPCell statusCell = new PdfPCell(new Phrase(givenLabel, boldfont1));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 statusCell.NoWrap = true;

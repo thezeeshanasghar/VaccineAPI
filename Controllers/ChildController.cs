@@ -1137,7 +1137,15 @@ namespace VaccineAPI.Controllers
                                   isFirstRow = false;
                               }
                            
-                            string doseDisplayName = (dbChild.IsEPIDone == true && dbSchedule.DoseId == 30)
+                            // "TCV" only labels the genuine EPI-history Typhoid row (DoseId 30,
+                            // IsDone=true) for a child whose DOB is on/after the real EPI-TCV
+                            // introduction cutoff (matches InsertEpiHistoryDoses' own gate exactly).
+                            // The always-added generic catch-up Typhoid row (IsDone=false) is a
+                            // completely separate, ordinary Typhoid dose - EPI never gave TCV to
+                            // this child, so it must print "Typhoid", never "TCV".
+                            bool isGenuineEpiTcv = dbChild.IsEPIDone == true && dbSchedule.DoseId == 30
+                                && dbSchedule.IsDone == true && dbChild.DOB.Date >= new DateTime(2020, 4, 1);
+                            string doseDisplayName = isGenuineEpiTcv
                                 ? "TCV"
                                 : System.Text.RegularExpressions.Regex.Replace(dbSchedule.Dose.Name, @"\s+\d+$", "");
                             PdfPCell dosenameCell = new PdfPCell(new Phrase(doseDisplayName, rangevaluefont));
@@ -3892,7 +3900,22 @@ namespace VaccineAPI.Controllers
             EnqueueSeries(62, 63); // Chickenpox 1/2
             EnqueueSeries(44, 45); // MMR 1/2
             EnqueueSeries(70, 71); // Hepatitis A 1/2
-            EnqueueSeries(59, 60); // MenACWY 1/2
+
+            // MenACWY: age at registration >= 2 years gets dose 1 only, no dose-2 placeholder
+            // queued at all — matching the existing brand-based give-time skip rule
+            // (ScheduleController.cs, MENACTRA age>2y / NIMENRIX age>1y auto-skips dose 2), but
+            // applied here upfront since EPI Plus registration already knows the child's age and
+            // there's no reason to pre-schedule a dose-2 row that will just sit there or need
+            // manual skipping later for the common case. Under 2 years still gets the normal
+            // 2-dose series (give-time brand choice decides that case, same as any regular child).
+            if (ageDays >= 730)
+            {
+                EnqueueSeries(59); // MenACWY 1 only
+            }
+            else
+            {
+                EnqueueSeries(59, 60); // MenACWY 1/2
+            }
 
             // HPV — girls only, all 3 doses (46/47/141), spaced by each dose's own MinGap.
             if (childDTO.Gender == "Girl")
@@ -3921,6 +3944,16 @@ namespace VaccineAPI.Controllers
             {
                 EnqueueSeries(157, 158);
             }
+
+            // Typhoid (30) — the standing non-EPI repeating dose. Routed through the same visit
+            // planner as a single-dose series (user, 2026-08-07: "our rule is 2 injectables per
+            // visit" applies here too) instead of being force-inserted at `today` unconditionally
+            // — that older approach could push a visit to 3 injectables (e.g. alongside
+            // Pneumococcal + Tdap) since it never counted against the cap. No-op if the
+            // EPI-history TCV insert already created DoseId 30 for this child (AlreadyExists
+            // check inside EnqueueSeries), since that's the one-time historical record, not this
+            // repeating entry — same non-suppression relationship as always.
+            EnqueueSeries(30);
 
             // --- Visit planner: assign every queued series' doses to real visit dates, at most
             // 2 injectables + 1 oral per visit. A series' next dose becomes eligible once its
@@ -3988,24 +4021,17 @@ namespace VaccineAPI.Controllers
                 }
             }
 
-            // Flu and non-EPI Typhoid — infinite/repeating bottom-table doses, added for every
-            // EPI Plus child regardless of DOB or whether an EPI-history TCV row already exists
-            // for them (that row is the one-time historical record; this is the standing
-            // repeating entry, and neither suppresses the other). Vitamin A is intentionally
-            // NOT auto-added here — the 1825-day (5-year) cutoff is a genuine exclusion for
-            // older children, not a missing rule, so it is gated explicitly. These three stay
-            // outside the visit planner — they're the existing infinite/repeating-table
-            // convention already used everywhere else in this system, unrelated to the fixed
-            // clinic-dose visit cadence above.
+            // Vitamin A — oral, infinite/repeating bottom-table dose. Intentionally NOT routed
+            // through the visit planner above (unlike Typhoid) — it's gated purely on age
+            // (<1825 days), always lands on `today`, and as an oral dose sharing that day with
+            // whatever the planner already placed in the very first visit would only ever
+            // collide with Cholera's own oral slot; keeping it a simple direct add avoids that
+            // ambiguity. The 1825-day (5-year) cutoff is a genuine exclusion for older children,
+            // not a missing rule, so it stays gated explicitly.
             if (ageDays < 1825 && !AlreadyExists(131))
             {
                 _db.Schedules.Add(new Schedule
                 { ChildId = childDTO.Id, DoseId = 131, Date = today, IsDone = false, DiseaseYear = "" }); // Vitamin A
-            }
-            if (!AlreadyExists(30))
-            {
-                _db.Schedules.Add(new Schedule
-                { ChildId = childDTO.Id, DoseId = 30, Date = today, IsDone = false, DiseaseYear = "" }); // Typhoid
             }
         }
 

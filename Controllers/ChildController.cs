@@ -1180,7 +1180,13 @@ namespace VaccineAPI.Controllers
                                 // this clinic administered - label it "EPI-given" instead of
                                 // "Given" so the two are never confused on the printed record.
                                 string givenLabel = isEpiPlus ? "EPI-given" : "Given";
-                                PdfPCell statusCell = new PdfPCell(new Phrase(givenLabel, boldfont1));
+                                // "EPI-given" is wider than "Given"/"Missed"/"Due" and was
+                                // overflowing into the Date column at boldfont1's fixed 10pt size
+                                // (NoWrap means overflow, not wrap, on this narrow Status column) -
+                                // shrink-to-fit the same way the Brand cell already does.
+                                Font givenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD,
+                                    ShrinkToFit(givenLabel, 10f, 42f), new BaseColor(0, 128, 0));
+                                PdfPCell statusCell = new PdfPCell(new Phrase(givenLabel, givenFont));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 statusCell.NoWrap = true;

@@ -1134,7 +1134,7 @@ namespace VaccineAPI.Controllers
                                   // (At Birth, 6 Weeks, etc.) stays horizontal at the normal size.
                                   bool isCatchUpCell = isEpiPlus && group.Key == catchUpLabel;
                                   Font ageCellFont = isCatchUpCell
-                                      ? FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11)
+                                      ? FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 16)
                                       : font;
                                   PdfPCell ageCell = new PdfPCell(new Phrase(group.Key, ageCellFont));
                                   ageCell.Rowspan = rowSpanCount;

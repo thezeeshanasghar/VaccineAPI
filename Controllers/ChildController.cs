@@ -3817,12 +3817,16 @@ namespace VaccineAPI.Controllers
                 AddScheduled(42, today.AddDays(28));
                 AddScheduled(66, today.AddMonths(6));
             }
-            else if (ageDays < 730) // 12-24 months
+            else if (ageDays < 730) // 12-23 months: 2 doses, 8 weeks apart (CDC PCV13 catch-up
+                                     // guidance) - NOT a 3rd primary dose, no booster follow-on.
             {
                 AddScheduled(41, today);
-                AddScheduled(42, today.AddDays(28));
+                AddScheduled(42, today.AddDays(56));
             }
-            else // > 24 months
+            else // 24 months and up (includes teens/adults): single dose, no further doses.
+                 // Per CDC PCV13 catch-up guidance the 24-59mo and 5y+ tiers both resolve to
+                 // exactly one dose - there is no age ceiling above which PCV stops being given,
+                 // but past 24 months it is always exactly one dose, never a multi-dose series.
             {
                 AddScheduled(41, today);
             }

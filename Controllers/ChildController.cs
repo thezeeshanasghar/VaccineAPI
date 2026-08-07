@@ -1180,17 +1180,23 @@ namespace VaccineAPI.Controllers
                                 // this clinic administered - label it "EPI-given" instead of
                                 // "Given" so the two are never confused on the printed record.
                                 string givenLabel = isEpiPlus ? "EPI-given" : "Given";
-                                PdfPCell statusCell = new PdfPCell(new Phrase(givenLabel, boldfont1));
+                                // "EPI-given" is wider than "Given"/"Missed"/"Due" and this
+                                // column's real width is only ~43pt (widths[] is a ratio, not
+                                // literal points - 50/595 of TotalWidth=510f). Measured directly
+                                // against the actual Helvetica-Bold metrics this cell uses
+                                // (accounting for ~4pt of cell padding): 8.5pt is the largest size
+                                // that keeps "EPI-given" on one line without overflowing into the
+                                // Date column. Earlier attempts guessed at maxWidth/NoWrap without
+                                // measuring and made it worse (still overflowed, then wrapped
+                                // messily) - this value was verified with a standalone script using
+                                // the same BaseFont.GetWidthPoint call ShrinkToFit relies on.
+                                Font givenFont = isEpiPlus
+                                    ? FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 8.5f, new BaseColor(0, 128, 0))
+                                    : boldfont1;
+                                PdfPCell statusCell = new PdfPCell(new Phrase(givenLabel, givenFont));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
-                                // "EPI-given" is wider than "Given"/"Missed"/"Due" and was
-                                // overflowing straight into the Date column under NoWrap at this
-                                // column's narrow real width (~43pt: the widths[] array is a
-                                // ratio, not literal points - 50/595 of TotalWidth=510f). A
-                                // font-shrink attempt still didn't leave enough margin for cell
-                                // padding to look right. Wrapping to two lines is a safer failure
-                                // mode than relying on exact point-width math for one label.
-                                statusCell.NoWrap = isEpiPlus ? false : true;
+                                statusCell.NoWrap = true;
                                 table.AddCell(statusCell);
                             }
                             else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)

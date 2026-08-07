@@ -1180,16 +1180,17 @@ namespace VaccineAPI.Controllers
                                 // this clinic administered - label it "EPI-given" instead of
                                 // "Given" so the two are never confused on the printed record.
                                 string givenLabel = isEpiPlus ? "EPI-given" : "Given";
-                                // "EPI-given" is wider than "Given"/"Missed"/"Due" and was
-                                // overflowing into the Date column at boldfont1's fixed 10pt size
-                                // (NoWrap means overflow, not wrap, on this narrow Status column) -
-                                // shrink-to-fit the same way the Brand cell already does.
-                                Font givenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD,
-                                    ShrinkToFit(givenLabel, 10f, 42f), new BaseColor(0, 128, 0));
-                                PdfPCell statusCell = new PdfPCell(new Phrase(givenLabel, givenFont));
+                                PdfPCell statusCell = new PdfPCell(new Phrase(givenLabel, boldfont1));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
-                                statusCell.NoWrap = true;
+                                // "EPI-given" is wider than "Given"/"Missed"/"Due" and was
+                                // overflowing straight into the Date column under NoWrap at this
+                                // column's narrow real width (~43pt: the widths[] array is a
+                                // ratio, not literal points - 50/595 of TotalWidth=510f). A
+                                // font-shrink attempt still didn't leave enough margin for cell
+                                // padding to look right. Wrapping to two lines is a safer failure
+                                // mode than relying on exact point-width math for one label.
+                                statusCell.NoWrap = isEpiPlus ? false : true;
                                 table.AddCell(statusCell);
                             }
                             else if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI == true)

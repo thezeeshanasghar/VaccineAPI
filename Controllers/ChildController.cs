@@ -3801,119 +3801,212 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        // EPI Plus: PCV, toddler-booster/Tdap, and Cholera clinic top-ups added on top of the
-        // EPI-history rows above — every one of these depends on EITHER what EPI already gave
-        // (PCV) OR the child's age at registration TODAY (toddler booster/Tdap), never on the
-        // doctor's generic DoctorSchedules template, since none of these are simple unconditional
-        // adds. Cholera is included here NOT because EPI ever gave it (it never did — this is a
-        // supplementary/outbreak vaccine, not routine EPI) but because every EPI Plus child still
-        // needs it scheduled like any regular child; it must never be marked Done via this path.
+        // Oral vaccines in this catalog (user, 2026-08-07) — everything else in the EPI Plus
+        // catch-up set is injectable. Used only to cap visit composition below; has no bearing
+        // on dosing/cutoff logic elsewhere.
+        private static readonly HashSet<long> OralCatchUpDoseIds = new HashSet<long>
+        {
+            131, // Vitamin A
+            157, 158, // Cholera 1/2
+            3, // OPV 0 (not actually catch-up-scheduled, listed for completeness)
+            64, 65, 112, // Rota (Rotarix) 1/2/3
+        };
+
+        // EPI Plus: PCV, toddler-booster/Tdap, Cholera, and the fixed clinic-dose set, all
+        // clinic top-ups added on top of the EPI-history rows above — every one of these
+        // depends on EITHER what EPI already gave (PCV) OR the child's age at registration
+        // TODAY (toddler booster/Tdap), never on the doctor's generic DoctorSchedules template.
+        // Cholera is included here NOT because EPI ever gave it (it never did — this is a
+        // supplementary/outbreak vaccine, not routine EPI) but because every EPI Plus child
+        // still needs it scheduled like any regular child; it must never be marked Done via
+        // this path.
+        //
+        // Visit pacing (user, 2026-08-07): a real clinic visit gives at most 2 injectables +
+        // 1 oral dose. Doses that don't fit the current visit roll to the next one, dated
+        // +28 days OR that dose's own MinGap from its predecessor in the same series — whichever
+        // is later. This replaces the old approach of hardcoding every dose to `today` or a
+        // fixed `+3mo`/`+6mo` offset, which dumped 7+ doses on a single same-day visit and left
+        // Cholera stuck at a DOB-derived date decades in the past whenever that date had already
+        // elapsed by the time the child registers as EPI Plus.
         private void InsertEpiClinicTopUps(ChildDTO childDTO)
         {
             var dob = childDTO.DOB.Date;
             var today = DateTime.UtcNow.Date;
             var ageDays = (today - dob).Days;
 
-            void AddScheduled(long doseId, DateTime date)
+            bool AlreadyExists(long doseId) =>
+                _db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == doseId);
+            int MinGapDays(long doseId) => _db.Doses.Where(x => x.Id == doseId)
+                .Select(x => x.MinGap).FirstOrDefault() ?? 28;
+
+            // Each series is an ordered list of DoseIds (dose 1, dose 2, dose 3, ...) — the
+            // planner enqueues dose 1 for every series first (clinical priority order below),
+            // then walks each series' own later doses only once its predecessor has actually
+            // been assigned a real visit date, using THAT date + the predecessor's own MinGap
+            // as the earliest the next dose may land. This is what correctly spreads e.g.
+            // Chickenpox 2 out from Chickenpox 1's real assigned visit, instead of both landing
+            // on the same day just because both were seeded with a flat "today".
+            var seriesQueue = new List<long[]>();
+            void EnqueueSeries(params long[] doseIds)
             {
-                if (_db.Schedules.Any(x => x.ChildId == childDTO.Id && x.DoseId == doseId)) return;
-                _db.Schedules.Add(new Schedule
-                {
-                    ChildId = childDTO.Id,
-                    DoseId = doseId,
-                    Date = date,
-                    IsDone = false,
-                    DiseaseYear = "",
-                });
+                var remaining = doseIds.Where(d => !AlreadyExists(d)).ToArray();
+                if (remaining.Length > 0) seriesQueue.Add(remaining);
             }
 
             // PCV clinic top-up: EPI already gave dose 1 for DOB >= 1 Jan 2009 (see
             // InsertEpiHistoryDoses) — those children need only the booster. Everyone born before
-            // that got no PCV from EPI at all, so the clinic adds a age-appropriate catch-up series.
+            // that got no PCV from EPI at all, so the clinic adds an age-appropriate catch-up
+            // series, each dose spaced by its own MinGap via the series planner below.
             if (dob >= new DateTime(2009, 1, 1))
             {
-                AddScheduled(66, today);
+                EnqueueSeries(66);
             }
-            else if (ageDays < 180) // < 6 months
+            else if (ageDays < 180) // < 6 months: full 3-dose primary + booster
             {
-                AddScheduled(41, today);
-                AddScheduled(42, today.AddDays(28));
-                AddScheduled(43, today.AddDays(56));
-                AddScheduled(66, today.AddMonths(6));
+                EnqueueSeries(41, 42, 43, 66);
             }
-            else if (ageDays < 365) // 6-12 months
+            else if (ageDays < 365) // 6-12 months: 2 primary doses + booster
             {
-                AddScheduled(41, today);
-                AddScheduled(42, today.AddDays(28));
-                AddScheduled(66, today.AddMonths(6));
+                EnqueueSeries(41, 42, 66);
             }
             else if (ageDays < 730) // 12-23 months: 2 doses, 8 weeks apart (CDC PCV13 catch-up
                                      // guidance) - NOT a 3rd primary dose, no booster follow-on.
             {
-                AddScheduled(41, today);
-                AddScheduled(42, today.AddDays(56));
+                EnqueueSeries(41, 42);
             }
             else // 24 months and up (includes teens/adults): single dose, no further doses.
                  // Per CDC PCV13 catch-up guidance the 24-59mo and 5y+ tiers both resolve to
                  // exactly one dose - there is no age ceiling above which PCV stops being given,
                  // but past 24 months it is always exactly one dose, never a multi-dose series.
             {
-                AddScheduled(41, today);
+                EnqueueSeries(41);
             }
 
-            // Toddler booster vs Tdap — cutoff at 7 years (user decision, 2026-08-04; supersedes
-            // the live code's old, unrelated, buggy one-off insert this replaces).
-            if (ageDays < 2555) // < 7 years
-            {
-                AddScheduled(57, dob.AddMonths(18));
-            }
-            else
-            {
-                AddScheduled(136, today);
-            }
+            // Toddler booster vs Tdap — cutoff at 7 years (user decision, 2026-08-04).
+            EnqueueSeries(ageDays < 2555 ? 57 : 136);
 
             // Fixed clinic doses — added unconditionally for every EPI Plus child, same as the
             // final reconciled mock. These do NOT depend on the doctor's own DoctorSchedules
             // template; EPI Plus guarantees this exact set regardless of what a given doctor has
-            // configured generically. Standard series intervals: same-day dose 1, +3mo dose 2
-            // (HepA/MenACWY/Chickenpox/MMR), except HPV which follows its own 0/2/6-month series.
-            AddScheduled(62, today);              // Chickenpox 1
-            AddScheduled(63, today.AddMonths(3));  // Chickenpox 2
-            AddScheduled(44, today);              // MMR 1
-            AddScheduled(45, today.AddMonths(3));  // MMR 2
-            AddScheduled(70, today);              // Hepatitis A 1
-            AddScheduled(71, today.AddMonths(6));  // Hepatitis A 2
-            AddScheduled(59, today);              // MenACWY 1
-            AddScheduled(60, today.AddMonths(3));  // MenACWY 2
+            // configured generically. Each is its own 2-dose series, spaced by its own MinGap.
+            EnqueueSeries(62, 63); // Chickenpox 1/2
+            EnqueueSeries(44, 45); // MMR 1/2
+            EnqueueSeries(70, 71); // Hepatitis A 1/2
+            EnqueueSeries(59, 60); // MenACWY 1/2
 
-            // HPV — girls only, all 3 doses (46/47/141), standard 0/2/6-month series.
+            // HPV — girls only, all 3 doses (46/47/141), spaced by each dose's own MinGap.
             if (childDTO.Gender == "Girl")
             {
-                AddScheduled(46, today);
-                AddScheduled(47, today.AddMonths(2));
-                AddScheduled(141, today.AddMonths(6));
+                EnqueueSeries(46, 47, 141);
             }
 
             // Cholera — never an EPI dose (supplementary/outbreak vaccine, not routine EPI), but
-            // still scheduled for every EPI Plus child at the same standard dates as a regular
-            // child. Always IsDone=false via AddScheduled above — never marked Done through this
-            // EPI path, since the government programme never actually administered it.
-            AddScheduled(157, dob.AddMonths(12));
-            AddScheduled(158, dob.AddMonths(13));
+            // still needs scheduling for every EPI Plus child. Its real-world due date is
+            // DOB+12mo/DOB+13mo; if that's still in the future, keep it there (unchanged from
+            // before). If it's already in the past (the common case for an EPI Plus child
+            // registering well past infancy), it re-anchors into the same today-onward
+            // catch-up visit queue as everything else here (user, 2026-08-07) instead of sitting
+            // permanently "overdue" at a date years gone. Always IsDone=false — never marked
+            // Done through this path, since the government programme never actually gave it.
+            var cholera1Date = dob.AddMonths(12);
+            if (cholera1Date > today)
+            {
+                if (!AlreadyExists(157)) _db.Schedules.Add(new Schedule
+                { ChildId = childDTO.Id, DoseId = 157, Date = cholera1Date, IsDone = false, DiseaseYear = "" });
+                var cholera2Date = dob.AddMonths(13);
+                if (!AlreadyExists(158)) _db.Schedules.Add(new Schedule
+                { ChildId = childDTO.Id, DoseId = 158, Date = cholera2Date, IsDone = false, DiseaseYear = "" });
+            }
+            else
+            {
+                EnqueueSeries(157, 158);
+            }
+
+            // --- Visit planner: assign every queued series' doses to real visit dates, at most
+            // 2 injectables + 1 oral per visit. A series' next dose becomes eligible once its
+            // predecessor's real assigned visit date + that predecessor DoseId's own MinGap has
+            // passed — so dose 2/3 of a series is spaced from its OWN predecessor's actual date,
+            // never a flat guess, and a short-MinGap series isn't held back waiting on a
+            // longer-MinGap series elsewhere in the queue.
+            var visitDate = today;
+            int injectablesThisVisit = 0;
+            int oralsThisVisit = 0;
+            var cursor = seriesQueue.Select(s => 0).ToArray(); // index into each series' next unplaced dose
+            var notBefore = seriesQueue.Select(_ => today).ToArray(); // per-series earliest-allowed date
+
+            // At each step: among series whose next dose is already eligible for the CURRENT
+            // visit (its notBefore <= visitDate) and whose type (oral/injectable) still has room
+            // this visit, place the first one found (series priority order). If nothing is
+            // placeable — visit is full, or every remaining series' next dose isn't eligible yet
+            // — advance visitDate to the EARLIEST notBefore among remaining series (never a fixed
+            // shared floor), floored at +28 days from the current visit. This lets a
+            // short-MinGap series (e.g. Chickenpox/MMR at ~90d) get its dose 2 visit as soon as
+            // it's actually due, instead of waiting on a long-MinGap series (e.g. Hepatitis A at
+            // 180d) to also become eligible first.
+            bool AnyRemaining() => cursor.Select((c, i) => c < seriesQueue[i].Length).Any(x => x);
+            while (AnyRemaining())
+            {
+                int placeIdx = -1;
+                for (int i = 0; i < seriesQueue.Count; i++)
+                {
+                    if (cursor[i] >= seriesQueue[i].Length) continue;
+                    if (notBefore[i] > visitDate) continue;
+                    var doseId = seriesQueue[i][cursor[i]];
+                    bool isOral = OralCatchUpDoseIds.Contains(doseId);
+                    bool hasRoom = isOral ? oralsThisVisit < 1 : injectablesThisVisit < 2;
+                    if (hasRoom) { placeIdx = i; break; }
+                }
+
+                if (placeIdx >= 0)
+                {
+                    var doseId = seriesQueue[placeIdx][cursor[placeIdx]];
+                    bool isOral = OralCatchUpDoseIds.Contains(doseId);
+                    if (isOral) oralsThisVisit++; else injectablesThisVisit++;
+
+                    _db.Schedules.Add(new Schedule
+                    {
+                        ChildId = childDTO.Id,
+                        DoseId = doseId,
+                        Date = visitDate,
+                        IsDone = false,
+                        DiseaseYear = "",
+                    });
+
+                    var thisDoseFloor = visitDate.AddDays(MinGapDays(doseId));
+                    cursor[placeIdx]++;
+                    if (cursor[placeIdx] < seriesQueue[placeIdx].Length) notBefore[placeIdx] = thisDoseFloor;
+                }
+                else
+                {
+                    var remainingIdx = Enumerable.Range(0, seriesQueue.Count)
+                        .Where(i => cursor[i] < seriesQueue[i].Length).ToArray();
+                    var earliestNotBefore = remainingIdx.Min(i => notBefore[i]);
+                    var floor = visitDate.AddDays(28);
+                    visitDate = earliestNotBefore > floor ? earliestNotBefore : floor;
+                    injectablesThisVisit = 0;
+                    oralsThisVisit = 0;
+                }
+            }
 
             // Flu and non-EPI Typhoid — infinite/repeating bottom-table doses, added for every
             // EPI Plus child regardless of DOB or whether an EPI-history TCV row already exists
             // for them (that row is the one-time historical record; this is the standing
             // repeating entry, and neither suppresses the other). Vitamin A is intentionally
             // NOT auto-added here — the 1825-day (5-year) cutoff is a genuine exclusion for
-            // older children, not a missing rule, so it is gated explicitly.
-            if (ageDays < 1825)
+            // older children, not a missing rule, so it is gated explicitly. These three stay
+            // outside the visit planner — they're the existing infinite/repeating-table
+            // convention already used everywhere else in this system, unrelated to the fixed
+            // clinic-dose visit cadence above.
+            if (ageDays < 1825 && !AlreadyExists(131))
             {
-                AddScheduled(131, today); // Vitamin A
+                _db.Schedules.Add(new Schedule
+                { ChildId = childDTO.Id, DoseId = 131, Date = today, IsDone = false, DiseaseYear = "" }); // Vitamin A
             }
-            AddScheduled(30, today); // Typhoid — normal non-EPI repeating dose; no-op if the
-                                      // EPI-history TCV insert above already created DoseId 30
-                                      // for this child, since AddScheduled skips existing rows.
+            if (!AlreadyExists(30))
+            {
+                _db.Schedules.Add(new Schedule
+                { ChildId = childDTO.Id, DoseId = 30, Date = today, IsDone = false, DiseaseYear = "" }); // Typhoid
+            }
         }
 
         // Date Function

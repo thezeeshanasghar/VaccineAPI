@@ -1128,11 +1128,20 @@ namespace VaccineAPI.Controllers
                         {
                              if (isFirstRow)
                               {
-                                  PdfPCell ageCell = new PdfPCell(new Phrase(group.Key, font));
+                                  // "Catch Up Vaccines" prints bold and rotated 90° (reading
+                                  // bottom-to-top) in its merged Age cell, per the user's
+                                  // handwritten reference sheet - every other fixed age label
+                                  // (At Birth, 6 Weeks, etc.) stays horizontal at the normal size.
+                                  bool isCatchUpCell = isEpiPlus && group.Key == catchUpLabel;
+                                  Font ageCellFont = isCatchUpCell
+                                      ? FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11)
+                                      : font;
+                                  PdfPCell ageCell = new PdfPCell(new Phrase(group.Key, ageCellFont));
                                   ageCell.Rowspan = rowSpanCount;
                                   ageCell.VerticalAlignment = Element.ALIGN_MIDDLE;
                                   ageCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                   ageCell.BorderColor = GrayColor.LightGray;
+                                  if (isCatchUpCell) ageCell.Rotation = 90;
                                   table.AddCell(ageCell);
                                   isFirstRow = false;
                               }

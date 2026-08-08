@@ -3746,6 +3746,14 @@ namespace VaccineAPI.Controllers
         {
             var dob = childDTO.DOB.Date;
             var now = DateTime.UtcNow;
+            // "Mark as Given" (default, IsEpiScheduleOnly false/absent) — unchanged from before:
+            // every EPI-programme dose below is inserted as already-administered history, exactly
+            // as this method has always behaved. "Schedule Only" (IsEpiScheduleOnly true) inserts
+            // the identical dose set at the identical dates computed below, but not-yet-given — so
+            // they read as ordinary Due/Missed rows instead of EPI-given history. Every DOB-bracket
+            // and date calculation below is untouched; only whether AddEpiDose marks the row done
+            // changes.
+            var markAsGiven = !childDTO.IsEpiScheduleOnly;
 
             void AddEpiDose(long doseId, DateTime date)
             {
@@ -3755,9 +3763,9 @@ namespace VaccineAPI.Controllers
                     ChildId = childDTO.Id,
                     DoseId = doseId,
                     Date = date,
-                    IsDone = true,
-                    GivenDate = date,
-                    DoneAt = now,
+                    IsDone = markAsGiven,
+                    GivenDate = markAsGiven ? date : (DateTime?)null,
+                    DoneAt = markAsGiven ? now : (DateTime?)null,
                     DiseaseYear = "",
                 });
             }

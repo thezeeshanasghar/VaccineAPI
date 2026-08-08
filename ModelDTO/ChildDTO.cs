@@ -28,6 +28,11 @@ namespace VaccineAPI.ModelDTO
         public string Nationality { get; set; } = "";
         public string CNIC { get; set; } = "";
         public bool IsEPIDone { get; set; }
+        // EPI Plus sub-choice: false (default) = "Mark as Given" - existing behaviour, EPI-history
+        // doses inserted as already administered. true = "Schedule Only" - the same EPI dose set
+        // and dates, inserted as not-yet-given (Due/Missed like any other upcoming dose). Only
+        // meaningful when IsEPIDone is true; ignored otherwise.
+        public bool IsEpiScheduleOnly { get; set; }
         public bool IsVerified { get; set; }
         public bool IsInactive { get; set; }
         public long ClinicId { get; set; }

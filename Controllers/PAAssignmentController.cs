@@ -514,12 +514,32 @@ namespace VaccineAPI.Controllers
         }
 
         // PATCH /api/PAAssignment/{id}/reassign
+        // dto.RequestingPaId: set when a manager-tier PA (not the doctor) is initiating the
+        // reassign from the shared PA Assignment Tracking view. Requires ReassignPaTask, and
+        // the assignment's own clinic must be one the manager PA has PaAccess to — same fence
+        // as GetForDoctor's requestingPaId, so a manager PA can't reassign an assignment they
+        // weren't even allowed to see.
         [HttpPatch("{id}/reassign")]
         public async Task<IActionResult> Reassign(long id, [FromBody] ReassignDto dto)
         {
             var old = await _db.PAAssignments.FindAsync(id);
             if (old == null)
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+
+            if (dto.RequestingPaId.HasValue)
+            {
+                var managerPerm = await _db.PaPermissions.FirstOrDefaultAsync(p => p.PaId == dto.RequestingPaId.Value);
+                if (managerPerm == null || !managerPerm.ReassignPaTask)
+                    return Forbid();
+
+                if (old.ClinicId.HasValue)
+                {
+                    var hasAccess = await _db.PaAccess.AnyAsync(a =>
+                        a.PersonalAssistantId == dto.RequestingPaId.Value && a.ClinicId == old.ClinicId.Value);
+                    if (!hasAccess)
+                        return Forbid();
+                }
+            }
 
             if (old.IsCompleted)
                 return Ok(new { IsSuccess = false, Message = "Cannot reassign a completed assignment" });
@@ -952,13 +972,20 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = assignments });
         }
 
-        // GET /api/PAAssignment/doctor/{doctorId}?clinicId=&paId=&status=&fromDate=&toDate=
+        // GET /api/PAAssignment/doctor/{doctorId}?clinicId=&paId=&status=&fromDate=&toDate=&requestingPaId=
         // Doctor-facing tracking list — the gap GetByPA (PA-only, excludes completed) and
         // GetActiveForDoctor (today-only, unfiltered) both leave open. Scoped through the
         // doctor's own clinics (multi-clinic safe, same pattern as
         // PaCashHandoverController.GetReconciliation), with clinic/PA/status/date-range
         // filters all optional. status defaults to "Active" to match the doctor's usual
         // "what's outstanding" view; pass "All" for full history.
+        //
+        // requestingPaId: set when a manager-tier PA (not the doctor) is calling this same
+        // endpoint from the shared PA Assignment Tracking view. Requires ViewPaAssignmentStatus
+        // and — unlike the doctor's own unrestricted view — further fences results down to only
+        // clinics in that PA's own PaAccess rows, so a manager PA can never see assignments at a
+        // clinic they don't personally have access to, even though the doctor who owns all of
+        // them can.
         [HttpGet("doctor/{doctorId}")]
         public async Task<IActionResult> GetForDoctor(
             long doctorId,
@@ -966,16 +993,30 @@ namespace VaccineAPI.Controllers
             [FromQuery] long? paId = null,
             [FromQuery] string status = "Active",
             [FromQuery] DateTime? fromDate = null,
-            [FromQuery] DateTime? toDate = null)
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] long? requestingPaId = null)
         {
             var clinicIds = await _db.Clinics
                 .Where(c => c.DoctorId == doctorId)
                 .Select(c => c.Id)
                 .ToListAsync();
 
+            if (requestingPaId.HasValue)
+            {
+                var managerPerm = await _db.PaPermissions.FirstOrDefaultAsync(p => p.PaId == requestingPaId.Value);
+                if (managerPerm == null || !managerPerm.ViewPaAssignmentStatus)
+                    return Forbid();
+
+                var managerClinicIds = await _db.PaAccess
+                    .Where(a => a.PersonalAssistantId == requestingPaId.Value)
+                    .Select(a => a.ClinicId)
+                    .ToListAsync();
+                clinicIds = clinicIds.Where(id => managerClinicIds.Contains(id)).ToList();
+            }
+
             var query = _db.PAAssignments.Where(a =>
                 a.DoctorId == doctorId &&
-                (a.ClinicId == null || clinicIds.Contains(a.ClinicId.Value)));
+                (a.ClinicId == null ? !requestingPaId.HasValue : clinicIds.Contains(a.ClinicId.Value)));
 
             if (clinicId.HasValue)
                 query = query.Where(a => a.ClinicId == clinicId.Value);
@@ -1106,6 +1147,7 @@ namespace VaccineAPI.Controllers
         public long NewPaId { get; set; }
         public string? Notes { get; set; }
         public DateTime? TargetDate { get; set; }
+        public long? RequestingPaId { get; set; }
     }
 
     public class SetTargetDateDto

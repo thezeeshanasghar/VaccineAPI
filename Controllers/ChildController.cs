@@ -1056,12 +1056,31 @@ namespace VaccineAPI.Controllers
                         .OrderBy(a => Math.Abs(a.Days - ageDays))
                         .First().Label;
                 }
+                // Every DoseId InsertEpiHistoryDoses can ever insert (union of every DOB-bracket
+                // branch, since any given child only hits some of them) - membership in this set,
+                // not IsDone, is what decides "this row belongs under a fixed EPI age label".
+                // IsDone only decides the row's printed Given/Due/Missed status (GetStatus below),
+                // never which age bucket it prints in - a "Schedule Only" child's history rows are
+                // all IsDone=false but must still land under At Birth/6 Weeks/etc., not collapse
+                // into Catch Up Vaccines alongside real clinic top-ups.
+                var epiHistoryDoseIds = new HashSet<long>
+                {
+                    1, 3, 102,          // At Birth: BCG, OPV, HepB
+                    34, 35, 36,         // Combo 6/10/14wk (post-2002 Hib-inclusive formulation)
+                    159, 160, 161,      // Combo 6/10/14wk (pre-2002 no-Hib formulation)
+                    153, 154,           // IPV
+                    64, 65,             // Rota
+                    113, 114,           // Measles/MR (post-2020-10-01 bracket)
+                    151, 152,           // Measles/MR (pre-2020-10-01 bracket)
+                    30,                 // TCV (shares Typhoid's DoseId)
+                    41, 42, 43,         // PCV
+                };
 
                 var groupedSchedules = orderedDbSchedules
                     .GroupBy(s => {
                         if (isEpiPlus)
                         {
-                            if (s.IsDone != true) return catchUpLabel;
+                            if (!epiHistoryDoseIds.Contains(s.DoseId)) return catchUpLabel;
                             var histAgeDays = ((s.GivenDate ?? s.Date) - child1.DOB).Days;
                             return NearestEpiFixedLabel(histAgeDays);
                         }

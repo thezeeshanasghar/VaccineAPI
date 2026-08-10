@@ -360,6 +360,9 @@ namespace VaccineAPI.Migrations
                     b.Property<bool>("AllowAssistant")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("AllowColdChain")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("longtext");

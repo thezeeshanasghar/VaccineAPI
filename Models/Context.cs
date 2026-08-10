@@ -85,6 +85,9 @@ namespace VaccineAPI.Models
         public DbSet<InvoiceAmendment> InvoiceAmendments { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
         public DbSet<PAAssignmentSchedule> PAAssignmentSchedules { get; set; }
+        public DbSet<Refrigerator> Refrigerators { get; set; }
+        public DbSet<TemperatureReading> TemperatureReadings { get; set; }
+        public DbSet<ColdChainApprovalLog> ColdChainApprovalLogs { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

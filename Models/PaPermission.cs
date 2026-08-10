@@ -94,5 +94,8 @@ namespace VaccineAPI.Models
         public bool SendFeedbackEmail { get; set; }
         public bool SendFeedbackWhatsApp { get; set; }
         public bool ManagePaClinicAssignments { get; set; }
+
+        // Cold Chain
+        public bool ColdChainEntry { get; set; }
     }
 }

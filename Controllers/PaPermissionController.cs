@@ -117,6 +117,8 @@ namespace VaccineAPI.Controllers
                 existing.SendFeedbackWhatsApp = incoming.SendFeedbackWhatsApp;
                 existing.ManagePaClinicAssignments = incoming.ManagePaClinicAssignments;
 
+                existing.ColdChainEntry = incoming.ColdChainEntry;
+
                 _db.Entry(existing).State = EntityState.Modified;
             }
 

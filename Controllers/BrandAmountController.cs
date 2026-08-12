@@ -73,6 +73,11 @@ namespace VaccineAPI.Controllers
         [HttpPut]
         public async Task<Response<string>> UpdateAmounts([FromBody] List<BrandAmountDTO> dtos)
         {
+            if (dtos.Any(d => d.PaId.HasValue))
+            {
+                return new Response<string>(false, "You do not have permission to update brand prices.", null);
+            }
+
             foreach (var dto in dtos)
             {
                 var ba = await _db.BrandAmounts.FindAsync(dto.Id);

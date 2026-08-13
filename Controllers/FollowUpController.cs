@@ -664,12 +664,12 @@ namespace VaccineAPI.Controllers
             };
             document.Add(heading);
 
-            var followUpHeaderTable = new PdfPTable(7);
+            var followUpHeaderTable = new PdfPTable(8);
             followUpHeaderTable.HorizontalAlignment = 0;
             followUpHeaderTable.TotalWidth = 510f;
             followUpHeaderTable.LockedWidth = true;
             followUpHeaderTable.SpacingBefore = 15;
-            float[] widths = new float[] { 0.5f, 1.5f, 1.5f, 1f, 1f, 1f, 1f };
+            float[] widths = new float[] { 0.5f, 1.3f, 1.3f, 0.9f, 0.9f, 0.8f, 1f, 1f };
             followUpHeaderTable.SetWidths(widths);
 
             followUpHeaderTable.AddCell(CreateCell("Sr No", "backgroudLightGray", 1, "center", "scheduleRecords"));
@@ -678,10 +678,13 @@ namespace VaccineAPI.Controllers
             followUpHeaderTable.AddCell(CreateCell("Weight", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("Height", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("OFC", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("Wt Velocity (kg/yr)", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("Ht Velocity (cm/yr)", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
             // Loop through follow-up details and add them to the table
             int srNo = 1; // Initialize serial number
+            float? lastValidWeight = null; // Last visit's weight where weight was actually documented
+            DateTime? lastValidWeightDate = null; // Visit date corresponding to lastValidWeight
             float? lastValidHeight = null; // Last visit's height where height was actually documented
             DateTime? lastValidHeightDate = null; // Visit date corresponding to lastValidHeight
 
@@ -692,6 +695,7 @@ namespace VaccineAPI.Controllers
                 string weightStr = (followUpDetails.Weight.HasValue && followUpDetails.Weight.Value > 0) ? $"{followUpDetails.Weight.Value} kg" : "-";
                 string heightStr = (followUpDetails.Height.HasValue && followUpDetails.Height.Value > 0) ? $"{followUpDetails.Height.Value} cm" : "-";
                 string ofcStr    = (followUpDetails.OFC.HasValue    && followUpDetails.OFC.Value    > 0) ? $"{followUpDetails.OFC.Value} cm"    : "-";
+                bool hasWeight = followUpDetails.Weight.HasValue && followUpDetails.Weight.Value > 0;
                 bool hasHeight = followUpDetails.Height.HasValue && followUpDetails.Height.Value > 0;
 
                 // Add current record to the table
@@ -732,8 +736,19 @@ namespace VaccineAPI.Controllers
                     HorizontalAlignment = Element.ALIGN_CENTER
                 });
 
-                // Growth Velocity = (Height difference) / (Time difference in years), comparing
-                // against the most recent prior visit where height was actually documented.
+                // Growth Velocity = (measurement difference) / (time difference in years), comparing
+                // against the most recent prior visit where that measurement was actually documented.
+                string weightVelocityStr = "-";
+                if (hasWeight && lastValidWeight.HasValue && lastValidWeightDate.HasValue)
+                {
+                    double weightYears = (currentVisitDate - lastValidWeightDate.Value).TotalDays / 365.25;
+                    if (weightYears >= (1.0 / 365.25))
+                    {
+                        float weightVelocity = (followUpDetails.Weight.Value - lastValidWeight.Value) / (float)weightYears;
+                        weightVelocityStr = $"{weightVelocity:F2} kg/yr";
+                    }
+                }
+
                 string velocityStr = "-";
                 if (hasHeight && lastValidHeight.HasValue && lastValidHeightDate.HasValue)
                 {
@@ -745,6 +760,13 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(weightVelocityStr, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                {
+                    BackgroundColor = BaseColor.White,
+                    BorderColor = BaseColor.LightGray,
+                    HorizontalAlignment = Element.ALIGN_CENTER
+                });
+
                 followUpHeaderTable.AddCell(new PdfPCell(new Phrase(velocityStr, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
                     BackgroundColor = BaseColor.White,
@@ -752,7 +774,12 @@ namespace VaccineAPI.Controllers
                     HorizontalAlignment = Element.ALIGN_CENTER
                 });
 
-                // Only update the "last valid" reference when this visit actually documented height
+                // Only update the "last valid" reference when this visit actually documented that measurement
+                if (hasWeight)
+                {
+                    lastValidWeight = followUpDetails.Weight.Value;
+                    lastValidWeightDate = currentVisitDate;
+                }
                 if (hasHeight)
                 {
                     lastValidHeight = followUpDetails.Height.Value;
@@ -766,7 +793,8 @@ namespace VaccineAPI.Controllers
 
             document.Close();
             output.Seek(0, SeekOrigin.Begin);
-            return File(output, "application/pdf", "Follow-Up.pdf");
+            var pdfFileName = $"{childName.Replace(" ", "_")}_Follow-Up.pdf";
+            return File(output, "application/pdf", pdfFileName);
         }
 
         protected PdfPCell CreateCell(string value, string color, int colpan, string alignment, string table)

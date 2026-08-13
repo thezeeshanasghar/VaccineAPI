@@ -15,6 +15,8 @@ namespace VaccineAPI.Models
         public float HeightMax { get; set; }
         public float OfcMin { get; set; }
         public float OfcMax { get; set; }
+        public float? BmiMin { get; set; }                 // WHO -2SD BMI-for-age (kg/m2)
+        public float? BmiMax { get; set; }                 // WHO +2SD BMI-for-age (kg/m2)
 
     }
 

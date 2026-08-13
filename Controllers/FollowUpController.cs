@@ -618,6 +618,7 @@ namespace VaccineAPI.Controllers
             string childName = childDetails.Name;
             string fatherName = $"S/D/W/o : {childDetails.FatherName}";
             string DOB = $"DOB : {childDetails.DOB.ToString("dd-MMM-yyyy")}";
+            int genderCode = childDetails.Gender == "Girl" ? 2 : 1;
 
             var output = new MemoryStream();
             var document = new Document();
@@ -677,7 +678,7 @@ namespace VaccineAPI.Controllers
             followUpHeaderTable.AddCell(CreateCell("Disease", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("Weight", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("Height", "backgroudLightGray", 1, "center", "scheduleRecords"));
-            followUpHeaderTable.AddCell(CreateCell("OFC", "backgroudLightGray", 1, "center", "scheduleRecords"));
+            followUpHeaderTable.AddCell(CreateCell("OFC/BMI", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("Wt Velocity (kg/yr)", "backgroudLightGray", 1, "center", "scheduleRecords"));
             followUpHeaderTable.AddCell(CreateCell("Ht Velocity (cm/yr)", "backgroudLightGray", 1, "center", "scheduleRecords"));
 
@@ -692,11 +693,50 @@ namespace VaccineAPI.Controllers
             {
                 DateTime currentVisitDate = followUpDetails.CurrentVisitDate ?? DateTime.MinValue;
                 string disease = followUpDetails.Disease ?? "";
-                string weightStr = (followUpDetails.Weight.HasValue && followUpDetails.Weight.Value > 0) ? $"{followUpDetails.Weight.Value} kg" : "-";
-                string heightStr = (followUpDetails.Height.HasValue && followUpDetails.Height.Value > 0) ? $"{followUpDetails.Height.Value} cm" : "-";
-                string ofcStr    = (followUpDetails.OFC.HasValue    && followUpDetails.OFC.Value    > 0) ? $"{followUpDetails.OFC.Value} cm"    : "-";
                 bool hasWeight = followUpDetails.Weight.HasValue && followUpDetails.Weight.Value > 0;
                 bool hasHeight = followUpDetails.Height.HasValue && followUpDetails.Height.Value > 0;
+
+                // Age in completed months at THIS visit's date (not today) — used to look up
+                // Weight/Height/OFC/BMI reference ranges from NormalRanges, same convention as
+                // the vaccine schedule PDF (ChildController.cs).
+                var ageInMonths = (currentVisitDate.Year - childDetails.DOB.Year) * 12 +
+                                   (currentVisitDate.Month - childDetails.DOB.Month) -
+                                   (currentVisitDate.Day >= childDetails.DOB.Day ? 0 : 1);
+                var normalRange = _db.NormalRanges.FirstOrDefault(x => x.Age == ageInMonths && x.Gender == genderCode);
+
+                string weightStr = hasWeight ? $"{followUpDetails.Weight.Value} kg" : "-";
+                if (hasWeight && normalRange != null)
+                {
+                    weightStr += $" ({normalRange.WeightMin}-{normalRange.WeightMax})";
+                }
+                string heightStr = hasHeight ? $"{followUpDetails.Height.Value} cm" : "-";
+                if (hasHeight && normalRange != null)
+                {
+                    heightStr += $" ({normalRange.HeightMin}-{normalRange.HeightMax})";
+                }
+
+                // OFC/BMI cell: same rule as the vaccine schedule PDF — &lt; 25mo shows OFC,
+                // &gt; 24mo shows BMI = kg / (cm² / 10000). Range annotation uses
+                // NormalRange.BmiMin/BmiMax (WHO -2SD/+2SD BMI-for-age) — unlike ChildController's
+                // schedule PDF, which mislabels BMI with the OFC range.
+                string ofcBmiStr = "-";
+                if (ageInMonths < 25 && followUpDetails.OFC.HasValue && followUpDetails.OFC.Value > 0)
+                {
+                    ofcBmiStr = $"{followUpDetails.OFC.Value} cm";
+                    if (normalRange != null)
+                    {
+                        ofcBmiStr += $" ({normalRange.OfcMin}-{normalRange.OfcMax})";
+                    }
+                }
+                else if (ageInMonths > 24 && hasWeight && hasHeight)
+                {
+                    double bmi = followUpDetails.Weight.Value / (followUpDetails.Height.Value * followUpDetails.Height.Value / 10000);
+                    ofcBmiStr = $"{Math.Round(bmi, 1)}";
+                    if (normalRange != null && normalRange.BmiMin.HasValue && normalRange.BmiMax.HasValue)
+                    {
+                        ofcBmiStr += $" ({normalRange.BmiMin}-{normalRange.BmiMax})";
+                    }
+                }
 
                 // Add current record to the table
                 followUpHeaderTable.AddCell(new PdfPCell(new Phrase(srNo.ToString(), FontFactory.GetFont(FontFactory.HELVETICA, 10)))
@@ -729,7 +769,7 @@ namespace VaccineAPI.Controllers
                     BorderColor = BaseColor.LightGray,
                     HorizontalAlignment = Element.ALIGN_CENTER
                 });
-                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(ofcStr, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
+                followUpHeaderTable.AddCell(new PdfPCell(new Phrase(ofcBmiStr, FontFactory.GetFont(FontFactory.HELVETICA, 10)))
                 {
                     BackgroundColor = BaseColor.White,
                     BorderColor = BaseColor.LightGray,

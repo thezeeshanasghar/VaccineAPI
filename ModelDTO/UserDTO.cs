@@ -24,6 +24,7 @@ namespace VaccineAPI.ModelDTO
         public string ProfileImage { get; set; } = "";
         public string DoctorType { get; set; } = "";
         public long PAId { get; set; }
+        public long ManagerId { get; set; }
         public bool IsVerified { get; set; }
         public string Name { get; set; } = "";
         public string SecurityStamp { get; set; } = "";

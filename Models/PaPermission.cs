@@ -88,14 +88,6 @@ namespace VaccineAPI.Models
         // Analytics
         public bool ViewAnalytics { get; set; }
 
-        // Manager-Level Permissions
-        public bool ViewPaAssignmentStatus { get; set; }
-        public bool ReassignPaTask { get; set; }
-        public bool ViewFeedbackResponseTracker { get; set; }
-        public bool SendFeedbackEmail { get; set; }
-        public bool SendFeedbackWhatsApp { get; set; }
-        public bool ManagePaClinicAssignments { get; set; }
-
         // Cold Chain
         public bool ColdChainEntry { get; set; }
     }

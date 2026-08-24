@@ -228,6 +228,15 @@ namespace VaccineAPI
             SendEmail(pa.Email, body);
         }
 
+        public static void ManagerForgotPassword(Manager manager)
+        {
+            string body = ""
+                   + "Hi " + "<b>" + manager.Name + "</b>, <br />"
+                   + "Your password is <b>" + manager.User.Password + "</b>";
+
+            SendEmail(manager.Email, body);
+        }
+
         public static void PersonalAssistantLoginDetails(PersonalAssistant pa, string password)
         {
             string body = ""

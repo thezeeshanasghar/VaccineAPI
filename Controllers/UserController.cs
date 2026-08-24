@@ -108,6 +108,23 @@ namespace VaccineAPI.Controllers
                     && x.CountryCode == userDTO.CountryCode
                     && x.UserType == userDTO.UserType
             );
+
+            // Manager logs in through the same PA login form (no visible role picker) — the
+            // frontend always sends UserType "PA". If the PA-typed lookup finds nothing, retry
+            // the identical credentials against UserType "MANAGER" before failing.
+            if (dbUser == null && userDTO.UserType == "PA")
+            {
+                dbUser = _db.Users.FirstOrDefault(
+                    x =>
+                        x.MobileNumber == userDTO.MobileNumber
+                        && x.Password == userDTO.Password
+                        && x.CountryCode == userDTO.CountryCode
+                        && x.UserType == "MANAGER"
+                );
+                if (dbUser != null)
+                    userDTO.UserType = "MANAGER";
+            }
+
             if (dbUser == null)
                 return new Response<UserDTO>(false, "Invalid Mobile Number and Password.", null);
 
@@ -162,6 +179,21 @@ namespace VaccineAPI.Controllers
                 var doctorDb = _db.Doctors.Where(x => x.Id == paDb.DoctorId).FirstOrDefault();
                 userDTO.AllowInventory = doctorDb != null && doctorDb.AllowInventory;
             }
+            else if (userDTO.UserType.Equals("MANAGER"))
+            {
+                var managerDb = _db.Manager.Where(x => x.UserId == dbUser.Id).FirstOrDefault();
+                if (managerDb == null)
+                    return new Response<UserDTO>(false, "Manager not found.", null);
+                else if (managerDb.IsActive == false)
+                    return new Response<UserDTO>(false, "Your account has been deactivated. Contact your doctor.", null);
+                else if (managerDb.IsVerified == false)
+                    return new Response<UserDTO>(false, "You are not approved. Contact doctor for approval.", null);
+                else
+                    userDTO.ManagerId = managerDb.Id;
+                userDTO.DoctorId = managerDb.DoctorId;
+                userDTO.IsVerified = managerDb.IsVerified;
+                userDTO.Name = managerDb.Name;
+            }
 
             return new Response<UserDTO>(true, null, userDTO);
         }
@@ -205,6 +237,18 @@ namespace VaccineAPI.Controllers
                     .Where(x => x.CountryCode == userDTO.CountryCode)
                     .Where(ut => ut.UserType == userDTO.UserType)
                     .FirstOrDefault();
+
+                // Manager shares the PA forgot-password form (no visible role picker), so the
+                // frontend always sends UserType "PA" here too — same PA-then-MANAGER fallback
+                // as login().
+                if (dbUser == null && userDTO.UserType == "PA")
+                {
+                    dbUser = _db.Users
+                        .Where(x => x.MobileNumber == userDTO.MobileNumber)
+                        .Where(x => x.CountryCode == userDTO.CountryCode)
+                        .Where(ut => ut.UserType == "MANAGER")
+                        .FirstOrDefault();
+                }
 
                 if (dbUser == null)
                     return new Response<UserDTO>(false, "Invalid Mobile Number", null);
@@ -259,6 +303,25 @@ namespace VaccineAPI.Controllers
                     else
                     {
                         UserEmail.PaForgotPassword(paDb);
+                        return new Response<UserDTO>(
+                            true,
+                            "Your password has been sent to your email address",
+                            null
+                        );
+                    }
+                }
+                else if (dbUser.UserType.Equals("MANAGER"))
+                {
+                    var managerDb = _db.Manager
+                        .Include(m => m.User)
+                        .FirstOrDefault(x => x.UserId == dbUser.Id);
+                    if (managerDb == null)
+                    {
+                        return new Response<UserDTO>(false, "Invalid Mobile Number", null);
+                    }
+                    else
+                    {
+                        UserEmail.ManagerForgotPassword(managerDb);
                         return new Response<UserDTO>(
                             true,
                             "Your password has been sent to your email address",

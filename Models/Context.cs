@@ -71,6 +71,9 @@ namespace VaccineAPI.Models
         public DbSet<PaAccess> PaAccess { get; set; }
         public DbSet<PaPermission> PaPermissions { get; set; }
         public DbSet<PaActivityLog> PaActivityLogs { get; set; }
+        public DbSet<Manager> Manager { get; set; }
+        public DbSet<ManagerAccess> ManagerAccess { get; set; }
+        public DbSet<ManagerPermission> ManagerPermissions { get; set; }
         public DbSet<InvoiceSubmission> InvoiceSubmissions { get; set; }
         public DbSet<Fee> Fee { get; set; }
         public DbSet<VaccineBrand> VaccineBrands { get; set; }

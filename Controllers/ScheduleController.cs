@@ -106,7 +106,7 @@ namespace VaccineAPI.Controllers
             if (scheduleDTO.PaId.HasValue)
             {
                 var paPerm = _db.PaPermissions.FirstOrDefault(p => p.PaId == scheduleDTO.PaId.Value);
-                if (paPerm == null || !paPerm.AddSpecialDoses)
+                if (paPerm == null || !paPerm.AddVaccineToPatientRecord)
                     return new Response<ScheduleDTO>(false, "You do not have permission to add vaccines to the schedule.", null);
             }
 
@@ -308,7 +308,8 @@ namespace VaccineAPI.Controllers
                 int? giveConsumedStockId = null;
                 var onlineClinicId = ResolveClinicIdForStock(
                     scheduleDTO.DoctorId,
-                    dbSchedule.Child?.ClinicId ?? 0
+                    dbSchedule.Child?.ClinicId ?? 0,
+                    scheduleDTO.PaId
                 );
 
                 if (onlineClinicId <= 0)
@@ -434,7 +435,7 @@ namespace VaccineAPI.Controllers
 
                     if (inventoryEnabled && wasGiven && previousBrandId.HasValue)
                     {
-                        rollbackClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId, onlineClinicId);
+                        rollbackClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId, onlineClinicId, scheduleDTO.PaId);
                         var rollbackDoctorId = _db.Clinics
                             .Where(c => c.Id == rollbackClinicId)
                             .Select(c => c.DoctorId)
@@ -472,26 +473,89 @@ namespace VaccineAPI.Controllers
                         );
                     }
 
-                    // PA reversing a dose that was already invoiced/paid is a total cancellation
-                    // (dose + amount both void) and is allowed — but the doctor needs visibility
-                    // into which PA reversed billed work, so log it before the fields below are
-                    // wiped. PaActivityLogController.ApproveReversal already knows how to read this
-                    // ActionCode; it was just never being written.
-                    if (scheduleDTO.PaId.HasValue && wasGiven
-                        && (dbSchedule.InvoiceSubmissionId.HasValue || dbSchedule.IsPaymentCollected))
+                    // The dose/stock reversal below happens instantly regardless of actor — that
+                    // part was never gated and still isn't. What differs is the INVOICE side,
+                    // split by actor to match this codebase's existing trust model (doctor actions
+                    // are instant everywhere — Cancel, Reassign, ungive itself; PA actions that
+                    // touch money get a review layer):
+                    //
+                    //   DOCTOR ungive → invoice deleted immediately, below. No approval needed —
+                    //   a doctor approving their own action to themselves would be circular, and
+                    //   canOverridePaidUngive() already treats doctor ungive as unconditionally
+                    //   trusted.
+                    //
+                    //   PA ungive → invoice is left untouched here. Instead this logs a pending
+                    //   reversal onto the doctor's existing "Pending Reversal Approvals" queue
+                    //   (Payment Reconciliation page — PaActivityLogController's
+                    //   GetPendingReversals/ApproveReversal/RejectReversal was already built and
+                    //   live, just going unused for this exact case before this fix). Approving
+                    //   there is what actually reduces/zeroes the invoice (ApproveReversal's
+                    //   "UngiveAfterPayment" branch); rejecting leaves the PA still owing the full
+                    //   amount. This is the audit trail: every PA give/ungive/invoice-change that
+                    //   touches money surfaces here for the doctor to review.
+                    if (wasGiven && (dbSchedule.InvoiceSubmissionId.HasValue || dbSchedule.IsPaymentCollected))
                     {
-                        _db.PaActivityLogs.Add(new PaActivityLog
+                        if (scheduleDTO.PaId.HasValue)
                         {
-                            PaId = scheduleDTO.PaId.Value,
-                            DoctorId = scheduleDTO.DoctorId,
-                            ClinicId = null,
-                            PatientId = dbSchedule.ChildId,
-                            ActionCode = "UngiveAfterPayment",
-                            Description = $"{(dbSchedule.Dose?.Name ?? dbSchedule.Dose?.Vaccine?.Name ?? $"Dose {dbSchedule.DoseId}")} ungiven after invoicing for patient {dbSchedule.ChildId}",
-                            Notes = $"Amount pending reversal: {dbSchedule.Amount ?? 0} | ScheduleId: {dbSchedule.Id}",
-                            IsReversal = true,
-                            ActionDate = DateTime.UtcNow
-                        });
+                            _db.PaActivityLogs.Add(new PaActivityLog
+                            {
+                                PaId = scheduleDTO.PaId.Value,
+                                DoctorId = scheduleDTO.DoctorId,
+                                ClinicId = null,
+                                PatientId = dbSchedule.ChildId,
+                                ActionCode = "UngiveAfterPayment",
+                                Description = $"{(dbSchedule.Dose?.Name ?? dbSchedule.Dose?.Vaccine?.Name ?? $"Dose {dbSchedule.DoseId}")} ungiven after invoicing for patient {dbSchedule.ChildId}",
+                                // InvoiceSubmissionId captured here because the ungive below wipes
+                                // Schedule.InvoiceSubmissionId/GivenDate — ApproveReversal previously
+                                // re-derived the invoice by guessing InvoiceDate == GivenDate, which
+                                // silently broke once GivenDate was gone by approval time (always
+                                // fell back to "today," almost never the invoice's real date). This
+                                // FK, captured while it's still known, is what ApproveReversal now
+                                // reads directly instead of re-guessing.
+                                Notes = $"Amount pending reversal: {dbSchedule.Amount ?? 0} | ScheduleId: {dbSchedule.Id} | InvoiceSubmissionId: {dbSchedule.InvoiceSubmissionId}",
+                                IsReversal = true,
+                                ActionDate = DateTime.UtcNow
+                            });
+                        }
+                        else if (dbSchedule.InvoiceSubmissionId.HasValue)
+                        {
+                            var invoiceToDelete = _db.InvoiceSubmissions
+                                .FirstOrDefault(i => i.Id == dbSchedule.InvoiceSubmissionId.Value);
+                            if (invoiceToDelete != null)
+                            {
+                                var amendmentsToDelete = _db.InvoiceAmendments
+                                    .Where(am => am.InvoiceSubmissionId == invoiceToDelete.Id);
+                                _db.InvoiceAmendments.RemoveRange(amendmentsToDelete);
+
+                                // Clear the assignment's own FK if it pointed at this invoice, so
+                                // GetByPA doesn't dereference a row that's about to be removed.
+                                var linkedAssignment = _db.PAAssignments
+                                    .FirstOrDefault(a => a.InvoiceSubmissionId == invoiceToDelete.Id);
+                                if (linkedAssignment != null)
+                                    linkedAssignment.InvoiceSubmissionId = null;
+
+                                _db.InvoiceSubmissions.Remove(invoiceToDelete);
+                            }
+                        }
+                    }
+
+                    // Void (not delete) the per-dose Invoice PDF/QR row — unlike InvoiceSubmission
+                    // this may already be a printed/shared certificate, so its QR should resolve to
+                    // "cancelled" rather than 404. Same fields the (unreachable) give-branch code
+                    // already used for this at line ~889 — this is the actually-reachable copy.
+                    if (wasGiven)
+                    {
+                        var invoiceToVoid = _db.Invoices
+                            .FirstOrDefault(i => i.DoseId == dbSchedule.DoseId
+                                              && i.ChildId == dbSchedule.ChildId
+                                              && i.DoctorId == scheduleDTO.DoctorId
+                                              && i.IsVoided == false);
+                        if (invoiceToVoid != null)
+                        {
+                            invoiceToVoid.IsVoided = true;
+                            invoiceToVoid.SupersededBy = "UNGIVEN";
+                            _db.Entry(invoiceToVoid).State = EntityState.Modified;
+                        }
                     }
 
                     dbSchedule.IsDone = scheduleDTO.IsDone;
@@ -506,6 +570,7 @@ namespace VaccineAPI.Controllers
                     dbSchedule.BrandId = null;
                     dbSchedule.Amount = null;
                     dbSchedule.VaccineCost = null;
+                    dbSchedule.InvoiceSubmissionId = null;
                     dbSchedule.IsSkip = scheduleDTO.IsSkip;
                     if (scheduleDTO.IsSkip == true)
                     {
@@ -709,7 +774,7 @@ namespace VaccineAPI.Controllers
                         dbSchedule.IsPaymentApproved = false;
                         dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                         dbSchedule.IsDisease = scheduleDTO.IsDisease;
-                        var stockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
+                        var stockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0, scheduleDTO.PaId);
                         var stockPeriodStartForStamp = _db.Clinics
                             .Where(c => c.Id == onlineClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
                         var stampDecision = InventoryTransactionService.ResolveGiveDecision(
@@ -907,7 +972,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.IsPaymentApproved = false;
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                 dbSchedule.IsDisease = scheduleDTO.IsDisease;
-                var onlineStockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
+                var onlineStockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0, scheduleDTO.PaId);
                 ApplyStockSourceFields(dbSchedule, scheduleDTO, onlineStockClinicId);
                 dbSchedule.Validity = scheduleDTO.Validity;
                 dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
@@ -1261,8 +1326,26 @@ namespace VaccineAPI.Controllers
             dbSchedule.StockClinicId = clinicId;
         }
 
-        private long ResolveClinicIdForStock(long actorId, long fallbackClinicId)
+        private long ResolveClinicIdForStock(long actorId, long fallbackClinicId, long? paId = null)
         {
+            // PA acting: resolve to the PA's OWN online clinic (PaAccess.IsOnline), never the
+            // doctor's. A multi-clinic PA's online clinic is a separate concept from the
+            // doctor's online clinic (Clinic.IsOnline) and must not fall back to it — doing so
+            // silently misattributes stock to whatever clinic the doctor happens to have
+            // online, unrelated to where the PA is actually working.
+            if (paId.HasValue && paId.Value > 0)
+            {
+                var paOwnOnlineClinicId = _db.PaAccess
+                    .Where(p => p.PersonalAssistantId == paId.Value && p.IsOnline)
+                    .Select(p => p.ClinicId)
+                    .FirstOrDefault();
+
+                if (paOwnOnlineClinicId > 0)
+                {
+                    return paOwnOnlineClinicId;
+                }
+            }
+
             if (actorId > 0)
             {
                 var doctorOnlineClinicId = _db.Clinics
@@ -1289,7 +1372,7 @@ namespace VaccineAPI.Controllers
             return fallbackClinicId;
         }
 
-        private long ResolveClinicIdForUngive(Schedule schedule, long actorId, long fallbackClinicId)
+        private long ResolveClinicIdForUngive(Schedule schedule, long actorId, long fallbackClinicId, long? paId = null)
         {
             var childClinicId = schedule.Child?.ClinicId ?? 0;
 
@@ -1333,7 +1416,7 @@ namespace VaccineAPI.Controllers
                     return childClinicId;
                 }
 
-                var actorClinicId = ResolveClinicIdForStock(actorId, childClinicId);
+                var actorClinicId = ResolveClinicIdForStock(actorId, childClinicId, paId);
                 if (actorClinicId > 0 && candidateClinicIds.Contains(actorClinicId))
                 {
                     return actorClinicId;
@@ -1505,7 +1588,7 @@ namespace VaccineAPI.Controllers
             if (firstPaId.HasValue)
             {
                 var paPerm = _db.PaPermissions.FirstOrDefault(p => p.PaId == firstPaId.Value);
-                if (paPerm == null || !paPerm.AddSpecialDoses)
+                if (paPerm == null || !paPerm.AddVaccineToPatientRecord)
                     return new Response<IEnumerable<ScheduleDTO>>(false, "You do not have permission to add vaccines to the schedule.", null);
             }
 
@@ -1947,7 +2030,7 @@ namespace VaccineAPI.Controllers
             // (same ChildId, same date), so clinic resolution is done once, not per item.
             if (scheduleDTO.IsDone == true && scheduleDTO.ConfirmUnbatchedGive == null)
             {
-                var chkClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0);
+                var chkClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0, scheduleDTO.PaId);
                 if (chkClinicId > 0 && IsInventoryEnabledForActor(scheduleDTO.DoctorId, chkClinicId))
                 {
                     var chkPeriodStart = _db.Clinics
@@ -2028,6 +2111,10 @@ namespace VaccineAPI.Controllers
                     schedule.GivenByPaId = null;
                     schedule.PaymentCollectorPaId = null;
                     schedule.Amount = null;
+                    // NOTE: InvoiceSubmissionId is intentionally NOT cleared here — the
+                    // log/delete block just below still needs to read it (both to embed the FK
+                    // into the PA-path log's Notes, and to look up the row for the doctor-path
+                    // delete). It's cleared right after that block runs instead.
                 }
 
                 // PA audit counters
@@ -2039,37 +2126,54 @@ namespace VaccineAPI.Controllers
                         schedule.UngiveCount++;
                 }
 
-                // Ungive-after-download: create an InvoiceAmendment so it appears on the
-                // doctor's Payment Reconciliation page. PA payable stays unchanged until doctor acts.
-                // Doctor APPROVE → payable drops to 0. Doctor REJECT → PA still owes full amount.
-                if (scheduleDTO.IsDone == false && wasIsDone == true && scheduleDTO.PaId.HasValue)
+                // Same doctor/PA split as the single-dose Update() path above: the dose/stock
+                // reversal still happens instantly for either actor. Doctor ungive deletes the
+                // invoice immediately (no approval — a doctor approving their own action to
+                // themselves would be circular). PA ungive does NOT touch the invoice inline —
+                // it logs a pending reversal onto the doctor's existing "Pending Reversal
+                // Approvals" queue (Payment Reconciliation page), same as the single-dose path.
+                // Replaces the previous date-window-guess InvoiceAmendment logic that used to
+                // live here (matched by InvoiceDate ± 1 day) — the same "guess instead of using
+                // the FK" pattern this codebase has already been burned by more than once.
+                if (scheduleDTO.IsDone == false && wasIsDone == true
+                    && (schedule.InvoiceSubmissionId.HasValue || schedule.IsPaymentCollected))
                 {
-                    var invoiceDateMin3 = DateTime.UtcNow.Date.AddDays(-1);
-                    var invoiceDateMax3 = DateTime.UtcNow.Date.AddDays(1);
-                    var invSub2 = _db.InvoiceSubmissions.FirstOrDefault(x =>
-                        x.ChildId == schedule.ChildId &&
-                        x.DoctorId == scheduleDTO.DoctorId &&
-                        x.InvoiceDate.Date >= invoiceDateMin3 &&
-                        x.InvoiceDate.Date <= invoiceDateMax3 &&
-                        x.TotalAmount > 0);
-
-                    if (invSub2 != null && !invSub2.HasPendingAmendment)
+                    if (scheduleDTO.PaId.HasValue)
                     {
-                        _db.InvoiceAmendments.Add(new InvoiceAmendment
+                        _db.PaActivityLogs.Add(new PaActivityLog
                         {
-                            InvoiceSubmissionId = invSub2.Id,
-                            AmendmentType = "Ungive",
-                            OldAmount = invSub2.TotalAmount,
-                            NewAmount = 0,
                             PaId = scheduleDTO.PaId.Value,
                             DoctorId = scheduleDTO.DoctorId,
-                            Notes = $"PA ungave vaccine after invoice was downloaded. ScheduleId: {schedule.Id}. Payment collected: {schedule.IsPaymentCollected}",
-                            CreatedAt = DateTime.UtcNow
+                            ClinicId = null,
+                            PatientId = schedule.ChildId,
+                            ActionCode = "UngiveAfterPayment",
+                            Description = $"{(schedule.Dose?.Name ?? schedule.Dose?.Vaccine?.Name ?? $"Dose {schedule.DoseId}")} ungiven after invoicing for patient {schedule.ChildId}",
+                            Notes = $"Amount pending reversal: {schedule.Amount ?? 0} | ScheduleId: {schedule.Id} | InvoiceSubmissionId: {schedule.InvoiceSubmissionId}",
+                            IsReversal = true,
+                            ActionDate = DateTime.UtcNow
                         });
-                        invSub2.InvoiceStatus = "UngiveReversal";
-                        invSub2.HasPendingAmendment = true;
-                        _db.Entry(invSub2).State = EntityState.Modified;
                     }
+                    else if (schedule.InvoiceSubmissionId.HasValue)
+                    {
+                        var invoiceToDelete2 = _db.InvoiceSubmissions
+                            .FirstOrDefault(i => i.Id == schedule.InvoiceSubmissionId.Value);
+                        if (invoiceToDelete2 != null)
+                        {
+                            var amendmentsToDelete2 = _db.InvoiceAmendments
+                                .Where(am => am.InvoiceSubmissionId == invoiceToDelete2.Id);
+                            _db.InvoiceAmendments.RemoveRange(amendmentsToDelete2);
+
+                            var linkedAssignment2 = _db.PAAssignments
+                                .FirstOrDefault(a => a.InvoiceSubmissionId == invoiceToDelete2.Id);
+                            if (linkedAssignment2 != null)
+                                linkedAssignment2.InvoiceSubmissionId = null;
+
+                            _db.InvoiceSubmissions.Remove(invoiceToDelete2);
+                        }
+                    }
+                    // Cleared after the block above, not before — the PA-path log needed to read
+                    // it into Notes, and the doctor-path delete needed it to find the row.
+                    schedule.InvoiceSubmissionId = null;
                 }
 
                 // Void the Invoice row immediately on ungive so the QR code on any downloaded PDF
@@ -2107,7 +2211,8 @@ namespace VaccineAPI.Controllers
 
                         var bulkStockClinicId = ResolveClinicIdForStock(
                             scheduleDTO.DoctorId,
-                            schedule.Child?.ClinicId ?? 0
+                            schedule.Child?.ClinicId ?? 0,
+                            scheduleDTO.PaId
                         );
 
                         // v2: the batch this dose consumed (for Schedule.StockId + certificate lot).
@@ -2134,7 +2239,7 @@ namespace VaccineAPI.Controllers
                         if (wasIsDone == true && scheduleDTO.IsDone == false && previousBrandId.HasValue)
                         {
                             var ungiveClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId,
-                                dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0);
+                                dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0, scheduleDTO.PaId);
 
                             if (ungiveClinicId > 0)
                             {
@@ -2180,7 +2285,8 @@ namespace VaccineAPI.Controllers
                         {
                             var onlineClinicId = ResolveClinicIdForStock(
                                 scheduleDTO.DoctorId,
-                                schedule.Child?.ClinicId ?? 0
+                                schedule.Child?.ClinicId ?? 0,
+                                scheduleDTO.PaId
                             );
 
                             if (onlineClinicId <= 0)
@@ -4465,7 +4571,7 @@ namespace VaccineAPI.Controllers
 
             // Audit row (no stock movement). Best-effort clinic resolution; a give always has a child.
             var childClinicId = schedule.Child != null ? schedule.Child.ClinicId : 0;
-            var clinicId = ResolveClinicIdForStock(dto.DoctorId, childClinicId);
+            var clinicId = ResolveClinicIdForStock(dto.DoctorId, childClinicId, dto.PaId);
             var eventDate = schedule.GivenDate ?? ClinicClock.TodayPkt();
             _inventory.LogBatchCorrection(dto.DoctorId, clinicId, schedule.BrandId.Value,
                 schedule.StockId, newLot, newExpiry, schedule.Id, eventDate, dto.CorrectByPaId);

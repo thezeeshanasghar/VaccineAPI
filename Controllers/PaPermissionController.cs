@@ -22,8 +22,16 @@ namespace VaccineAPI.Controllers
             if (perm == null)
             {
                 // Return a blank permission object so frontend knows none are set yet.
-                // RescheduleVaccine defaults true: single-dose reschedule is available to all PAs.
-                return Ok(new PaPermission { PaId = paId, RescheduleVaccine = true });
+                // RescheduleVaccine, SetClinicOnline, AddPatient default true: these are
+                // day-1 essentials a multi-clinic PA needs before any permission row is
+                // ever explicitly saved for them.
+                return Ok(new PaPermission
+                {
+                    PaId = paId,
+                    RescheduleVaccine = true,
+                    SetClinicOnline = true,
+                    AddPatient = true
+                });
             }
             return Ok(perm);
         }
@@ -71,6 +79,7 @@ namespace VaccineAPI.Controllers
                 existing.PrintSchedulePdf = incoming.PrintSchedulePdf;
                 existing.AddSpecialDoses = incoming.AddSpecialDoses;
                 existing.EditVaccineSchedule = incoming.EditVaccineSchedule;
+                existing.AddVaccineToPatientRecord = incoming.AddVaccineToPatientRecord;
 
                 existing.ViewFollowUps = incoming.ViewFollowUps;
                 existing.AddFollowUp = incoming.AddFollowUp;

@@ -39,6 +39,7 @@ namespace VaccineAPI.Models
         public bool PrintSchedulePdf { get; set; }
         public bool AddSpecialDoses { get; set; }
         public bool EditVaccineSchedule { get; set; }
+        public bool AddVaccineToPatientRecord { get; set; }
 
         // Follow-Up
         public bool ViewFollowUps { get; set; }

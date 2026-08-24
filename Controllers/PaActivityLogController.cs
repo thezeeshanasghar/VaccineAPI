@@ -143,29 +143,61 @@ namespace VaccineAPI.Controllers
 
             if (log.ActionCode == "UngiveAfterPayment")
             {
-                // Parse ScheduleId from Notes ("Amount pending reversal: X | ScheduleId: Y")
+                // Parse ScheduleId and InvoiceSubmissionId from Notes
+                // ("Amount pending reversal: X | ScheduleId: Y | InvoiceSubmissionId: Z").
+                // The invoice is looked up by this FK — captured by ScheduleController at the
+                // moment of ungive, before Schedule.InvoiceSubmissionId/GivenDate were wiped —
+                // NOT by guessing InvoiceDate == Schedule.GivenDate. That guess used to be the
+                // only lookup here and was already silently broken: GivenDate is always null by
+                // the time a doctor gets around to approving (the ungive itself clears it), so
+                // the old code fell back to "today," almost never the invoice's real date.
                 long scheduleId = 0;
+                long invoiceSubmissionId = 0;
                 var notesParts = log.Notes ?? "";
                 var sidIndex = notesParts.IndexOf("ScheduleId: ");
                 if (sidIndex >= 0)
-                    long.TryParse(notesParts.Substring(sidIndex + 12).Trim(), out scheduleId);
+                {
+                    var afterSid = notesParts.Substring(sidIndex + 12);
+                    var sidEnd = afterSid.IndexOf(" |");
+                    long.TryParse(sidEnd >= 0 ? afterSid.Substring(0, sidEnd) : afterSid.Trim(), out scheduleId);
+                }
+                var iidIndex = notesParts.IndexOf("InvoiceSubmissionId: ");
+                if (iidIndex >= 0)
+                    long.TryParse(notesParts.Substring(iidIndex + 21).Trim(), out invoiceSubmissionId);
 
                 if (scheduleId > 0)
                 {
                     var schedule = _db.Schedules.FirstOrDefault(s => s.Id == scheduleId);
                     if (schedule != null)
                     {
-                        var invoiceDate = schedule.GivenDate.HasValue ? schedule.GivenDate.Value.Date : log.ActionDate.Date;
-                        var inv = _db.InvoiceSubmissions.FirstOrDefault(x =>
-                            x.ChildId == schedule.ChildId &&
-                            x.DoctorId == log.DoctorId &&
-                            x.InvoiceDate.Date == invoiceDate);
-                        if (inv != null)
-                        {
-                            inv.TotalAmount = Math.Max(0, inv.TotalAmount - (schedule.Amount ?? 0));
-                            _db.Entry(inv).State = EntityState.Modified;
-                        }
                         schedule.IsPaymentCollected = false;
+
+                        if (invoiceSubmissionId > 0)
+                        {
+                            var inv = _db.InvoiceSubmissions.FirstOrDefault(x => x.Id == invoiceSubmissionId);
+                            if (inv != null)
+                            {
+                                inv.TotalAmount = Math.Max(0, inv.TotalAmount - (schedule.Amount ?? 0));
+                                if (inv.TotalAmount == 0)
+                                {
+                                    // This was the only (or last remaining) dose on this invoice —
+                                    // delete it outright, matching the doctor-instant path's
+                                    // behavior for the same situation.
+                                    var amendments = _db.InvoiceAmendments.Where(am => am.InvoiceSubmissionId == inv.Id);
+                                    _db.InvoiceAmendments.RemoveRange(amendments);
+
+                                    var linkedAssignment = _db.PAAssignments.FirstOrDefault(a => a.InvoiceSubmissionId == inv.Id);
+                                    if (linkedAssignment != null) linkedAssignment.InvoiceSubmissionId = null;
+
+                                    _db.InvoiceSubmissions.Remove(inv);
+                                }
+                                else
+                                {
+                                    // Other doses still stand on this invoice — reduce, don't delete.
+                                    _db.Entry(inv).State = EntityState.Modified;
+                                }
+                            }
+                        }
 
                         // Belt-and-suspenders: ensure Invoice row is voided in case the ungive path missed it
                         var invoiceToVoid = _db.Invoices

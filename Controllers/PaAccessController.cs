@@ -136,6 +136,7 @@ namespace VaccineAPI.Controllers
                     paAccess.IsOnline = false;
                     _db.Entry(paAccess).State = EntityState.Modified;
                 }
+                existingPaAccess.IsOnline = true;
             }
             // If this is the only clinic for the PA, set it as online
             else if (paAccessList.Count == 1)

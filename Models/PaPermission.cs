@@ -40,6 +40,7 @@ namespace VaccineAPI.Models
         public bool AddSpecialDoses { get; set; }
         public bool EditVaccineSchedule { get; set; }
         public bool AddVaccineToPatientRecord { get; set; }
+        public bool ViewPaAssignmentStatus { get; set; }
 
         // Follow-Up
         public bool ViewFollowUps { get; set; }

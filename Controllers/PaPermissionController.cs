@@ -80,6 +80,7 @@ namespace VaccineAPI.Controllers
                 existing.AddSpecialDoses = incoming.AddSpecialDoses;
                 existing.EditVaccineSchedule = incoming.EditVaccineSchedule;
                 existing.AddVaccineToPatientRecord = incoming.AddVaccineToPatientRecord;
+                existing.ViewPaAssignmentStatus = incoming.ViewPaAssignmentStatus;
 
                 existing.ViewFollowUps = incoming.ViewFollowUps;
                 existing.AddFollowUp = incoming.AddFollowUp;

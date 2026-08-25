@@ -21,10 +21,31 @@ namespace VaccineAPI.Controllers
             _inventory = inventory;
         }
 
+        // Verifies the caller is who they claim to be: userId/securityStamp must match a real
+        // User row, and that row's SecurityStamp must equal the one issued at login (login and
+        // validate-session already produce/check this same pair — this just applies it here too).
+        // Every login page (loginpa, login) stores SecurityStamp locally right after auth, so any
+        // caller with a valid session already has it on hand to send.
+        private async Task<bool> VerifyCaller(long? userId, string? securityStamp)
+        {
+            if (!userId.HasValue || string.IsNullOrEmpty(securityStamp))
+                return false;
+
+            var user = await _db.Users.FindAsync(userId.Value);
+            return user != null && user.SecurityStamp == securityStamp;
+        }
+
         // GET /api/PAAssignment/pa/{paId}
         [HttpGet("pa/{paId}")]
-        public async Task<IActionResult> GetByPA(long paId)
+        public async Task<IActionResult> GetByPA(long paId, [FromQuery] long? userId, [FromQuery] string? securityStamp)
         {
+            var pa = await _db.PersonalAssistant.FindAsync(paId);
+            if (pa == null)
+                return Ok(new { IsSuccess = false, Message = "Personal Assistant not found." });
+
+            if (!await VerifyCaller(userId, securityStamp) || userId!.Value != pa.UserId)
+                return Forbid();
+
             // Fetch raw assignments first — avoid EF Join+Where MySQL column misattribution bug
             var rawAssignments = await _db.PAAssignments
                 .Where(a => a.PersonalAssistantId == paId && !a.IsCompleted && !a.IsCancelled)
@@ -540,6 +561,15 @@ namespace VaccineAPI.Controllers
                         return Forbid();
                 }
             }
+            else
+            {
+                // Doctor-initiated reassign (e.g. vaccine.page.ts's reassign popup) — caller
+                // must be the owning doctor, verified the same way the manager path is fenced
+                // above rather than trusting old.DoctorId's own request implicitly.
+                var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == old.DoctorId);
+                if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
+                    return Forbid();
+            }
 
             if (old.IsCompleted)
                 return Ok(new { IsSuccess = false, Message = "Cannot reassign a completed assignment" });
@@ -736,6 +766,13 @@ namespace VaccineAPI.Controllers
         {
             try
             {
+                // Both current callers (bookings.page.ts, vaccine.page.ts) create on behalf of
+                // the doctor whose session they're in — verify the caller actually owns DoctorId
+                // rather than trusting it as sent.
+                var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
+                if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
+                    return Forbid();
+
                 var today = DateTime.UtcNow.AddHours(5).Date;
 
                 var exists = await _db.PAAssignments.AnyAsync(a =>
@@ -1148,6 +1185,10 @@ namespace VaccineAPI.Controllers
         public string? Notes { get; set; }
         public DateTime? TargetDate { get; set; }
         public long? RequestingManagerId { get; set; }
+        // Required on the doctor-initiated path (RequestingManagerId absent) — ignored when a
+        // manager is calling, since that path is fenced by ManagerPermission/ManagerAccess instead.
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class SetTargetDateDto
@@ -1172,6 +1213,8 @@ namespace VaccineAPI.Controllers
         public List<long> ScheduleIds { get; set; } = new List<long>();
         public DateTime? TargetDate { get; set; }
         public long? BookingId { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class DoseRow

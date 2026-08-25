@@ -31,7 +31,11 @@ namespace VaccineAPI.Models
         // "BookingId:{id}" string convention that used to live inside Notes.
         public long? BookingId { get; set; }
 
-        // "Active" | "InvoiceDownloaded" | "PaymentCollected" | "PendingHandover" | "Completed" | "PendingCancellation"
+        // "Active" | "PendingHandover" | "PendingCancellation" — the only values ever written
+        // (PAAssignmentController). Completion is NOT tracked here: it uses the separate
+        // IsCompleted/CompletedAt fields below instead, so don't add a "Completed" string value
+        // without migrating those over — two overlapping ways to represent "done" on one row
+        // is exactly the kind of landmine a future query against this field would hit.
         public string AssignmentStatus { get; set; } = "Active";
         public DateTime? HandoverDoneAt { get; set; }
         public long? InvoiceSubmissionId { get; set; }

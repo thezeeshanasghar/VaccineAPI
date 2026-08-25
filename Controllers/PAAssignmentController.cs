@@ -44,7 +44,7 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Personal Assistant not found." });
 
             if (!await VerifyCaller(userId, securityStamp) || userId!.Value != pa.UserId)
-                return Forbid();
+                return Ok(new { IsSuccess = false, Message = "Not authorised to view this Personal Assistant's assignments." });
 
             // Fetch raw assignments first — avoid EF Join+Where MySQL column misattribution bug
             var rawAssignments = await _db.PAAssignments
@@ -551,14 +551,14 @@ namespace VaccineAPI.Controllers
             {
                 var managerPerm = await _db.ManagerPermissions.FirstOrDefaultAsync(p => p.ManagerId == dto.RequestingManagerId.Value);
                 if (managerPerm == null || !managerPerm.ReassignPaTask)
-                    return Forbid();
+                    return Ok(new { IsSuccess = false, Message = "You do not have permission to reassign PA tasks." });
 
                 if (old.ClinicId.HasValue)
                 {
                     var hasAccess = await _db.ManagerAccess.AnyAsync(a =>
                         a.ManagerId == dto.RequestingManagerId.Value && a.ClinicId == old.ClinicId.Value);
                     if (!hasAccess)
-                        return Forbid();
+                        return Ok(new { IsSuccess = false, Message = "This assignment's clinic is outside your access." });
                 }
             }
             else
@@ -568,7 +568,7 @@ namespace VaccineAPI.Controllers
                 // above rather than trusting old.DoctorId's own request implicitly.
                 var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == old.DoctorId);
                 if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
-                    return Forbid();
+                    return Ok(new { IsSuccess = false, Message = "Not authorised to reassign this assignment." });
             }
 
             if (old.IsCompleted)
@@ -771,7 +771,7 @@ namespace VaccineAPI.Controllers
                 // rather than trusting it as sent.
                 var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
                 if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
-                    return Forbid();
+                    return Ok(new { IsSuccess = false, Message = "Not authorised to create this assignment." });
 
                 var today = DateTime.UtcNow.AddHours(5).Date;
 
@@ -1042,7 +1042,7 @@ namespace VaccineAPI.Controllers
             {
                 var managerPerm = await _db.ManagerPermissions.FirstOrDefaultAsync(p => p.ManagerId == requestingManagerId.Value);
                 if (managerPerm == null || !managerPerm.ViewPaAssignmentStatus)
-                    return Forbid();
+                    return Ok(new { IsSuccess = false, Message = "You do not have permission to view PA assignments." });
 
                 var managerClinicIds = await _db.ManagerAccess
                     .Where(a => a.ManagerId == requestingManagerId.Value)

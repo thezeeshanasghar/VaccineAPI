@@ -264,13 +264,16 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/DirectSale/completed-for-pa/{paId}
-        // Direct sales this PA has marked done — shown in the PA's
-        // "Completed" list alongside completed vaccine assignments.
+        // Direct sales this PA has marked done but the doctor hasn't confirmed cash for yet —
+        // shown in the PA's list alongside completed vaccine assignments. Was previously
+        // unfiltered on IsConfirmedByDoctor, so a confirmed sale stayed visible forever — same
+        // bug class as GetByPA's old !IsCompleted filter, now excluded once confirmed so both
+        // lists disappear on the same doctor-confirmation cutoff.
         [HttpGet("completed-for-pa/{paId}")]
         public IActionResult GetCompletedForPa(long paId)
         {
             var rows = _db.DirectSales
-                .Where(d => d.PaymentCollectorPaId == paId && d.IsMarkedDoneByPA)
+                .Where(d => d.PaymentCollectorPaId == paId && d.IsMarkedDoneByPA && !d.IsConfirmedByDoctor)
                 .OrderByDescending(d => d.SaleDate)
                 .ToList();
 

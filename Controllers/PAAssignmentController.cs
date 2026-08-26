@@ -46,9 +46,13 @@ namespace VaccineAPI.Controllers
             if (!await VerifyCaller(userId, securityStamp) || userId!.Value != pa.UserId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised to view this Personal Assistant's assignments." });
 
-            // Fetch raw assignments first — avoid EF Join+Where MySQL column misattribution bug
+            // Fetch raw assignments first — avoid EF Join+Where MySQL column misattribution bug.
+            // Was filtered on !IsCompleted, which dropped a row the instant the PA marked it done
+            // — before the doctor ever confirmed cash handover, so a PA lost visibility on money
+            // she was still accountable for. Now stays visible through IsCompleted and only drops
+            // once IsCashConfirmedByDoctor, matching GetForDoctor's own "CashConfirmed" cutoff.
             var rawAssignments = await _db.PAAssignments
-                .Where(a => a.PersonalAssistantId == paId && !a.IsCompleted && !a.IsCancelled)
+                .Where(a => a.PersonalAssistantId == paId && !a.IsCashConfirmedByDoctor && !a.IsCancelled)
                 .ToListAsync();
 
             var childIds = rawAssignments.Select(a => a.ChildId).Distinct().ToList();
@@ -143,8 +147,11 @@ namespace VaccineAPI.Controllers
                     ParentWhatsApp = child?.User != null ? ToWhatsAppNumber(child.User.MobileNumber, child.User.CountryCode) : "",
                     a.IsAutoCreated,
                     a.AssignmentStatus,
+                    a.IsCompleted,
+                    a.IsCashConfirmedByDoctor,
                     InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
                     HasInvoice    = invoice != null,
+                    a.InvoiceSubmissionId,
                     BookingId     = a.BookingId,
                     ParentComment = booking?.Comments ?? "",
                     DoctorComment = booking?.DoctorComment ?? "",

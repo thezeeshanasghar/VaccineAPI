@@ -92,7 +92,7 @@ namespace VaccineAPI
   </div>
 </div>";
 
-            SendEmail(child.Email, body, child.Clinic.Name + " — Registration Confirmed");
+            SendEmail(child.Email, body, child.Clinic.Name + " — Registration Confirmed", isHtml: true);
         }
 
         private static string BuildLogoImgTag(string monogramImagePath, string contentRootPath)
@@ -195,7 +195,7 @@ namespace VaccineAPI
   </div>
 </div>";
 
-            SendEmail(child.Email, body, child.Clinic.Name + " — Vaccination Reminder");
+            SendEmail(child.Email, body, child.Clinic.Name + " — Vaccination Reminder", isHtml: true);
         }
 
         public static void DoctorForgotPassword(Doctor doctor)
@@ -268,7 +268,7 @@ namespace VaccineAPI
         }
 
         #endregion
-        public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com")
+        public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com", bool isHtml = false)
         {
             if (string.IsNullOrWhiteSpace(userEmail))
             {
@@ -285,7 +285,8 @@ namespace VaccineAPI
                     {
                         recipient_email = userEmail,
                         subject = subject,
-                        body = body
+                        body = body,
+                        is_html = isHtml
                     };
 
                     var json = JsonSerializer.Serialize(data);

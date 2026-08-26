@@ -22,15 +22,23 @@ namespace VaccineAPI.Controllers
             if (perm == null)
             {
                 // Return a blank permission object so frontend knows none are set yet.
-                // RescheduleVaccine, SetClinicOnline, AddPatient default true: these are
-                // day-1 essentials a multi-clinic PA needs before any permission row is
-                // ever explicitly saved for them.
+                // RescheduleVaccine, SetClinicOnline, AddPatient, and the alerts/messaging
+                // block (ViewAlerts, SendBulkEmail, OpenWhatsApp, DownloadAlertCsv) default
+                // true: these are day-1 essentials a PA needs before any permission row is
+                // ever explicitly saved for them. Without these, the Email/WhatsApp buttons
+                // on the alerts page are invisible (*ngIf-gated) to any PA whose doctor never
+                // opened "PA Permissions" and saved a row — silently blocking vaccine-due
+                // alert emails/WhatsApp, not just failing them.
                 return Ok(new PaPermission
                 {
                     PaId = paId,
                     RescheduleVaccine = true,
                     SetClinicOnline = true,
-                    AddPatient = true
+                    AddPatient = true,
+                    ViewAlerts = true,
+                    SendBulkEmail = true,
+                    OpenWhatsApp = true,
+                    DownloadAlertCsv = true
                 });
             }
             return Ok(perm);

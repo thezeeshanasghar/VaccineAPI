@@ -915,6 +915,7 @@ namespace VaccineAPI.Controllers
             }
             catch (Exception ex)
             {
+                Console.WriteLine("PAAssignmentController.Create failed: " + (ex.InnerException?.Message ?? ex.Message));
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
         }

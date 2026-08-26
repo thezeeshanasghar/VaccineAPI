@@ -2446,28 +2446,28 @@ namespace VaccineAPI.Controllers
                     }
                     _db.SaveChanges();
                 }
-                Child c = _db.Childs.Where(x => x.Id == childDTO.Id)
+                // AsNoTracking() is required here: childDB (added above) is still tracked by
+                // this request's DbContext, so a tracked re-query would return that same
+                // instance via EF's identity map — with Clinic/User left null, since
+                // AutoMapperProfile.Ignore()s them on Child<-ChildDTO — instead of actually
+                // reloading the Includes below. That was the root cause of registration
+                // emails silently failing: ParentEmail dereferences Clinic/User with no
+                // null guards, threw a NullReferenceException, and was swallowed below.
+                Child c = _db.Childs.AsNoTracking().Where(x => x.Id == childDTO.Id)
                               .Include(x => x.User)
                               .Include(x => x.Clinic)
                                   .ThenInclude(cl => cl.Doctor)
                                       .ThenInclude(d => d.User)
                               .FirstOrDefault();
-                // TEMP DIAGNOSTIC: registration emails have been silently failing with no
-                // server log access to debug them. Surface the exception in the API response
-                // instead of only Console.WriteLine, so it's visible from the client. Revert
-                // this once the root cause is confirmed and fixed.
-                string emailDebugMessage = null;
                 try
                 {
                     if (c.Email != "") UserEmail.ParentEmail(c, _host.ContentRootPath);
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
-                    emailDebugMessage = "EMAIL_DEBUG: " + e.GetType().Name + ": " + e.Message
-                        + " | StackTrace: " + e.StackTrace;
+                    Console.WriteLine("Registration email failed: " + e);
                 }
-                return new Response<ChildDTO>(true, emailDebugMessage, childDTO);
+                return new Response<ChildDTO>(true, null, childDTO);
             }
         }
 

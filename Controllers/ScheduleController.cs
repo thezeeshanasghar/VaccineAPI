@@ -1146,6 +1146,20 @@ namespace VaccineAPI.Controllers
             };
             _db.PAAssignments.Add(newAssignment);
             _db.SaveChanges();
+
+            // Fire-and-forget email — same pattern as PAAssignmentController.Create/Reassign.
+            // This path auto-creates the assignment silently from the give-vaccine flow, so
+            // without this the PA never learns they were assigned.
+            var newPa = _db.PersonalAssistant.Find(paId);
+            if (newPa != null && !string.IsNullOrEmpty(newPa.Email))
+            {
+                _ = Task.Run(() => UserEmail.SendEmail(
+                    newPa.Email,
+                    "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
+                    "New Patient Assignment"
+                ));
+            }
+
             return newAssignment.Id;
         }
 

@@ -978,7 +978,7 @@ namespace VaccineAPI.Controllers
                 dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
                 ScheduleDTO newData = _mapper.Map<ScheduleDTO>(dbSchedule);
-                // Auto-create assignment when PA gives a vaccine with no prior assignment today,
+                // Auto-create assignment when PA gives a vaccine with no prior open assignment,
                 // and pin this dose to it — covers both "first dose under a brand new
                 // assignment" and "extra dose given mid-visit, not in the original pinned set."
                 if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
@@ -1114,12 +1114,22 @@ namespace VaccineAPI.Controllers
                 if (doctorId <= 0) return 0;
             }
 
+            // Reuse an existing open assignment for this child+PA from today or yesterday —
+            // widened from same-calendar-day-only because the old window missed the common
+            // case of a dose given one day and its invoice/payment recorded the next: that
+            // created a second assignment pinned to the same doses instead of reusing the
+            // first, orphaning the first with no invoice link, stuck in Active/Pending forever
+            // (confirmed live: Mahzala Ali assignments 764/779, SUMAYYA TUFAIL 621/626, exactly
+            // one day apart in both cases). Deliberately NOT unbounded — ConfirmInvoice now
+            // closes (IsCompleted) an assignment once the doctor confirms cash, so this window
+            // only needs to bridge a short in-progress gap, not search all history.
             var today = DateTime.UtcNow.AddHours(5).Date; // PKT = UTC+5
             var existing = _db.PAAssignments
                 .Where(a => a.ChildId == childId &&
                             a.PersonalAssistantId == paId &&
-                            a.AssignedAt >= today && a.AssignedAt < today.AddDays(1) &&
-                            !a.IsCancelled)
+                            a.AssignedAt >= today.AddDays(-1) && a.AssignedAt < today.AddDays(1) &&
+                            !a.IsCompleted && !a.IsCancelled)
+                .OrderByDescending(a => a.AssignedAt)
                 .Select(a => a.Id)
                 .FirstOrDefault();
             if (existing > 0) return existing;
@@ -2373,7 +2383,7 @@ namespace VaccineAPI.Controllers
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
                 }
             }
-            // Auto-create assignment when PA bulk-gives vaccines with no prior assignment today,
+            // Auto-create assignment when PA bulk-gives vaccines with no prior open assignment,
             // and pin every dose actually given in this batch to it.
             if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
             {
@@ -4621,6 +4631,15 @@ namespace VaccineAPI.Controllers
         // cash-handover-confirmed moment: also stamps the linked PAAssignment (if any) so
         // PA Assignment Tracking can drop it out of Active immediately, regardless of how
         // old the assignment is or whether the PA's own IsCompleted flag is set.
+        //
+        // Also marks the assignment IsCompleted — the doctor confirming cash received is a
+        // stronger, unambiguous "this is done" signal than waiting on the PA to separately
+        // tap Done, and previously nothing here ever closed the assignment: live audit found
+        // 20+ of one PA's "Pending" assignments were fully given AND fully paid, some 60+
+        // days old, sitting open forever because GetByPA's own !IsCompleted filter had
+        // nothing to trigger it. IsCompleted also feeds EnsurePAAssignment's dedup check —
+        // closing settled assignments here keeps that check from reusing a stale one for an
+        // unrelated later visit.
         [HttpPatch("confirm-invoice/{id}")]
         public IActionResult ConfirmInvoice(long id, [FromQuery] long doctorId)
         {
@@ -4638,6 +4657,11 @@ namespace VaccineAPI.Controllers
             {
                 linkedAssignment.IsCashConfirmedByDoctor = true;
                 linkedAssignment.CashConfirmedAt = DateTime.UtcNow;
+                if (!linkedAssignment.IsCompleted)
+                {
+                    linkedAssignment.IsCompleted = true;
+                    linkedAssignment.CompletedAt = DateTime.UtcNow;
+                }
             }
 
             _db.SaveChanges();

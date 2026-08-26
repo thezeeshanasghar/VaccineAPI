@@ -773,28 +773,24 @@ namespace VaccineAPI.Controllers
                 if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
                     return Ok(new { IsSuccess = false, Message = "Not authorised to create this assignment." });
 
-                var today = DateTime.UtcNow.AddHours(5).Date;
+                // Any still-open assignment for this child blocks a new one — not just one
+                // created "today". The old same-calendar-day window let a second assignment
+                // through whenever the first was created the day before (confirmed live:
+                // LI DING JIANG assignment 774 created Aug 25, assignment 783 created Aug 26
+                // for the same child — both sat open simultaneously, same patient name shown
+                // twice on the PA's list with no way to tell which one actually had the given
+                // dose). The orphan-invoice linking below assumes exactly one open assignment
+                // per child exists at a time; this check is what's supposed to guarantee that.
+                var existingRow = await _db.PAAssignments
+                    .Where(a => a.ChildId == dto.ChildId && !a.IsCompleted && !a.IsCancelled)
+                    .OrderByDescending(a => a.AssignedAt)
+                    .FirstOrDefaultAsync();
 
-                var exists = await _db.PAAssignments.AnyAsync(a =>
-                    a.ChildId == dto.ChildId &&
-                    !a.IsCompleted &&
-                    !a.IsCancelled &&
-                    a.AssignedAt >= today && a.AssignedAt < today.AddDays(1));
-
-                if (exists)
+                if (existingRow != null)
                 {
-                    var existingRow = await _db.PAAssignments
-                        .Where(a => a.ChildId == dto.ChildId && !a.IsCompleted && !a.IsCancelled
-                                    && a.AssignedAt >= today && a.AssignedAt < today.AddDays(1))
-                        .FirstOrDefaultAsync();
-
-                    var paName = "another PA";
-                    if (existingRow != null)
-                    {
-                        var existingPa = await _db.PersonalAssistant.FindAsync(existingRow.PersonalAssistantId);
-                        paName = existingPa?.Name ?? "another PA";
-                    }
-                    return Ok(new { IsSuccess = false, Message = $"This patient is already assigned to {paName} today. Cancel that assignment first or use Reassign." });
+                    var existingPa = await _db.PersonalAssistant.FindAsync(existingRow.PersonalAssistantId);
+                    var paName = existingPa?.Name ?? "another PA";
+                    return Ok(new { IsSuccess = false, Message = $"This patient already has an open assignment with {paName}. Cancel that assignment first or use Reassign." });
                 }
 
                 var assignment = new PAAssignment

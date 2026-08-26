@@ -1073,8 +1073,14 @@ namespace VaccineAPI.Controllers
             switch (status)
             {
                 case "Active":
+                    // Excludes PendingCancellation too — those await a doctor decision on the
+                    // dedicated GetPendingCancellations view, not action as a normal open task.
+                    // Without this, a request that nobody approves/rejects sits here forever
+                    // looking exactly like a live assignment (confirmed live: 0 currently stuck,
+                    // but the code path allowed it — see project_pa_orphan_cleanup memory).
                     query = query.Where(a => !a.IsCancelled && !a.IsCashConfirmedByDoctor
-                                           && !a.IsCompleted && a.AssignmentStatus != "PendingHandover");
+                                           && !a.IsCompleted && a.AssignmentStatus != "PendingHandover"
+                                           && a.AssignmentStatus != "PendingCancellation");
                     break;
                 case "PendingHandover":
                     query = query.Where(a => !a.IsCancelled && !a.IsCashConfirmedByDoctor

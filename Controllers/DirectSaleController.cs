@@ -214,11 +214,13 @@ namespace VaccineAPI.Controllers
         // Doctor's confirmation on the Payment Reconciliation page that this
         // sale's payment has been received. Mirrors ScheduleController.ConfirmInvoice.
         [HttpPatch("by-bill/{saleBillNo}/confirm")]
-        public IActionResult Confirm(string saleBillNo)
+        public IActionResult Confirm(string saleBillNo, [FromQuery] long doctorId)
         {
             var rows = _db.DirectSales.Where(d => d.SaleBillNo == saleBillNo).ToList();
             if (rows.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "Sale not found." });
+            if (rows.Any(d => d.DoctorId != doctorId))
+                return Ok(new { IsSuccess = false, Message = "Not authorised to confirm this sale." });
 
             var now = DateTime.UtcNow;
             foreach (var row in rows)

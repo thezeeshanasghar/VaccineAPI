@@ -4660,6 +4660,8 @@ namespace VaccineAPI.Controllers
             var inv = _db.InvoiceSubmissions.FirstOrDefault(i => i.Id == id);
             if (inv == null)
                 return Ok(new { IsSuccess = false, Message = "Invoice not found." });
+            if (inv.DoctorId != doctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised to confirm this invoice." });
             if (inv.IsConfirmedByDoctor)
                 return Ok(new { IsSuccess = false, Message = "Invoice already confirmed." });
 

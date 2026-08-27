@@ -218,11 +218,13 @@ namespace VaccineAPI.Controllers
 
         // PATCH /api/PaCashHandover/{id}/confirm
         [HttpPatch("{id}/confirm")]
-        public IActionResult Confirm(long id)
+        public IActionResult Confirm(long id, [FromQuery] long doctorId)
         {
             var handover = _db.PaCashHandovers.FirstOrDefault(h => h.Id == id);
             if (handover == null)
                 return Ok(new { IsSuccess = false, Message = "Handover not found." });
+            if (handover.DoctorId != doctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised to confirm this handover." });
             if (handover.Status != "Pending")
                 return Ok(new { IsSuccess = false, Message = "Handover is not pending." });
 
@@ -239,6 +241,8 @@ namespace VaccineAPI.Controllers
             var handover = _db.PaCashHandovers.FirstOrDefault(h => h.Id == id);
             if (handover == null)
                 return Ok(new { IsSuccess = false, Message = "Handover not found." });
+            if (handover.DoctorId != dto.DoctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised to reject this handover." });
             if (handover.Status != "Pending")
                 return Ok(new { IsSuccess = false, Message = "Handover is not pending." });
 
@@ -820,6 +824,16 @@ namespace VaccineAPI.Controllers
 
             if (string.IsNullOrWhiteSpace(dto.Reason))
                 return Ok(new { IsSuccess = false, Message = "Please provide a reason for the adjustment." });
+
+            // This creates a new row rather than modifying an existing one, so there's no prior
+            // owner to check against — instead verify the PA actually has access to a clinic
+            // under this doctor, so an arbitrary caller can't inject an adjustment against a
+            // PA/doctor pair with no real relationship.
+            var paBelongsToDoctor = _db.PaAccess.Any(a =>
+                a.PersonalAssistantId == dto.PaId &&
+                _db.Clinics.Any(c => c.Id == a.ClinicId && c.DoctorId == dto.DoctorId));
+            if (!paBelongsToDoctor)
+                return Ok(new { IsSuccess = false, Message = "Not authorised to adjust this PA's payable." });
 
             _db.PaPayableAdjustments.Add(new PaPayableAdjustment
             {

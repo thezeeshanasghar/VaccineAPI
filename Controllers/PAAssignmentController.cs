@@ -773,12 +773,32 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                // Both current callers (bookings.page.ts, vaccine.page.ts) create on behalf of
-                // the doctor whose session they're in — verify the caller actually owns DoctorId
-                // rather than trusting it as sent.
-                var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
-                if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
-                    return Ok(new { IsSuccess = false, Message = "Not authorised to create this assignment." });
+                if (dto.RequestingManagerId.HasValue)
+                {
+                    // Manager-initiated create (vaccine.page.ts's ASSIGN PA, Manager view) — fenced
+                    // the same way Reassign's manager path is: permission flag + clinic access,
+                    // not the doctor-ownership check below (Manager never has CallerUserId==doctor.UserId).
+                    var managerPerm = await _db.ManagerPermissions.FirstOrDefaultAsync(p => p.ManagerId == dto.RequestingManagerId.Value);
+                    if (managerPerm == null || !managerPerm.AssignPaToPatient)
+                        return Ok(new { IsSuccess = false, Message = "You do not have permission to assign a PA." });
+
+                    if (dto.ClinicId.HasValue)
+                    {
+                        var hasAccess = await _db.ManagerAccess.AnyAsync(a =>
+                            a.ManagerId == dto.RequestingManagerId.Value && a.ClinicId == dto.ClinicId.Value);
+                        if (!hasAccess)
+                            return Ok(new { IsSuccess = false, Message = "This clinic is outside your access." });
+                    }
+                }
+                else
+                {
+                    // Both current doctor callers (bookings.page.ts, vaccine.page.ts) create on
+                    // behalf of the doctor whose session they're in — verify the caller actually
+                    // owns DoctorId rather than trusting it as sent.
+                    var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
+                    if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
+                        return Ok(new { IsSuccess = false, Message = "Not authorised to create this assignment." });
+                }
 
                 // Any still-open assignment for this child blocks a new one — not just one
                 // created "today". The old same-calendar-day window let a second assignment
@@ -811,6 +831,7 @@ namespace VaccineAPI.Controllers
                     IsCompleted         = false,
                     IsCancelled         = false,
                     IsAutoCreated       = false,
+                    CreatedByManagerId  = dto.RequestingManagerId,
                     TargetDate          = dto.TargetDate,
                     BookingId           = dto.BookingId
                 };
@@ -858,7 +879,9 @@ namespace VaccineAPI.Controllers
                     var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
                     var paName = pa?.Name ?? "PA";
                     orphanInvoice.PaId = dto.PersonalAssistantId;
-                    orphanInvoice.SubmittedByLabel = "Doctor/(" + paName + ")";
+                    orphanInvoice.SubmittedByLabel = dto.RequestingManagerId.HasValue
+                        ? "Manager/(" + paName + ")"
+                        : "Doctor/(" + paName + ")";
                     if (orphanInvoice.ClinicId == null && dto.ClinicId.HasValue)
                         orphanInvoice.ClinicId = dto.ClinicId;
                     assignment.InvoiceSubmissionId = orphanInvoice.Id;
@@ -1225,6 +1248,9 @@ namespace VaccineAPI.Controllers
         public List<long> ScheduleIds { get; set; } = new List<long>();
         public DateTime? TargetDate { get; set; }
         public long? BookingId { get; set; }
+        public long? RequestingManagerId { get; set; }
+        // Required on the doctor-initiated path (RequestingManagerId absent) — ignored when a
+        // manager is calling, since that path is fenced by ManagerPermission/ManagerAccess instead.
         public long? CallerUserId { get; set; }
         public string? SecurityStamp { get; set; }
     }

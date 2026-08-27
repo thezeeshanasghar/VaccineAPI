@@ -49,6 +49,9 @@ namespace VaccineAPI.Controllers
                 existing.SendFeedbackEmail = incoming.SendFeedbackEmail;
                 existing.SendFeedbackWhatsApp = incoming.SendFeedbackWhatsApp;
                 existing.ManagePaClinicAssignments = incoming.ManagePaClinicAssignments;
+                existing.AssignPaToPatient = incoming.AssignPaToPatient;
+                existing.CanGiveVaccine = incoming.CanGiveVaccine;
+                existing.CanEditInvoice = incoming.CanEditInvoice;
 
                 _db.Entry(existing).State = EntityState.Modified;
             }

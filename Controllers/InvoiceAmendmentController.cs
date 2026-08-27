@@ -37,10 +37,15 @@ namespace VaccineAPI.Controllers
                 .Where(c => childIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
-            var paIds = amendments.Select(a => a.PaId).Distinct().ToList();
+            var paIds = amendments.Where(a => a.PaId.HasValue).Select(a => a.PaId!.Value).Distinct().ToList();
             var paNames = _db.PersonalAssistant
                 .Where(p => paIds.Contains(p.Id))
                 .ToDictionary(p => p.Id, p => p.Name ?? "");
+
+            var managerIds = amendments.Where(a => a.ManagerId.HasValue).Select(a => a.ManagerId!.Value).Distinct().ToList();
+            var managerNames = _db.Manager
+                .Where(m => managerIds.Contains(m.Id))
+                .ToDictionary(m => m.Id, m => m.Name ?? "");
 
             var result = amendments.Select(a => new
             {
@@ -50,7 +55,9 @@ namespace VaccineAPI.Controllers
                 OldAmount          = a.OldAmount,
                 NewAmount          = a.NewAmount,
                 PaId               = a.PaId,
-                PaName             = paNames.ContainsKey(a.PaId) ? paNames[a.PaId] : "",
+                PaName             = a.ManagerId.HasValue
+                                        ? "Manager/(" + (managerNames.ContainsKey(a.ManagerId.Value) ? managerNames[a.ManagerId.Value] : "") + ")"
+                                        : (a.PaId.HasValue && paNames.ContainsKey(a.PaId.Value) ? paNames[a.PaId.Value] : ""),
                 Date               = a.CreatedAt.ToString("yyyy-MM-dd"),
                 PatientName        = a.InvoiceSubmission != null && childNames.ContainsKey(a.InvoiceSubmission.ChildId)
                                         ? childNames[a.InvoiceSubmission.ChildId] : "",

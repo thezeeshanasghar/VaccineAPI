@@ -41,6 +41,14 @@ namespace VaccineAPI.Models
         public DateTime? Expiry { get; set; }
         public int? Validity { get; set; }
         public long? GivenByPaId { get; set; }
+        // Manager attribution for give/ungive — kept STRICTLY separate from GivenByPaId.
+        // GivenByPaId is joined directly against personalassistant.Id in cash-in-hand math
+        // (PaCashHandoverController.ComputeCashInHand/BatchCashInHand) and name lookups
+        // (ChildController). Manager.Id is a different auto-increment space from the same
+        // starting point, so writing a Manager's ID into GivenByPaId would silently collide
+        // with an unrelated PA's cash totals. Never write to GivenByPaId when a Manager acts,
+        // and never join/compare this column against personalassistant.Id.
+        public long? GivenByManagerId { get; set; }
         public long? SkippedByPaId { get; set; }
         public DateTime? SkippedAt { get; set; }
         public long? PaymentCollectorPaId { get; set; }

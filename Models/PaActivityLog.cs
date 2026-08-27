@@ -7,7 +7,10 @@ namespace VaccineAPI.Models
     public class PaActivityLog
     {
         public long Id { get; set; }
-        public long PaId { get; set; }
+        // Nullable: a Manager-initiated action logs ManagerId instead, never both — see
+        // Schedule.GivenByManagerId comment for why PA/Manager ID spaces are kept separate.
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
         public long DoctorId { get; set; }
         public long? ClinicId { get; set; }
         public long? PatientId { get; set; }

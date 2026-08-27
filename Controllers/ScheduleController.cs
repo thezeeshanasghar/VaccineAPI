@@ -373,10 +373,14 @@ namespace VaccineAPI.Controllers
                     // outright; the doctor is allowed (the frontend shows the "history only" warning
                     // and only reaches here on confirm). Restore is 0 either way — the give's
                     // ledger row is consumesStock=false (PRE_PERIOD), so UnadministerSync mirrors it.
+                    // Manager shares PA's strictness for undo/counters (capped like PA, not
+                    // uncapped like Doctor) — Manager is new to clinical actions, same guardrail.
+                    bool isNonDoctorActor = scheduleDTO.PaId.HasValue || scheduleDTO.ManagerId.HasValue;
+
                     if (dbSchedule.IsDone == true && IsPreResetDose(dbSchedule))
                     {
-                        // PA: blocked outright.
-                        if (scheduleDTO.PaId.HasValue)
+                        // PA/Manager: blocked outright.
+                        if (isNonDoctorActor)
                             return new Response<ScheduleDTO>(false,
                                 "This is a historical dose from before the current stock period. Ask the doctor to undo it.", null);
 
@@ -387,14 +391,17 @@ namespace VaccineAPI.Controllers
                                 "This dose was given before the current stock period. Undoing it returns no stock and removes a real vaccination from this child's history. Undo anyway?");
                     }
 
-                    // PA-only: own actions today only
-                    if (scheduleDTO.PaId.HasValue)
+                    // PA/Manager: own actions today only
+                    if (isNonDoctorActor)
                     {
                         var today = DateTime.UtcNow.AddHours(5).Date;
 
                         if (dbSchedule.IsDone == true)
                         {
-                            if (dbSchedule.GivenByPaId != scheduleDTO.PaId)
+                            bool ownsGive = scheduleDTO.PaId.HasValue
+                                ? dbSchedule.GivenByPaId == scheduleDTO.PaId
+                                : dbSchedule.GivenByManagerId == scheduleDTO.ManagerId;
+                            if (!ownsGive)
                                 return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
                             if (!dbSchedule.DoneAt.HasValue || dbSchedule.DoneAt.Value.AddHours(5).Date != today)
                                 return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
@@ -409,24 +416,24 @@ namespace VaccineAPI.Controllers
                         }
                     }
 
-                    // PA ungive counter: max 2 per dose
-                    if (scheduleDTO.PaId.HasValue && dbSchedule.IsDone == true)
+                    // PA/Manager ungive counter: max 2 per dose
+                    if (isNonDoctorActor && dbSchedule.IsDone == true)
                     {
                         if (dbSchedule.UngiveCount >= 2)
                             return new Response<ScheduleDTO>(false, "This vaccine has already been ungiven twice. Contact the doctor.", null);
                         dbSchedule.UngiveCount++;
                     }
 
-                    // PA unskip counter: max 2 per dose
-                    if (scheduleDTO.PaId.HasValue && scheduleDTO.IsSkip == false && dbSchedule.IsSkip == true)
+                    // PA/Manager unskip counter: max 2 per dose
+                    if (isNonDoctorActor && scheduleDTO.IsSkip == false && dbSchedule.IsSkip == true)
                     {
                         if (dbSchedule.UnskipCount >= 2)
                             return new Response<ScheduleDTO>(false, "This vaccine has already been unskipped twice. Contact the doctor.", null);
                         dbSchedule.UnskipCount++;
                     }
 
-                    // PA skip counter: max 2 per dose (when ungive also sets IsSkip=true)
-                    if (scheduleDTO.PaId.HasValue && scheduleDTO.IsSkip == true && dbSchedule.IsSkip != true)
+                    // PA/Manager skip counter: max 2 per dose (when ungive also sets IsSkip=true)
+                    if (isNonDoctorActor && scheduleDTO.IsSkip == true && dbSchedule.IsSkip != true)
                     {
                         if (dbSchedule.SkipCount >= 2)
                             return new Response<ScheduleDTO>(false, "This vaccine has already been skipped twice. Contact the doctor.", null);
@@ -562,6 +569,7 @@ namespace VaccineAPI.Controllers
                     dbSchedule.GivenDate = null;
                     dbSchedule.DoneAt = null;
                     dbSchedule.GivenByPaId = null;
+                    dbSchedule.GivenByManagerId = null;
                     dbSchedule.PaymentMode = "Cash";
                     dbSchedule.OnlineService = null;
                     dbSchedule.IsPaymentApproved = false;
@@ -886,8 +894,8 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                // PA give counter: max 2 per dose
-                if (scheduleDTO.PaId.HasValue && scheduleDTO.IsDone == true)
+                // PA/Manager give counter: max 2 per dose
+                if ((scheduleDTO.PaId.HasValue || scheduleDTO.ManagerId.HasValue) && scheduleDTO.IsDone == true)
                 {
                     if (dbSchedule.GiveCount >= 2)
                         return new Response<ScheduleDTO>(false, "This vaccine has already been given twice. Contact the doctor.", null);
@@ -908,9 +916,9 @@ namespace VaccineAPI.Controllers
                 dbSchedule.Circle = scheduleDTO.Circle;
 
                 // Ungive-after-download: create an InvoiceAmendment so it appears on the
-                // doctor's Payment Reconciliation page. PA payable stays unchanged until doctor acts.
-                // Doctor APPROVE → payable drops to 0. Doctor REJECT → PA still owes full amount.
-                if (scheduleDTO.IsDone == false && dbSchedule.IsDone == true && scheduleDTO.PaId.HasValue)
+                // doctor's Payment Reconciliation page. PA/Manager payable stays unchanged until
+                // doctor acts. Doctor APPROVE → payable drops to 0. Doctor REJECT → still owed.
+                if (scheduleDTO.IsDone == false && dbSchedule.IsDone == true && (scheduleDTO.PaId.HasValue || scheduleDTO.ManagerId.HasValue))
                 {
                     var invoiceDateMin2 = DateTime.UtcNow.Date.AddDays(-1);
                     var invoiceDateMax2 = DateTime.UtcNow.Date.AddDays(1);
@@ -929,9 +937,12 @@ namespace VaccineAPI.Controllers
                             AmendmentType = "Ungive",
                             OldAmount = invSub.TotalAmount,
                             NewAmount = 0,
-                            PaId = scheduleDTO.PaId.Value,
+                            PaId = scheduleDTO.PaId,
+                            ManagerId = scheduleDTO.ManagerId,
                             DoctorId = scheduleDTO.DoctorId,
-                            Notes = $"PA ungave vaccine after invoice was downloaded. ScheduleId: {dbSchedule.Id}. Payment collected: {dbSchedule.IsPaymentCollected}",
+                            Notes = scheduleDTO.ManagerId.HasValue
+                                ? $"Manager ungave vaccine after invoice was downloaded. ScheduleId: {dbSchedule.Id}. Payment collected: {dbSchedule.IsPaymentCollected}"
+                                : $"PA ungave vaccine after invoice was downloaded. ScheduleId: {dbSchedule.Id}. Payment collected: {dbSchedule.IsPaymentCollected}",
                             CreatedAt = DateTime.UtcNow
                         });
                         invSub.InvoiceStatus = "UngiveReversal";
@@ -961,9 +972,15 @@ namespace VaccineAPI.Controllers
                 dbSchedule.GivenDate = scheduleDTO.GivenDate;
                 dbSchedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
                 dbSchedule.GivenByPaId = scheduleDTO.IsDone ? scheduleDTO.PaId : null;
+                // Manager attribution — separate column, never GivenByPaId (see field comment
+                // on Schedule.GivenByManagerId for why: FK-space collision risk in cash math).
+                dbSchedule.GivenByManagerId = scheduleDTO.IsDone ? scheduleDTO.ManagerId : null;
                 if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue)
                     dbSchedule.PaymentCollectorPaId = scheduleDTO.PaId;
                 else if (scheduleDTO.IsDone)
+                    // Manager give falls through here too (ManagerId set, PaId null) — correct,
+                    // since Manager never collects payment; the assigned PA still does, resolved
+                    // via the child's active assignment same as a Doctor give would be.
                     dbSchedule.PaymentCollectorPaId = GetActivePaIdForChild(dbSchedule.ChildId);
                 else
                     dbSchedule.PaymentCollectorPaId = null;
@@ -1889,8 +1906,10 @@ namespace VaccineAPI.Controllers
                          && x.IsSkip != true)
                 .ToList();
 
-            // PA bulk counter + ownership pre-check: verify before mutating any row
-            if (scheduleDTO.PaId.HasValue)
+            // PA/Manager bulk counter + ownership pre-check: verify before mutating any row.
+            // Manager shares PA's strictness here (capped like PA, not uncapped like Doctor).
+            bool bulkIsNonDoctorActor = scheduleDTO.PaId.HasValue || scheduleDTO.ManagerId.HasValue;
+            if (bulkIsNonDoctorActor)
             {
                 var today = DateTime.UtcNow.AddHours(5).Date;
                 foreach (var checkSchedule in dbChildSchedules)
@@ -1899,7 +1918,10 @@ namespace VaccineAPI.Controllers
                     {
                         if (checkSchedule.UngiveCount >= 2)
                             return new Response<ScheduleDTO>(false, "One or more vaccines have already been ungiven twice. Contact the doctor.", null);
-                        if (checkSchedule.GivenByPaId != scheduleDTO.PaId)
+                        bool ownsGive = scheduleDTO.PaId.HasValue
+                            ? checkSchedule.GivenByPaId == scheduleDTO.PaId
+                            : checkSchedule.GivenByManagerId == scheduleDTO.ManagerId;
+                        if (!ownsGive)
                             return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
                         if (!checkSchedule.DoneAt.HasValue || checkSchedule.DoneAt.Value.AddHours(5).Date != today)
                             return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
@@ -1930,7 +1952,7 @@ namespace VaccineAPI.Controllers
                             if (scheduleDTO.GivenDate.Date < minAgeDate)
                             {
                                 var msg = (chkDose.Name ?? "A dose") + " cannot be given before " + minAgeDate.ToString("dd-MM-yyyy") + " (minimum age not reached).";
-                                if (scheduleDTO.PaId.HasValue)
+                                if (bulkIsNonDoctorActor)
                                     bulkErrors.Add(msg);
                                 else if (!bulkErrors.Contains(msg))
                                     bulkErrors.Add("[Warning] " + msg);
@@ -1948,7 +1970,7 @@ namespace VaccineAPI.Controllers
                             if (scheduleDTO.GivenDate.Date > maxAgeDate)
                             {
                                 var msg = (chkDose.Name ?? "A dose") + " cannot be given after " + maxAgeDate.ToString("dd-MM-yyyy") + " (maximum age exceeded).";
-                                if (scheduleDTO.PaId.HasValue)
+                                if (bulkIsNonDoctorActor)
                                     bulkErrors.Add(msg);
                                 else if (!bulkErrors.Contains("[Warning] " + msg))
                                     bulkErrors.Add("[Warning] " + msg);
@@ -2013,7 +2035,7 @@ namespace VaccineAPI.Controllers
                                 if (scheduleDTO.GivenDate.Date < enforcedGapDate)
                                 {
                                     var msg = (chkDose.Name ?? "A dose") + " cannot be given before " + minGapDate.ToString("dd-MM-yyyy") + " (minimum gap not met).";
-                                    if (scheduleDTO.PaId.HasValue)
+                                    if (bulkIsNonDoctorActor)
                                         bulkErrors.Add(msg);
                                     else if (!bulkErrors.Contains("[Warning] " + msg))
                                         bulkErrors.Add("[Warning] " + msg);
@@ -2122,10 +2144,13 @@ namespace VaccineAPI.Controllers
                 schedule.OnlineService = scheduleDTO.OnlineService;
                 schedule.IsPaymentApproved = false;
                 schedule.IsPAApprove= scheduleDTO.IsPAApprove;
-                // Track which PA gave/ungave this dose; same PA is the payment collector
+                // Track which PA/Manager gave/ungave this dose; the PA is still the payment
+                // collector even when a Manager gave it (see Schedule.GivenByManagerId comment —
+                // Manager attribution is display-only, never a cash-math key).
                 if (scheduleDTO.IsDone)
                 {
                     schedule.GivenByPaId = scheduleDTO.PaId;
+                    schedule.GivenByManagerId = scheduleDTO.ManagerId;
                     schedule.PaymentCollectorPaId = scheduleDTO.PaId.HasValue
                         ? scheduleDTO.PaId
                         : GetActivePaIdForChild(schedule.ChildId);
@@ -2133,6 +2158,7 @@ namespace VaccineAPI.Controllers
                 else
                 {
                     schedule.GivenByPaId = null;
+                    schedule.GivenByManagerId = null;
                     schedule.PaymentCollectorPaId = null;
                     schedule.Amount = null;
                     // NOTE: InvoiceSubmissionId is intentionally NOT cleared here — the
@@ -2141,8 +2167,8 @@ namespace VaccineAPI.Controllers
                     // delete). It's cleared right after that block runs instead.
                 }
 
-                // PA audit counters
-                if (scheduleDTO.PaId.HasValue)
+                // PA/Manager audit counters
+                if (scheduleDTO.PaId.HasValue || scheduleDTO.ManagerId.HasValue)
                 {
                     if (scheduleDTO.IsDone == true && wasIsDone == false)
                         schedule.GiveCount++;
@@ -2162,17 +2188,25 @@ namespace VaccineAPI.Controllers
                 if (scheduleDTO.IsDone == false && wasIsDone == true
                     && (schedule.InvoiceSubmissionId.HasValue || schedule.IsPaymentCollected))
                 {
-                    if (scheduleDTO.PaId.HasValue)
+                    if (scheduleDTO.PaId.HasValue || scheduleDTO.ManagerId.HasValue)
                     {
+                        // Manager ungive after payment shares PA's path — logged as a pending
+                        // reversal for the doctor to approve, NOT deleted immediately like the
+                        // doctor-initiated branch below. A Manager approving their own action to
+                        // themselves would be exactly the circularity that branch exists to avoid
+                        // for doctors, and final cash confirmation must stay doctor-only regardless.
                         _db.PaActivityLogs.Add(new PaActivityLog
                         {
-                            PaId = scheduleDTO.PaId.Value,
+                            PaId = scheduleDTO.PaId,
+                            ManagerId = scheduleDTO.ManagerId,
                             DoctorId = scheduleDTO.DoctorId,
                             ClinicId = null,
                             PatientId = schedule.ChildId,
                             ActionCode = "UngiveAfterPayment",
                             Description = $"{(schedule.Dose?.Name ?? schedule.Dose?.Vaccine?.Name ?? $"Dose {schedule.DoseId}")} ungiven after invoicing for patient {schedule.ChildId}",
-                            Notes = $"Amount pending reversal: {schedule.Amount ?? 0} | ScheduleId: {schedule.Id} | InvoiceSubmissionId: {schedule.InvoiceSubmissionId}",
+                            Notes = scheduleDTO.ManagerId.HasValue
+                                ? $"Ungiven by Manager (Id {scheduleDTO.ManagerId}). Amount pending reversal: {schedule.Amount ?? 0} | ScheduleId: {schedule.Id} | InvoiceSubmissionId: {schedule.InvoiceSubmissionId}"
+                                : $"Amount pending reversal: {schedule.Amount ?? 0} | ScheduleId: {schedule.Id} | InvoiceSubmissionId: {schedule.InvoiceSubmissionId}",
                             IsReversal = true,
                             ActionDate = DateTime.UtcNow
                         });
@@ -2513,6 +2547,52 @@ namespace VaccineAPI.Controllers
                         existing.ClinicId = dto.ClinicId;
                     _db.Entry(existing).State = EntityState.Modified;
                 }
+                else if (dto.ManagerId.HasValue)
+                {
+                    // Manager edit — shares PA's exact 1-edit-total cap and same-day window, but
+                    // is NOT PA-ownership-scoped (a Manager isn't the invoice's submitter). Scoped
+                    // by ManagerAccess clinic-fence instead, matching every other Manager permission.
+                    var managerPerm = _db.ManagerPermissions.FirstOrDefault(p => p.ManagerId == dto.ManagerId.Value);
+                    if (managerPerm == null || !managerPerm.CanEditInvoice)
+                        return new Response<object>(false, "You do not have permission to edit invoices.", null);
+
+                    var invoiceClinicId = dto.ClinicId ?? existing.ClinicId;
+                    if (invoiceClinicId.HasValue)
+                    {
+                        var hasAccess = _db.ManagerAccess.Any(a => a.ManagerId == dto.ManagerId.Value && a.ClinicId == invoiceClinicId.Value);
+                        if (!hasAccess)
+                            return new Response<object>(false, "This invoice's clinic is outside your access.", null);
+                    }
+
+                    if (existing.EditCount >= 1)
+                        return new Response<object>(false, "Invoice has already been edited once. Further changes are not allowed.", null);
+
+                    var pktTodayMgr = DateTime.UtcNow.AddHours(5).Date;
+                    if (existing.SubmittedAt.AddHours(5).Date != pktTodayMgr)
+                        return new Response<object>(false, "Invoice can only be edited on the same day it was first submitted.", null);
+
+                    var oldAmountMgr = existing.TotalAmount;
+                    var newAmountMgr = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
+
+                    _db.InvoiceAmendments.Add(new InvoiceAmendment
+                    {
+                        InvoiceSubmissionId = existing.Id,
+                        AmendmentType = "Edit",
+                        OldAmount = oldAmountMgr,
+                        NewAmount = newAmountMgr,
+                        ManagerId = dto.ManagerId.Value,
+                        DoctorId = dto.DoctorId,
+                        Notes = $"Manager edited invoice. Consultation fee: {dto.ConsultationFee}",
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    existing.EditCount++;
+                    existing.EditedByManagerId = dto.ManagerId;
+                    existing.HasPendingAmendment = true;
+                    if (dto.ClinicId.HasValue && existing.ClinicId == null)
+                        existing.ClinicId = dto.ClinicId;
+                    _db.Entry(existing).State = EntityState.Modified;
+                }
                 else
                 {
                     // Doctor editing — direct update, no amendment gate needed
@@ -2642,7 +2722,7 @@ namespace VaccineAPI.Controllers
                 var pa = _db.PersonalAssistant.Find(activeAssignment.PersonalAssistantId);
                 var paName = pa?.Name ?? "PA";
                 invoice.PaId = activeAssignment.PersonalAssistantId;
-                invoice.SubmittedByLabel = "Doctor/(" + paName + ")";
+                invoice.SubmittedByLabel = DetermineSubmittedByLabel(childId, paName);
             }
 
             if (activeAssignment.InvoiceSubmissionId != invoice.Id && invoice.Id > 0)
@@ -2677,6 +2757,18 @@ namespace VaccineAPI.Controllers
                     _db.Entry(s).State = EntityState.Modified;
                 }
             }
+        }
+
+        // Whether to stamp "Doctor/(PA Name)" or "Manager/(PA Name)" onto an invoice's
+        // SubmittedByLabel — checks whether any of the child's given-but-not-yet-invoiced
+        // doses were actually given by a Manager (GivenByManagerId set) rather than assuming
+        // "Doctor" for every non-PA give. Defaults to "Doctor/(PA Name)" when no such dose is
+        // found (the pre-existing behavior, unchanged for every actual doctor give).
+        private string DetermineSubmittedByLabel(long childId, string paName)
+        {
+            bool givenByManager = _db.Schedules
+                .Any(s => s.ChildId == childId && s.IsDone && s.GivenByManagerId.HasValue && s.InvoiceSubmissionId == null);
+            return (givenByManager ? "Manager/(" : "Doctor/(") + paName + ")";
         }
 
         [HttpGet("invoice-status")]

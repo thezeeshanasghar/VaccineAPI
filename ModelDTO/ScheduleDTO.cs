@@ -41,8 +41,11 @@ namespace VaccineAPI.ModelDTO
         public List<ScheduleBrandDTO> ScheduleBrands { get; set; } = new List<ScheduleBrandDTO>();
         public long DoctorId { get; set; }
         public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
         public long? GivenByPaId { get; set; }
         public string GivenByPaName { get; set; } = "";
+        public long? GivenByManagerId { get; set; }
+        public string GivenByManagerName { get; set; } = "";
         public long? SkippedByPaId { get; set; }
         public long? PaymentCollectorPaId { get; set; }
         public string PaymentCollectorPaName { get; set; } = "";

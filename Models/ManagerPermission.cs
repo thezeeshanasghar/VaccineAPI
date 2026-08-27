@@ -17,5 +17,10 @@ namespace VaccineAPI.Models
         public bool SendFeedbackEmail { get; set; }
         public bool SendFeedbackWhatsApp { get; set; }
         public bool ManagePaClinicAssignments { get; set; }
+
+        // Clinical (added 2026-08-27 — Manager now mirrors Doctor/PA for these actions)
+        public bool AssignPaToPatient { get; set; }
+        public bool CanGiveVaccine { get; set; }
+        public bool CanEditInvoice { get; set; }
     }
 }

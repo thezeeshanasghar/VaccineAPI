@@ -11,7 +11,10 @@ namespace VaccineAPI.Models
         public string AmendmentType { get; set; } = "";   // "Edit" | "Ungive"
         public decimal OldAmount { get; set; }
         public decimal NewAmount { get; set; }
-        public long PaId { get; set; }
+        // Nullable: a Manager-driven amendment has no PA acting on it — see
+        // Schedule.GivenByManagerId comment for why PA/Manager ID spaces are kept separate.
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
         public long DoctorId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public bool IsApprovedByDoctor { get; set; } = false;

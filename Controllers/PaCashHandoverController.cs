@@ -333,7 +333,11 @@ namespace VaccineAPI.Controllers
                     OnlineService = s.OnlineService,
                     IsPaymentApproved = s.IsPaymentApproved,
                     IsPaymentCollected = s.IsPaymentCollected,
-                    PaymentApprovedAt = s.PaymentApprovedAt
+                    PaymentApprovedAt = s.PaymentApprovedAt,
+                    // Manager gave this dose; this PA only collected/recorded payment — the
+                    // per-PA bucket above is still correct (this PA really did handle the cash),
+                    // but the row itself should read "Manager/(PA Name)" not just the PA's name.
+                    GivenByManagerId = s.GivenByManagerId
                 }).ToList();
                 return new {
                     PaId = paId,
@@ -462,6 +466,11 @@ namespace VaccineAPI.Controllers
                 .Select(p => new { p.Id, p.Name })
                 .ToList()
                 .ToDictionary(p => p.Id, p => p.Name);
+
+            var managerNames = _db.Manager
+                .Select(m => new { m.Id, m.Name })
+                .ToList()
+                .ToDictionary(m => m.Id, m => m.Name);
 
             var clinicNames = _db.Clinics
                 .Where(c => clinicIds.Contains(c.Id))
@@ -612,10 +621,14 @@ namespace VaccineAPI.Controllers
                 PaId                = a.PersonalAssistantId,
                 // Doctor never assigned this PA — the system auto-created the assignment
                 // because the PA gave a dose on their own initiative (EnsurePAAssignment in
-                // ScheduleController.cs). Don't imply doctor involvement that didn't happen.
+                // ScheduleController.cs). Don't imply doctor/manager involvement that didn't happen.
+                // Otherwise, whoever created the assignment (Doctor or Manager) is credited —
+                // CreatedByManagerId is only set on the Manager-initiated Create() path.
                 PaName              = a.IsAutoCreated
                     ? (paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "PA")
-                    : "Doctor/(" + (paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "PA") + ")",
+                    : a.CreatedByManagerId.HasValue
+                        ? "Manager/(" + (managerNames.ContainsKey(a.CreatedByManagerId.Value) ? managerNames[a.CreatedByManagerId.Value] : "") + ")"
+                        : "Doctor/(" + (paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "PA") + ")",
                 ClinicId            = a.ClinicId ?? 0,
                 ClinicName          = (a.ClinicId.HasValue && clinicNames.ContainsKey(a.ClinicId.Value)) ? clinicNames[a.ClinicId.Value] : "",
                 OldAmount           = (decimal?)null,
@@ -665,7 +678,12 @@ namespace VaccineAPI.Controllers
                 HasPendingAmendment = true,
                 PendingHandover     = false,
                 PaId                = a.PaId,
-                PaName              = paNames.ContainsKey(a.PaId) ? paNames[a.PaId] : "",
+                // A Manager-driven amendment (ManagerId set, PaId null) has no PA acting on
+                // it directly — InvoiceAmendment doesn't itself carry which PA recorded
+                // payment, so show "Manager" alone rather than guess a name.
+                PaName              = a.ManagerId.HasValue
+                    ? "Manager" + (managerNames.ContainsKey(a.ManagerId.Value) ? " (" + managerNames[a.ManagerId.Value] + ")" : "")
+                    : (a.PaId.HasValue && paNames.ContainsKey(a.PaId.Value) ? paNames[a.PaId.Value] : ""),
                 ClinicId            = (a.InvoiceSubmission != null && a.InvoiceSubmission.ClinicId.HasValue) ? a.InvoiceSubmission.ClinicId.Value : 0,
                 ClinicName          = (a.InvoiceSubmission != null && a.InvoiceSubmission.ClinicId.HasValue && clinicNames.ContainsKey(a.InvoiceSubmission.ClinicId.Value))
                                         ? clinicNames[a.InvoiceSubmission.ClinicId.Value] : "",

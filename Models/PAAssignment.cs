@@ -21,6 +21,12 @@ namespace VaccineAPI.Models
         public long? ReassignedFromAssignmentId { get; set; }
         public bool IsAutoCreated { get; set; } = false;
 
+        // Set when a Manager (not the doctor) created this assignment via
+        // PAAssignmentController.Create's RequestingManagerId branch — lets the
+        // reconciliation "AwaitingInvoice" row correctly show "Manager/(PA Name)"
+        // instead of assuming "Doctor/(PA Name)" for every non-auto-created assignment.
+        public long? CreatedByManagerId { get; set; }
+
         // When this task should actually be done — distinct from AssignedAt (when the
         // doctor handed it to the PA). Auto-filled from Booking.PreferredDate when
         // assigning off a booking; editable by the doctor either way. Null means no

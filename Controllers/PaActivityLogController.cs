@@ -212,12 +212,13 @@ namespace VaccineAPI.Controllers
                             _db.Entry(invoiceToVoid).State = EntityState.Modified;
                         }
 
-                        // Reduce PA payable for the ungiven vaccine amount
-                        if (log.PaId > 0 && (schedule.Amount ?? 0) > 0)
+                        // Reduce PA payable for the ungiven vaccine amount. Manager-originated
+                        // logs (PaId null) correctly skip this — Manager has no payable balance.
+                        if (log.PaId.HasValue && log.PaId > 0 && (schedule.Amount ?? 0) > 0)
                         {
                             _db.PaPayableAdjustments.Add(new PaPayableAdjustment
                             {
-                                PaId = log.PaId,
+                                PaId = log.PaId.Value,
                                 DoctorId = log.DoctorId,
                                 ClinicId = log.ClinicId,
                                 Amount = -(schedule.Amount ?? 0),
@@ -242,12 +243,13 @@ namespace VaccineAPI.Controllers
                     decimal.TryParse(numStr, out reduction);
                 }
 
-                // Apply the reduction to PA payable
-                if (log.PaId > 0 && reduction > 0)
+                // Apply the reduction to PA payable. Manager-originated logs (PaId null)
+                // correctly skip this — Manager has no payable balance.
+                if (log.PaId.HasValue && log.PaId > 0 && reduction > 0)
                 {
                     _db.PaPayableAdjustments.Add(new PaPayableAdjustment
                     {
-                        PaId = log.PaId,
+                        PaId = log.PaId.Value,
                         DoctorId = log.DoctorId,
                         ClinicId = log.ClinicId,
                         Amount = -reduction,

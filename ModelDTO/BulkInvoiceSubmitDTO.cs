@@ -9,6 +9,7 @@ namespace VaccineAPI.ModelDTO
         public long ChildId { get; set; }
         public long DoctorId { get; set; }
         public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
         public long? ClinicId { get; set; }
         public DateTime InvoiceDate { get; set; }
         public decimal ConsultationFee { get; set; }

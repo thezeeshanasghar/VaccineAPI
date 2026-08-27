@@ -14,6 +14,9 @@ namespace VaccineAPI.Models
         public DateTime InvoiceDate { get; set; }
         public DateTime SubmittedAt { get; set; }
         public int EditCount { get; set; } = 0;
+        // Set when a Manager (not the PA who submitted, and not the doctor) makes the edit
+        // that increments EditCount — attribution only, shares PA's 1-edit-total cap.
+        public long? EditedByManagerId { get; set; }
         public decimal ConsultationFee { get; set; }
         public decimal TotalAmount { get; set; } = 0;
         public bool IsConfirmedByDoctor { get; set; } = false;

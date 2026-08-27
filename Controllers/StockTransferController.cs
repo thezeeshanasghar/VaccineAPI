@@ -236,16 +236,20 @@ namespace VaccineAPI.Controllers
                     await _inventory.ReverseTransferIn(row.DoctorId, row.ToClinicId, row.BrandId, row.Quantity, row.Id);
                 }
 
-                // Remove destination stock rows created by this bill
+                // v2: close, never hard-delete (Models/Stock.cs:29-31) — these destination rows,
+                // and the XFER bill that anchors them, can already be referenced by ledger rows
+                // from real gives/sales that happened at the destination clinic after the transfer
+                // landed. Deleting either throws once such a reference exists (same root cause as
+                // the SellDirect/TransferOut/ReverseBillLine fixes above), and deleting the Bill
+                // alone would orphan Stock.BillId even if the Stock row itself were kept.
                 if (billId.HasValue)
                 {
                     var destStocks = await _db.Stocks.Where(s => s.BillId == billId).ToListAsync();
-                    _db.Stocks.RemoveRange(destStocks);
-
-                    // Delete the XFER bill
-                    var xferBill = await _db.Bills.FirstOrDefaultAsync(b => b.Id == billId);
-                    if (xferBill != null)
-                        _db.Bills.Remove(xferBill);
+                    foreach (var destStock in destStocks)
+                    {
+                        destStock.Quantity = 0;
+                        destStock.IsClosed = true;
+                    }
                 }
 
                 _db.StockTransfers.RemoveRange(allRows);

@@ -140,7 +140,12 @@ namespace VaccineAPI.Services
             Log(doctorId, clinicId, stock.BrandId, stock.Id, stock.BatchLot, stock.Expiry,
                 -stock.Quantity, stock.StockAmount, InventoryTransactionType.BillEdit, billId, billDate);
 
-            _db.Stocks.Remove(stock);
+            // v2: close, never hard-delete (Models/Stock.cs:29-31) — unconditionally deleting here
+            // threw the same "row still referenced" error as the SellDirect/TransferOut bug the
+            // instant any sale/give/transfer had already logged a ledger row against this batch.
+            stock.Quantity = 0;
+            stock.IsClosed = true;
+            _db.Entry(stock).State = EntityState.Modified;
         }
 
         // ----- Split-consumed (BillController.SplitConsumed) -----
@@ -180,7 +185,12 @@ namespace VaccineAPI.Services
             Log(doctorId, clinicId, stock.BrandId, stock.Id, stock.BatchLot, stock.Expiry,
                 -stock.Quantity, stock.StockAmount, InventoryTransactionType.BillReverse, billId, billDate);
 
-            _db.Stocks.Remove(stock);
+            // v2: close, never hard-delete (Models/Stock.cs:29-31) — same fix as ReverseBillLine
+            // above: unconditional delete crashes the instant any other row already references
+            // this batch, and can also destroy stock that was never even consumed yet.
+            stock.Quantity = 0;
+            stock.IsClosed = true;
+            _db.Entry(stock).State = EntityState.Modified;
         }
 
         // ----- Adjust Stock: Increase (AdjustStockController.Create, Type == "Increase") -----
@@ -395,10 +405,13 @@ namespace VaccineAPI.Services
                 sourceStock.Expiry, -quantity, sourceStock.StockAmount, InventoryTransactionType.TransferOut,
                 stockTransferId, eventDate);
 
-            if (sourceStock.Quantity == 0 && sourceStock.BillId == null)
-                _db.Stocks.Remove(sourceStock);
-            else
-                _db.Entry(sourceStock).State = EntityState.Modified;
+            // v2: close, never hard-delete (Models/Stock.cs:29-31) — deleting a depleted batch
+            // throws once any other table (this batch's own prior ledger rows, or Schedule.StockId)
+            // already references its Id. See SellDirect below for the same fix.
+            if (sourceStock.Quantity == 0)
+                sourceStock.IsClosed = true;
+
+            _db.Entry(sourceStock).State = EntityState.Modified;
 
             return sourceStock;
         }
@@ -526,10 +539,13 @@ namespace VaccineAPI.Services
                 sourceStock.Expiry, -quantity, sourceStock.StockAmount, InventoryTransactionType.DirectSale,
                 directSaleId, eventDate);
 
-            if (sourceStock.Quantity == 0 && sourceStock.BillId == null)
-                _db.Stocks.Remove(sourceStock);
-            else
-                _db.Entry(sourceStock).State = EntityState.Modified;
+            // v2: close, never hard-delete (Models/Stock.cs:29-31) — this was the one path still
+            // removing the row outright, which throws once any other table (ledger rows from this
+            // batch's own prior sales/gives, or Schedule.StockId) already references this Id.
+            if (sourceStock.Quantity == 0)
+                sourceStock.IsClosed = true;
+
+            _db.Entry(sourceStock).State = EntityState.Modified;
 
             return sourceStock;
         }

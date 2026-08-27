@@ -2,10 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
 
 namespace VaccineAPI.Controllers
 {
@@ -433,6 +436,261 @@ namespace VaccineAPI.Controllers
 
             return Ok(new { IsSuccess = true, ResponseData = logs });
         }
+
+        // ---------------- Reports ----------------
+
+        // GET /api/coldchain/readings/pdf?clinicId=X&fromDate=Y&toDate=Z&refrigeratorId=W
+        [HttpGet("readings/pdf")]
+        public async Task<IActionResult> DownloadReadingsPdf(
+            [FromQuery] long clinicId,
+            [FromQuery] DateTime fromDate,
+            [FromQuery] DateTime toDate,
+            [FromQuery] long? refrigeratorId = null)
+        {
+            var clinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == clinicId);
+            if (clinic == null)
+                return Ok(new { IsSuccess = false, Message = "Clinic not found" });
+
+            var from = fromDate.Date;
+            var to = toDate.Date;
+
+            var query = _db.TemperatureReadings
+                .Where(r => r.ClinicId == clinicId && r.RecordedDate >= from && r.RecordedDate <= to);
+            if (refrigeratorId.HasValue)
+                query = query.Where(r => r.RefrigeratorId == refrigeratorId.Value);
+
+            var readings = await query
+                .OrderByDescending(r => r.RecordedDate)
+                .ThenByDescending(r => r.RecordedTime)
+                .ToListAsync();
+
+            Refrigerator singleFridge = refrigeratorId.HasValue
+                ? await _db.Refrigerators.FindAsync(refrigeratorId.Value)
+                : null;
+            var fridgeNames = await _db.Refrigerators
+                .Where(f => f.ClinicId == clinicId)
+                .ToDictionaryAsync(f => f.Id, f => f.Name);
+
+            var output = CreateTemperatureLogPdf(clinic, singleFridge, readings, fridgeNames, from, to);
+
+            var fileNameSuffix = singleFridge != null ? "_" + singleFridge.Name.Replace(" ", "_") : "";
+            var fileName = $"Temperature_Log{fileNameSuffix}_{from:MMM-dd}_to_{to:MMM-dd-yyyy}.pdf";
+            Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileName}\"");
+            return File(output.ToArray(), "application/pdf");
+        }
+
+        private static MemoryStream CreateTemperatureLogPdf(
+            Clinic clinic,
+            Refrigerator singleFridge,
+            List<TemperatureReading> readings,
+            Dictionary<long, string> fridgeNames,
+            DateTime from,
+            DateTime to)
+        {
+            EnsurePlexFonts();
+            var output = new MemoryStream();
+            var petrol = new BaseColor(18, 60, 74);
+            var porcelain = new BaseColor(238, 242, 241);
+            var line = new BaseColor(222, 229, 227);
+            var inkMuted = new BaseColor(102, 120, 122);
+            var green = new BaseColor(20, 122, 76);
+            var greenTint = new BaseColor(227, 244, 234);
+            var red = new BaseColor(174, 42, 31);
+            var redTint = new BaseColor(251, 234, 232);
+
+            using (var document = new Document(PageSize.A4, 36f, 36f, 36f, 36f))
+            {
+                PdfWriter.GetInstance(document, output);
+                document.Open();
+
+                // Header: brand mark + clinic/module label on the left, "Temperature Log" + generated timestamp on the right.
+                var headerTable = new PdfPTable(2) { WidthPercentage = 100 };
+                headerTable.SetWidths(new float[] { 1.6f, 1f });
+                var brandCell = new PdfPCell { Border = PdfPCell.NO_BORDER, PaddingBottom = 12f };
+                brandCell.AddElement(new Paragraph(clinic.Name, PlexSans(13, bold: true)) { SpacingAfter = 1f });
+                brandCell.AddElement(new Paragraph("Cold Chain Management", PlexSans(8)));
+                headerTable.AddCell(brandCell);
+
+                var titleCell = new PdfPCell { Border = PdfPCell.NO_BORDER, PaddingBottom = 12f, HorizontalAlignment = Element.ALIGN_RIGHT };
+                var titlePara = new Paragraph("Temperature Log", PlexSans(15, bold: true)) { Alignment = Element.ALIGN_RIGHT, SpacingAfter = 2f };
+                titleCell.AddElement(titlePara);
+                titleCell.AddElement(new Paragraph($"Generated {DateTime.UtcNow.AddHours(5):dd MMM yyyy, HH:mm}", PlexSans(8)) { Alignment = Element.ALIGN_RIGHT });
+                headerTable.AddCell(titleCell);
+                document.Add(headerTable);
+
+                var headerRule = new PdfPTable(1) { WidthPercentage = 100, SpacingAfter = 14f };
+                var ruleCell = new PdfPCell(new Phrase(" ", PlexSans(1))) { Border = PdfPCell.BOTTOM_BORDER, BorderColor = petrol, BorderWidthBottom = 2f, FixedHeight = 2f };
+                headerRule.AddCell(ruleCell);
+                document.Add(headerRule);
+
+                // Meta strip: Clinic / Refrigerator / Period.
+                var metaTable = new PdfPTable(3) { WidthPercentage = 100, SpacingAfter = 14f };
+                metaTable.AddCell(MetaCell("CLINIC", clinic.Name, porcelain));
+                metaTable.AddCell(MetaCell("REFRIGERATOR", singleFridge != null ? singleFridge.Name : "All refrigerators", porcelain));
+                metaTable.AddCell(MetaCell("PERIOD", $"{from:dd MMM yyyy} - {to:dd MMM yyyy}", porcelain));
+                document.Add(metaTable);
+
+                // Summary stats.
+                var total = readings.Count;
+                var inRangeCount = readings.Count(r => r.IsInRange);
+                var outOfRangeCount = total - inRangeCount;
+                var avgTemp = total == 0 ? 0 : readings.Average(r => r.Temperature);
+
+                var statsTable = new PdfPTable(4) { WidthPercentage = 100, SpacingAfter = 16f };
+                statsTable.SetWidths(new float[] { 1f, 1f, 1f, 1f });
+                statsTable.AddCell(StatCell("TOTAL READINGS", total.ToString(), BaseColor.Black, line));
+                statsTable.AddCell(StatCell("IN RANGE", inRangeCount.ToString(), green, line));
+                statsTable.AddCell(StatCell("OUT OF RANGE", outOfRangeCount.ToString(), red, line));
+                statsTable.AddCell(StatCell("AVG TEMP", $"{avgTemp:0.0} C", petrol, line));
+                document.Add(statsTable);
+
+                // Readings table.
+                var readingsTable = new PdfPTable(6) { WidthPercentage = 100 };
+                readingsTable.SetWidths(new float[] { 1.3f, 0.9f, 1f, 1.2f, 1.4f, 2f });
+                var headFont = PlexSans(8, bold: true);
+                foreach (var h in new[] { "Date", "Time", "Temp (C)", "Status", "Recorded By", "Notes" })
+                {
+                    var c = new PdfPCell(new Phrase(h, new Font(headFont.BaseFont, 8, Font.NORMAL, BaseColor.White)))
+                    {
+                        BackgroundColor = petrol,
+                        Padding = 6f,
+                        Border = PdfPCell.NO_BORDER
+                    };
+                    readingsTable.AddCell(c);
+                }
+
+                var rowIndex = 0;
+                foreach (var r in readings)
+                {
+                    var rowBg = !r.IsInRange ? redTint : (rowIndex % 2 == 1 ? porcelain : BaseColor.White);
+                    var fridgeName = singleFridge != null ? singleFridge.Name
+                        : (fridgeNames.TryGetValue(r.RefrigeratorId, out var n) ? n : "-");
+
+                    readingsTable.AddCell(DataCell(r.RecordedDate.ToString("dd MMM yyyy"), rowBg));
+                    readingsTable.AddCell(DataCell(r.RecordedTime, rowBg));
+                    readingsTable.AddCell(DataCell(r.Temperature.ToString("0.0"), rowBg, Element.ALIGN_RIGHT));
+
+                    var statusCell = new PdfPCell(new Phrase(r.IsInRange ? "In Range" : "Out of Range",
+                        new Font(PlexSans(7.5f, bold: true).BaseFont, 7.5f, Font.NORMAL, r.IsInRange ? green : red)))
+                    {
+                        BackgroundColor = rowBg,
+                        Padding = 6f,
+                        Border = PdfPCell.NO_BORDER
+                    };
+                    readingsTable.AddCell(statusCell);
+
+                    readingsTable.AddCell(DataCell(string.IsNullOrWhiteSpace(r.RecordedByName) ? "-" : r.RecordedByName, rowBg));
+                    readingsTable.AddCell(DataCell(string.IsNullOrWhiteSpace(r.Notes) ? "-" : r.Notes, rowBg));
+                    rowIndex++;
+                }
+
+                if (readings.Count == 0)
+                {
+                    var emptyCell = new PdfPCell(new Phrase("No readings recorded for this period.", PlexSans(9)))
+                    {
+                        Colspan = 6,
+                        Border = PdfPCell.NO_BORDER,
+                        Padding = 12f,
+                        HorizontalAlignment = Element.ALIGN_CENTER
+                    };
+                    readingsTable.AddCell(emptyCell);
+                }
+                document.Add(readingsTable);
+
+                // Footer: confidentiality note + signature line.
+                var footerTable = new PdfPTable(2) { WidthPercentage = 100, SpacingBefore = 24f };
+                footerTable.SetWidths(new float[] { 2f, 1f });
+                var noteCell = new PdfPCell(new Phrase(
+                    "Vaccine.pk Cold Chain Management - Confidential clinical record. Generated from readings logged by clinic staff and PAs.",
+                    PlexSans(7.5f)))
+                {
+                    Border = PdfPCell.TOP_BORDER,
+                    BorderColor = line,
+                    PaddingTop = 10f,
+                    VerticalAlignment = Element.ALIGN_TOP
+                };
+                footerTable.AddCell(noteCell);
+
+                var sigCell = new PdfPCell
+                {
+                    Border = PdfPCell.TOP_BORDER,
+                    BorderColor = line,
+                    PaddingTop = 10f,
+                    HorizontalAlignment = Element.ALIGN_RIGHT
+                };
+                sigCell.AddElement(new Paragraph(" ", PlexSans(8)) { SpacingAfter = 22f });
+                sigCell.AddElement(new Paragraph(new Chunk(new iTextSharp.text.pdf.draw.LineSeparator(0.5f, 100f, inkMuted, Element.ALIGN_RIGHT, -2))) { Alignment = Element.ALIGN_RIGHT });
+                sigCell.AddElement(new Paragraph("Doctor / Reviewer Signature", PlexSans(7.5f)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 3f });
+                footerTable.AddCell(sigCell);
+                document.Add(footerTable);
+
+                document.Close();
+            }
+
+            output.Seek(0, SeekOrigin.Begin);
+            return output;
+        }
+
+        private static PdfPCell MetaCell(string label, string value, BaseColor background)
+        {
+            var cell = new PdfPCell { BackgroundColor = background, Padding = 8f, Border = PdfPCell.BOX, BorderColor = BaseColor.White, BorderWidth = 1f };
+            cell.AddElement(new Paragraph(label, new Font(PlexSans(7).BaseFont, 7, Font.NORMAL, new BaseColor(102, 120, 122))) { SpacingAfter = 2f });
+            cell.AddElement(new Paragraph(value, PlexSans(10, bold: true)));
+            return cell;
+        }
+
+        private static PdfPCell StatCell(string label, string value, BaseColor valueColor, BaseColor border)
+        {
+            var cell = new PdfPCell { Padding = 8f, Border = PdfPCell.BOX, BorderColor = border, BorderWidth = 0.75f };
+            cell.AddElement(new Paragraph(label, new Font(PlexSans(6.5f).BaseFont, 6.5f, Font.NORMAL, new BaseColor(102, 120, 122))) { SpacingAfter = 3f });
+            cell.AddElement(new Paragraph(value, new Font(PlexSans(13, bold: true).BaseFont, 13, Font.NORMAL, valueColor)));
+            return cell;
+        }
+
+        private static PdfPCell DataCell(string text, BaseColor background, int align = Element.ALIGN_LEFT)
+        {
+            return new PdfPCell(new Phrase(text, PlexSans(8)))
+            {
+                BackgroundColor = background,
+                Padding = 6f,
+                Border = PdfPCell.NO_BORDER,
+                HorizontalAlignment = align
+            };
+        }
+
+        // ---------------- PDF fonts ----------------
+
+        private static bool _plexLoaded = false;
+        private static readonly object _plexLock = new object();
+        private static BaseFont _plexSans;
+        private static BaseFont _plexSansBold;
+
+        private static void EnsurePlexFonts()
+        {
+            if (_plexLoaded) return;
+            lock (_plexLock)
+            {
+                if (_plexLoaded) return;
+                string dir = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Fonts");
+                BaseFont Load(string file, string helveticaFallback)
+                {
+                    try
+                    {
+                        string path = Path.Combine(dir, file);
+                        if (System.IO.File.Exists(path))
+                            return BaseFont.CreateFont(path, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                    }
+                    catch { /* fall through to Helvetica */ }
+                    return BaseFont.CreateFont(helveticaFallback, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+                }
+                _plexSans     = Load("IBMPlexSans-Regular.ttf", BaseFont.HELVETICA);
+                _plexSansBold = Load("IBMPlexSans-Bold.ttf", BaseFont.HELVETICA_BOLD);
+                _plexLoaded = true;
+            }
+        }
+
+        private static Font PlexSans(float size, bool bold = false) =>
+            new Font(bold ? _plexSansBold : _plexSans, size);
 
         // ---------------- Helpers ----------------
 

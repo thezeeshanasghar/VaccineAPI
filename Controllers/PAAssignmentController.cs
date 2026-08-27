@@ -976,14 +976,16 @@ namespace VaccineAPI.Controllers
         [HttpGet("active/{doctorId}")]
         public async Task<IActionResult> GetActiveForDoctor(long doctorId)
         {
-            var today = DateTime.UtcNow.AddHours(5).Date;
-
-            // Fetch raw assignment rows first, then enrich in memory to avoid EF join translation issues
+            // Was restricted to AssignedAt falling on today — any open assignment made on a
+            // prior day (e.g. still PendingHandover, waiting on the doctor) went invisible here
+            // while still blocking a new one via Create's own unrestricted duplicate check
+            // (same !IsCompleted && !IsCancelled, no date filter). That mismatch showed as
+            // "Not assigned to a PA" on the child's vaccine page with Assign PA then failing —
+            // confirmed live on 112 children. Now matches Create's own check exactly.
             var raw = await _db.PAAssignments
                 .Where(a => a.DoctorId == doctorId
                          && !a.IsCompleted
-                         && !a.IsCancelled
-                         && a.AssignedAt >= today && a.AssignedAt < today.AddDays(1))
+                         && !a.IsCancelled)
                 .ToListAsync();
 
             var childIds = raw.Select(a => a.ChildId).Distinct().ToList();

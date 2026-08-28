@@ -17,7 +17,7 @@ namespace VaccineAPI
     {
         #region Parent Email
 
-        public static void ParentEmail(Child child, string contentRootPath)
+        public static string ParentEmail(Child child, string contentRootPath)
         {
             string honorific = child.Gender == "Girl" ? "Miss." : "Mr.";
             string doctorMobile = child.Clinic?.Doctor?.User?.MobileNumber ?? "";
@@ -92,7 +92,7 @@ namespace VaccineAPI
   </div>
 </div>";
 
-            SendEmail(child.Email, body, child.Clinic.Name + " — Registration Confirmed", isHtml: true);
+            return SendEmail(child.Email, body, child.Clinic.Name + " — Registration Confirmed", isHtml: true);
         }
 
         private static string BuildLogoImgTag(string monogramImagePath, string contentRootPath)
@@ -268,11 +268,13 @@ namespace VaccineAPI
         }
 
         #endregion
-        public static void SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com", bool isHtml = false)
+        // Returns a diagnostic string describing the outcome (null on success) — callers
+        // that don't care can ignore the return value, same as before this was added.
+        public static string SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com", bool isHtml = false)
         {
             if (string.IsNullOrWhiteSpace(userEmail))
             {
-                return;
+                return "SendEmail: userEmail was null/empty";
             }
 
             using (var client = new HttpClient())
@@ -300,12 +302,15 @@ namespace VaccineAPI
                     if (!result.Contains("\"status\":\"success\""))
                     {
                         Console.WriteLine("Failed to send email: " + result);
+                        return "SendEmail: provider responded without success — HTTP " + (int)response.StatusCode + ": " + result;
                     }
+                    return null;
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine("Error sending email: " + ex.Message);
                     // Do not rethrow: email failures must not break API workflows.
+                    return "SendEmail: " + ex.GetType().Name + ": " + ex.Message;
                 }
             }
         }

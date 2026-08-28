@@ -2467,7 +2467,9 @@ namespace VaccineAPI.Controllers
                     if (c == null)
                         emailDebugMessage = "EMAIL_DEBUG: reload query returned null Child";
                     else if (c.Email != "")
-                        UserEmail.ParentEmail(c, _host.ContentRootPath);
+                        emailDebugMessage = UserEmail.ParentEmail(c, _host.ContentRootPath) is string err
+                            ? "EMAIL_DEBUG: " + err
+                            : null;
                     else
                         emailDebugMessage = "EMAIL_DEBUG: c.Email was empty/null (value=\"" + c.Email + "\")";
                 }

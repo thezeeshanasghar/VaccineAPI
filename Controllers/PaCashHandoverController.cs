@@ -516,6 +516,7 @@ namespace VaccineAPI.Controllers
                 ScheduleId          = i.Id,
                 AmendmentId         = (long?)null,
                 AssignmentId        = assignmentByInvoiceId.ContainsKey(i.Id) ? (long?)assignmentByInvoiceId[i.Id].Id : (long?)null,
+                SortKey             = i.SubmittedAt,
                 Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
                 AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? assignmentByInvoiceId[i.Id].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
@@ -607,6 +608,7 @@ namespace VaccineAPI.Controllers
                 ScheduleId          = a.Id,
                 AmendmentId         = (long?)null,
                 AssignmentId        = (long?)a.Id,
+                SortKey             = a.AssignedAt,
                 Date                = a.AssignedAt.AddHours(5).ToString("yyyy-MM-dd"),
                 AssignedAt          = a.AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
                 PatientName         = pendingChildNames.ContainsKey(a.ChildId) ? pendingChildNames[a.ChildId] : "",
@@ -665,6 +667,7 @@ namespace VaccineAPI.Controllers
                 AmendmentId         = (long?)a.Id,
                 AssignmentId        = assignmentByInvoiceId.ContainsKey(a.InvoiceSubmissionId)
                                         ? (long?)assignmentByInvoiceId[a.InvoiceSubmissionId].Id : (long?)null,
+                SortKey             = a.CreatedAt,
                 Date                = a.CreatedAt.ToString("yyyy-MM-dd"),
                 AssignedAt          = assignmentByInvoiceId.ContainsKey(a.InvoiceSubmissionId)
                                         ? assignmentByInvoiceId[a.InvoiceSubmissionId].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
@@ -719,6 +722,7 @@ namespace VaccineAPI.Controllers
                         AmendmentId         = (long?)null,
                         AssignmentId        = (long?)null,
                         DirectSaleBillNo    = first.SaleBillNo,
+                        SortKey             = first.SaleDate,
                         Date                = first.SaleDate.ToString("yyyy-MM-dd"),
                         PatientName         = first.ClientName ?? "",
                         Amount              = g.Sum(x => x.TotalSaleValue),
@@ -738,12 +742,15 @@ namespace VaccineAPI.Controllers
                     };
                 });
 
-            // Merge: invoice rows first, then pending amendment rows (doctor must action these),
-            // then PA-collected direct-sale rows, then informational "awaiting invoice" rows last
+            // Merge all row types and sort by SortKey (each row's own creation/assignment
+            // timestamp) descending, so the most recently added row is always on top —
+            // regardless of RowType. A fixed concatenation-by-type order was tried before
+            // and left newly-added rows buried under older rows of a different type.
             var combined = invoiceRows.Cast<object>()
                 .Concat(amendmentRows.Cast<object>())
                 .Concat(directSaleRows.Cast<object>())
                 .Concat(awaitingInvoiceRows.Cast<object>())
+                .OrderByDescending(r => ((dynamic)r).SortKey)
                 .ToList();
 
             return Ok(new { IsSuccess = true, ResponseData = combined });

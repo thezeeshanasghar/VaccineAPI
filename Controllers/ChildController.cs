@@ -2459,15 +2459,25 @@ namespace VaccineAPI.Controllers
                                   .ThenInclude(cl => cl.Doctor)
                                       .ThenInclude(d => d.User)
                               .FirstOrDefault();
+                // TEMP DIAGNOSTIC 2026-08-28: surfacing the exact failure to confirm the fix.
+                // Remove once verified.
+                string emailDebugMessage = null;
                 try
                 {
-                    if (c.Email != "") UserEmail.ParentEmail(c, _host.ContentRootPath);
+                    if (c == null)
+                        emailDebugMessage = "EMAIL_DEBUG: reload query returned null Child";
+                    else if (c.Email != "")
+                        UserEmail.ParentEmail(c, _host.ContentRootPath);
+                    else
+                        emailDebugMessage = "EMAIL_DEBUG: c.Email was empty/null (value=\"" + c.Email + "\")";
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine("Registration email failed: " + e);
+                    emailDebugMessage = "EMAIL_DEBUG: " + e.GetType().Name + ": " + e.Message
+                        + " | StackTrace: " + e.StackTrace;
                 }
-                return new Response<ChildDTO>(true, null, childDTO);
+                return new Response<ChildDTO>(true, emailDebugMessage, childDTO);
             }
         }
 

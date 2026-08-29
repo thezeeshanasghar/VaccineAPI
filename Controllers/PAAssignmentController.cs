@@ -808,8 +808,15 @@ namespace VaccineAPI.Controllers
                 // twice on the PA's list with no way to tell which one actually had the given
                 // dose). The orphan-invoice linking below assumes exactly one open assignment
                 // per child exists at a time; this check is what's supposed to guarantee that.
+                // !IsCompleted alone isn't enough: the PA marking a dose given flips
+                // IsCompleted=1 well before the doctor cash-confirms it, so a second assignment
+                // could still slip through in that window — orphaning the first one forever with
+                // no invoice and no way to ever reach IsCashConfirmedByDoctor (confirmed live:
+                // 33 such orphans across 31 children, e.g. Minahil Tahir assignment 753 orphaned
+                // the moment assignment 805 was created for the same dose). A row only stops
+                // blocking once the doctor has actually confirmed the cash on it.
                 var existingRow = await _db.PAAssignments
-                    .Where(a => a.ChildId == dto.ChildId && !a.IsCompleted && !a.IsCancelled)
+                    .Where(a => a.ChildId == dto.ChildId && !a.IsCancelled && !a.IsCashConfirmedByDoctor)
                     .OrderByDescending(a => a.AssignedAt)
                     .FirstOrDefaultAsync();
 

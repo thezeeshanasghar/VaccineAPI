@@ -824,7 +824,25 @@ namespace VaccineAPI.Controllers
                 {
                     var existingPa = await _db.PersonalAssistant.FindAsync(existingRow.PersonalAssistantId);
                     var paName = existingPa?.Name ?? "another PA";
-                    return Ok(new { IsSuccess = false, Message = $"This patient already has an open assignment with {paName}. Cancel that assignment first or use Reassign." });
+                    var assignedDate = existingRow.AssignedAt.AddHours(5).ToString("dd MMM yyyy");
+
+                    // Tells the frontend whether there's actually a Confirm button waiting on
+                    // reconciliation (a real Invoice row exists) or the PA never submitted an
+                    // invoice at all (still an "Awaiting Invoice" row, nothing to confirm yet) —
+                    // the deep-link/CTA text needs to differ between these two cases.
+                    var hasInvoice = existingRow.InvoiceSubmissionId.HasValue;
+
+                    return Ok(new
+                    {
+                        IsSuccess = false,
+                        Message = $"This patient already has an open assignment with {paName}. Cancel that assignment first or use Reassign.",
+                        BlockedByAssignment = true,
+                        BlockingPaId = existingRow.PersonalAssistantId,
+                        BlockingPaName = paName,
+                        BlockingAssignedDate = assignedDate,
+                        BlockingClinicId = existingRow.ClinicId,
+                        BlockingHasInvoice = hasInvoice
+                    });
                 }
 
                 var assignment = new PAAssignment

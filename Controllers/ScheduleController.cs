@@ -3236,32 +3236,23 @@ namespace VaccineAPI.Controllers
             var dose = await _db.Doses.Include(x => x.Vaccine).FirstOrDefaultAsync(d => d.Id == DoseId);
             if (dose == null)
                 return new Response<List<Schedule>>(false, "Dose not found.", null);
-            var infiniteVaccineNames = new[] { "Typhoid", "Flu", "Vitamin A" };
-            bool isInfinite = infiniteVaccineNames.Any(name =>
-                dose.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
+            bool isInfinite = InfiniteDoseCleanup.IsInfiniteDoseName(dose.Name);
 
             if (isInfinite)
             {
-                var undoneSchedules = await _db.Schedules
-                    .Include(x => x.Dose)
+                var undoneCountBefore = await _db.Schedules
                     .Where(x => x.ChildId == ChildId
                         && x.Dose.VaccineId == dose.VaccineId
                         && x.IsDone == false
                         && x.IsSkip != true)
-                    .OrderBy(x => x.Date)
-                    .ToListAsync();
+                    .CountAsync();
 
-                if (undoneSchedules.Count == 0)
+                if (undoneCountBefore == 0)
                 {
                     return new Response<List<Schedule>>(false, "No undone infinite doses found.", null);
                 }
-                var scheduleToKeep = undoneSchedules.First();
-                var schedulesToDelete = undoneSchedules.Skip(1).ToList();
 
-                if (schedulesToDelete.Any())
-                {
-                    _db.Schedules.RemoveRange(schedulesToDelete);
-                }
+                InfiniteDoseCleanup.RemoveExtraUndoneRows(_db, ChildId, dose.VaccineId);
 
                 if (paId.HasValue && doctorId.HasValue)
                 {

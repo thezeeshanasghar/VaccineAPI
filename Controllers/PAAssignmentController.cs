@@ -201,6 +201,7 @@ namespace VaccineAPI.Controllers
                     }
 
                     var schedules = await _db.Schedules
+                        .Include(s => s.Dose)
                         .Where(s => s.ChildId == childId && s.PaymentCollectorPaId == paId)
                         .ToListAsync();
 
@@ -214,6 +215,8 @@ namespace VaccineAPI.Controllers
                         .Where(c => c.Id == childId)
                         .Select(c => c.ClinicId)
                         .FirstOrDefaultAsync();
+
+                    var vaccineIdsToCleanUp = new HashSet<long>();
 
                     foreach (var s in schedules)
                     {
@@ -238,6 +241,15 @@ namespace VaccineAPI.Controllers
                             _inventory.UnadministerSync(doctorId, childClinicId, s.BrandId.Value, s.Id, s.GivenDate ?? DateTime.Today, paId);
                         }
 
+                        // This dose was given, which (for an infinite/repeating vaccine like Flu)
+                        // already inserted a brand-new future Schedule row dated GivenDate+MinGap.
+                        // Reversing the give below without also removing that future row leaves it
+                        // behind as a permanent orphan — same cleanup the normal UNGIVE button runs.
+                        if (s.IsDone == true && InfiniteDoseCleanup.IsInfiniteDoseName(s.Dose?.Name))
+                        {
+                            vaccineIdsToCleanUp.Add(s.Dose.VaccineId);
+                        }
+
                         s.IsDone = false;
                         s.GivenDate = null;
                         s.DoneAt = null;
@@ -252,6 +264,11 @@ namespace VaccineAPI.Controllers
                         s.IsSkip = false;
                         s.SkippedByPaId = null;
                         s.SkippedAt = null;
+                    }
+
+                    foreach (var vaccineId in vaccineIdsToCleanUp)
+                    {
+                        InfiniteDoseCleanup.RemoveExtraUndoneRows(_db, childId, vaccineId);
                     }
                 }
 

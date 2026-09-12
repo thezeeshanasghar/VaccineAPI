@@ -4332,6 +4332,7 @@ namespace VaccineAPI.Controllers
         {
              var dbChild = _db.Childs
                  .Include(c => c.Clinic)
+                     .ThenInclude(cl => cl.Doctor)
                  .FirstOrDefault(c => c.Id == childId);
 
              if (dbChild == null)
@@ -4422,7 +4423,11 @@ namespace VaccineAPI.Controllers
             document.Add(detailsTable);
 
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
-            var qrCodeUrl = $"{baseUrl}/Child/PID/{childId}";
+            // Dr. Salman (Doctor.Id == 1) verifies patients on vaccinepk.com/verify instead of
+            // the built-in HTML landing page.
+            var qrCodeUrl = dbChild.Clinic.Doctor?.Id == 1
+                ? $"https://vaccinepk.com/verify/?type=pid&mr={childId}"
+                : $"{baseUrl}/Child/PID/{childId}";
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))

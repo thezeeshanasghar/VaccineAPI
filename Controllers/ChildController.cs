@@ -180,6 +180,31 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // Same ChildId+date scoping as GetInvoiceTotal above — reads the actual
+        // consultation fee saved on THIS visit's InvoiceSubmission row, instead of
+        // GetConsultationFeeByInvoiceId's legacy Fee-table lookup, which is keyed by
+        // an InvoiceId that GetInvoiceId can resolve to any past visit for this
+        // ChildId+DoseId (no date filter), silently resurfacing an old visit's fee.
+        [HttpGet("consultation-fee-for-visit")]
+        public ActionResult<Response<decimal>> GetConsultationFeeForVisit([FromQuery] long childId, [FromQuery] string scheduleDate)
+        {
+            if (!DateTime.TryParse(scheduleDate, out var date))
+                return Ok(new Response<decimal>(false, "Invalid date.", 0));
+
+            var submission = _db.InvoiceSubmissions
+                .Where(x => x.ChildId == childId
+                         && x.InvoiceDate.Date == date.Date
+                         && x.InvoiceStatus != "Cancelled"
+                         && x.InvoiceStatus != "UngiveReversal")
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefault();
+
+            if (submission == null)
+                return Ok(new Response<decimal>(false, "No invoice found for this visit.", 0));
+
+            return Ok(new Response<decimal>(true, "Fee found.", submission.ConsultationFee));
+        }
+
         [HttpGet("/forgetemail/{email}")]
         public ActionResult ForgetChildDetailsByEmail(string email)
         {

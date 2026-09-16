@@ -255,10 +255,13 @@ namespace VaccineAPI.Controllers
             if (pa != null && !string.IsNullOrEmpty(pa.Email))
             {
                 var reason = !string.IsNullOrEmpty(dto.RejectionNote) ? dto.RejectionNote : "No reason given";
+                var handoverDoctor = _db.Doctors.FirstOrDefault(d => d.Id == handover.DoctorId);
+                var handoverSender = EmailSenderResolver.Resolve(handoverDoctor, _db);
                 _ = Task.Run(() => UserEmail.SendEmail(
                     pa.Email,
                     $"Hi {pa.Name},<br><br>Your cash handover of <b>Rs. {handover.Amount:N0}</b> has been <b>rejected</b>.<br>Reason: {reason}<br><br>Please re-submit the handover after resolving the issue.",
-                    "Cash Handover Rejected"
+                    "Cash Handover Rejected",
+                    sender: handoverSender
                 ));
             }
 

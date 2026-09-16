@@ -175,7 +175,8 @@ namespace VaccineAPI.Controllers
 
                     try
                     {
-                        UserEmail.SendEmail(doctor.Email, message + "\n\nOpen VacDoc → Bookings to respond.", title);
+                        var bookingSender = EmailSenderResolver.Resolve(doctor, _db);
+                        UserEmail.SendEmail(doctor.Email, message + "\n\nOpen VacDoc → Bookings to respond.", title, sender: bookingSender);
                     }
                     catch (Exception)
                     {
@@ -364,7 +365,8 @@ namespace VaccineAPI.Controllers
 
                     try
                     {
-                        UserEmail.SendEmail(doctor.Email, message + "\n\nOpen VacDoc → Bookings to review.", title);
+                        var bookingSender = EmailSenderResolver.Resolve(doctor, _db);
+                        UserEmail.SendEmail(doctor.Email, message + "\n\nOpen VacDoc → Bookings to review.", title, sender: bookingSender);
                     }
                     catch (Exception)
                     {

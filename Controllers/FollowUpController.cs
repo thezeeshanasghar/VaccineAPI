@@ -235,7 +235,8 @@ namespace VaccineAPI.Controllers
 
                 Note: This is an automated reminder. Please do not reply to this email.";
 
-                UserEmail.SendEmail(child.Email, emailBody, "Follow-up Reminder");
+                var followUpSender = EmailSenderResolver.Resolve(child.Clinic.Doctor, _db);
+                UserEmail.SendEmail(child.Email, emailBody, "Follow-up Reminder", sender: followUpSender);
 
                 return new Response<object>(true, "Email sent successfully.", new
                 {
@@ -350,7 +351,8 @@ namespace VaccineAPI.Controllers
                     // Send email
                     try
                     {
-                        UserEmail.SendEmail(child.Email, body);
+                        var followUpSender = EmailSenderResolver.Resolve(clinic.Doctor, _db);
+                        UserEmail.SendEmail(child.Email, body, sender: followUpSender);
                     }
                     catch (Exception ex)
                     {

@@ -233,7 +233,9 @@ namespace VaccineAPI.Controllers
                         "Web Link: https://doctor.vaccinationcentre.com/";
                     try
                     {
-                        UserEmail.SendEmail(child.Email, body);
+                        var doctorForChild = _db.Clinics.Where(c => c.Id == child.ClinicId).Select(c => c.Doctor).FirstOrDefault();
+                        var senderForChild = EmailSenderResolver.Resolve(doctorForChild, _db);
+                        UserEmail.SendEmail(child.Email, body, sender: senderForChild);
                         return Ok("Email sent successfully");
                     }
                     catch (Exception ex)
@@ -2492,7 +2494,7 @@ namespace VaccineAPI.Controllers
                     if (c == null)
                         emailDebugMessage = "EMAIL_DEBUG: reload query returned null Child";
                     else if (c.Email != "")
-                        emailDebugMessage = UserEmail.ParentEmail(c, _host.ContentRootPath) is string err
+                        emailDebugMessage = UserEmail.ParentEmail(c, _host.ContentRootPath, _db) is string err
                             ? "EMAIL_DEBUG: " + err
                             : null;
                     else
@@ -5023,23 +5025,26 @@ namespace VaccineAPI.Controllers
                 foreach (var schedule in dbSchedules)
                 {
                     string vaccineName = string.IsNullOrWhiteSpace(schedule.Dose?.Name) ? DASH : schedule.Dose.Name;
-                    string brand = string.IsNullOrWhiteSpace(schedule.Brand?.Name) ? DASH : schedule.Brand.Name;
-                    string manufacturer = string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer;
+                    bool isGiven = schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue;
+                    // Not-yet-given doses (including an infinite dose's auto-created next
+                    // occurrence) must never look administered — no brand/batch, and the date
+                    // column shows the real due date, not a given date.
+                    string brand = !isGiven ? "Pending" : (string.IsNullOrWhiteSpace(schedule.Brand?.Name) ? DASH : schedule.Brand.Name);
+                    string manufacturer = !isGiven ? DASH : (string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer);
                     latestStockByBrand.TryGetValue(schedule.BrandId ?? 0, out var latestStock);
-                    string batchLot = string.IsNullOrWhiteSpace(latestStock?.BatchLot) ? DASH : latestStock.BatchLot;
+                    string batchLot = !isGiven ? DASH : (string.IsNullOrWhiteSpace(latestStock?.BatchLot) ? DASH : latestStock.BatchLot);
                     // Route/Site: "Route / Site", each part omitted if empty; en-dash if both empty.
                     string routeSite;
                     {
                         var parts = new List<string>();
                         if (!string.IsNullOrWhiteSpace(schedule.Route)) parts.Add(schedule.Route.Trim());
                         if (!string.IsNullOrWhiteSpace(schedule.Site)) parts.Add(schedule.Site.Trim());
-                        routeSite = parts.Count > 0 ? string.Join(" / ", parts) : DASH;
+                        routeSite = !isGiven ? DASH : (parts.Count > 0 ? string.Join(" / ", parts) : DASH);
                     }
-                    // Not-yet-given doses show "Due" in the Date Given column (per the reference
-                    // template); all other empty cells use the en-dash.
-                    bool isGiven = schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue;
-                    string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
-                    string expiry = latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH;
+                    // Not-yet-given doses show the real due date, prefixed so it can never be
+                    // mistaken for a given date; all other empty cells use the en-dash.
+                    string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due: " + schedule.Date.ToString("dd/MM/yyyy");
+                    string expiry = !isGiven ? DASH : (latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH);
                     // Validity only applies once a dose is given; otherwise en-dash like the other cells.
                     string validity = (isGiven && schedule.Validity != null) ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
 
@@ -5311,20 +5316,23 @@ namespace VaccineAPI.Controllers
                 foreach (var schedule in dbSchedules)
                 {
                     string vaccineName = string.IsNullOrWhiteSpace(schedule.Dose?.Name) ? DASH : schedule.Dose.Name;
-                    string brand = string.IsNullOrWhiteSpace(schedule.Brand?.Name) ? DASH : schedule.Brand.Name;
-                    string manufacturer = string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer;
+                    bool isGiven = schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue;
+                    // Not-yet-given doses (including an infinite dose's auto-created next
+                    // occurrence) must never look administered — no brand/batch, and the date
+                    // column shows the real due date, not a given date.
+                    string brand = !isGiven ? "Pending" : (string.IsNullOrWhiteSpace(schedule.Brand?.Name) ? DASH : schedule.Brand.Name);
+                    string manufacturer = !isGiven ? DASH : (string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer);
                     latestStockByBrand.TryGetValue(schedule.BrandId ?? 0, out var latestStock);
-                    string batchLot = string.IsNullOrWhiteSpace(latestStock?.BatchLot) ? DASH : latestStock.BatchLot;
+                    string batchLot = !isGiven ? DASH : (string.IsNullOrWhiteSpace(latestStock?.BatchLot) ? DASH : latestStock.BatchLot);
                     string routeSite;
                     {
                         var parts = new List<string>();
                         if (!string.IsNullOrWhiteSpace(schedule.Route)) parts.Add(schedule.Route.Trim());
                         if (!string.IsNullOrWhiteSpace(schedule.Site)) parts.Add(schedule.Site.Trim());
-                        routeSite = parts.Count > 0 ? string.Join(" / ", parts) : DASH;
+                        routeSite = !isGiven ? DASH : (parts.Count > 0 ? string.Join(" / ", parts) : DASH);
                     }
-                    bool isGiven = schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue;
-                    string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due";
-                    string expiry = latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH;
+                    string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due: " + schedule.Date.ToString("dd/MM/yyyy");
+                    string expiry = !isGiven ? DASH : (latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH);
                     string validity = (isGiven && schedule.Validity != null) ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
 
                     PdfPCell Cell(string text, int col, int align)

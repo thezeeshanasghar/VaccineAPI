@@ -280,7 +280,9 @@ namespace VaccineAPI.Controllers
                    + "Please login at: https://doctor.vaccinationcentre.com/loginpa\n\n"
                    + "Regards,\n"
                    + "Vaccination Centre Team";
-                UserEmail.SendEmail(personalAssistant.Email, body, "Your Personal Assistant Account Details");
+                var doctorForPa = _db.Doctors.FirstOrDefault(d => d.Id == personalAssistant.DoctorId);
+                var senderForPa = EmailSenderResolver.Resolve(doctorForPa, _db);
+                UserEmail.SendEmail(personalAssistant.Email, body, "Your Personal Assistant Account Details", sender: senderForPa);
             }
             catch (Exception ex)
             {

@@ -112,7 +112,8 @@ namespace VaccineAPI.Controllers
                 + "Web Link: https://doctor.vaccinationcentre.com";
                 try
                 {
-                    UserEmail.SendEmail(doctor.Email, body);
+                    var senderForDoctor = EmailSenderResolver.Resolve(doctor, _db);
+                    UserEmail.SendEmail(doctor.Email, body, sender: senderForDoctor);
                 }
                 catch (Exception ex)
                 {
@@ -204,7 +205,10 @@ namespace VaccineAPI.Controllers
                     + "ID/Mobile Number: " + doctorDTO.MobileNumber + "\n"
                     + "Password: " + doctorDTO.Password + "\n"
                     + "Web Link: https://doctor.vaccinationcentre.com";
-                UserEmail.SendEmail(doctorDTO.Email, body);
+                // Brand-new doctor account: they can't have own SMTP settings configured yet,
+                // so use the app-wide default sender.
+                var senderForNewDoctor = EmailSenderResolver.Resolve(null, _db);
+                UserEmail.SendEmail(doctorDTO.Email, body, sender: senderForNewDoctor);
             }
             return new Response<DoctorDTO>(true, null, doctorDTO);
         }

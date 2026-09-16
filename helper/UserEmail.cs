@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Collections.Generic;
+using System.Linq;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
 using Microsoft.AspNetCore.Mvc;
@@ -17,7 +18,7 @@ namespace VaccineAPI
     {
         #region Parent Email
 
-        public static string ParentEmail(Child child, string contentRootPath)
+        public static string ParentEmail(Child child, string contentRootPath, Context db)
         {
             string honorific = child.Gender == "Girl" ? "Miss." : "Mr.";
             string doctorMobile = child.Clinic?.Doctor?.User?.MobileNumber ?? "";
@@ -92,7 +93,8 @@ namespace VaccineAPI
   </div>
 </div>";
 
-            return SendEmail(child.Email, body, child.Clinic.Name + " — Registration Confirmed", isHtml: true);
+            var sender = EmailSenderResolver.Resolve(child.Clinic?.Doctor, db);
+            return SendEmail(child.Email, body, child.Clinic.Name + " — Registration Confirmed", isHtml: true, sender: sender);
         }
 
         private static string BuildLogoImgTag(string monogramImagePath, string contentRootPath)
@@ -128,7 +130,7 @@ namespace VaccineAPI
 
 
 
-        public static void ParentAlertEmail(List<(string DoseName, DateTime Date)> dueDoses, Child child, string linkToken, string contentRootPath)
+        public static void ParentAlertEmail(List<(string DoseName, DateTime Date)> dueDoses, Child child, string linkToken, string contentRootPath, Context db)
         {
             if (dueDoses.Count == 0) return;
 
@@ -195,49 +197,57 @@ namespace VaccineAPI
   </div>
 </div>";
 
-            SendEmail(child.Email, body, child.Clinic.Name + " — Vaccination Reminder", isHtml: true);
+            var sender = EmailSenderResolver.Resolve(child.Clinic?.Doctor, db);
+            SendEmail(child.Email, body, child.Clinic.Name + " — Vaccination Reminder", isHtml: true, sender: sender);
         }
 
-        public static void DoctorForgotPassword(Doctor doctor)
+        public static void DoctorForgotPassword(Doctor doctor, Context db)
         {
             string body = ""
                    + "Hi " + "<b>" + doctor.DisplayName + "</b>, <br />"
                    + "Your password is <b>" + doctor.User.Password + "</b>";
 
-            SendEmail(doctor.Email, body);
+            var sender = EmailSenderResolver.Resolve(doctor, db);
+            SendEmail(doctor.Email, body, sender: sender);
         }
-      
-      
-      
-        public static void ParentForgotPassword(Child child)
+
+
+
+        public static void ParentForgotPassword(Child child, Context db)
         {
             string body = ""
                    + "Hi " + "<b>" + child.Name + "</b>, <br />"
                    + "Your password is <b>" + child.User.Password + "</b>";
 
-            SendEmail(child.Email, body);
+            var doctor = db.Clinics.Where(c => c.Id == child.ClinicId).Select(c => c.Doctor).FirstOrDefault();
+            var sender = EmailSenderResolver.Resolve(doctor, db);
+            SendEmail(child.Email, body, sender: sender);
         }
 
-        
-        public static void PaForgotPassword(PersonalAssistant pa)
+
+        public static void PaForgotPassword(PersonalAssistant pa, Context db)
         {
             string body = ""
                    + "Hi " + "<b>" + pa.Name + "</b>, <br />"
                    + "Your password is <b>" + pa.User.Password + "</b>";
 
-            SendEmail(pa.Email, body);
+            var doctor = db.Doctors.FirstOrDefault(d => d.Id == pa.DoctorId);
+            var sender = EmailSenderResolver.Resolve(doctor, db);
+            SendEmail(pa.Email, body, sender: sender);
         }
 
-        public static void ManagerForgotPassword(Manager manager)
+        public static void ManagerForgotPassword(Manager manager, Context db)
         {
             string body = ""
                    + "Hi " + "<b>" + manager.Name + "</b>, <br />"
                    + "Your password is <b>" + manager.User.Password + "</b>";
 
-            SendEmail(manager.Email, body);
+            var doctor = db.Doctors.FirstOrDefault(d => d.Id == manager.DoctorId);
+            var sender = EmailSenderResolver.Resolve(doctor, db);
+            SendEmail(manager.Email, body, sender: sender);
         }
 
-        public static void PersonalAssistantLoginDetails(PersonalAssistant pa, string password)
+        public static void PersonalAssistantLoginDetails(PersonalAssistant pa, string password, Context db)
         {
             string body = ""
                    + "Hello " + pa.Name + "\n\n"
@@ -249,10 +259,12 @@ namespace VaccineAPI
                    + "Regards,\n"
                    + "Vaccination Centre Team";
 
-            SendEmail(pa.Email, body, "Your Personal Assistant Account Details");
+            var doctor = db.Doctors.FirstOrDefault(d => d.Id == pa.DoctorId);
+            var sender = EmailSenderResolver.Resolve(doctor, db);
+            SendEmail(pa.Email, body, "Your Personal Assistant Account Details", sender: sender);
         }
-        
-        public static void AgentLoginDetails(Agent agent, string password)
+
+        public static void AgentLoginDetails(Agent agent, string password, Context db)
         {
             string body = ""
                 + "Hello " + agent.Name + ",\n\n"
@@ -264,54 +276,65 @@ namespace VaccineAPI
                 + "Regards,\n"
                 + "Vaccination Centre Team";
 
-            SendEmail(agent.Email, body, "Your VacAgent Login Details");
+            var sender = EmailSenderResolver.Resolve(null, db);
+            SendEmail(agent.Email, body, "Your VacAgent Login Details", sender: sender);
         }
 
         #endregion
+
+        // Sender credentials resolved by the caller (via EmailSenderResolver) — either a
+        // doctor's own SMTP settings (when AllowOwnEmail is on and configured) or the
+        // app-wide default (info@vaccinationcentre.com). SendEmail itself does no DB work.
+        public class SmtpSender
+        {
+            public string Host { get; set; } = "";
+            public int Port { get; set; }
+            public bool UseSsl { get; set; }
+            public string Username { get; set; } = "";
+            public string Password { get; set; } = "";
+            public string FromEmail { get; set; } = "";
+            public string FromName { get; set; } = "";
+        }
+
         // Returns a diagnostic string describing the outcome (null on success) — callers
         // that don't care can ignore the return value, same as before this was added.
-        public static string SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com", bool isHtml = false)
+        public static string SendEmail(string userEmail, string body, string subject = "vaccinationcentre.com", bool isHtml = false, SmtpSender sender = null)
         {
             if (string.IsNullOrWhiteSpace(userEmail))
             {
                 return "SendEmail: userEmail was null/empty";
             }
-
-            using (var client = new HttpClient())
+            if (sender == null || string.IsNullOrWhiteSpace(sender.Host))
             {
-                try
+                return "SendEmail: no SMTP sender configured";
+            }
+
+            try
+            {
+                using (var client = new System.Net.Mail.SmtpClient(sender.Host, sender.Port))
                 {
-                    client.Timeout = TimeSpan.FromSeconds(15);
+                    client.Credentials = new System.Net.NetworkCredential(sender.Username, sender.Password);
+                    client.EnableSsl = sender.UseSsl;
+                    client.Timeout = 15000;
 
-                    var data = new
+                    using (var message = new System.Net.Mail.MailMessage())
                     {
-                        recipient_email = userEmail,
-                        subject = subject,
-                        body = body,
-                        is_html = isHtml
-                    };
+                        message.From = new System.Net.Mail.MailAddress(sender.FromEmail, string.IsNullOrWhiteSpace(sender.FromName) ? sender.FromEmail : sender.FromName);
+                        message.To.Add(userEmail);
+                        message.Subject = subject;
+                        message.Body = body;
+                        message.IsBodyHtml = isHtml;
 
-                    var json = JsonSerializer.Serialize(data);
-                    var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                    // Send POST request to PHP endpoint
-                    var response = client.PostAsync("https://trade.kplex.pk/testmail.php", content).Result;
-                    var result = response.Content.ReadAsStringAsync().Result;
-
-                    // Keep business flow non-blocking if email provider rejects request.
-                    if (!result.Contains("\"status\":\"success\""))
-                    {
-                        Console.WriteLine("Failed to send email: " + result);
-                        return "SendEmail: provider responded without success — HTTP " + (int)response.StatusCode + ": " + result;
+                        client.Send(message);
                     }
-                    return null;
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Error sending email: " + ex.Message);
-                    // Do not rethrow: email failures must not break API workflows.
-                    return "SendEmail: " + ex.GetType().Name + ": " + ex.Message;
-                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error sending email: " + ex.Message);
+                // Do not rethrow: email failures must not break API workflows.
+                return "SendEmail: " + ex.GetType().Name + ": " + ex.Message;
             }
         }
     }

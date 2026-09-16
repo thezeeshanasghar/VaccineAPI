@@ -388,10 +388,12 @@ namespace VaccineAPI.Controllers
                     var child        = await _db.Childs.FindAsync(assignment.ChildId);
                     var childNameStr = child?.Name ?? "a patient";
                     var reasonStr    = dto.Reason ?? "No reason given";
+                    var cancelSender = EmailSenderResolver.Resolve(doctor, _db);
                     _ = Task.Run(() => UserEmail.SendEmail(
                         doctor.Email,
                         $"{paNameStr} has cancelled the assignment for patient {childNameStr}. Reason: {reasonStr}. Please reassign or reschedule.",
-                        "PA Assignment Cancelled"
+                        "PA Assignment Cancelled",
+                        sender: cancelSender
                     ));
                 }
             }
@@ -448,10 +450,12 @@ namespace VaccineAPI.Controllers
                 var child        = await _db.Childs.FindAsync(assignment.ChildId);
                 var childNameStr = child?.Name ?? "a patient";
                 var reasonStr    = dto.Reason ?? "No reason given";
+                var cancelReqSender = EmailSenderResolver.Resolve(doctor, _db);
                 _ = Task.Run(() => UserEmail.SendEmail(
                     doctor.Email,
                     $"{paNameStr} has requested to cancel the assignment for patient {childNameStr}. Reason: {reasonStr}. Please review and approve or reject this request in the VacDoc app.",
-                    "PA Cancellation Request — Approval Needed"
+                    "PA Cancellation Request — Approval Needed",
+                    sender: cancelReqSender
                 ));
             }
 
@@ -548,10 +552,13 @@ namespace VaccineAPI.Controllers
                 var child = await _db.Childs.FindAsync(assignment.ChildId);
                 var childNameStr = child?.Name ?? "the patient";
                 var reason = !string.IsNullOrEmpty(dto.Notes) ? dto.Notes : "No reason given";
+                var rejectDoctor = await _db.Doctors.FindAsync(assignment.DoctorId);
+                var rejectSender = EmailSenderResolver.Resolve(rejectDoctor, _db);
                 _ = Task.Run(() => UserEmail.SendEmail(
                     pa.Email,
                     $"Hi {pa.Name},<br><br>Your request to cancel the assignment for patient <b>{childNameStr}</b> has been <b>rejected</b>.<br>Reason: {reason}<br><br>The assignment remains active.",
-                    "Cancellation Request Rejected"
+                    "Cancellation Request Rejected",
+                    sender: rejectSender
                 ));
             }
 
@@ -664,10 +671,13 @@ namespace VaccineAPI.Controllers
             var pa = await _db.PersonalAssistant.FindAsync(dto.NewPaId);
             if (pa != null && !string.IsNullOrEmpty(pa.Email))
             {
+                var reassignDoctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == newAssignment.DoctorId);
+                var reassignSender = EmailSenderResolver.Resolve(reassignDoctor, _db);
                 _ = Task.Run(() => UserEmail.SendEmail(
                     pa.Email,
                     "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
-                    "New Patient Assignment"
+                    "New Patient Assignment",
+                    sender: reassignSender
                 ));
             }
 
@@ -963,10 +973,13 @@ namespace VaccineAPI.Controllers
                 var newPa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
                 if (newPa != null && !string.IsNullOrEmpty(newPa.Email))
                 {
+                    var createDoctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
+                    var createSender = EmailSenderResolver.Resolve(createDoctor, _db);
                     _ = Task.Run(() => UserEmail.SendEmail(
                         newPa.Email,
                         "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
-                        "New Patient Assignment"
+                        "New Patient Assignment",
+                        sender: createSender
                     ));
                 }
 

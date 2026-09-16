@@ -262,7 +262,7 @@ namespace VaccineAPI.Controllers
                     }
                     else
                     {
-                        UserEmail.DoctorForgotPassword(doctorDb);
+                        UserEmail.DoctorForgotPassword(doctorDb, _db);
                         UserSMS u = new UserSMS(_db);
                         u.DoctorForgotPasswordSMS(doctorDb);
                         return new Response<UserDTO>(
@@ -281,7 +281,7 @@ namespace VaccineAPI.Controllers
                     }
                     else
                     {
-                        UserEmail.ParentForgotPassword(childDB);
+                        UserEmail.ParentForgotPassword(childDB, _db);
                         UserSMS u = new UserSMS(_db);
                         u.ParentForgotPasswordSMS(childDB);
                         return new Response<UserDTO>(
@@ -302,7 +302,7 @@ namespace VaccineAPI.Controllers
                     }
                     else
                     {
-                        UserEmail.PaForgotPassword(paDb);
+                        UserEmail.PaForgotPassword(paDb, _db);
                         return new Response<UserDTO>(
                             true,
                             "Your password has been sent to your email address",
@@ -321,7 +321,7 @@ namespace VaccineAPI.Controllers
                     }
                     else
                     {
-                        UserEmail.ManagerForgotPassword(managerDb);
+                        UserEmail.ManagerForgotPassword(managerDb, _db);
                         return new Response<UserDTO>(
                             true,
                             "Your password has been sent to your email address",
@@ -402,7 +402,9 @@ namespace VaccineAPI.Controllers
             // Send email
             try
             {
-                UserEmail.SendEmail(child.Email, body);
+                var doctorForChild = _db.Clinics.Where(c => c.Id == child.ClinicId).Select(c => c.Doctor).FirstOrDefault();
+                var senderForChild = EmailSenderResolver.Resolve(doctorForChild, _db);
+                UserEmail.SendEmail(child.Email, body, sender: senderForChild);
                 return new Response<bool>(true, "Your login credentials have been sent to your email address", true);
             }
             catch (Exception ex)

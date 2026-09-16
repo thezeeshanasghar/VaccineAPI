@@ -1173,10 +1173,13 @@ namespace VaccineAPI.Controllers
             var newPa = _db.PersonalAssistant.Find(paId);
             if (newPa != null && !string.IsNullOrEmpty(newPa.Email))
             {
+                var assignmentDoctor = _db.Doctors.FirstOrDefault(d => d.Id == doctorId);
+                var assignmentSender = EmailSenderResolver.Resolve(assignmentDoctor, _db);
                 _ = Task.Run(() => UserEmail.SendEmail(
                     newPa.Email,
                     "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
-                    "New Patient Assignment"
+                    "New Patient Assignment",
+                    sender: assignmentSender
                 ));
             }
 
@@ -3541,7 +3544,7 @@ namespace VaccineAPI.Controllers
                         .Select(s => (DoseName: s.Dose.Name, Date: s.Date))
                         .ToList();
                     var linkToken = LinkLoginToken.Generate(dbChild.UserId, dbChild.Id, LinkLoginSecret());
-                    UserEmail.ParentAlertEmail(dueDoses, dbChild, linkToken, _host.ContentRootPath);
+                    UserEmail.ParentAlertEmail(dueDoses, dbChild, linkToken, _host.ContentRootPath, _db);
                 }
                 catch (Exception ex)
                 {
@@ -3589,7 +3592,7 @@ namespace VaccineAPI.Controllers
                     .Select(s => (DoseName: s.Dose.Name, Date: s.Date))
                     .ToList();
                 var linkToken = LinkLoginToken.Generate(child.UserId, child.Id, LinkLoginSecret());
-                UserEmail.ParentAlertEmail(dueDoses, child, linkToken, _host.ContentRootPath);
+                UserEmail.ParentAlertEmail(dueDoses, child, linkToken, _host.ContentRootPath, _db);
                 return new Response<object>(true, "Email sent successfully.", new
                 {
                     child.Id,
@@ -3715,7 +3718,7 @@ namespace VaccineAPI.Controllers
                             .Select(x => (DoseName: x.Dose.Name, Date: x.Date))
                             .ToList();
                         var linkToken = LinkLoginToken.Generate(child.UserId, child.Id, LinkLoginSecret());
-                        UserEmail.ParentAlertEmail(dueDoses, child, linkToken, _host.ContentRootPath);
+                        UserEmail.ParentAlertEmail(dueDoses, child, linkToken, _host.ContentRootPath, _db);
                     }
                 }
                 List<ScheduleDTO> scheduleDtos = _mapper.Map<List<ScheduleDTO>>(Schedules);

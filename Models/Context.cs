@@ -91,6 +91,7 @@ namespace VaccineAPI.Models
         public DbSet<Refrigerator> Refrigerators { get; set; }
         public DbSet<TemperatureReading> TemperatureReadings { get; set; }
         public DbSet<ColdChainApprovalLog> ColdChainApprovalLogs { get; set; }
+        public DbSet<AppEmailSetting> AppEmailSettings { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

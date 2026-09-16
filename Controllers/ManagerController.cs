@@ -239,7 +239,9 @@ namespace VaccineAPI.Controllers
                  + "Please login at: https://doctor.vaccinationcentre.com/loginpa\n\n"
                  + "Regards,\n"
                  + "Vaccination Centre Team";
-                UserEmail.SendEmail(manager.Email, body, "Your Manager Account Details");
+                var doctorForManager = _db.Doctors.FirstOrDefault(d => d.Id == manager.DoctorId);
+                var senderForManager = EmailSenderResolver.Resolve(doctorForManager, _db);
+                UserEmail.SendEmail(manager.Email, body, "Your Manager Account Details", sender: senderForManager);
             }
             catch (Exception ex)
             {

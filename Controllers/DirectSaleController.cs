@@ -147,10 +147,13 @@ namespace VaccineAPI.Controllers
                     var collectorPa = await _db.PersonalAssistant.FindAsync(dto.PaymentCollectorPaId.Value);
                     if (collectorPa != null && !string.IsNullOrEmpty(collectorPa.Email))
                     {
+                        var saleDoctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
+                        var saleSender = EmailSenderResolver.Resolve(saleDoctor, _db);
                         _ = Task.Run(() => UserEmail.SendEmail(
                             collectorPa.Email,
                             "A direct sale has been assigned to you for cash collection. Please log in to your VacDoc app to view it under Assignments.",
-                            "New Direct Sale Assignment"
+                            "New Direct Sale Assignment",
+                            sender: saleSender
                         ));
                     }
                 }

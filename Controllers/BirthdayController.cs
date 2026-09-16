@@ -72,7 +72,8 @@ Website: https://vaccinationcentre.com";
 
                 try
                 {
-                    UserEmail.SendEmail(emailTo, emailBody, $"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!");
+                    var senderForBirthday = EmailSenderResolver.Resolve(child.Clinic.Doctor, _db);
+                    UserEmail.SendEmail(emailTo, emailBody, $"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!", sender: senderForBirthday);
 
                     return new Response<object>(true,
                         "Birthday email sent successfully.",
@@ -155,10 +156,12 @@ Website: https://vaccinationcentre.com";
 
                     try
                     {
+                        var senderForBirthday = EmailSenderResolver.Resolve(child.Clinic.Doctor, _db);
                         UserEmail.SendEmail(
                             emailTo,
                             emailBody,
-                            $"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!"
+                            $"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!",
+                            sender: senderForBirthday
                         );
 
                         emailsSent.Add(

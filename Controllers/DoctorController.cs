@@ -297,6 +297,8 @@ namespace VaccineAPI.Controllers
             dbDoctor.AllowAnalytics     = doctorDTO.AllowAnalytics;
             dbDoctor.AllowAssistant     = doctorDTO.AllowAssistant;
             dbDoctor.AllowColdChain     = doctorDTO.AllowColdChain;
+            dbDoctor.AllowOwnWebsite    = doctorDTO.AllowOwnWebsite;
+            dbDoctor.AllowOwnEmail      = doctorDTO.AllowOwnEmail;
             _db.SaveChanges();
             //  dbDoctor = _mapper.Map<DoctorDTO, Doctor>(doctorDTO, dbDoctor);
             return new Response<DoctorDTO>(true, null, doctorDTO);

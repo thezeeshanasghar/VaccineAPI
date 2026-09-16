@@ -23,12 +23,12 @@ namespace VaccineAPI.Controllers
             {
                 // Return a blank permission object so frontend knows none are set yet.
                 // RescheduleVaccine, SetClinicOnline, AddPatient, and the alerts/messaging
-                // block (ViewAlerts, SendBulkEmail, OpenWhatsApp, DownloadAlertCsv) default
-                // true: these are day-1 essentials a PA needs before any permission row is
-                // ever explicitly saved for them. Without these, the Email/WhatsApp buttons
-                // on the alerts page are invisible (*ngIf-gated) to any PA whose doctor never
-                // opened "PA Permissions" and saved a row — silently blocking vaccine-due
-                // alert emails/WhatsApp, not just failing them.
+                // block (ViewAlerts, SendBulkEmail, OpenWhatsApp, OpenSms, DownloadAlertCsv)
+                // default true: these are day-1 essentials a PA needs before any permission
+                // row is ever explicitly saved for them. Without these, the Email/WhatsApp/SMS
+                // buttons on the alerts page are invisible (*ngIf-gated) to any PA whose doctor
+                // never opened "PA Permissions" and saved a row — silently blocking vaccine-due
+                // alerts, not just failing them.
                 return Ok(new PaPermission
                 {
                     PaId = paId,
@@ -38,6 +38,7 @@ namespace VaccineAPI.Controllers
                     ViewAlerts = true,
                     SendBulkEmail = true,
                     OpenWhatsApp = true,
+                    OpenSms = true,
                     DownloadAlertCsv = true
                 });
             }
@@ -103,6 +104,7 @@ namespace VaccineAPI.Controllers
                 existing.ViewAlerts = incoming.ViewAlerts;
                 existing.SendBulkEmail = incoming.SendBulkEmail;
                 existing.OpenWhatsApp = incoming.OpenWhatsApp;
+                existing.OpenSms = incoming.OpenSms;
                 existing.DownloadAlertCsv = incoming.DownloadAlertCsv;
                 existing.RetryMessage = incoming.RetryMessage;
 

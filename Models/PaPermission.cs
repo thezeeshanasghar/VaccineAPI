@@ -59,6 +59,7 @@ namespace VaccineAPI.Models
         public bool ViewAlerts { get; set; }
         public bool SendBulkEmail { get; set; }
         public bool OpenWhatsApp { get; set; }
+        public bool OpenSms { get; set; }
         public bool DownloadAlertCsv { get; set; }
         public bool RetryMessage { get; set; }
 

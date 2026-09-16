@@ -55,7 +55,7 @@ namespace VaccineAPI.ModelDTO
         public int SkipCount { get; set; }
         public int UnskipCount { get; set; }
         [JsonConverter(typeof(OnlyDateConverter))]
-        public System.DateTime GivenDate { get; set; }
+        public System.DateTime? GivenDate { get; set; }
 
         // v2 deduction-decision (§6.2a). Only consulted for a backdated, in-period, brand give —
         // the one ambiguous case where the frontend must have shown the prompt:

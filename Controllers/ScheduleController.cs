@@ -190,7 +190,7 @@ namespace VaccineAPI.Controllers
                 // past the age/future guards below. Reject it before any other give-time check.
                 if (scheduleDTO.IsDone == true)
                 {
-                    if (scheduleDTO.GivenDate.Date <= dbSchedule.Child.DOB.Date)
+                    if (!scheduleDTO.GivenDate.HasValue || scheduleDTO.GivenDate.Value.Date <= dbSchedule.Child.DOB.Date)
                         return new Response<ScheduleDTO>(false,
                             "The given date is invalid — it must be after the child's date of birth.", null);
                 }
@@ -200,7 +200,7 @@ namespace VaccineAPI.Controllers
                     var brand = _db.Brands.FirstOrDefault(b => b.Id == scheduleDTO.BrandId.Value);
                     if (brand != null && brand.MinAge.HasValue)
                     {
-                        var givenDate = scheduleDTO.GivenDate.Date;
+                        var givenDate = scheduleDTO.GivenDate!.Value.Date;
                         var minAllowedDate = calculateDate(dbSchedule.Child.DOB, brand.MinAge.Value).Date;
                         if (givenDate < minAllowedDate)
                             return new Response<ScheduleDTO>(false,
@@ -215,7 +215,7 @@ namespace VaccineAPI.Controllers
                     if (dose != null && dose.MinAge > 0)
                     {
                         var minAgeDate = calculateDate(dbSchedule.Child.DOB, dose.MinAge).Date;
-                        if (scheduleDTO.GivenDate.Date < minAgeDate)
+                        if (scheduleDTO.GivenDate!.Value.Date < minAgeDate)
                         {
                             var doseName = dose.Name ?? "This dose";
                             if (scheduleDTO.PaId.HasValue)
@@ -235,7 +235,7 @@ namespace VaccineAPI.Controllers
                     if (dose != null && dose.MaxAge.HasValue)
                     {
                         var maxAgeDate = calculateDate(dbSchedule.Child.DOB, dose.MaxAge.Value).Date;
-                        if (scheduleDTO.GivenDate.Date > maxAgeDate)
+                        if (scheduleDTO.GivenDate!.Value.Date > maxAgeDate)
                         {
                             var doseName = dose.Name ?? "This dose";
                             if (scheduleDTO.PaId.HasValue)
@@ -275,7 +275,7 @@ namespace VaccineAPI.Controllers
                             // (cholera/rabies), a give within 4 days before the floor is valid.
                             var exactInterval = dose.Vaccine != null && dose.Vaccine.ExactIntervalRequired;
                             var enforcedGapDate = exactInterval ? minGapDate : minGapDate.AddDays(-CdcGraceDays);
-                            if (scheduleDTO.GivenDate.Date < enforcedGapDate)
+                            if (scheduleDTO.GivenDate!.Value.Date < enforcedGapDate)
                             {
                                 if (scheduleDTO.PaId.HasValue)
                                     return new Response<ScheduleDTO>(false,
@@ -286,10 +286,10 @@ namespace VaccineAPI.Controllers
                             }
                             // Accepted, but inside the grace window (1–4 days early) → flag it so
                             // the client shows the CDC note. Not set for exact-interval vaccines.
-                            else if (!exactInterval && scheduleDTO.GivenDate.Date < minGapDate)
+                            else if (!exactInterval && scheduleDTO.GivenDate!.Value.Date < minGapDate)
                             {
                                 graceApplied = true;
-                                graceMessage = doseName + " was given " + (minGapDate - scheduleDTO.GivenDate.Date).Days
+                                graceMessage = doseName + " was given " + (minGapDate - scheduleDTO.GivenDate!.Value.Date).Days
                                     + " day(s) before the " + minGapDate.ToString("dd-MM-yyyy")
                                     + " minimum interval — accepted as valid under the CDC 4-day grace period.";
                             }
@@ -596,8 +596,11 @@ namespace VaccineAPI.Controllers
                     {
                         if (wasGiven && previousBrandId.HasValue)
                         {
+                            // scheduleDTO.GivenDate isn't sent on an ungive request — use the
+                            // dose's own recorded given date for the ledger event.
+                            var ungiveEventDate = scheduleDTO.GivenDate ?? dbSchedule.GivenDate ?? DateTime.UtcNow;
                             _inventory.UnadministerSync(dbBrandInventory2.DoctorId, rollbackClinicId,
-                                previousBrandId.Value, dbSchedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
+                                previousBrandId.Value, dbSchedule.Id, ungiveEventDate, scheduleDTO.PaId);
                         }
                     }
                     using (var tx = _db.Database.BeginTransaction())
@@ -625,7 +628,7 @@ namespace VaccineAPI.Controllers
                 {
                     // v2 date policy (§8): a dose can never be marked given with a FUTURE date,
                     // on any path. Reject before any inventory/IsDone work.
-                    if (scheduleDTO.GivenDate.Date > ClinicClock.TodayPkt())
+                    if (scheduleDTO.GivenDate!.Value.Date > ClinicClock.TodayPkt())
                     {
                         return new Response<ScheduleDTO>(false,
                             "The given date cannot be in the future.", null);
@@ -637,7 +640,7 @@ namespace VaccineAPI.Controllers
                     var stockPeriodStart = _db.Clinics
                         .Where(c => c.Id == onlineClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
                     var decision = InventoryTransactionService.ResolveGiveDecision(
-                        scheduleDTO.BrandId, scheduleDTO.GivenDate, stockPeriodStart, scheduleDTO.ReRecordHistorical);
+                        scheduleDTO.BrandId, scheduleDTO.GivenDate.Value, stockPeriodStart, scheduleDTO.ReRecordHistorical);
 
                     if (decision.NeedsPrompt)
                     {
@@ -681,7 +684,7 @@ namespace VaccineAPI.Controllers
                         // case (records, floors Count at 0, flags NeedsReconcile). The old
                         // Count<=0 rejection is removed for the consuming path.
                         _inventory.AdministerSync(dbBrandInventory, onlineClinicId, dbSchedule.Id,
-                            scheduleDTO.GivenDate, scheduleDTO.PaId,
+                            scheduleDTO.GivenDate.Value, scheduleDTO.PaId,
                             decision.ConsumesStock, decision.Reason, out giveConsumedStockId);
 
                         // Persist the inventory deduction in its own transaction, right here,
@@ -731,7 +734,7 @@ namespace VaccineAPI.Controllers
                 if (dbSchedule.Dose.Name.StartsWith("HPV") && dbSchedule.Dose.DoseOrder == 1)
                 {
                     var daysDifference = Convert.ToInt32(
-                        (scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays
+                        (scheduleDTO.GivenDate!.Value.Date - dbSchedule.Child.DOB.Date).TotalDays
                     );
 
                     // Console.WriteLine (daysDifference);
@@ -751,7 +754,7 @@ namespace VaccineAPI.Controllers
                                     )
                                     .FirstOrDefault();
                                 childschedule.IsSkip = false;
-                                childschedule.Date = calculateDate(scheduleDTO.GivenDate.Date, dose.MinGap ?? 30);
+                                childschedule.Date = calculateDate(scheduleDTO.GivenDate!.Value.Date, dose.MinGap ?? 30);
                             }
 
                             if (dose.DoseOrder == 3)
@@ -762,7 +765,7 @@ namespace VaccineAPI.Controllers
                                     )
                                     .FirstOrDefault();
                                 childschedule.IsSkip = false;
-                                childschedule.Date = calculateDate(scheduleDTO.GivenDate.Date, 180);
+                                childschedule.Date = calculateDate(scheduleDTO.GivenDate!.Value.Date, 180);
                             }
                         }
 
@@ -786,7 +789,7 @@ namespace VaccineAPI.Controllers
                         var stockPeriodStartForStamp = _db.Clinics
                             .Where(c => c.Id == onlineClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
                         var stampDecision = InventoryTransactionService.ResolveGiveDecision(
-                            scheduleDTO.BrandId, scheduleDTO.GivenDate, stockPeriodStartForStamp, scheduleDTO.ReRecordHistorical);
+                            scheduleDTO.BrandId, scheduleDTO.GivenDate.Value, stockPeriodStartForStamp, scheduleDTO.ReRecordHistorical);
                         // v2 lot/expiry stamping:
                         //  - consuming brand give that drew a batch → stamp that exact batch.
                         //  - consuming brand give at ZERO stock (no batch) → blank (no fabrication).
@@ -810,7 +813,7 @@ namespace VaccineAPI.Controllers
                 {
                     var doseBrand = _db.Brands.FirstOrDefault(x => x.Id == scheduleDTO.BrandId);
                     var daysDifference = Convert.ToInt32(
-                        (scheduleDTO.GivenDate.Date - dbSchedule.Child.DOB.Date).TotalDays
+                        (scheduleDTO.GivenDate!.Value.Date - dbSchedule.Child.DOB.Date).TotalDays
                     );
 
                     if (doseBrand != null)
@@ -1550,12 +1553,17 @@ namespace VaccineAPI.Controllers
 
         private void ChangeDueDatesOfInjectedSchedule(ScheduleDTO scheduleDTO, Schedule dbSchedule)
         {
-            var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Date - dbSchedule.Date.Date).TotalDays);
+            // Only meaningful for an actual give — nothing to re-anchor future doses off of
+            // when there's no given date (e.g. an ungive reaching this via the unconditional
+            // call site above).
+            if (!scheduleDTO.GivenDate.HasValue) return;
+
+            var daysDifference = Convert.ToInt32((scheduleDTO.GivenDate.Value.Date - dbSchedule.Date.Date).TotalDays);
             var dbDose = _db.Doses.Include(x => x.Vaccine).ToList();
             var dbVacc = _db.Vaccines.Include(x => x.Doses).ToList();
             var AllDoses = dbSchedule.Dose.Vaccine.Doses;
             AllDoses = AllDoses.Where(x => x.DoseOrder > dbSchedule.Dose.DoseOrder).OrderBy(x => x.DoseOrder).ToList();
-            var previousdosedate = scheduleDTO.GivenDate.Date;
+            var previousdosedate = scheduleDTO.GivenDate.Value.Date;
             foreach (var d in AllDoses)
             {
                 if (!d.MinGap.HasValue)
@@ -1931,6 +1939,14 @@ namespace VaccineAPI.Controllers
                 }
             }
 
+            // BUG-16 (bulk) — mirror the single-give guard: a bulk give must carry a real
+            // GivenDate before any of the age/gap checks below trust it.
+            if (scheduleDTO.IsDone == true && !scheduleDTO.GivenDate.HasValue)
+            {
+                return new Response<ScheduleDTO>(false,
+                    "The given date is invalid — it must be after the child's date of birth.", null);
+            }
+
             // Step 4 — MinAge, MaxAge, Brand.MinAge and MinGap checks for bulk give (accumulate all errors)
             bool bulkGraceApplied = false;
             var bulkGraceMessages = new System.Collections.Generic.List<string>();
@@ -1949,7 +1965,7 @@ namespace VaccineAPI.Controllers
                         if (child != null)
                         {
                             var minAgeDate = calculateDate(child.DOB, chkDose.MinAge).Date;
-                            if (scheduleDTO.GivenDate.Date < minAgeDate)
+                            if (scheduleDTO.GivenDate!.Value.Date < minAgeDate)
                             {
                                 var msg = (chkDose.Name ?? "A dose") + " cannot be given before " + minAgeDate.ToString("dd-MM-yyyy") + " (minimum age not reached).";
                                 if (bulkIsNonDoctorActor)
@@ -1967,7 +1983,7 @@ namespace VaccineAPI.Controllers
                         if (child != null)
                         {
                             var maxAgeDate = calculateDate(child.DOB, chkDose.MaxAge.Value).Date;
-                            if (scheduleDTO.GivenDate.Date > maxAgeDate)
+                            if (scheduleDTO.GivenDate!.Value.Date > maxAgeDate)
                             {
                                 var msg = (chkDose.Name ?? "A dose") + " cannot be given after " + maxAgeDate.ToString("dd-MM-yyyy") + " (maximum age exceeded).";
                                 if (bulkIsNonDoctorActor)
@@ -1994,7 +2010,7 @@ namespace VaccineAPI.Controllers
                             if (child != null)
                             {
                                 var brandMinAgeDate = calculateDate(child.DOB, chkBrand.MinAge.Value).Date;
-                                if (scheduleDTO.GivenDate.Date < brandMinAgeDate)
+                                if (scheduleDTO.GivenDate!.Value.Date < brandMinAgeDate)
                                 {
                                     var msg = chkBrand.Name + " cannot be given before " + brandMinAgeDate.ToString("dd-MM-yyyy") + ".";
                                     if (!bulkErrors.Contains(msg))
@@ -2032,7 +2048,7 @@ namespace VaccineAPI.Controllers
                                     .Select(v => v.ExactIntervalRequired)
                                     .FirstOrDefault();
                                 var enforcedGapDate = exactInterval ? minGapDate : minGapDate.AddDays(-CdcGraceDays);
-                                if (scheduleDTO.GivenDate.Date < enforcedGapDate)
+                                if (scheduleDTO.GivenDate!.Value.Date < enforcedGapDate)
                                 {
                                     var msg = (chkDose.Name ?? "A dose") + " cannot be given before " + minGapDate.ToString("dd-MM-yyyy") + " (minimum gap not met).";
                                     if (bulkIsNonDoctorActor)
@@ -2040,10 +2056,10 @@ namespace VaccineAPI.Controllers
                                     else if (!bulkErrors.Contains("[Warning] " + msg))
                                         bulkErrors.Add("[Warning] " + msg);
                                 }
-                                else if (!exactInterval && scheduleDTO.GivenDate.Date < minGapDate)
+                                else if (!exactInterval && scheduleDTO.GivenDate!.Value.Date < minGapDate)
                                 {
                                     bulkGraceApplied = true;
-                                    var gmsg = (chkDose.Name ?? "A dose") + " given " + (minGapDate - scheduleDTO.GivenDate.Date).Days
+                                    var gmsg = (chkDose.Name ?? "A dose") + " given " + (minGapDate - scheduleDTO.GivenDate!.Value.Date).Days
                                         + " day(s) early — valid under the CDC 4-day grace period.";
                                     if (!bulkGraceMessages.Contains(gmsg))
                                         bulkGraceMessages.Add(gmsg);
@@ -2094,7 +2110,7 @@ namespace VaccineAPI.Controllers
                         if (!chkBrandId2.HasValue || chkBrandId2.Value <= 0) continue;
 
                         var chkDecision = InventoryTransactionService.ResolveGiveDecision(
-                            chkBrandId2, scheduleDTO.GivenDate, chkPeriodStart, scheduleDTO.ReRecordHistorical);
+                            chkBrandId2, scheduleDTO.GivenDate!.Value, chkPeriodStart, scheduleDTO.ReRecordHistorical);
                         if (!chkDecision.ConsumesStock) continue;
 
                         if (!_inventory.HasFillableBatch(chkBrandId2.Value, chkClinicId))
@@ -2114,7 +2130,7 @@ namespace VaccineAPI.Controllers
 
             // v2 date policy (§8): no give with a FUTURE date, on any path — reject the whole
             // bulk request before any dose is marked done. Only applies when actually giving.
-            if (scheduleDTO.IsDone && scheduleDTO.GivenDate.Date > ClinicClock.TodayPkt())
+            if (scheduleDTO.IsDone && scheduleDTO.GivenDate!.Value.Date > ClinicClock.TodayPkt())
             {
                 return new Response<ScheduleDTO>(false, "The given date cannot be in the future.", null);
             }
@@ -2138,7 +2154,7 @@ namespace VaccineAPI.Controllers
                 schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
                 schedule.Circle =(scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
                 schedule.IsDone = scheduleDTO.IsDone;
-                schedule.GivenDate = scheduleDTO.GivenDate.Date;
+                schedule.GivenDate = scheduleDTO.IsDone ? scheduleDTO.GivenDate!.Value.Date : (DateTime?)null;
                 schedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
                 if (scheduleDTO.PaymentMode != null) schedule.PaymentMode = scheduleDTO.PaymentMode;
                 schedule.OnlineService = scheduleDTO.OnlineService;
@@ -2332,7 +2348,10 @@ namespace VaccineAPI.Controllers
                                     // UnadministerBulkSync mirrors the original give (restores
                                     // only if that give actually consumed); safe to call even
                                     // for OHF/historical/pre-reset gives (it no-ops the stock).
-                                    _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, scheduleDTO.GivenDate, scheduleDTO.PaId);
+                                    // scheduleDTO.GivenDate isn't sent on an ungive request — use the
+                                    // dose's own recorded given date for the ledger event.
+                                    var ungiveEventDate = scheduleDTO.GivenDate ?? schedule.GivenDate ?? DateTime.UtcNow;
+                                    _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, ungiveEventDate, scheduleDTO.PaId);
                                 }
                             }
                         }
@@ -2360,7 +2379,7 @@ namespace VaccineAPI.Controllers
                             var bulkPeriodStart = _db.Clinics
                                 .Where(c => c.Id == onlineClinicId).Select(c => c.StockPeriodStart).FirstOrDefault();
                             var bulkDecision = InventoryTransactionService.ResolveGiveDecision(
-                                scheduleBrand.BrandId, scheduleDTO.GivenDate, bulkPeriodStart, scheduleDTO.ReRecordHistorical);
+                                scheduleBrand.BrandId, scheduleDTO.GivenDate!.Value, bulkPeriodStart, scheduleDTO.ReRecordHistorical);
                             if (bulkDecision.NeedsPrompt)
                             {
                                 return new Response<ScheduleDTO>(false,
@@ -2409,7 +2428,7 @@ namespace VaccineAPI.Controllers
                                 // v2: never hard-block on zero stock (§2.8 exception) — the give-at-zero
                                 // path records, floors Count at 0, and flags NeedsReconcile.
                                 _inventory.AdministerSync(brandInventory, onlineClinicId, schedule.Id,
-                                    scheduleDTO.GivenDate, scheduleDTO.PaId,
+                                    scheduleDTO.GivenDate!.Value, scheduleDTO.PaId,
                                     bulkDecision.ConsumesStock, bulkDecision.Reason, out bulkConsumedStockId);
 
                                 schedule.StockId = bulkConsumedStockId;
@@ -2476,6 +2495,18 @@ namespace VaccineAPI.Controllers
         [HttpPut("update-bulk-invoice")]
         public Response<object> updateInvoice([FromBody] BulkInvoiceSubmitDTO dto)
         {
+            // Reject an InvoiceDate implausibly ahead of now — a real invoice was found live in
+            // production 5 months in the future (InvoiceDate stamped from a due-date bucket the
+            // client happened to be browsing instead of the actual given date; VacDoc's
+            // resolveInvoiceDate() has since been hardened to block this client-side too, but this
+            // guard closes the bug class server-side regardless of which client path sends it).
+            // A far-PAST InvoiceDate is legitimate and expected — doctors routinely invoice
+            // catch-up/backdated visits — so only the future direction is bounded, with a small
+            // +2 day tolerance for UTC/PKT offset (PKT is UTC+5, so "today" in PKT can already be
+            // tomorrow in UTC depending on time of day).
+            if (dto.InvoiceDate.Date > DateTime.UtcNow.AddDays(2).Date)
+                return new Response<object>(false, "Invoice date can't be in the future.", null);
+
             // Use a ±1 day window to guard against UTC/PKT offset causing date mismatch on second call
             var invoiceDateMin = dto.InvoiceDate.Date.AddDays(-1);
             var invoiceDateMax = dto.InvoiceDate.Date.AddDays(1);
@@ -2595,10 +2626,33 @@ namespace VaccineAPI.Controllers
                 }
                 else
                 {
-                    // Doctor editing — direct update, no amendment gate needed
+                    // Doctor editing — no 1-edit cap / same-day window (doctor is the final
+                    // authority on their own invoices, unlike PA/Manager), but still recorded
+                    // as an InvoiceAmendment for the same audit trail the reconciliation page
+                    // shows for PA/Manager edits. Auto-approved in the same call since the
+                    // doctor is both editor and approver — TotalAmount applies immediately,
+                    // no separate approval click, no HasPendingAmendment window.
+                    var oldAmountDoc = existing.TotalAmount;
                     var newAmount = dto.Schedules.Sum(s => s.Amount) + dto.ConsultationFee;
+
+                    var now = DateTime.UtcNow;
+                    _db.InvoiceAmendments.Add(new InvoiceAmendment
+                    {
+                        InvoiceSubmissionId = existing.Id,
+                        AmendmentType = "Edit",
+                        OldAmount = oldAmountDoc,
+                        NewAmount = newAmount,
+                        DoctorId = dto.DoctorId,
+                        Notes = $"Doctor edited invoice. Consultation fee: {dto.ConsultationFee}",
+                        CreatedAt = now,
+                        IsApprovedByDoctor = true,
+                        ApprovedAt = now,
+                        ApprovedByDoctorId = dto.DoctorId
+                    });
+
                     existing.ConsultationFee = dto.ConsultationFee;
                     existing.TotalAmount = newAmount;
+                    existing.EditCount++;
                     if (dto.ClinicId.HasValue && existing.ClinicId == null)
                         existing.ClinicId = dto.ClinicId;
 

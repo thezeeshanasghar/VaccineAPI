@@ -477,11 +477,18 @@ namespace VaccineAPI.Controllers
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
             // --- Part 1: Standard invoice rows ---
+            // Excludes InvoiceStatus == "Cancelled" — a voided invoice (doctor's "Void invoice"
+            // action, or the phantom-duplicate cleanup on 2026-09-16, see
+            // invoicesubmissions_phantom_duplicate_void_backup_20260916) must disappear from
+            // reconciliation entirely, not just sit there confirmable/double-countable. This
+            // filter was previously missing — voiding an invoice set the flag but never actually
+            // removed the row from this list.
             var invQuery = _db.InvoiceSubmissions
                 .Where(i =>
                     i.PaId.HasValue &&
                     i.TotalAmount > 0 &&
                     i.DoctorId == doctorId &&
+                    i.InvoiceStatus != "Cancelled" &&
                     (i.ClinicId == null || clinicIds.Contains(i.ClinicId.Value)));
 
             if (clinicId.HasValue) invQuery = invQuery.Where(i => i.ClinicId == clinicId.Value);
@@ -496,6 +503,28 @@ namespace VaccineAPI.Controllers
                 .Where(c => invChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
+            // Pending (unresolved) PA/Manager amendments, keyed by their invoice — folded onto
+            // that invoice's row below instead of listed as a separate row. Before this, a PA or
+            // Manager edit left the original Invoice row AND a new EditReversal/UngiveReversal
+            // row both visible for the same visit: confirming the untouched Invoice row locked in
+            // the stale pre-edit amount while the edit sat open forever, and the PA's own list only
+            // ever showed one assignment — so the two rows here could never both be resolved by
+            // parallel actions. One invoice now always renders as exactly one row. (Doctor's own
+            // edits never reach this dictionary — they're auto-approved in the same call that
+            // creates them, see ScheduleController's doctor-edit branch, so they never leave
+            // HasPendingAmendment set.)
+            var invoiceIdsForAmendments = invoices.Select(i => i.Id).ToList();
+            var pendingAmendmentByInvoiceId = _db.InvoiceAmendments
+                .Where(a =>
+                    a.DoctorId == doctorId &&
+                    !a.IsApprovedByDoctor &&
+                    !a.IsRejectedByDoctor &&
+                    invoiceIdsForAmendments.Contains(a.InvoiceSubmissionId))
+                .OrderByDescending(a => a.CreatedAt)
+                .ToList()
+                .GroupBy(a => a.InvoiceSubmissionId)
+                .ToDictionary(g => g.Key, g => g.First());
+
             // InvoiceSubmissionId -> PAAssignment.Id — the real FK link (PAAssignment.InvoiceSubmissionId,
             // written at assignment-create/reassign time, see VaccineAPI staging a6fd23e). Lets the doctor
             // delete an assignment (and cascade its invoice/schedules) directly from an Invoice/amendment
@@ -509,31 +538,39 @@ namespace VaccineAPI.Controllers
                 .GroupBy(a => a.InvoiceSubmissionId)
                 .ToDictionary(g => g.Key, g => g.First());
 
-            var invoiceRows = invoices.Select(i => new
+            var invoiceRows = invoices.Select(i =>
             {
-                RowType             = "Invoice",
-                InvoiceSubmissionId = i.Id,
-                ScheduleId          = i.Id,
-                AmendmentId         = (long?)null,
-                AssignmentId        = assignmentByInvoiceId.ContainsKey(i.Id) ? (long?)assignmentByInvoiceId[i.Id].Id : (long?)null,
-                SortKey             = i.SubmittedAt,
-                Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
-                AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? assignmentByInvoiceId[i.Id].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
-                PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
-                Amount              = i.TotalAmount,
-                PaymentMode         = i.PaymentMode ?? "",
-                IsConfirmed         = i.IsConfirmedByDoctor,
-                ConfirmedAt         = i.ConfirmedAt.HasValue ? i.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
-                InvoiceStatus       = i.InvoiceStatus,
-                HasPendingAmendment = i.HasPendingAmendment,
-                PendingHandover     = i.PendingHandover,
-                HandoverDoneAt      = i.HandoverDoneAt.HasValue ? i.HandoverDoneAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
-                PaId                = i.PaId.Value,
-                PaName              = i.SubmittedByLabel ?? (paNames.ContainsKey(i.PaId.Value) ? paNames[i.PaId.Value] : ""),
-                ClinicId            = i.ClinicId ?? 0,
-                ClinicName          = (i.ClinicId.HasValue && clinicNames.ContainsKey(i.ClinicId.Value)) ? clinicNames[i.ClinicId.Value] : "",
-                OldAmount           = (decimal?)null,
-                NewAmount           = (decimal?)null
+                pendingAmendmentByInvoiceId.TryGetValue(i.Id, out var pending);
+                return new
+                {
+                    RowType             = "Invoice",
+                    InvoiceSubmissionId = i.Id,
+                    ScheduleId          = i.Id,
+                    // Set only when a PA/Manager edit or ungive is awaiting this doctor's
+                    // approval — lets the frontend swap Confirm for Approve/Reject on THIS
+                    // same row instead of rendering the amendment as a second list entry.
+                    AmendmentId         = pending != null ? (long?)pending.Id : null,
+                    AssignmentId        = assignmentByInvoiceId.ContainsKey(i.Id) ? (long?)assignmentByInvoiceId[i.Id].Id : (long?)null,
+                    SortKey             = pending != null ? pending.CreatedAt : i.SubmittedAt,
+                    Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
+                    AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? assignmentByInvoiceId[i.Id].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                    PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
+                    Amount              = i.TotalAmount,
+                    PaymentMode         = i.PaymentMode ?? "",
+                    IsConfirmed         = i.IsConfirmedByDoctor,
+                    ConfirmedAt         = i.ConfirmedAt.HasValue ? i.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                    InvoiceStatus       = i.InvoiceStatus,
+                    HasPendingAmendment = i.HasPendingAmendment,
+                    PendingAmendmentType = pending != null ? (pending.AmendmentType == "Ungive" ? "UngiveReversal" : "EditReversal") : (string)null,
+                    PendingHandover     = i.PendingHandover,
+                    HandoverDoneAt      = i.HandoverDoneAt.HasValue ? i.HandoverDoneAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                    PaId                = i.PaId.Value,
+                    PaName              = i.SubmittedByLabel ?? (paNames.ContainsKey(i.PaId.Value) ? paNames[i.PaId.Value] : ""),
+                    ClinicId            = i.ClinicId ?? 0,
+                    ClinicName          = (i.ClinicId.HasValue && clinicNames.ContainsKey(i.ClinicId.Value)) ? clinicNames[i.ClinicId.Value] : "",
+                    OldAmount           = pending != null ? (decimal?)pending.OldAmount : null,
+                    NewAmount           = pending != null ? (decimal?)pending.NewAmount : null
+                };
             });
 
             // --- Part 0: Assignments with no invoice yet — informational "Awaiting Invoice" rows ---
@@ -561,10 +598,14 @@ namespace VaccineAPI.Controllers
             //
             // Built from a query that does NOT carry `invoices`' `TotalAmount > 0` display filter —
             // a real invoice downloaded with a zero amount must still suppress its placeholder row.
+            // Cancelled/voided invoices must NOT count here — otherwise voiding a phantom invoice
+            // (e.g. the 2026-09-16 duplicate cleanup) would permanently suppress a legitimate future
+            // "Awaiting Invoice" row for that same child+PA pair.
             var invoicedPairsQuery = _db.InvoiceSubmissions
                 .Where(i =>
                     i.PaId.HasValue &&
                     i.DoctorId == doctorId &&
+                    i.InvoiceStatus != "Cancelled" &&
                     (i.ClinicId == null || clinicIds.Contains(i.ClinicId.Value)));
             if (clinicId.HasValue) invoicedPairsQuery = invoicedPairsQuery.Where(i => i.ClinicId == clinicId.Value);
             if (paId.HasValue)     invoicedPairsQuery = invoicedPairsQuery.Where(i => i.PaId == paId.Value);
@@ -649,7 +690,17 @@ namespace VaccineAPI.Controllers
             if (from.HasValue) amendQuery = amendQuery.Where(a => a.CreatedAt.Date >= from.Value);
             if (to.HasValue)   amendQuery = amendQuery.Where(a => a.CreatedAt.Date < to.Value);
 
-            var amendments = amendQuery.OrderByDescending(a => a.CreatedAt).ToList();
+            // Exclude amendments already folded onto their parent Invoice row above — this
+            // query is now only a fallback for the rare case where the parent invoice fell out
+            // of `invoices` (e.g. a filtered-out clinic/PA, or TotalAmount dropped to 0 from an
+            // already-approved prior amendment on the same invoice). Without this exclusion the
+            // amendment would render twice: once folded into the Invoice row, once standalone.
+            var foldedAmendmentIds = pendingAmendmentByInvoiceId.Values.Select(a => a.Id).ToHashSet();
+            var amendments = amendQuery
+                .ToList()
+                .Where(a => !foldedAmendmentIds.Contains(a.Id))
+                .OrderByDescending(a => a.CreatedAt)
+                .ToList();
 
             var amendChildIds = amendments
                 .Where(a => a.InvoiceSubmission != null)

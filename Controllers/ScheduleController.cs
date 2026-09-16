@@ -2828,6 +2828,15 @@ namespace VaccineAPI.Controllers
             return (givenByManager ? "Manager/(" : "Doctor/(") + paName + ")";
         }
 
+        // The PA cash-payment system's confirmed real go-live date — earliest real PAAssignment
+        // row in production, 2026-05-28. An InvoiceSubmission whose SubmittedAt predates this is
+        // definitionally not a real payment-flow transaction: either the 2026-08-28 Historical
+        // Backfill (SubmittedByLabel='Historical Backfill') or an earlier, separate batch that
+        // stamped a per-PA label with the same synthetic midnight-exact SubmittedAt signature (see
+        // the 2026-09-16 schedules_paymentcollected_precutoff_backup correction). Used to hide the
+        // PAYMENT action button on old doses that were never meant to go through PA cash collection.
+        private static readonly DateTime PaPaymentSystemLaunch = new DateTime(2026, 5, 28);
+
         [HttpGet("invoice-status")]
         public ActionResult GetInvoiceStatus([FromQuery] long childId, [FromQuery] long doctorId, [FromQuery] DateTime invoiceDate)
         {
@@ -2842,11 +2851,12 @@ namespace VaccineAPI.Controllers
                 x.InvoiceDate.Date <= invoiceDateMax);
 
             if (submission == null)
-                return Ok(new { isSubmitted = false, editCount = 0, canEdit = true, submittedByPaId = (long?)null });
+                return Ok(new { isSubmitted = false, editCount = 0, canEdit = true, submittedByPaId = (long?)null, isPrePaymentSystem = false });
 
             var pktNow = DateTime.UtcNow.AddHours(5);
             bool canEdit = submission.EditCount < 1 && submission.SubmittedAt.AddHours(5).Date == pktNow.Date;
-            return Ok(new { isSubmitted = true, editCount = submission.EditCount, canEdit, submittedByPaId = submission.PaId });
+            bool isPrePaymentSystem = submission.SubmittedAt < PaPaymentSystemLaunch;
+            return Ok(new { isSubmitted = true, editCount = submission.EditCount, canEdit, submittedByPaId = submission.PaId, isPrePaymentSystem });
         }
 
         // Converts a GapInDays code into a human-readable duration for messages

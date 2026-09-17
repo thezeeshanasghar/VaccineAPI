@@ -135,7 +135,6 @@ namespace VaccineAPI
             if (dueDoses.Count == 0) return;
 
             DateTime today = DateTime.UtcNow.AddHours(5).Date;
-            string recordLink = "https://client.vaccinationcentre.com/child/vaccine/" + child.Id + "?t=" + Uri.EscapeDataString(linkToken);
             string logoTag = BuildLogoImgTag(child.Clinic?.MonogramImage, contentRootPath);
             bool isVaccinePkBranded = child.Clinic?.Doctor?.Id == 1;
             string poweredByLine = isVaccinePkBranded
@@ -179,15 +178,6 @@ namespace VaccineAPI
   </div>
   <div style=""margin:0 32px 24px;"">
     {doseCardsBuilder}
-  </div>
-  <div style=""margin:0 32px 12px;text-align:center;"">
-    <a href=""{recordLink}"" style=""display:block;width:100%;box-sizing:border-box;text-align:center;background:#2E9FB5;color:#ffffff;font-weight:700;font-size:15px;padding:14px 20px;border-radius:9px;text-decoration:none;"">View Vaccination Record</a>
-  </div>
-  <p style=""text-align:center;margin:14px 32px 28px;font-size:12.5px;color:#5B7480;line-height:1.6;"">Opens your child's record — no separate login needed.</p>
-  <div style=""margin:0 32px 28px;padding:16px 18px;border-radius:10px;background:#EEF9F6;border:1px solid #CDEBE3;text-align:center;"">
-    <p style=""font-size:13px;font-weight:700;color:#0E2A38;margin:0 0 4px;"">Manage this from our app</p>
-    <p style=""font-size:12.5px;color:#5B7480;line-height:1.55;margin:0 0 10px;"">Log in to see your child's full vaccine details, book your next appointment, and learn more about each vaccine.</p>
-    <a href=""{recordLink}"" style=""display:inline-block;font-size:13px;font-weight:700;color:#2E9FB5;text-decoration:none;"">Log in &rarr;</a>
   </div>
   <hr style=""border:none;border-top:1px solid #DCE7E8;margin:0 32px;"">
   <div style=""padding:20px 32px 28px;font-size:12px;color:#5B7480;line-height:1.7;"">

@@ -14,6 +14,7 @@ using iTextSharpImage = iTextSharp.text.Image;
 using iTextSharpFont = iTextSharp.text.Font;
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.Extensions.Configuration;
 
 // using WebApi.Out3Cache.V2;
 namespace VaccineAPI.Controllers
@@ -25,11 +26,21 @@ namespace VaccineAPI.Controllers
         private readonly Context _db;
         private readonly IMapper _mapper;
         private readonly IWebHostEnvironment _host;
-        public ChildController(Context context, IMapper mapper, IWebHostEnvironment host)
+        private readonly IConfiguration _config;
+        public ChildController(Context context, IMapper mapper, IWebHostEnvironment host, IConfiguration config)
         {
             _db = context;
             _mapper = mapper;
             _host = host;
+            _config = config;
+        }
+
+        // Secret used to sign parent magic-link tokens. Mirrors ScheduleController/UserController.
+        private string LinkLoginSecret()
+        {
+            return _config["LinkLogin:Secret"]
+                ?? System.Environment.GetEnvironmentVariable("LinkLoginSecret")
+                ?? "";
         }
 
         [HttpPut("{id:long}/toggle-active")]
@@ -2494,9 +2505,12 @@ namespace VaccineAPI.Controllers
                     if (c == null)
                         emailDebugMessage = "EMAIL_DEBUG: reload query returned null Child";
                     else if (c.Email != "")
-                        emailDebugMessage = UserEmail.ParentEmail(c, _host.ContentRootPath, _db) is string err
+                    {
+                        var linkToken = LinkLoginToken.Generate(c.UserId, c.Id, LinkLoginSecret());
+                        emailDebugMessage = UserEmail.ParentEmail(c, linkToken, _host.ContentRootPath, _db) is string err
                             ? "EMAIL_DEBUG: " + err
                             : null;
+                    }
                     else
                         emailDebugMessage = "EMAIL_DEBUG: c.Email was empty/null (value=\"" + c.Email + "\")";
                 }

@@ -18,83 +18,59 @@ namespace VaccineAPI
     {
         #region Parent Email
 
-        public static string ParentEmail(Child child, string contentRootPath, Context db)
+        public static string ParentEmail(Child child, string linkToken, string contentRootPath, Context db)
         {
             string honorific = child.Gender == "Girl" ? "Miss." : "Mr.";
-            string doctorMobile = child.Clinic?.Doctor?.User?.MobileNumber ?? "";
-            string doctorPhone = doctorMobile.StartsWith("92") || doctorMobile.StartsWith("+92")
-                ? doctorMobile.TrimStart('+')
-                : "92" + doctorMobile.TrimStart('0');
-            string schedulePdfUrl = "http://myapi.vaccinationcentre.com/api/child/" + child.Id + "/Download-Schedule-PDF";
-            string logoTag = BuildLogoImgTag(child.Clinic?.MonogramImage, contentRootPath);
-            bool isVaccinePkBranded = child.Clinic?.Doctor?.Id == 1;
-            string poweredByLine = isVaccinePkBranded
-                ? @"<div style=""font-size:11.5px;color:#5B7480;"">Powered by Vaccine.pk</div>"
-                : "";
-            string webLinkLine = isVaccinePkBranded
-                ? @"<p style=""text-align:center;margin:14px 32px 32px;font-size:13px;color:#5B7480;"">or <a href=""https://vaccinationcentre.com"" style=""color:#2E9FB5;font-weight:600;text-decoration:none;"">open Vaccine.pk in your browser</a></p>"
-                : "";
+            string openAppUrl = "https://client.vaccinationcentre.com/child?t=" + Uri.EscapeDataString(linkToken);
+            string rawPassword = child.User.Password ?? "";
+            string last4 = rawPassword.Length <= 4 ? rawPassword : rawPassword.Substring(rawPassword.Length - 4);
+            string maskedPassword = "••••" + last4;
 
             string body = $@"
 <div style=""font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #DCE7E8;border-radius:14px;overflow:hidden;"">
-  <div style=""padding:26px 32px;border-bottom:1px solid #DCE7E8;display:flex;align-items:center;gap:14px;"">
-    {logoTag}
-    <div>
-      <div style=""font-size:16px;font-weight:700;color:#0E2A38;"">{child.Clinic.Name}</div>
-      {poweredByLine}
+  <div style=""padding:32px 32px 24px;text-align:center;border-bottom:1px solid #DCE7E8;"">
+    <div style=""width:52px;height:52px;border-radius:50%;background:#DFF3EA;display:inline-flex;align-items:center;justify-content:center;margin:0 0 14px;"">
+      <div style=""font-size:24px;color:#1E8E5A;"">&#10003;</div>
+    </div>
+    <h1 style=""font-size:20px;line-height:1.3;margin:0 0 6px;font-weight:700;color:#0E2A38;"">Registration confirmed</h1>
+    <p style=""font-size:14.5px;color:#5B7480;margin:0;line-height:1.5;"">{honorific} {child.Name}, your account is active at {child.Clinic.Name}</p>
+  </div>
+  <div style=""padding:26px 32px 8px;"">
+    <p style=""font-size:11.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5B7480;margin:0 0 12px;"">Sign in details</p>
+    <div style=""border:1px solid #DCE7E8;border-radius:10px;overflow:hidden;"">
+      <div style=""display:flex;justify-content:space-between;padding:12px 16px;"">
+        <span style=""font-size:13.5px;color:#5B7480;"">Mobile number</span>
+        <span style=""font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;"">{child.User.MobileNumber}</span>
+      </div>
+      <div style=""display:flex;justify-content:space-between;padding:12px 16px;border-top:1px solid #DCE7E8;"">
+        <span style=""font-size:13.5px;color:#5B7480;"">Password</span>
+        <span style=""font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;"">{maskedPassword}</span>
+      </div>
+    </div>
+    <p style=""font-size:12.5px;color:#5B7480;margin:12px 0 0;"">Keep these safe. You'll use them to log in.</p>
+  </div>
+  <div style=""padding:22px 32px 6px;"">
+    <p style=""font-size:11.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5B7480;margin:0 0 12px;"">What you can do now</p>
+    <div style=""border:1px solid #DCE7E8;border-radius:10px;padding:14px 16px;margin-bottom:10px;"">
+      <div style=""font-size:14.5px;font-weight:700;color:#0E2A38;margin:0 0 2px;"">Book appointments</div>
+      <div style=""font-size:13px;color:#5B7480;"">Schedule vaccinations in seconds — no phone calls needed.</div>
+    </div>
+    <div style=""border:1px solid #DCE7E8;border-radius:10px;padding:14px 16px;margin-bottom:10px;"">
+      <div style=""font-size:14.5px;font-weight:700;color:#0E2A38;margin:0 0 2px;"">View vaccine records</div>
+      <div style=""font-size:13px;color:#5B7480;"">Access complete history for you and your family.</div>
+    </div>
+    <div style=""border:1px solid #DCE7E8;border-radius:10px;padding:14px 16px;"">
+      <div style=""font-size:14.5px;font-weight:700;color:#0E2A38;margin:0 0 2px;"">Track upcoming doses</div>
+      <div style=""font-size:13px;color:#5B7480;"">Get reminders so you never miss an appointment.</div>
     </div>
   </div>
-  <div style=""padding:32px 32px 8px;"">
-    <p style=""font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2E9FB5;margin:0 0 10px;"">Registration confirmed</p>
-    <h1 style=""font-size:22px;line-height:1.35;margin:0 0 6px;font-weight:700;color:#0E2A38;"">{honorific} {child.Name} is registered at {child.Clinic.Name}</h1>
-    <p style=""font-size:14.5px;color:#5B7480;margin:0 0 26px;line-height:1.6;"">Use the details below to sign in to the parent app and track upcoming doses.</p>
-  </div>
-  <div style=""border:1px solid #DCE7E8;border-radius:10px;margin:0 32px 20px;overflow:hidden;"">
-    <div style=""font-size:11.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5B7480;padding:14px 18px 6px;"">Sign-in details</div>
-    <div style=""display:flex;justify-content:space-between;padding:9px 18px;"">
-      <span style=""font-size:13.5px;color:#5B7480;"">Mobile Number (ID)</span>
-      <span style=""font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;"">{child.User.MobileNumber}</span>
-    </div>
-    <div style=""display:flex;justify-content:space-between;padding:9px 18px;border-top:1px solid #DCE7E8;"">
-      <span style=""font-size:13.5px;color:#5B7480;"">Password</span>
-      <span style=""font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;"">{child.User.Password}</span>
-    </div>
-  </div>
-  <div style=""display:flex;gap:8px;margin:0 32px 24px;padding:11px 14px;background:#FBF1EF;border:1px solid #E7C9C3;border-radius:8px;font-size:12.5px;color:#0E2A38;line-height:1.5;"">
-    Keep this password private. You can change it any time from the app's account settings.
-  </div>
-  <div style=""border:1px solid #DCE7E8;border-radius:10px;margin:0 32px 28px;overflow:hidden;"">
-    <div style=""font-size:11.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5B7480;padding:14px 18px 6px;"">Clinic &amp; doctor contact</div>
-    <div style=""display:flex;justify-content:space-between;padding:9px 18px;"">
-      <span style=""font-size:13.5px;color:#5B7480;"">Clinic</span>
-      <span style=""font-size:14.5px;font-weight:600;"">{child.Clinic.Name}</span>
-    </div>
-    <div style=""display:flex;justify-content:space-between;padding:9px 18px;border-top:1px solid #DCE7E8;"">
-      <span style=""font-size:13.5px;color:#5B7480;"">Address</span>
-      <span style=""font-size:14.5px;font-weight:600;"">{child.Clinic.Address}</span>
-    </div>
-    <div style=""display:flex;justify-content:space-between;padding:9px 18px;border-top:1px solid #DCE7E8;"">
-      <span style=""font-size:13.5px;color:#5B7480;"">Clinic Phone</span>
-      <span style=""font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;"">{child.Clinic.PhoneNumber}</span>
-    </div>
-    <div style=""display:flex;justify-content:space-between;padding:9px 18px;border-top:1px solid #DCE7E8;"">
-      <span style=""font-size:13.5px;color:#5B7480;"">Doctor Phone</span>
-      <span style=""font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;"">+{doctorPhone}</span>
-    </div>
-  </div>
-  <div style=""margin:0 32px 12px;text-align:center;"">
-    <a href=""{schedulePdfUrl}"" style=""display:block;width:100%;box-sizing:border-box;text-align:center;background:#2E9FB5;color:#ffffff;font-weight:700;font-size:15px;padding:14px 20px;border-radius:9px;text-decoration:none;"">Download Vaccination Schedule</a>
-  </div>
-  {webLinkLine}
-  <hr style=""border:none;border-top:1px solid #DCE7E8;margin:0 32px;"">
-  <div style=""padding:22px 32px 30px;font-size:12px;color:#5B7480;line-height:1.7;"">
-    <p style=""font-weight:700;color:#0E2A38;font-size:13px;margin:0 0 4px;"">{child.Clinic.Name}</p>
-    <p style=""margin:0;"">This email confirms registration for your child's vaccination record. If you did not request this, please contact the clinic directly using the number above.</p>
+  <div style=""margin:26px 32px 30px;"">
+    <a href=""{openAppUrl}"" style=""display:block;width:100%;box-sizing:border-box;text-align:center;background:#3B6FE0;color:#ffffff;font-weight:700;font-size:15px;padding:14px 20px;border-radius:9px;text-decoration:none;"">Open app now</a>
   </div>
 </div>";
 
             var sender = EmailSenderResolver.Resolve(child.Clinic?.Doctor, db);
-            return SendEmail(child.Email, body, child.Clinic.Name + " — Registration Confirmed", isHtml: true, sender: sender);
+            return SendEmail(child.Email, body, "Registration confirmed", isHtml: true, sender: sender);
         }
 
         private static string BuildLogoImgTag(string monogramImagePath, string contentRootPath)

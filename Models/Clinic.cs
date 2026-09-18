@@ -11,7 +11,6 @@ namespace VaccineAPI.Models
         public Clinic()
         {
             this.Childs = new HashSet<Child>();
-            this.ClinicTimings = new HashSet<ClinicTiming>();
         }
         public long Id { get; set; }
         public string Name { get; set; } = "";
@@ -39,8 +38,6 @@ namespace VaccineAPI.Models
         public virtual Doctor Doctor { get; set; } = null!;
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
         public virtual ICollection<Child> Childs { get; set; }
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
-        public virtual ICollection<ClinicTiming> ClinicTimings { get; set; }
 
     }
 

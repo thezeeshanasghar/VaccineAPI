@@ -54,7 +54,6 @@ namespace VaccineAPI.Models
         public DbSet<Dose> Doses { get; set; }
         public DbSet<DoctorSchedule> DoctorSchedules { get; set; }
         public DbSet<Doctor> Doctors { get; set; }
-        public DbSet<ClinicTiming> ClinicTimings { get; set; }
         public DbSet<Clinic> Clinics { get; set; }
         public DbSet<Child> Childs { get; set; }
         // public DbSet<BrandInventory> BrandInventorys { get; set; }

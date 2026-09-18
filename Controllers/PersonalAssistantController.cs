@@ -122,17 +122,15 @@ namespace VaccineAPI.Controllers
             {
                 var paAccessList = await _db
                     .PaAccess.Include(pa => pa.Clinic)
-                        .ThenInclude(c => c.ClinicTimings)
                     .Where(pa => pa.PersonalAssistantId == paId)
                     .ToListAsync();
-                    
+
                 if (!paAccessList.Any())
                 {
                     return NotFound(new { message = "No clinics found for the provided PA ID." });
                 }
-                
+
                 // Return clinics with PA-specific IsOnline status
-                // Project ClinicTimings to DTOs to avoid circular reference (ClinicTiming.Clinic -> Clinic.ClinicTimings)
                 var clinicsWithPaStatus = paAccessList.Select(pa => new
                 {
                     Id = pa.Clinic.Id,
@@ -146,16 +144,6 @@ namespace VaccineAPI.Controllers
                     DoctorId = pa.Clinic.DoctorId,
                     RegNo = pa.Clinic.RegNo,
                     IsOnline = pa.IsOnline, // Use PA's IsOnline instead of Clinic's IsOnline
-                    ClinicTimings = pa.Clinic.ClinicTimings.Select(t => new ClinicTimingDTO
-                    {
-                        Id = t.Id,
-                        Day = t.Day,
-                        StartTime = t.StartTime,
-                        EndTime = t.EndTime,
-                        Session = t.Session,
-                        IsOpen = t.IsOpen,
-                        ClinicId = t.ClinicId
-                    }).ToList(),
                     PaAccessId = pa.Id
                 }).ToList();
                 

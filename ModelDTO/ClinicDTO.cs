@@ -26,7 +26,6 @@ namespace VaccineAPI.ModelDTO
 
         //  [JsonIgnore]
         public int childrenCount { get; set; }
-        public List<ClinicTimingDTO> ClinicTimings { get; set; } = new List<ClinicTimingDTO>();
 
     }
 

@@ -97,7 +97,6 @@ namespace VaccineAPI.Controllers
             {
                 var managerAccessList = await _db
                     .ManagerAccess.Include(ma => ma.Clinic)
-                        .ThenInclude(c => c.ClinicTimings)
                     .Where(ma => ma.ManagerId == managerId)
                     .ToListAsync();
 
@@ -106,7 +105,6 @@ namespace VaccineAPI.Controllers
                     return NotFound(new { message = "No clinics found for the provided Manager ID." });
                 }
 
-                // Project ClinicTimings to DTOs to avoid circular reference (ClinicTiming.Clinic -> Clinic.ClinicTimings)
                 var clinicsWithManagerAccess = managerAccessList.Select(ma => new
                 {
                     Id = ma.Clinic.Id,
@@ -119,16 +117,6 @@ namespace VaccineAPI.Controllers
                     Long = ma.Clinic.Long,
                     DoctorId = ma.Clinic.DoctorId,
                     RegNo = ma.Clinic.RegNo,
-                    ClinicTimings = ma.Clinic.ClinicTimings.Select(t => new ClinicTimingDTO
-                    {
-                        Id = t.Id,
-                        Day = t.Day,
-                        StartTime = t.StartTime,
-                        EndTime = t.EndTime,
-                        Session = t.Session,
-                        IsOpen = t.IsOpen,
-                        ClinicId = t.ClinicId
-                    }).ToList(),
                     ManagerAccessId = ma.Id
                 }).ToList();
 

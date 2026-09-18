@@ -20,7 +20,6 @@ namespace VaccineAPI
             CreateMap<Dose, DoseDTO>().ReverseMap();
             CreateMap<DoctorSchedule, DoctorScheduleDTO>().ReverseMap();
             CreateMap<Doctor, DoctorDTO>().ReverseMap();
-            CreateMap<ClinicTiming, ClinicTimingDTO>().ReverseMap();
             CreateMap<Clinic, ClinicDTO>().ReverseMap();
             CreateMap<Child, ChildDTO>()
                 .ForMember(dest => dest.Schedules, opt => opt.Ignore())

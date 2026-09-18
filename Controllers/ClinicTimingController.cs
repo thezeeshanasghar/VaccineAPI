@@ -1,11 +1,10 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
-using AutoMapper;
-using VaccineAPI.ModelDTO;
 
 namespace VaccineAPI.Controllers
 {
@@ -14,104 +13,10 @@ namespace VaccineAPI.Controllers
     public class ClinicTimingController : ControllerBase
     {
         private readonly Context _db;
-        private readonly IMapper _mapper;
 
-        public ClinicTimingController(Context context, IMapper mapper)
+        public ClinicTimingController(Context context)
         {
             _db = context;
-            _mapper = mapper;
-        }
-
-        [HttpGet]
-        public async Task<Response<List<ClinicTimingDTO>>> GetAll()
-        {
-            var list = await _db.ClinicTimings.OrderBy(x => x.Id).ToListAsync();
-            List<ClinicTimingDTO> listDTO = _mapper.Map<List<ClinicTimingDTO>>(list);
-            return new Response<List<ClinicTimingDTO>>(true, null, listDTO);
-        }
-
-        [HttpGet("{id}")]
-        public async Task<Response<ClinicTimingDTO>> GetSingle(long id)
-        {
-            var dbclinictiming = await _db.ClinicTimings.FirstOrDefaultAsync();
-            ClinicTimingDTO clinictimingDTO = _mapper.Map<ClinicTimingDTO>(dbclinictiming);
-            if (dbclinictiming == null)
-                return new Response<ClinicTimingDTO>(false, "Not Found", null);
-
-            return new Response<ClinicTimingDTO>(true, null, clinictimingDTO);
-        }
-
-        [HttpPost]
-        public async Task<ActionResult<ClinicTiming>> Post(ClinicTiming ClinicTiming)
-        {
-            _db.ClinicTimings.Update(ClinicTiming);
-            await _db.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetSingle), new { id = ClinicTiming.Id }, ClinicTiming);
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Put(long id, ClinicTiming ClinicTiming)
-        {
-            if (id != ClinicTiming.Id)
-                return BadRequest();
-
-            _db.Entry(ClinicTiming).State = EntityState.Modified;
-            await _db.SaveChangesAsync();
-            return NoContent();
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
-        {
-            var obj = await _db.ClinicTimings.FindAsync(id);
-            if (obj == null)
-                return NotFound();
-
-            _db.ClinicTimings.Remove(obj);
-            await _db.SaveChangesAsync();
-            return NoContent();
-        }
-
-        [Route("api/clintimings/{clinicId}")]
-        [HttpPatch]
-        public async Task<IActionResult> UpdateClinicTimings(long clinicId, [FromBody] List<ClinicTiming> updatedTimings)
-        {
-            try
-            {
-                if (updatedTimings == null || !updatedTimings.Any())
-                {
-                    return BadRequest("No updated clinic timings provided.");
-                }
-
-                var timingIds = updatedTimings.Select(t => t.Id).ToList();
-
-                var existingTimings = await _db.ClinicTimings.Where(t => timingIds.Contains(t.Id) && t.ClinicId == clinicId).ToListAsync();
-
-                if (existingTimings == null || existingTimings.Count == 0)
-                {
-                    return NotFound();
-                }
-
-                foreach (var updatedTiming in updatedTimings)
-                {
-                    var existingTiming = existingTimings.FirstOrDefault(t => t.Id == updatedTiming.Id);
-
-                    if (existingTiming != null)
-                    {
-                        existingTiming.Day = updatedTiming.Day;
-                        existingTiming.Session = updatedTiming.Session;
-                        existingTiming.StartTime = updatedTiming.StartTime;
-                        existingTiming.EndTime = updatedTiming.EndTime;
-                        existingTiming.ClinicId = updatedTiming.ClinicId;
-                    }
-                }
-                await _db.SaveChangesAsync();
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, ex.Message);
-            }
         }
 
         public class ClinicIdsRequestModel
@@ -175,92 +80,5 @@ namespace VaccineAPI.Controllers
                 return StatusCode(500, $"An error occurred while retrieving child IDs: {ex.Message}");
             }
         }
-
-
-        [Route("api/clinic/update")]
-        [HttpPut]
-        public async Task<IActionResult> UpdateClinicAndTimings(long clinicId, [FromBody] ClinicDTO request)
-        {
-            try
-            {
-                var dbClinic = await _db.Clinics.FindAsync(clinicId);
-                if (dbClinic == null)
-                {
-                    return NotFound($"Clinic not found for id {clinicId}.");
-                }
-                dbClinic.Name = request.Name;
-                dbClinic.ConsultationFee = request.ConsultationFee;
-                dbClinic.PhoneNumber = request.PhoneNumber;
-                dbClinic.Address = request.Address;
-                dbClinic.MonogramImage = request.MonogramImage;
-                dbClinic.RegNo = request.RegNo;
-                // dbClinic.IsOnline = request.IsOnline;
-                // Master switch wins: only honor the per-clinic flag if the owning doctor is allowed inventory.
-                var doctorAllowsInventory = await _db.Doctors
-                    .Where(d => d.Id == dbClinic.DoctorId)
-                    .Select(d => (bool?)d.AllowInventory)
-                    .FirstOrDefaultAsync() ?? false;
-                dbClinic.MaintainInventory = doctorAllowsInventory && request.MaintainInventory;
-
-                var timingIds = request.ClinicTimings.Select(t => t.Id).ToList();
-                var existingTimings = await _db.ClinicTimings
-                    .Where(t => timingIds.Contains(t.Id) && t.ClinicId == dbClinic.Id)
-                    .ToListAsync();
-
-                foreach (var updatedTiming in request.ClinicTimings)
-                {
-                    var existingTiming = existingTimings.FirstOrDefault(t => t.Id == updatedTiming.Id);
-
-                    if (existingTiming != null)
-                    {
-                        existingTiming.Day = updatedTiming.Day;
-                        existingTiming.Session = updatedTiming.Session;
-                        existingTiming.IsOpen = updatedTiming.IsOpen;
-                        existingTiming.StartTime = updatedTiming.StartTime;
-                        existingTiming.EndTime = updatedTiming.EndTime;
-                        existingTiming.ClinicId = dbClinic.Id;
-                    }
-                    else
-                    {
-                        var newTiming = new ClinicTiming
-                        {
-                            Day = updatedTiming.Day,
-                            Session = updatedTiming.Session,
-                            StartTime = updatedTiming.StartTime,
-                            IsOpen = updatedTiming.IsOpen,
-                            EndTime = updatedTiming.EndTime,
-                            ClinicId = dbClinic.Id
-                        };
-                        _db.ClinicTimings.Add(newTiming);
-                    }
-                }
-                await _db.SaveChangesAsync();
-
-                return Ok(new ClinicDTO
-                {
-                    Id = dbClinic.Id,
-                    Name = dbClinic.Name,
-                    ConsultationFee = dbClinic.ConsultationFee,
-                    PhoneNumber = dbClinic.PhoneNumber,
-                    Address = dbClinic.Address,
-                    MonogramImage = dbClinic.MonogramImage,
-                    MaintainInventory = dbClinic.MaintainInventory,
-                    // IsOnline = dbClinic.IsOnline,
-                    ClinicTimings = existingTimings.Select(t => new ClinicTimingDTO
-                    {
-                        Id = t.Id,
-                        Day = t.Day,
-                        Session = t.Session,
-                        StartTime = t.StartTime,
-                        EndTime = t.EndTime
-                    }).ToList()
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, ex.Message);
-            }
-        }
     }
-
 }

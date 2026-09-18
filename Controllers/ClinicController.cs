@@ -26,7 +26,7 @@ namespace VaccineAPI.Controllers
         [HttpGet]
         public async Task<Response<List<ClinicDTO>>> GetAll()
         {
-            var list = await _db.Clinics.Include(x => x.ClinicTimings).OrderBy(x => x.Id).ToListAsync();
+            var list = await _db.Clinics.OrderBy(x => x.Id).ToListAsync();
             //var list = await _db.Clinics.OrderBy(x=>x.Id).ToListAsync();
             List<ClinicDTO> listDTO = _mapper.Map<List<ClinicDTO>>(list);
             return new Response<List<ClinicDTO>>(true, null, listDTO);
@@ -35,7 +35,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}")]
         public async Task<Response<ClinicDTO>> GetSingle(long id)
         {
-            var dbclinic = await _db.Clinics.Include(x => x.ClinicTimings).Where(x => x.Id == id).FirstOrDefaultAsync();
+            var dbclinic = await _db.Clinics.Where(x => x.Id == id).FirstOrDefaultAsync();
             ClinicDTO clinicDTO = _mapper.Map<ClinicDTO>(dbclinic);
             if (dbclinic == null)
                 return new Response<ClinicDTO>(false, "Not Found", null);
@@ -46,16 +46,21 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<ClinicDTO> Add([FromBody] ClinicDTO clinicDTO)
         {
+            if (string.IsNullOrWhiteSpace(clinicDTO.Name)
+                || string.IsNullOrWhiteSpace(clinicDTO.Address)
+                || string.IsNullOrWhiteSpace(clinicDTO.PhoneNumber))
+            {
+                return new Response<ClinicDTO>(false, "Clinic name, address and phone are required.", null);
+            }
+
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             clinicDTO.Name = textInfo.ToTitleCase(clinicDTO.Name);
             var clinicList = _db.Clinics.Where(x => x.DoctorId == clinicDTO.DoctorId).ToList();
             var dbClinic = _mapper.Map<Clinic>(clinicDTO);
             dbClinic.IsOnline = clinicList.Count == 0;
             // Master switch wins: a clinic can only maintain inventory if the owning doctor is allowed to.
-            var doctorAllowsInventory = _db.Doctors
-                .Where(d => d.Id == clinicDTO.DoctorId)
-                .Select(d => (bool?)d.AllowInventory)
-                .FirstOrDefault() ?? false;
+            var owningDoctor = _db.Doctors.FirstOrDefault(d => d.Id == clinicDTO.DoctorId);
+            var doctorAllowsInventory = owningDoctor?.AllowInventory ?? false;
             dbClinic.MaintainInventory = doctorAllowsInventory && clinicDTO.MaintainInventory;
             _db.Clinics.Add(dbClinic);
             _db.SaveChanges();
@@ -107,31 +112,6 @@ namespace VaccineAPI.Controllers
                     .FirstOrDefault() ?? false;
                 dbClinic.MaintainInventory = doctorAllowsInventory && clinicDTO.MaintainInventory;
                 _db.SaveChanges();
-                foreach (var clinicTiming in clinicDTO.ClinicTimings)
-                {
-                    ClinicTiming? dbClinicTiming = _db.ClinicTimings.Where(x => x.Id == clinicTiming.Id).FirstOrDefault();
-                    if (dbClinicTiming != null)
-                    {
-                        dbClinicTiming.ClinicId = Id;
-                        dbClinicTiming.Day = clinicTiming.Day;
-                        dbClinicTiming.StartTime = clinicTiming.StartTime;
-                        dbClinicTiming.EndTime = clinicTiming.EndTime;
-                        dbClinicTiming.Session = clinicTiming.Session;
-                        dbClinicTiming.IsOpen = clinicTiming.IsOpen;
-                    }
-                    else if (dbClinicTiming == null && clinicTiming.IsOpen)
-                    {
-                        ClinicTiming newClinicTiming = new ClinicTiming();
-                        newClinicTiming.ClinicId = Id;
-                        newClinicTiming.Day = clinicTiming.Day;
-                        newClinicTiming.StartTime = clinicTiming.StartTime;
-                        newClinicTiming.EndTime = clinicTiming.EndTime;
-                        newClinicTiming.Session = clinicTiming.Session;
-                        newClinicTiming.IsOpen = clinicTiming.IsOpen;
-                        _db.ClinicTimings.Add(newClinicTiming);
-                    }
-                    _db.SaveChanges();
-                }
                 return new Response<ClinicDTO>(true, null, clinicDTO);
             }
         }
@@ -178,9 +158,6 @@ namespace VaccineAPI.Controllers
         [HttpDelete("{id}")]
         public Response<string> Delete(int Id)
         {
-            var relatedClinicTimings = _db.ClinicTimings.Where(c => c.ClinicId == Id);
-            _db.ClinicTimings.RemoveRange(relatedClinicTimings);
-
             var relatedBills = _db.Bills.Where(b => b.ClinicId == Id);
             _db.Bills.RemoveRange(relatedBills);
 

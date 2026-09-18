@@ -58,7 +58,7 @@ namespace VaccineAPI.Controllers
         public async Task<Response<DoctorDTO>> GetSinglebyuser(long id)
         {
 
-            var dbdoctor = await _db.Doctors.Where(x => x.UserId == id).Include(x => x.User).FirstOrDefaultAsync();
+            var dbdoctor = await _db.Doctors.Where(x => x.UserId == id).Include(x => x.User).Include(x => x.Clinics).FirstOrDefaultAsync();
             DoctorDTO doctorDTO = _mapper.Map<DoctorDTO>(dbdoctor);
 
             if (dbdoctor == null)
@@ -72,7 +72,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("{id}/clinics")]
         public Response<IEnumerable<ClinicDTO>> GetAllClinicsOfaDoctor(int id)
         {
-            var doctor = _db.Doctors.Include(x => x.Clinics).ThenInclude(x => x.ClinicTimings).Include(x => x.Childs).FirstOrDefault(c => c.Id == id);
+            var doctor = _db.Doctors.Include(x => x.Clinics).Include(x => x.Childs).FirstOrDefault(c => c.Id == id);
             if (doctor == null)
                 return new Response<IEnumerable<ClinicDTO>>(false, "Doctor not found", null);
             else
@@ -129,6 +129,15 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<DoctorDTO> Post(DoctorDTO doctorDTO)
         {
+            if (string.IsNullOrWhiteSpace(doctorDTO.DisplayName)
+                || string.IsNullOrWhiteSpace(doctorDTO.Email)
+                || string.IsNullOrWhiteSpace(doctorDTO.MobileNumber)
+                || string.IsNullOrWhiteSpace(doctorDTO.CountryCode)
+                || string.IsNullOrWhiteSpace(doctorDTO.Password))
+            {
+                return new Response<DoctorDTO>(false, "Name, email, mobile number and password are required.", null);
+            }
+
             // Check if the phone number exists in either Users or Doctors table
             var existingUserWithPhone = _db.Users.FirstOrDefault(x => x.MobileNumber == doctorDTO.MobileNumber);
             var existingDoctorWithPhone = _db.Doctors.FirstOrDefault(d => d.PhoneNo == doctorDTO.PhoneNo);
@@ -178,6 +187,21 @@ namespace VaccineAPI.Controllers
                 _db.Doctors.Add(doctorDB);
                 _db.SaveChanges();
                 doctorDTO.Id = doctorDB.Id;
+
+                // Seed this doctor's schedule from the default template (DoctorId = 1),
+                // same source DoctorScheduleController.GetSingle falls back to on first read.
+                var defaultDoctorSchedules = _db.DoctorSchedules.Where(ds => ds.DoctorId == 1).ToList();
+                foreach (var defaultSchedule in defaultDoctorSchedules)
+                {
+                    _db.DoctorSchedules.Add(new DoctorSchedule
+                    {
+                        DoctorId = doctorDB.Id,
+                        DoseId = defaultSchedule.DoseId,
+                        GapInDays = defaultSchedule.GapInDays,
+                        IsActive = defaultSchedule.IsActive
+                    });
+                }
+                _db.SaveChanges();
 
                 // var vaccines = _db.Vaccines.Include(x => x.Brands).ToList();
                 // bool brandamount = _db.BrandAmounts.Any(x => x.DoctorId == doctorDTO.Id);
@@ -420,7 +444,7 @@ namespace VaccineAPI.Controllers
         {
             {
                 var dbDoctor = _db.Doctors.Include(x => x.User).Include(x => x.DoctorSchedules).Include(x => x.FollowUps)
-                    .Include(x => x.Clinics).ThenInclude(x => x.ClinicTimings).Include(x => x.Clinics).ThenInclude(x => x.Childs).Where(c => c.Id == Id).FirstOrDefault();
+                    .Include(x => x.Clinics).ThenInclude(x => x.Childs).Where(c => c.Id == Id).FirstOrDefault();
                 if (dbDoctor == null)
                 {
                     return new Response<string>(false, "Doctor not found", null);
@@ -440,7 +464,6 @@ namespace VaccineAPI.Controllers
                             _db.Users.Remove(dbChild.User);
                         _db.Childs.Remove(dbChild);
                     }
-                    _db.ClinicTimings.RemoveRange(clinic.ClinicTimings);
                 }
                 _db.DoctorSchedules.RemoveRange(dbDoctor.DoctorSchedules);
                 _db.Clinics.RemoveRange(dbDoctor.Clinics);

@@ -50,6 +50,20 @@ namespace VaccineAPI.Controllers
                 ?? "";
         }
 
+        // Same mechanism as PAAssignmentController.VerifyCaller — userId/securityStamp must
+        // match a real User row's currently-issued SecurityStamp. Applied here to the
+        // money-moving endpoints (confirm-invoice, record-payment-mode, mark-payment-collected)
+        // that previously trusted a raw client-supplied doctorId/PaId with no identity check
+        // at all (see feedback/project_no_api_auth_middleware).
+        private bool VerifyCaller(long? userId, string? securityStamp)
+        {
+            if (!userId.HasValue || string.IsNullOrEmpty(securityStamp))
+                return false;
+
+            var user = _db.Users.Find(userId.Value);
+            return user != null && user.SecurityStamp == securityStamp;
+        }
+
         [HttpGet]
         public async Task<Response<List<ScheduleDTO>>> GetAll()
         {
@@ -2713,7 +2727,7 @@ namespace VaccineAPI.Controllers
                 .FirstOrDefault();
 
             var activeAssignmentForPin = _db.PAAssignments
-                .Where(a => a.ChildId == dto.ChildId && !a.IsCancelled && !a.IsCompleted)
+                .Where(a => a.ChildId == dto.ChildId && !a.IsCancelled && !a.IsCashConfirmedByDoctor)
                 .OrderByDescending(a => a.AssignedAt)
                 .FirstOrDefault();
 
@@ -2758,7 +2772,7 @@ namespace VaccineAPI.Controllers
         private long? GetActivePaIdForChild(long childId)
         {
             return _db.PAAssignments
-                .Where(a => a.ChildId == childId && !a.IsCancelled && !a.IsCompleted)
+                .Where(a => a.ChildId == childId && !a.IsCancelled && !a.IsCashConfirmedByDoctor)
                 .OrderByDescending(a => a.AssignedAt)
                 .Select(a => (long?)a.PersonalAssistantId)
                 .FirstOrDefault();
@@ -2767,7 +2781,7 @@ namespace VaccineAPI.Controllers
         private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId, bool allowPaIdOverwrite = true)
         {
             var activeAssignment = _db.PAAssignments
-                .Where(a => a.ChildId == childId && !a.IsCancelled && !a.IsCompleted)
+                .Where(a => a.ChildId == childId && !a.IsCancelled && !a.IsCashConfirmedByDoctor)
                 .OrderByDescending(a => a.AssignedAt)
                 .FirstOrDefault();
 
@@ -4681,6 +4695,9 @@ namespace VaccineAPI.Controllers
         [HttpPatch("{id}/mark-payment-collected")]
         public IActionResult MarkPaymentCollected(long id, [FromBody] ScheduleDTO dto)
         {
+            if (!VerifyCaller(dto.CallerUserId, dto.SecurityStamp))
+                return Ok(new Response<ScheduleDTO>(false, "Not authorised.", null));
+
             var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
             if (schedule == null) return Ok(new Response<ScheduleDTO>(false, "Not found", null));
             if (schedule.PaymentCollectorPaId == null)
@@ -4702,6 +4719,9 @@ namespace VaccineAPI.Controllers
         [HttpPatch("{id}/record-payment-mode")]
         public IActionResult RecordPaymentMode(long id, [FromBody] ScheduleDTO dto)
         {
+            if (!VerifyCaller(dto.CallerUserId, dto.SecurityStamp))
+                return Ok(new Response<ScheduleDTO>(false, "Not authorised.", null));
+
             var schedule = _db.Schedules.FirstOrDefault(s => s.Id == id);
             if (schedule == null) return Ok(new Response<ScheduleDTO>(false, "Not found", null));
             var allowed = new[] { "Cash", "Online" };
@@ -4790,7 +4810,47 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, Message = "Payment verified." });
         }
 
-        // PATCH /api/Schedule/confirm-invoice/{id}?doctorId=X
+        // Stamps IsCashConfirmedByDoctor/CashConfirmedAt/IsCompleted on whichever PAAssignment
+        // actually owns this invoice right now — shared by ConfirmInvoice's normal path and its
+        // already-confirmed self-heal path below, so both ever only use one lookup rule.
+        //
+        // Two hardening fixes over the original single-line lookup:
+        // 1. Filters out cancelled assignments. Reassign() carries InvoiceSubmissionId forward
+        //    onto the NEW assignment but never clears it off the OLD (now-cancelled) one — an
+        //    unfiltered FirstOrDefault() could nondeterministically match either row if both
+        //    ever end up pointing at the same invoice.
+        // 2. Falls back to the child's current still-open assignment (by InvoiceSubmissionId OR,
+        //    failing that, the live "active" definition below) when no assignment's FK points at
+        //    this invoice at all — the root cause of the 2026-09-18 stuck-assignment incident
+        //    (invoice confirmed, assignment's FK link was never written/was stale, so the
+        //    assignment sat open forever with no code path able to close it).
+        private PAAssignment? ResolveAssignmentForInvoice(InvoiceSubmission inv)
+        {
+            var linked = _db.PAAssignments
+                .Where(a => a.InvoiceSubmissionId == inv.Id && !a.IsCancelled)
+                .OrderByDescending(a => a.AssignedAt)
+                .FirstOrDefault();
+            if (linked != null)
+                return linked;
+
+            // Self-heal: no assignment's FK points at this invoice, but the child may still have
+            // a genuinely open assignment that this invoice belongs to (same definition of
+            // "active" as Create()'s own duplicate-block guard — !IsCancelled && !IsCashConfirmedByDoctor,
+            // not the older, narrower !IsCompleted). Re-link it here rather than leaving the
+            // assignment permanently stuck with no way to ever reach this method again.
+            var openForChild = _db.PAAssignments
+                .Where(a => a.ChildId == inv.ChildId && !a.IsCancelled && !a.IsCashConfirmedByDoctor)
+                .OrderByDescending(a => a.AssignedAt)
+                .FirstOrDefault();
+            if (openForChild != null)
+            {
+                openForChild.InvoiceSubmissionId = inv.Id;
+                _db.Entry(openForChild).State = EntityState.Modified;
+            }
+            return openForChild;
+        }
+
+        // PATCH /api/Schedule/confirm-invoice/{id}?doctorId=X&callerUserId=Y&securityStamp=Z
         // Doctor confirms receipt of a full invoice (InvoiceSubmission row). This is the
         // cash-handover-confirmed moment: also stamps the linked PAAssignment (if any) so
         // PA Assignment Tracking can drop it out of Active immediately, regardless of how
@@ -4805,20 +4865,42 @@ namespace VaccineAPI.Controllers
         // closing settled assignments here keeps that check from reusing a stale one for an
         // unrelated later visit.
         [HttpPatch("confirm-invoice/{id}")]
-        public IActionResult ConfirmInvoice(long id, [FromQuery] long doctorId)
+        public IActionResult ConfirmInvoice(long id, [FromQuery] long doctorId, [FromQuery] long? callerUserId, [FromQuery] string? securityStamp)
         {
+            if (!VerifyCaller(callerUserId, securityStamp))
+                return Ok(new { IsSuccess = false, Message = "Not authorised to confirm this invoice." });
+
             var inv = _db.InvoiceSubmissions.FirstOrDefault(i => i.Id == id);
             if (inv == null)
                 return Ok(new { IsSuccess = false, Message = "Invoice not found." });
             if (inv.DoctorId != doctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised to confirm this invoice." });
+
             if (inv.IsConfirmedByDoctor)
+            {
+                // Already confirmed — but if the linked assignment never actually synced (the
+                // exact stuck-assignment bug), self-heal it here instead of just erroring, so a
+                // doctor re-hitting Confirm on an already-confirmed row can still unblock it.
+                var stillOpen = ResolveAssignmentForInvoice(inv);
+                if (stillOpen != null && !stillOpen.IsCashConfirmedByDoctor)
+                {
+                    stillOpen.IsCashConfirmedByDoctor = true;
+                    stillOpen.CashConfirmedAt = DateTime.UtcNow;
+                    if (!stillOpen.IsCompleted)
+                    {
+                        stillOpen.IsCompleted = true;
+                        stillOpen.CompletedAt = DateTime.UtcNow;
+                    }
+                    _db.SaveChanges();
+                    return Ok(new { IsSuccess = true, Message = "Invoice was already confirmed — assignment sync gap fixed.", ResponseData = new { HealedSyncGap = true } });
+                }
                 return Ok(new { IsSuccess = false, Message = "Invoice already confirmed." });
+            }
 
             inv.IsConfirmedByDoctor = true;
             inv.ConfirmedAt = DateTime.UtcNow;
 
-            var linkedAssignment = _db.PAAssignments.FirstOrDefault(a => a.InvoiceSubmissionId == inv.Id);
+            var linkedAssignment = ResolveAssignmentForInvoice(inv);
             if (linkedAssignment != null)
             {
                 linkedAssignment.IsCashConfirmedByDoctor = true;

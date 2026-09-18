@@ -103,6 +103,12 @@ namespace VaccineAPI.ModelDTO
         public bool IgnoreMinGapAtGiveTime { get; set; } = false;
         public bool IgnoreMaxAgeAtGiveTime { get; set; } = false;
         public DateTime? AlertSentAt { get; set; }
+
+        // Caller identity, verified the same way as PAAssignmentController.VerifyCaller —
+        // required on money-moving endpoints (record-payment-mode, mark-payment-collected)
+        // now that this app has zero auth middleware app-wide.
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
 }

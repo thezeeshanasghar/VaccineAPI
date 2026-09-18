@@ -859,16 +859,36 @@ namespace VaccineAPI.Controllers
                     // the deep-link/CTA text needs to differ between these two cases.
                     var hasInvoice = existingRow.InvoiceSubmissionId.HasValue;
 
+                    // Distinguishes "genuinely still needs the doctor's confirmation" from the
+                    // sync-gap case (2026-09-18 incident): invoice already shows Confirmed on
+                    // reconciliation, but this assignment's own flag never flipped, so telling the
+                    // doctor to "go tap Confirm" would be a dead end — there's nothing left to tap.
+                    bool alreadyConfirmedButUnsynced = false;
+                    DateTime? blockingConfirmedAt = null;
+                    if (hasInvoice)
+                    {
+                        var blockingInvoice = await _db.InvoiceSubmissions.FindAsync(existingRow.InvoiceSubmissionId!.Value);
+                        if (blockingInvoice != null && blockingInvoice.IsConfirmedByDoctor)
+                        {
+                            alreadyConfirmedButUnsynced = true;
+                            blockingConfirmedAt = blockingInvoice.ConfirmedAt;
+                        }
+                    }
+
                     return Ok(new
                     {
                         IsSuccess = false,
                         Message = $"This patient already has an open assignment with {paName}. Cancel that assignment first or use Reassign.",
                         BlockedByAssignment = true,
+                        BlockingAssignmentId = existingRow.Id,
                         BlockingPaId = existingRow.PersonalAssistantId,
                         BlockingPaName = paName,
                         BlockingAssignedDate = assignedDate,
                         BlockingClinicId = existingRow.ClinicId,
-                        BlockingHasInvoice = hasInvoice
+                        BlockingHasInvoice = hasInvoice,
+                        BlockingInvoiceSubmissionId = existingRow.InvoiceSubmissionId,
+                        AlreadyConfirmedButUnsynced = alreadyConfirmedButUnsynced,
+                        BlockingConfirmedAt = blockingConfirmedAt
                     });
                 }
 

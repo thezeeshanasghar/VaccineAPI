@@ -89,13 +89,38 @@ namespace VaccineAPI.Controllers
             {
                 if (amendment.AmendmentType == "Ungive")
                 {
-                    // Doctor accepts the ungive — invoice cancelled, PA owes nothing for this invoice
+                    // Doctor accepts the ungive — invoice cancelled, PA owes nothing for this invoice.
+                    // A cancelled invoice can never reach ScheduleController.ConfirmInvoice again (that
+                    // endpoint only ever acts on an invoice a doctor is confirming receipt of cash on —
+                    // there's no cash left to confirm here), so without closing the assignment here too,
+                    // it would sit open forever with nothing to reach it: the same stuck-assignment class
+                    // as the 2026-09-18 ConfirmInvoice sync-gap incident, just via a voided-invoice door
+                    // instead of a stale-FK door.
                     inv.TotalAmount = 0;
                     inv.InvoiceStatus = "Cancelled";
+
+                    var linkedAssignment = _db.PAAssignments
+                        .Where(a => a.InvoiceSubmissionId == inv.Id && !a.IsCancelled)
+                        .OrderByDescending(a => a.AssignedAt)
+                        .FirstOrDefault();
+                    if (linkedAssignment != null && !linkedAssignment.IsCashConfirmedByDoctor)
+                    {
+                        linkedAssignment.IsCashConfirmedByDoctor = true;
+                        linkedAssignment.CashConfirmedAt = DateTime.UtcNow;
+                        if (!linkedAssignment.IsCompleted)
+                        {
+                            linkedAssignment.IsCompleted = true;
+                            linkedAssignment.CompletedAt = DateTime.UtcNow;
+                        }
+                        _db.Entry(linkedAssignment).State = EntityState.Modified;
+                    }
                 }
                 else if (amendment.AmendmentType == "Edit")
                 {
-                    // Doctor accepts the edit — PA's payable becomes the new (edited) amount
+                    // Doctor accepts the edit — PA's payable becomes the new (edited) amount.
+                    // Invoice stays Active and unconfirmed: the doctor still owes a real, separate
+                    // ConfirmInvoice action to receive this (revised) amount — the assignment must
+                    // stay open, not close here.
                     inv.TotalAmount = amendment.NewAmount;
                     inv.ConsultationFee = inv.ConsultationFee; // unchanged
                     inv.InvoiceStatus = "Active";

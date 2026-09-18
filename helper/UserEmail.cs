@@ -22,9 +22,7 @@ namespace VaccineAPI
         {
             string honorific = child.Gender == "Girl" ? "Miss." : "Mr.";
             string openAppUrl = "https://client.vaccinationcentre.com/child?t=" + Uri.EscapeDataString(linkToken);
-            string rawPassword = child.User.Password ?? "";
-            string last4 = rawPassword.Length <= 4 ? rawPassword : rawPassword.Substring(rawPassword.Length - 4);
-            string maskedPassword = "••••" + last4;
+            string maskedPassword = "••••";
 
             string body = $@"
 <div style=""font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #DCE7E8;border-radius:14px;overflow:hidden;"">
@@ -37,16 +35,16 @@ namespace VaccineAPI
   </div>
   <div style=""padding:26px 32px 8px;"">
     <p style=""font-size:11.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5B7480;margin:0 0 12px;"">Sign in details</p>
-    <div style=""border:1px solid #DCE7E8;border-radius:10px;overflow:hidden;"">
-      <div style=""display:flex;justify-content:space-between;padding:12px 16px;"">
-        <span style=""font-size:13.5px;color:#5B7480;"">Mobile number</span>
-        <span style=""font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;"">{child.User.MobileNumber}</span>
-      </div>
-      <div style=""display:flex;justify-content:space-between;padding:12px 16px;border-top:1px solid #DCE7E8;"">
-        <span style=""font-size:13.5px;color:#5B7480;"">Password</span>
-        <span style=""font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;"">{maskedPassword}</span>
-      </div>
-    </div>
+    <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""border:1px solid #DCE7E8;border-radius:10px;border-collapse:separate;overflow:hidden;"">
+      <tr>
+        <td style=""padding:12px 16px;font-size:13.5px;color:#5B7480;"">Mobile number</td>
+        <td style=""padding:12px 16px;font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;text-align:right;"">{child.User.MobileNumber}</td>
+      </tr>
+      <tr>
+        <td style=""padding:12px 16px;font-size:13.5px;color:#5B7480;border-top:1px solid #DCE7E8;"">Password</td>
+        <td style=""padding:12px 16px;font-size:14.5px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;text-align:right;border-top:1px solid #DCE7E8;"">{maskedPassword}</td>
+      </tr>
+    </table>
     <p style=""font-size:12.5px;color:#5B7480;margin:12px 0 0;"">Keep these safe. You'll use them to log in.</p>
   </div>
   <div style=""padding:22px 32px 6px;"">

@@ -591,10 +591,10 @@ namespace VaccineAPI.Controllers
                 doc.Add(sumTbl);
 
                 BaseColor headerBg = new BaseColor(21, 101, 192);
-                float[] colWidths = { 1.4f, 2.2f, 1.4f, 2.2f, 0.6f, 1.2f };
-                string[] colHeaders = { "Date", "Patient / Client", "Vaccination Fee", "Item", "Qty", "Price" };
+                float[] colWidths = { 1.3f, 2.0f, 1.3f, 2.0f, 0.5f, 1.1f, 1.6f };
+                string[] colHeaders = { "Date", "Patient / Client", "Vaccination Fee", "Item", "Qty", "Price", "Given By" };
 
-                var mainTbl = new PdfPTable(6) { WidthPercentage = 100, SpacingBefore = 4 };
+                var mainTbl = new PdfPTable(7) { WidthPercentage = 100, SpacingBefore = 4 };
                 mainTbl.SetWidths(colWidths);
                 foreach (var h in colHeaders)
                 {
@@ -611,7 +611,7 @@ namespace VaccineAPI.Controllers
                 {
                     mainTbl.AddCell(new PdfPCell(new Phrase("Patient Vaccinations", sectionFont))
                     {
-                        Colspan = 6, BackgroundColor = new BaseColor(232, 240, 254),
+                        Colspan = 7, BackgroundColor = new BaseColor(232, 240, 254),
                         Border = Rectangle.NO_BORDER, Padding = 4
                     });
                 }
@@ -621,6 +621,7 @@ namespace VaccineAPI.Controllers
                 {
                     var scheduleRows = visit.OrderBy(s => s.Brand != null ? s.Brand.Name : "").ToList();
                     decimal consFee = ResolveVaccinationFee(visit.Key.ChildId, visit.Key.Date, invoiceSubs, invoiceRecords, feeRecords);
+                    string givenBy = ResolveGivenByLabel(visit.Key.ChildId, visit.Key.Date, invoiceSubs);
                     string patientName = scheduleRows.Count > 0 && scheduleRows[0].Child != null ? scheduleRows[0].Child.Name : "";
                     string visitDate = visit.Key.Date.ToString("dd-MM-yyyy");
 
@@ -654,23 +655,26 @@ namespace VaccineAPI.Controllers
                         mainTbl.AddCell(new PdfPCell(new Phrase(brandName, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
                         mainTbl.AddCell(new PdfPCell(new Phrase("1", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
                         mainTbl.AddCell(new PdfPCell(new Phrase(price == 0 ? "-" : price.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                        mainTbl.AddCell(new PdfPCell(new Phrase(givenBy, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
                     }
 
                     var subtotalBg = new BaseColor(224, 235, 252);
                     mainTbl.AddCell(new PdfPCell(new Phrase($"Total for {patientName}: {patientTotal:N2}", boldCell))
                     {
-                        Colspan = 6, BackgroundColor = subtotalBg,
+                        Colspan = 7, BackgroundColor = subtotalBg,
                         Border = Rectangle.NO_BORDER, Padding = 4,
                         HorizontalAlignment = Element.ALIGN_RIGHT
                     });
                 }
 
                 // --- Direct (walk-in) sales rows ---
+                // No InvoiceSubmission for walk-in sales (they aren't patient visits/invoices),
+                // so "Given By" has nothing to resolve — left blank rather than guessing "Doctor".
                 if (directSales.Count > 0)
                 {
                     mainTbl.AddCell(new PdfPCell(new Phrase("Direct / Walk-in Sales", sectionFont))
                     {
-                        Colspan = 6, BackgroundColor = new BaseColor(232, 240, 254),
+                        Colspan = 7, BackgroundColor = new BaseColor(232, 240, 254),
                         Border = Rectangle.NO_BORDER, Padding = 4, PaddingTop = 10
                     });
 
@@ -689,13 +693,14 @@ namespace VaccineAPI.Controllers
                         mainTbl.AddCell(new PdfPCell(new Phrase(dsBrand, cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
                         mainTbl.AddCell(new PdfPCell(new Phrase(ds.Quantity.ToString(), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
                         mainTbl.AddCell(new PdfPCell(new Phrase(ds.TotalSaleValue.ToString("N2"), cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3, HorizontalAlignment = Element.ALIGN_RIGHT });
+                        mainTbl.AddCell(new PdfPCell(new Phrase("-", cellFont)) { BackgroundColor = bg, Border = Rectangle.BOX, BorderColor = new BaseColor(220, 220, 220), Padding = 3 });
                     }
 
                     var dsTotalBg = new BaseColor(224, 235, 252);
                     decimal dsTotalAmt = directSales.Sum(d => d.TotalSaleValue);
                     mainTbl.AddCell(new PdfPCell(new Phrase($"Total Direct Sales: {dsTotalAmt:N2}", boldCell))
                     {
-                        Colspan = 6, BackgroundColor = dsTotalBg,
+                        Colspan = 7, BackgroundColor = dsTotalBg,
                         Border = Rectangle.NO_BORDER, Padding = 4,
                         HorizontalAlignment = Element.ALIGN_RIGHT
                     });
@@ -1621,6 +1626,23 @@ namespace VaccineAPI.Controllers
             .ToList();
         var fee = feeRecords.FirstOrDefault(f => childInvoiceIds.Contains(f.InvoiceId));
         return fee != null ? fee.Amount : 0;
+    }
+
+    // "Given By" column for the Sales & Collection PDF — same InvoiceSubmission match as
+    // ResolveVaccinationFee (ChildId + InvoiceDate), reading SubmittedByLabel: the authoritative
+    // "Doctor" / "Doctor/(PA Name)" / "Manager/(PA Name)" text already used by the reconciliation
+    // page (PaCashHandoverController.GetReconciliation). No attribution logic re-derived here —
+    // a blank/never-stamped label defaults to "Doctor", matching ScheduleController's own
+    // DetermineSubmittedByLabel default.
+    private static string ResolveGivenByLabel(
+        long childId, DateTime visitDate,
+        List<InvoiceSubmission> invoiceSubs)
+    {
+        var sub = invoiceSubs.FirstOrDefault(x =>
+            x.ChildId == childId && x.InvoiceDate.Date == visitDate.Date);
+        return (sub != null && !string.IsNullOrWhiteSpace(sub.SubmittedByLabel))
+            ? sub.SubmittedByLabel
+            : "Doctor";
     }
     }
 }

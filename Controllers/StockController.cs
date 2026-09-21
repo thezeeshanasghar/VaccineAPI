@@ -661,10 +661,13 @@ namespace VaccineAPI.Controllers
                     var subtotalBg = new BaseColor(224, 235, 252);
                     mainTbl.AddCell(new PdfPCell(new Phrase($"Total for {patientName}: {patientTotal:N2}", boldCell))
                     {
-                        Colspan = 7, BackgroundColor = subtotalBg,
+                        Colspan = 6, BackgroundColor = subtotalBg,
                         Border = Rectangle.NO_BORDER, Padding = 4,
                         HorizontalAlignment = Element.ALIGN_RIGHT
                     });
+                    // Given By column stays out of the subtotal bar — bar ends at column 6,
+                    // same width as the original 6-column report, Given By cell left blank.
+                    mainTbl.AddCell(new PdfPCell(new Phrase("", cellFont)) { BackgroundColor = subtotalBg, Border = Rectangle.NO_BORDER, Padding = 4 });
                 }
 
                 // --- Direct (walk-in) sales rows ---
@@ -700,10 +703,11 @@ namespace VaccineAPI.Controllers
                     decimal dsTotalAmt = directSales.Sum(d => d.TotalSaleValue);
                     mainTbl.AddCell(new PdfPCell(new Phrase($"Total Direct Sales: {dsTotalAmt:N2}", boldCell))
                     {
-                        Colspan = 7, BackgroundColor = dsTotalBg,
+                        Colspan = 6, BackgroundColor = dsTotalBg,
                         Border = Rectangle.NO_BORDER, Padding = 4,
                         HorizontalAlignment = Element.ALIGN_RIGHT
                     });
+                    mainTbl.AddCell(new PdfPCell(new Phrase("", cellFont)) { BackgroundColor = dsTotalBg, Border = Rectangle.NO_BORDER, Padding = 4 });
                 }
 
                 doc.Add(mainTbl);

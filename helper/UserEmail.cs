@@ -134,7 +134,18 @@ namespace VaccineAPI
     </div>");
             }
 
-            string doseCount = dueDoses.Count == 1 ? "1 dose" : dueDoses.Count + " doses";
+            // All doses in dueDoses share the same run date by construction (callers pass in
+            // only today's due schedules — see GetRawAlertSchedules/GetAlert2/SendAlertEmail),
+            // so this is always a same-day batch, never an open-ended overdue sweep. "Overdue"
+            // above only reflects a dose whose date fell in the past relative to when the run
+            // executes, which cannot happen for an exact-date-match batch but is kept as a
+            // defensive label in case a caller ever passes a mixed-date list.
+            bool anyOverdue = dueDoses.Any(d => d.Date.Date < today);
+            string doseCount = dueDoses.Count == 1 ? "1 vaccine" : dueDoses.Count + " vaccines";
+            string dueWord = anyOverdue ? "due" : "due today";
+            string headline = dueDoses.Count == 1
+                ? $"{child.Name}'s vaccine is {dueWord}"
+                : $"{doseCount} are {dueWord} for {child.Name}";
 
             string body = $@"
 <div style=""font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #DCE7E8;border-radius:14px;overflow:hidden;"">
@@ -147,7 +158,7 @@ namespace VaccineAPI
   </div>
   <div style=""padding:32px 32px 8px;"">
     <p style=""font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2E9FB5;margin:0 0 10px;"">Vaccination reminder</p>
-    <h1 style=""font-size:21px;line-height:1.4;margin:0 0 6px;font-weight:700;color:#0E2A38;"">{doseCount} due for {child.Name}</h1>
+    <h1 style=""font-size:21px;line-height:1.4;margin:0 0 6px;font-weight:700;color:#0E2A38;"">{headline}</h1>
     <p style=""font-size:14.5px;color:#5B7480;margin:0 0 24px;line-height:1.6;"">Please confirm your appointment with the clinic to keep the schedule on track.</p>
   </div>
   <div style=""margin:0 32px 24px;"">
@@ -161,8 +172,58 @@ namespace VaccineAPI
   </div>
 </div>";
 
+            string subject = dueDoses.Count == 1
+                ? $"{child.Name} has a vaccine due today — {child.Clinic.Name}"
+                : $"{child.Name} has {doseCount} due today — {child.Clinic.Name}";
+
             var sender = EmailSenderResolver.Resolve(child.Clinic?.Doctor, db);
-            SendEmail(child.Email, body, child.Clinic.Name + " — Vaccination Reminder", isHtml: true, sender: sender);
+            SendEmail(child.Email, body, subject, isHtml: true, sender: sender);
+        }
+
+        // milestoneNote: optional short line noting a real, currently-pending dose that falls
+        // on/near this birthday — never fabricated. Callers decide what counts as "near" by
+        // querying Schedule the same way the due-alert does (IsDone/IsSkip false, real Date
+        // match); this method only renders whatever line it's given, or omits the row entirely
+        // when milestoneNote is null so a birthday with no real milestone never shows one.
+        public static void BirthdayEmail(Child child, int age, string ordinalSuffix, string milestoneNote, string contentRootPath, Context db)
+        {
+            string logoTag = BuildLogoImgTag(child.Clinic?.MonogramImage, contentRootPath);
+            bool isVaccinePkBranded = child.Clinic?.Doctor?.Id == 1;
+            string poweredByLine = isVaccinePkBranded
+                ? @"<div style=""font-size:11.5px;color:#5B7480;"">Powered by Vaccine.pk</div>"
+                : "";
+
+            string milestoneBlock = string.IsNullOrWhiteSpace(milestoneNote) ? "" : $@"
+    <div style=""border:1px solid #CDEBE3;background:#EEF9F6;border-radius:10px;padding:13px 16px;margin-top:18px;"">
+      <div style=""font-size:13px;color:#0E2A38;line-height:1.6;"">{milestoneNote}</div>
+    </div>";
+
+            string body = $@"
+<div style=""font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #DCE7E8;border-radius:14px;overflow:hidden;"">
+  <div style=""padding:26px 32px;border-bottom:1px solid #DCE7E8;display:flex;align-items:center;gap:14px;"">
+    {logoTag}
+    <div>
+      <div style=""font-size:16px;font-weight:700;color:#0E2A38;"">{child.Clinic.Name}</div>
+      {poweredByLine}
+    </div>
+  </div>
+  <div style=""padding:32px 32px 8px;"">
+    <p style=""font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2E9FB5;margin:0 0 10px;"">&#127881; Happy birthday</p>
+    <h1 style=""font-size:21px;line-height:1.4;margin:0 0 6px;font-weight:700;color:#0E2A38;"">Happy {age}{ordinalSuffix} birthday, {child.Name}!</h1>
+    <p style=""font-size:14.5px;color:#5B7480;margin:0 0 4px;line-height:1.6;"">Wishing {child.Name} a day filled with joy, laughter, and wonderful memories — from all of us at {child.Clinic.Name}.</p>
+    {milestoneBlock}
+  </div>
+  <hr style=""border:none;border-top:1px solid #DCE7E8;margin:24px 32px 0;"">
+  <div style=""padding:20px 32px 28px;font-size:12px;color:#5B7480;line-height:1.7;"">
+    <p style=""margin:0;"">This is an automated birthday wish. For any medical queries, please contact the clinic directly.</p>
+    <p style=""margin-top:6px;"">&#128222; {child.Clinic.PhoneNumber}</p>
+  </div>
+</div>";
+
+            string subject = $"Happy {age}{ordinalSuffix} Birthday, {child.Name}! \U0001F389";
+
+            var sender = EmailSenderResolver.Resolve(child.Clinic?.Doctor, db);
+            SendEmail(child.Email, body, subject, isHtml: true, sender: sender);
         }
 
         public static void DoctorForgotPassword(Doctor doctor, Context db)

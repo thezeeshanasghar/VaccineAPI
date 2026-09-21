@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using VaccineAPI.ModelDTO;
 using VaccineAPI.Models;
@@ -21,11 +22,42 @@ namespace VaccineAPI.Controllers
     {
         private readonly Context _db;
         private readonly IMapper _mapper;
+        private readonly IWebHostEnvironment _host;
 
-        public BirthdayController(Context context, IMapper mapper)
+        public BirthdayController(Context context, IMapper mapper, IWebHostEnvironment host)
         {
             _db = context;
             _mapper = mapper;
+            _host = host;
+        }
+
+        // A "milestone" is a real, currently-pending dose (not done, not skipped) whose due
+        // date falls in the week surrounding this birthday — same IsDone/IsSkip predicate the
+        // due-alert uses (GetRawAlertSchedules), so this never invents a milestone the schedule
+        // doesn't actually have. Returns null when there's nothing genuinely due around today,
+        // so BirthdayEmail simply omits the milestone line rather than showing a wrong one.
+        private static string BuildMilestoneNote(Child child, int age, DateTime today, Context db)
+        {
+            var nearbyDose = db.Schedules
+                .Include(s => s.Dose)
+                .Where(s => s.ChildId == child.Id
+                    && s.IsDone != true
+                    && s.IsSkip != true
+                    && s.Date.Date >= today.AddDays(-3)
+                    && s.Date.Date <= today.AddDays(3))
+                .OrderBy(s => Math.Abs((s.Date.Date - today).Days))
+                .FirstOrDefault();
+
+            if (nearbyDose == null)
+                return null;
+
+            string whenPhrase = nearbyDose.Date.Date == today
+                ? "today"
+                : nearbyDose.Date.Date > today
+                    ? $"on {nearbyDose.Date:dd MMM}"
+                    : $"was due {nearbyDose.Date:dd MMM}";
+
+            return $"Turning {age} is also around when <b>{nearbyDose.Dose.Name.Trim()}</b> is {whenPhrase} — no action needed today, just something to keep in mind.";
         }
 
         [HttpGet("birthdaymail/{childId}")]
@@ -49,31 +81,13 @@ namespace VaccineAPI.Controllers
                     return new Response<object>(false, "No email address found for the child.", null);
                 }
 
-                var emailTo = child.Email;
                 var today = DateTime.Today;
                 var age = today.Year - child.DOB.Year;
-                string emailBody = $@"Dear {child.Name},
-
-🎉 Happy {age}{GetOrdinalSuffix(age)} Birthday! 🎂
-
-We hope your special day is filled with joy, laughter, and wonderful memories!
-
-From,
-{child.Clinic.Doctor.DisplayName}
-{child.Clinic.Name}
-
-Stay healthy and keep smiling! 😊
-
-Best wishes from all of us at {child.Clinic.Name}
-
-Note: This is an automated birthday wish. For any medical queries, please contact the clinic directly.
-Contact: {child.Clinic.PhoneNumber}
-Website: https://vaccinationcentre.com";
+                string milestoneNote = BuildMilestoneNote(child, age, today, _db);
 
                 try
                 {
-                    var senderForBirthday = EmailSenderResolver.Resolve(child.Clinic.Doctor, _db);
-                    UserEmail.SendEmail(emailTo, emailBody, $"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!", sender: senderForBirthday);
+                    UserEmail.BirthdayEmail(child, age, GetOrdinalSuffix(age), milestoneNote, _host.ContentRootPath, _db);
 
                     return new Response<object>(true,
                         "Birthday email sent successfully.",
@@ -81,7 +95,7 @@ Website: https://vaccinationcentre.com";
                         {
                             ChildId = child.Id,
                             Name = child.Name,
-                            Email = emailTo,
+                            Email = child.Email,
                             Age = age,
                             ClinicName = child.Clinic.Name
                         });
@@ -121,7 +135,7 @@ Website: https://vaccinationcentre.com";
                         && c.Clinic.DoctorId == doctorId
                         && c.IsInactive == false
                         && !string.IsNullOrEmpty(c.Email)
-                    ) 
+                    )
                     .ToList();
 
                 if (!children.Any())
@@ -133,43 +147,19 @@ Website: https://vaccinationcentre.com";
 
                 foreach (var child in children)
                 {
-                    var emailTo = child.Email;
                     var age = today.Year - child.DOB.Year;
-                    string emailBody =
-                        $@"Dear {child.Name},
-
-🎉 Happy {age}{GetOrdinalSuffix(age)} Birthday! 🎂
-
-We hope your special day is filled with joy, laughter, and wonderful memories!
-
-From,
-{child.Clinic.Doctor.DisplayName}
-{child.Clinic.Name}
-
-Stay healthy and keep smiling! 😊
-
-Best wishes from all of us at {child.Clinic.Name}
-
-Note: This is an automated birthday wish. For any medical queries, please contact the clinic directly.
-Contact: {child.Clinic.PhoneNumber}
-Website: https://vaccinationcentre.com";
+                    string milestoneNote = BuildMilestoneNote(child, age, today, _db);
 
                     try
                     {
-                        var senderForBirthday = EmailSenderResolver.Resolve(child.Clinic.Doctor, _db);
-                        UserEmail.SendEmail(
-                            emailTo,
-                            emailBody,
-                            $"Happy {age}{GetOrdinalSuffix(age)} Birthday, {child.Name}!",
-                            sender: senderForBirthday
-                        );
+                        UserEmail.BirthdayEmail(child, age, GetOrdinalSuffix(age), milestoneNote, _host.ContentRootPath, _db);
 
                         emailsSent.Add(
                             new
                             {
                                 ChildId = child.Id,
                                 Name = child.Name,
-                                Email = emailTo,
+                                Email = child.Email,
                                 Age = age,
                                 ClinicName = child.Clinic.Name,
                             }

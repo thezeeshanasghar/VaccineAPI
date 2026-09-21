@@ -657,9 +657,15 @@ namespace VaccineAPI.Controllers
                     }
 
                     var subtotalBg = new BaseColor(224, 235, 252);
-                    mainTbl.AddCell(new PdfPCell(new Phrase($"Total for {patientName}: {patientTotal:N2}", boldCell))
+                    mainTbl.AddCell(new PdfPCell(new Phrase($"Total for {patientName}", boldCell))
                     {
-                        Colspan = 6, BackgroundColor = subtotalBg,
+                        Colspan = 2, BackgroundColor = subtotalBg,
+                        Border = Rectangle.NO_BORDER, Padding = 4,
+                        HorizontalAlignment = Element.ALIGN_LEFT
+                    });
+                    mainTbl.AddCell(new PdfPCell(new Phrase(patientTotal.ToString("N2"), boldCell))
+                    {
+                        Colspan = 4, BackgroundColor = subtotalBg,
                         Border = Rectangle.NO_BORDER, Padding = 4,
                         HorizontalAlignment = Element.ALIGN_RIGHT
                     });
@@ -693,9 +699,15 @@ namespace VaccineAPI.Controllers
 
                     var dsTotalBg = new BaseColor(224, 235, 252);
                     decimal dsTotalAmt = directSales.Sum(d => d.TotalSaleValue);
-                    mainTbl.AddCell(new PdfPCell(new Phrase($"Total Direct Sales: {dsTotalAmt:N2}", boldCell))
+                    mainTbl.AddCell(new PdfPCell(new Phrase("Total Direct Sales", boldCell))
                     {
-                        Colspan = 6, BackgroundColor = dsTotalBg,
+                        Colspan = 2, BackgroundColor = dsTotalBg,
+                        Border = Rectangle.NO_BORDER, Padding = 4,
+                        HorizontalAlignment = Element.ALIGN_LEFT
+                    });
+                    mainTbl.AddCell(new PdfPCell(new Phrase(dsTotalAmt.ToString("N2"), boldCell))
+                    {
+                        Colspan = 4, BackgroundColor = dsTotalBg,
                         Border = Rectangle.NO_BORDER, Padding = 4,
                         HorizontalAlignment = Element.ALIGN_RIGHT
                     });

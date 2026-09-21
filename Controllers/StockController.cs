@@ -395,6 +395,73 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // GET /api/stock/sales-summary?clinicId=X&doctorId=Y&from=DATE&to=DATE
+        // JSON totals for the selected clinic/range — same figures GetSalesCollectionReport
+        // prints in its PDF summary block, for the Sales & Collection page's stat row.
+        [HttpGet("sales-summary")]
+        public async Task<IActionResult> GetSalesSummary(
+            [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
+            [FromQuery] DateTime from,
+            [FromQuery] DateTime to)
+        {
+            var clinic = await _db.Clinics.FindAsync(clinicId);
+            if (clinic == null)
+                return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (!await CallerOwnsClinicAsync(clinic, doctorId))
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
+
+            var totals = await ComputeSalesCollectionTotalsAsync(clinicId, clinic.DoctorId, from, to);
+            return Ok(new
+            {
+                IsSuccess = true,
+                ResponseData = new
+                {
+                    TotalPatients = totals.TotalPatients,
+                    TotalVaxFee = totals.TotalVaxFee,
+                    TotalItemsPrice = totals.TotalItemsPrice,
+                    GrandTotal = totals.GrandTotal
+                }
+            });
+        }
+
+        // GET /api/stock/sales-report-log?clinicId=X&doctorId=Y&take=5
+        // Recent Sales & Collection PDF downloads for this clinic, most recent first — each row
+        // written by GetSalesCollectionReport at download time. Powers the "Recent Reports" list;
+        // re-download replays that row's FromDate/ToDate against sales-collection-report.
+        [HttpGet("sales-report-log")]
+        public async Task<IActionResult> GetSalesReportLog(
+            [FromQuery] long clinicId,
+            [FromQuery] long doctorId,
+            [FromQuery] int take = 5)
+        {
+            var clinic = await _db.Clinics.FindAsync(clinicId);
+            if (clinic == null)
+                return NotFound(new { IsSuccess = false, Message = "Clinic not found" });
+            if (!await CallerOwnsClinicAsync(clinic, doctorId))
+                return StatusCode(403, new { IsSuccess = false, Message = "You do not have access to this clinic." });
+
+            take = Math.Clamp(take, 1, 20);
+            var rows = await _db.SalesReportLogs
+                .Where(r => r.ClinicId == clinicId)
+                .OrderByDescending(r => r.GeneratedAt)
+                .Take(take)
+                .Select(r => new
+                {
+                    r.Id,
+                    r.FromDate,
+                    r.ToDate,
+                    r.GeneratedAt,
+                    r.TotalPatients,
+                    r.TotalVaxFee,
+                    r.TotalItemsPrice,
+                    r.GrandTotal
+                })
+                .ToListAsync();
+
+            return Ok(new { IsSuccess = true, ResponseData = rows });
+        }
+
         // GET /api/stock/sales-collection-report?clinicId=X&from=DATE&to=DATE
         [HttpGet("sales-collection-report")]
         public async Task<IActionResult> GetSalesCollectionReport(
@@ -640,6 +707,24 @@ namespace VaccineAPI.Controllers
 
                 doc.Close();
                 writer.Close();
+
+                // Log this download for the Recent Reports list — reuses the totals already
+                // computed above (same figures printed in the summary block), no extra query.
+                _db.SalesReportLogs.Add(new SalesReportLog
+                {
+                    ClinicId = clinicId,
+                    DoctorId = ownerDoctorId,
+                    FromDate = from.Date,
+                    ToDate = to.Date,
+                    GeneratedAt = DateTime.UtcNow,
+                    TotalPatients = totalPatients,
+                    TotalVaxFee = totalVaxFee,
+                    TotalItemsPrice = totalItemsPrice,
+                    GrandTotal = grandTotal
+                });
+                try { await _db.SaveChangesAsync(); }
+                catch { /* logging the download must never block the actual download */ }
+
                 return File(ms.ToArray(), "application/pdf", ReportFileName.Build("SalesCollectionReport", clinic.Name));
             }
         }
@@ -1445,6 +1530,76 @@ namespace VaccineAPI.Controllers
                 return File(ms.ToArray(), "application/pdf", ReportFileName.Build($"SupplierReport-{supplier}", clinicName));
             }
         }
+    // Shared totals for the Sales & Collection period — same figures the PDF prints in its
+    // summary block (GetSalesCollectionReport), reused by the JSON summary endpoint and by
+    // the SalesReportLog row written on each PDF download, so all three never drift apart.
+    private async Task<(int TotalPatients, decimal TotalVaxFee, decimal TotalItemsPrice, decimal GrandTotal)>
+        ComputeSalesCollectionTotalsAsync(long clinicId, long ownerDoctorId, DateTime from, DateTime to)
+    {
+        var schedules = await _db.Schedules
+            .Include(s => s.Brand)
+            .Include(s => s.Child)
+            .Where(s => s.Child.ClinicId == clinicId
+                     && s.IsDone == true
+                     && s.BrandId != null
+                     && s.GivenDate.HasValue
+                     && s.GivenDate.Value.Date >= from.Date
+                     && s.GivenDate.Value.Date <= to.Date)
+            .ToListAsync();
+
+        var brandIds = schedules.Where(s => s.BrandId.HasValue).Select(s => s.BrandId!.Value).Distinct().ToList();
+        var brandAmounts = await _db.BrandAmounts
+            .Where(b => b.ClinicId == clinicId && brandIds.Contains(b.BrandId))
+            .ToListAsync();
+
+        var childIds = schedules.Select(s => s.ChildId).Distinct().ToList();
+
+        var invoiceSubs = await _db.InvoiceSubmissions
+            .Where(x => x.DoctorId == ownerDoctorId
+                      && childIds.Contains(x.ChildId)
+                      && x.InvoiceDate.Date >= from.Date
+                      && x.InvoiceDate.Date <= to.Date)
+            .ToListAsync();
+
+        var invoiceRecords = await _db.Invoices
+            .Where(i => i.ClinicId == clinicId
+                      && childIds.Contains(i.ChildId)
+                      && !i.IsVoided)
+            .ToListAsync();
+        var invoiceIds = invoiceRecords.Select(i => i.InvoiceId).Distinct().ToList();
+        var feeRecords = await _db.Fee
+            .Where(f => invoiceIds.Contains(f.InvoiceId))
+            .ToListAsync();
+
+        var directSales = await _db.DirectSales
+            .Where(d => d.ClinicId == clinicId
+                     && d.SaleDate.Date >= from.Date
+                     && d.SaleDate.Date <= to.Date)
+            .ToListAsync();
+
+        var patientVisits = schedules
+            .GroupBy(s => new { s.ChildId, Date = s.GivenDate!.Value.Date })
+            .ToList();
+
+        decimal totalVaxFee = 0;
+        decimal totalItemsPrice = 0;
+
+        foreach (var visit in patientVisits)
+        {
+            totalVaxFee += ResolveVaccinationFee(visit.Key.ChildId, visit.Key.Date, invoiceSubs, invoiceRecords, feeRecords);
+            foreach (var s in visit)
+            {
+                bool hasAmount = s.Amount.HasValue && s.Amount.Value != 0;
+                var ba = brandAmounts.FirstOrDefault(b => s.BrandId.HasValue && b.BrandId == s.BrandId.Value);
+                totalItemsPrice += hasAmount ? s.Amount!.Value : (ba != null ? ba.Amount : 0);
+            }
+        }
+        foreach (var ds in directSales)
+            totalItemsPrice += ds.TotalSaleValue;
+
+        return (patientVisits.Count, totalVaxFee, totalItemsPrice, totalVaxFee + totalItemsPrice);
+    }
+
     // Returns the vaccination fee for a patient visit.
     // Primary: InvoiceSubmission (written after the 2026-05-30 fix)
     // Fallback: Fee table (written when any invoice PDF is generated — works for all historical invoices)

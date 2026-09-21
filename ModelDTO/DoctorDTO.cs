@@ -41,6 +41,7 @@ namespace VaccineAPI.ModelDTO
         public bool AllowAssistant { get; set; }
         public bool AllowColdChain { get; set; }
         public bool AllowOwnWebsite { get; set; }
+        public string? WebsiteUrl { get; set; }
         public bool AllowOwnEmail { get; set; }
         public int SMSLimit { get; set; }
         public string DoctorType { get; set; } = "";

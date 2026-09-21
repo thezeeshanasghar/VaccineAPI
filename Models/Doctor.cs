@@ -45,6 +45,7 @@ namespace VaccineAPI.Models
         public bool AllowAssistant { get; set; }
         public bool AllowColdChain { get; set; }
         public bool AllowOwnWebsite { get; set; }
+        public string? WebsiteUrl { get; set; }
         public bool AllowOwnEmail { get; set; }
         public string? SmtpHost { get; set; }
         public int? SmtpPort { get; set; }

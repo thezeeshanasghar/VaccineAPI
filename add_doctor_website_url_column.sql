@@ -1,0 +1,1 @@
+ALTER TABLE doctors ADD COLUMN WebsiteUrl VARCHAR(255) NULL;

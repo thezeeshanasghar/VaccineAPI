@@ -28,8 +28,12 @@ namespace VaccineAPI.Models
         // Referring agent, selectable at registration for any patient type. Null/unset means
         // "Vaccine.pk" (the practice itself) — no referral fee applies. Set by whoever registers
         // the patient (doctor/manager/PA), defaults to null unless explicitly changed.
+        // Plain scalar column, no EF navigation property — Agents is a MyISAM table with no
+        // real FK constraint, and AgentController does its own explicit lookups/joins rather
+        // than navigating Child.Agent, so a nav property here only risks EF's convention-based
+        // FK discovery inventing a shadow column (it did: tried "ReferralAgentId", which
+        // doesn't exist, and broke every query touching Childs with a 500).
         public long? AgentId { get; set; }
-        public virtual Agent? ReferralAgent { get; set; }
         public string CNIC { get; set; } = "";
         public bool? IsEPIDone { get; set; }
         public bool? IsVerified { get; set; }

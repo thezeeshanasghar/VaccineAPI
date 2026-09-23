@@ -300,8 +300,22 @@ namespace VaccineAPI.Controllers
             var overridesByAgent = await _context.AgentVaccineFeeOverrides
                 .GroupBy(o => o.AgentId)
                 .ToDictionaryAsync(g => g.Key, g => g.ToDictionary(o => o.VaccineId, o => o.Fee));
-            var clinicNamesById = await _context.Clinics
-                .ToDictionaryAsync(c => c.Id, c => c.Name);
+            // Raw SELECT of just Id/Name — some prod rows have a NULL MonogramImage
+            // (declared non-nullable string on the Clinic entity), which makes EF's
+            // normal DbSet query materialize the full entity and throw InvalidCastException
+            // on that column. This endpoint only needs the name, so it never touches that column.
+            var clinicNamesById = new Dictionary<long, string>();
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT Id, Name FROM clinics";
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    clinicNamesById[reader.GetInt64(0)] = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                }
+            }
 
             var children = await _context.Childs
                 .Where(c => c.AgentId.HasValue)

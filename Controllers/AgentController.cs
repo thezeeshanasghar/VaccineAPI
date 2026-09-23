@@ -89,6 +89,7 @@ namespace VaccineAPI.Controllers
             dbAgent.Name = agent.Name;
             dbAgent.PhoneNumber = agent.PhoneNumber;
             dbAgent.ReferralFeePerClient = agent.ReferralFeePerClient;
+            dbAgent.ClinicId = agent.ClinicId;
 
             await _context.SaveChangesAsync();
 
@@ -299,6 +300,8 @@ namespace VaccineAPI.Controllers
             var overridesByAgent = await _context.AgentVaccineFeeOverrides
                 .GroupBy(o => o.AgentId)
                 .ToDictionaryAsync(g => g.Key, g => g.ToDictionary(o => o.VaccineId, o => o.Fee));
+            var clinicNamesById = await _context.Clinics
+                .ToDictionaryAsync(c => c.Id, c => c.Name);
 
             var children = await _context.Childs
                 .Where(c => c.AgentId.HasValue)
@@ -338,6 +341,9 @@ namespace VaccineAPI.Controllers
                     agent.AgentCode,
                     agent.ReferralFeePerClient,
                     agent.MustChangePassword,
+                    agent.ClinicId,
+                    ClinicName = agent.ClinicId.HasValue && clinicNamesById.TryGetValue(agent.ClinicId.Value, out var cname) ? cname : null,
+                    OverrideCount = agentOverrides.Count,
                     ReferredCount = referred.Count,
                     AvailedCount = availed,
                     Owed = owed

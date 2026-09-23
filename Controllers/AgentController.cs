@@ -304,17 +304,25 @@ namespace VaccineAPI.Controllers
             // (declared non-nullable string on the Clinic entity), which makes EF's
             // normal DbSet query materialize the full entity and throw InvalidCastException
             // on that column. This endpoint only needs the name, so it never touches that column.
+            // Use EF's connection-management wrapper (ref-counted open/close) rather than the
+            // raw ADO connection directly — calling OpenAsync/CloseAsync on the raw connection
+            // ourselves fights EF's own open/close around the other _context calls in this
+            // method and throws ObjectDisposedException on whichever runs next.
             var clinicNamesById = new Dictionary<long, string>();
-            using (var conn = _context.Database.GetDbConnection())
+            await _context.Database.OpenConnectionAsync();
+            try
             {
-                if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
-                using var cmd = conn.CreateCommand();
+                using var cmd = _context.Database.GetDbConnection().CreateCommand();
                 cmd.CommandText = "SELECT Id, Name FROM clinics";
                 using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
                     clinicNamesById[reader.GetInt64(0)] = reader.IsDBNull(1) ? "" : reader.GetString(1);
                 }
+            }
+            finally
+            {
+                await _context.Database.CloseConnectionAsync();
             }
 
             var children = await _context.Childs

@@ -12,4 +12,9 @@ namespace VaccineAPI.ModelDTO
         public string OldPassword { get; set; } = "";
         public string NewPassword { get; set; } = "";
     }
+
+    public class AgentFeeOverrideDTO
+    {
+        public decimal Fee { get; set; }
+    }
 }

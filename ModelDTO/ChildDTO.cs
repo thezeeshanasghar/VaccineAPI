@@ -24,7 +24,10 @@ namespace VaccineAPI.ModelDTO
         public string Gender { get; set; } = "";
         public bool IsSkip { get; set; }
         public string City { get; set; } = "Rawalpindi";
+        // Legacy free-text referral field, no longer written by the registration form.
         public string Agent { get; set; } = "";
+        // Referring agent for any patient type. Null means "Vaccine.pk" — no referral fee.
+        public long? AgentId { get; set; }
         public string Nationality { get; set; } = "";
         public string CNIC { get; set; } = "";
         public bool IsEPIDone { get; set; }

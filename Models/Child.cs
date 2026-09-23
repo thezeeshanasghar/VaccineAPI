@@ -22,7 +22,14 @@ namespace VaccineAPI.Models
         public System.DateTime DOB { get; set; }
         public string Gender { get; set; } = "";
         public string City { get; set; } = "";
+        // Legacy free-text referral field — no longer written by the registration form
+        // (see AgentId below), kept only so historical Travel patients' names still render.
         public string Agent { get; set; } = "";
+        // Referring agent, selectable at registration for any patient type. Null/unset means
+        // "Vaccine.pk" (the practice itself) — no referral fee applies. Set by whoever registers
+        // the patient (doctor/manager/PA), defaults to null unless explicitly changed.
+        public long? AgentId { get; set; }
+        public virtual Agent? ReferralAgent { get; set; }
         public string CNIC { get; set; } = "";
         public bool? IsEPIDone { get; set; }
         public bool? IsVerified { get; set; }

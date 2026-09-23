@@ -3715,6 +3715,7 @@ namespace VaccineAPI.Controllers
                 dbChild.IsPAApprove = dbChild.AddedByPaId == null ? true : childDTO.IsPAApprove;
                 dbChild.Nationality = childDTO.Nationality;
                 dbChild.Agent = childDTO.Agent;
+                dbChild.AgentId = childDTO.AgentId;
                 dbChild.CNIC = childDTO.CNIC;
                 var dbUser = dbChild.User;
 
@@ -5850,31 +5851,10 @@ namespace VaccineAPI.Controllers
             };
         }
 
-        [HttpGet("agents/{doctorId}")]
-        public Response<IEnumerable<string>> GetAgentNamesByDoctorId(long doctorId)
-        {
-            try
-            {
-                // Fetch distinct agent names where Agent is not null/empty and matches the given DoctorId
-                var agentNames = _db.Childs
-                    .Where(c => !string.IsNullOrEmpty(c.Agent) && c.Clinic.DoctorId == doctorId)
-                    .Select(c => c.Agent)
-                    .Distinct()
-                    .ToList();
-
-                if (!agentNames.Any())
-                {
-                    return new Response<IEnumerable<string>>(false, "No agents found for the specified doctor", null);
-                }
-
-                return new Response<IEnumerable<string>>(true, "Agents retrieved successfully", agentNames);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error retrieving agents: {ex.Message}");
-                return new Response<IEnumerable<string>>(false, "An error occurred while retrieving agents", null);
-            }
-        }
+        // Superseded by AgentController.GetAllAgents (GET api/Agent) — the registration form's
+        // Agent dropdown now lists real Agent records (Id/Name/Phone) instead of distinct
+        // free-text Child.Agent strings, since agents are global rather than per-doctor and
+        // Child.AgentId is now a real foreign key (see ChildDTO.AgentId / Child.AgentId).
 
         // ── IMMUNIZATION CARD: FRONT SIDE (Page 1) ────────────────────────
         [HttpGet("{id}/immunization-card-front")]

@@ -746,7 +746,7 @@ namespace VaccineAPI.Controllers
         // reachable from an email link.
         private async Task<string> BuildAssignmentEmailBody(long assignmentId, long paUserId, long childId)
         {
-            var child = await _db.Childs.FindAsync(childId);
+            var child = await _db.Childs.Include(c => c.User).FirstOrDefaultAsync(c => c.Id == childId);
             string childName = child?.Name ?? "a patient";
 
             var doseNames = await (
@@ -766,8 +766,20 @@ namespace VaccineAPI.Controllers
             string token = PaAssignmentLinkToken.Generate(paUserId, assignmentId, LinkLoginSecret());
             string link = "https://doctor.vaccinationcentre.com/members/pa/assignments?t=" + Uri.EscapeDataString(token) + "&aid=" + assignmentId;
 
+            // Same digits GetByPA already sends as ParentWhatsApp for the in-app WhatsApp
+            // button — wrapped here as a wa.me link since an email can't use the app-scheme
+            // (whatsapp://) or web.whatsapp.com paths the frontend uses instead.
+            string parentWhatsAppLine = "";
+            if (child?.User != null)
+            {
+                string parentWhatsAppDigits = ToWhatsAppNumber(child.User.MobileNumber, child.User.CountryCode);
+                if (!string.IsNullOrEmpty(parentWhatsAppDigits))
+                    parentWhatsAppLine = $"\nMessage parent on WhatsApp: https://wa.me/{parentWhatsAppDigits}";
+            }
+
             return $"A patient has been assigned to you: {childName}, {doseList}.{targetDateLine}\n\n" +
-                   $"View assignment: {link}\n" +
+                   $"View assignment: {link}" +
+                   parentWhatsAppLine + "\n" +
                    "(link valid for 24 hours)";
         }
 

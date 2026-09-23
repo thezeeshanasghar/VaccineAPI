@@ -14,11 +14,22 @@ namespace VaccineAPI.Controllers
     {
         private readonly Context _db;
         private readonly VaccineAPI.Services.InventoryTransactionService _inventory;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
 
-        public PAAssignmentController(Context db, VaccineAPI.Services.InventoryTransactionService inventory)
+        public PAAssignmentController(Context db, VaccineAPI.Services.InventoryTransactionService inventory, Microsoft.Extensions.Configuration.IConfiguration config)
         {
             _db = db;
             _inventory = inventory;
+            _config = config;
+        }
+
+        // Same resolution order as UserController.LinkLoginSecret() — one shared config
+        // key/env var for every magic-link token type in the app.
+        private string LinkLoginSecret()
+        {
+            return _config["LinkLogin:Secret"]
+                ?? Environment.GetEnvironmentVariable("LinkLoginSecret")
+                ?? "";
         }
 
         // Verifies the caller is who they claim to be: userId/securityStamp must match a real
@@ -673,9 +684,10 @@ namespace VaccineAPI.Controllers
             {
                 var reassignDoctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == newAssignment.DoctorId);
                 var reassignSender = EmailSenderResolver.Resolve(reassignDoctor, _db);
+                string reassignEmailBody = await BuildAssignmentEmailBody(newAssignment.Id, pa.UserId, old.ChildId);
                 _ = Task.Run(() => UserEmail.SendEmail(
                     pa.Email,
-                    "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
+                    reassignEmailBody,
                     "New Patient Assignment",
                     sender: reassignSender
                 ));
@@ -725,6 +737,38 @@ namespace VaccineAPI.Controllers
                 CreatedAt       = DateTime.Now
             });
             await _db.SaveChangesAsync();
+        }
+
+        // Builds the plain-text body for the PA-assignment email (Create + Reassign both use
+        // this). Names the child and doses instead of the old generic "a patient has been
+        // assigned to you" text, and appends a 24-hour magic link straight to this assignment's
+        // card in VacDoc (PaAssignmentLinkToken) — read-only auto-login, no write action is ever
+        // reachable from an email link.
+        private async Task<string> BuildAssignmentEmailBody(long assignmentId, long paUserId, long childId)
+        {
+            var child = await _db.Childs.FindAsync(childId);
+            string childName = child?.Name ?? "a patient";
+
+            var doseNames = await (
+                from pas in _db.PAAssignmentSchedules
+                join s in _db.Schedules on pas.ScheduleId equals s.Id
+                join d in _db.Doses on s.DoseId equals d.Id
+                where pas.AssignmentId == assignmentId
+                select d.Name
+            ).ToListAsync();
+            string doseList = doseNames.Count > 0 ? string.Join(", ", doseNames) : "vaccination";
+
+            var assignmentRow = await _db.PAAssignments.FindAsync(assignmentId);
+            string targetDateLine = assignmentRow?.TargetDate != null
+                ? "\nTarget date: " + assignmentRow.TargetDate.Value.ToString("dd MMM yyyy")
+                : "";
+
+            string token = PaAssignmentLinkToken.Generate(paUserId, assignmentId, LinkLoginSecret());
+            string link = "https://doctor.vaccinationcentre.com/members/pa/assignments?t=" + Uri.EscapeDataString(token) + "&aid=" + assignmentId;
+
+            return $"A patient has been assigned to you: {childName}, {doseList}.{targetDateLine}\n\n" +
+                   $"View assignment: {link}\n" +
+                   "(link valid for 24 hours)";
         }
 
         // Normalise a locally-stored mobile to wa.me international format: digits only, no
@@ -995,9 +1039,10 @@ namespace VaccineAPI.Controllers
                 {
                     var createDoctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
                     var createSender = EmailSenderResolver.Resolve(createDoctor, _db);
+                    string createEmailBody = await BuildAssignmentEmailBody(assignment.Id, newPa.UserId, dto.ChildId);
                     _ = Task.Run(() => UserEmail.SendEmail(
                         newPa.Email,
-                        "A patient has been assigned to you. Please log in to your VacDoc app to view your assignments.",
+                        createEmailBody,
                         "New Patient Assignment",
                         sender: createSender
                     ));

@@ -228,6 +228,50 @@ namespace VaccineAPI.Controllers
             return new Response<UserDTO>(true, null, userDTO);
         }
 
+        // Magic-link auto-login for a PA-assignment email (VacDoc). VacDoc opens
+        // .../members/pa/assignments?t={token}&aid={paAssignmentId}; on load it posts
+        // the token here and, if valid, gets back the same PA UserDTO the normal PA
+        // login returns, which it stores as the session. The token is a stateless
+        // HMAC-signed blob (see PaAssignmentLinkToken) carrying UserId + PAAssignmentId
+        // + a 24-hour expiry, so there is nothing to store or migrate on the server.
+        [HttpGet("link-login-pa")]
+        public Response<UserDTO> LinkLoginPa(string token)
+        {
+            if (!PaAssignmentLinkToken.Validate(token, LinkLoginSecret(), out long userId, out long paAssignmentId))
+                return new Response<UserDTO>(false, "This link is invalid or has expired.", null);
+
+            var dbUser = _db.Users.FirstOrDefault(x => x.Id == userId && x.UserType == "PA");
+            if (dbUser == null)
+                return new Response<UserDTO>(false, "Account not found.", null);
+
+            var paDb = _db.PersonalAssistant.FirstOrDefault(x => x.UserId == userId);
+            if (paDb == null)
+                return new Response<UserDTO>(false, "Personal Assistant not found.", null);
+            if (paDb.IsActive == false)
+                return new Response<UserDTO>(false, "Your account has been deactivated. Contact your doctor.", null);
+            if (paDb.IsVerified == false)
+                return new Response<UserDTO>(false, "You are not approved. Contact doctor for approval.", null);
+
+            // The assignment referenced by the link must actually belong to this PA.
+            var assignmentDb = _db.PAAssignments.FirstOrDefault(x => x.Id == paAssignmentId && x.PersonalAssistantId == paDb.Id);
+            if (assignmentDb == null)
+                return new Response<UserDTO>(false, "Assignment not found.", null);
+
+            var doctorDb = _db.Doctors.FirstOrDefault(x => x.Id == paDb.DoctorId);
+
+            var userDTO = _mapper.Map<UserDTO>(dbUser);
+            userDTO.Id = dbUser.Id;
+            userDTO.SecurityStamp = dbUser.SecurityStamp;
+            userDTO.PAId = paDb.Id;
+            userDTO.DoctorId = paDb.DoctorId;
+            userDTO.IsVerified = paDb.IsVerified;
+            userDTO.Name = paDb.Name;
+            userDTO.AllowInventory = doctorDb != null && doctorDb.AllowInventory;
+            userDTO.Password = ""; // never echo the password back over a link login
+
+            return new Response<UserDTO>(true, null, userDTO);
+        }
+
         [HttpPost("forgot-password")]
         public Response<UserDTO> ForgotPassword(UserDTO userDTO)
         {

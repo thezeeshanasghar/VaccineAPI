@@ -18,5 +18,15 @@ namespace VaccineAPI.Models
         // the registration form for PA/Manager — a doctor's own registrations always use his
         // active clinic regardless of the selected agent. No FK constraint (agents is MyISAM).
         public long? ClinicId { get; set; }
+
+        // Which patient types this agent may self-register from VacAgent. All default false —
+        // an agent stays verification-only (its original purpose) until the doctor explicitly
+        // grants registration for one or more types via the Edit Agent modal. These gate what
+        // VacAgent's registration form offers; ChildController.PostAgentChild re-checks them
+        // server-side rather than trusting the client.
+        public bool CanRegisterRegular { get; set; }
+        public bool CanRegisterEPI { get; set; }
+        public bool CanRegisterCustomize { get; set; }
+        public bool CanRegisterTravel { get; set; }
     }
 }

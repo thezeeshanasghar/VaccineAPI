@@ -2524,6 +2524,90 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // POST: api/Child/agent-register — patient self-registration from VacAgent.
+        // Thin wrapper around Post() above: validates the agent is allowed to register this
+        // patient type (server-side, never trusting the client toggle), stamps AddedByAgentId
+        // and AgentId (the agent both submitted and is the referral source), then reuses the
+        // exact same registration logic (parent-user creation, EPI history, clinic-template
+        // scheduling, etc.) as the doctor/PA/manager form. Auto-approved like a doctor/manager
+        // registration — no IsPAApprove gate — only a doctor notification, same pattern as
+        // BookingController's new-booking notification.
+        [HttpPost("agent-register")]
+        public Response<ChildDTO> PostAgentChild(ChildDTO childDTO)
+        {
+            if (!childDTO.AgentId.HasValue)
+                return new Response<ChildDTO>(false, "AgentId is required.", null);
+
+            var agent = _db.Agents.FirstOrDefault(a => a.Id == childDTO.AgentId.Value);
+            if (agent == null)
+                return new Response<ChildDTO>(false, "Agent not found.", null);
+
+            bool allowed = childDTO.Type switch
+            {
+                "regular" => agent.CanRegisterRegular,
+                "special" => agent.CanRegisterCustomize,
+                "travel" => agent.CanRegisterTravel,
+                _ => false
+            };
+            // EPI Plus submits Type="regular" + IsEPIDone=true (same convention the doctor/PA
+            // form uses — see add.page.ts's moveNextStep translation) so it needs its own check.
+            if (childDTO.Type == "regular" && childDTO.IsEPIDone)
+                allowed = agent.CanRegisterEPI;
+
+            if (!allowed)
+                return new Response<ChildDTO>(false, "This agent is not permitted to register this patient type.", null);
+
+            // Regular/EPI Plus registration schedules the doctor's clinic-template doses at
+            // submit time (see Post() below) and needs a real ClinicId to look up that doctor —
+            // VacAgent's simplified form has no clinic picker, so this only works when the agent
+            // has an assigned default clinic. Travel/Customize don't touch clinic scheduling.
+            if ((childDTO.Type == "regular") && childDTO.ClinicId <= 0)
+                return new Response<ChildDTO>(false, "This agent has no assigned clinic — ask the doctor to set one before registering Regular or EPI Plus patients.", null);
+
+            childDTO.AddedByAgentId = agent.Id;
+            childDTO.AgentId = agent.Id;
+
+            var result = Post(childDTO);
+
+            if (result.IsSuccess)
+            {
+                try
+                {
+                    var clinic = _db.Clinics.Include(x => x.Doctor).FirstOrDefault(x => x.Id == childDTO.ClinicId);
+                    var doctor = clinic?.Doctor;
+                    if (doctor != null)
+                    {
+                        var title = "New Patient from Agent";
+                        var message = agent.Name + " registered " + childDTO.Name + " (" +
+                            (childDTO.Type == "travel" ? "Travel" : childDTO.Type == "special" ? "Customize" : childDTO.IsEPIDone ? "EPI Plus" : "Regular") +
+                            ") at " + (clinic?.Name ?? "your clinic") + ". Review and plan vaccines.";
+
+                        _db.Notifications.Add(new Notification
+                        {
+                            Type = "AgentRegisteredPatient",
+                            RecipientType = "DOCTOR",
+                            RecipientId = doctor.Id,
+                            ChildId = result.ResponseData?.Id,
+                            ClinicId = childDTO.ClinicId,
+                            Title = title,
+                            Message = message,
+                            IsRead = false,
+                            CreatedAt = DateTime.Now
+                        });
+                        _db.SaveChanges();
+                    }
+                }
+                catch (Exception e)
+                {
+                    // Notification failure must never fail the registration itself — the patient
+                    // is already saved by this point.
+                    Console.WriteLine("Agent-registration notification failed: " + e);
+                }
+            }
+
+            return result;
+        }
+
         [HttpPost("followup")]
         public Response<List<FollowUpDTO>> GetFollowUp(FollowUpDTO followUpDto)
         {

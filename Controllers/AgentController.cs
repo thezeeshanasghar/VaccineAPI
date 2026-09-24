@@ -90,6 +90,10 @@ namespace VaccineAPI.Controllers
             dbAgent.PhoneNumber = agent.PhoneNumber;
             dbAgent.ReferralFeePerClient = agent.ReferralFeePerClient;
             dbAgent.ClinicId = agent.ClinicId;
+            dbAgent.CanRegisterRegular = agent.CanRegisterRegular;
+            dbAgent.CanRegisterEPI = agent.CanRegisterEPI;
+            dbAgent.CanRegisterCustomize = agent.CanRegisterCustomize;
+            dbAgent.CanRegisterTravel = agent.CanRegisterTravel;
 
             await _context.SaveChangesAsync();
 
@@ -239,7 +243,12 @@ namespace VaccineAPI.Controllers
                     agent.Email,
                     agent.AgentCode,
                     agent.ReferralFeePerClient,
-                    agent.MustChangePassword
+                    agent.MustChangePassword,
+                    agent.ClinicId,
+                    agent.CanRegisterRegular,
+                    agent.CanRegisterEPI,
+                    agent.CanRegisterCustomize,
+                    agent.CanRegisterTravel
                 }
             });
         }

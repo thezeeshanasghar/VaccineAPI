@@ -52,6 +52,11 @@ namespace VaccineAPI.Models
 
         public long UserId { get; set; }
         public long? AddedByPaId { get; set; }
+        // Set when this patient was self-registered by an agent from VacAgent (as opposed to
+        // referred — see AgentId above, which tracks referral fee attribution independent of
+        // who physically submitted the form). No nav property — same MyISAM/no-real-FK
+        // reasoning as AgentId.
+        public long? AddedByAgentId { get; set; }
         public DateTime? CreatedAt { get; set; }
         [JsonIgnore]
         public User User { get; set; } = null!;

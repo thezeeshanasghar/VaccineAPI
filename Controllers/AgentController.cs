@@ -198,6 +198,52 @@ namespace VaccineAPI.Controllers
             });
         }
 
+        // GET: api/Agent/{id}/clients?query=... — the agent's OWN referred children only
+        // (Child.AgentId == id, the same referral-attribution FK the report/summary endpoints
+        // use), never any other patient at the clinic. query is optional: blank returns the
+        // agent's most-recent referrals; non-blank filters by name/guardian/mobile, case-
+        // insensitive substring match, no MR/CNIC lookup here (that's agent-search's job for
+        // Travel-only verification, a different, non-ownership-scoped use case).
+        [HttpGet("{id}/clients")]
+        public async Task<ActionResult<object>> GetAgentClients(int id, [FromQuery] string query)
+        {
+            var agent = await _context.Agents.FindAsync(id);
+            if (agent == null) return NotFound(new { IsSuccess = false, Message = "Agent not found." });
+
+            var childrenQuery = _context.Childs
+                .Include(c => c.User)
+                .Where(c => c.AgentId == id);
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var q = query.Trim().ToLower();
+                childrenQuery = childrenQuery.Where(c =>
+                    (c.Name != null && c.Name.ToLower().Contains(q)) ||
+                    (c.FatherName != null && c.FatherName.ToLower().Contains(q)) ||
+                    (c.User != null && c.User.MobileNumber != null && c.User.MobileNumber.Contains(q)));
+            }
+
+            var children = await childrenQuery
+                .OrderByDescending(c => c.Id)
+                .Take(100)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                IsSuccess = true,
+                ResponseData = children.Select(c => new
+                {
+                    c.Id,
+                    c.Name,
+                    Guardian = c.FatherName,
+                    c.Gender,
+                    DOB = c.DOB.ToString("yyyy-MM-dd"),
+                    MobileNumber = c.User != null ? c.User.MobileNumber : null,
+                    c.Type
+                })
+            });
+        }
+
         // GET: api/Agent/AgentAlert
         [HttpGet("AgentAlert")]
         public async Task<IEnumerable<string>> GetLatestPatientAgentsNotInAgentTableAsync()

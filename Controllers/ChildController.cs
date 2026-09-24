@@ -6474,5 +6474,57 @@ namespace VaccineAPI.Controllers
                 return File(outputMs.ToArray(), "application/pdf", fileName);
             }
         }
+
+        // GET: api/Child/{id}/agent-record?agentId=... — read-only vaccination record for a
+        // patient the given agent referred. Authorization boundary is the AgentId match itself
+        // (no separate auth layer exists app-wide — see No API Auth Middleware): a mismatched
+        // or missing agentId returns NotFound, same response as a truly unknown child, so this
+        // never confirms/denies a child's existence to a caller who isn't its referring agent.
+        // Intentionally NOT the full ScheduleDTO/vaccine.page shape — agents get given/due
+        // status only, no payment mode, invoice IDs, brand/lot, or staff identity fields, same
+        // boundary as what a travel certificate already shows publicly.
+        [HttpGet("{id}/agent-record")]
+        public async Task<ActionResult<object>> GetAgentChildRecord(int id, [FromQuery] long agentId)
+        {
+            if (agentId <= 0)
+                return BadRequest(new { IsSuccess = false, Message = "agentId is required." });
+
+            var child = await _db.Childs
+                .Include(c => c.User)
+                .Include(c => c.Schedules)
+                    .ThenInclude(s => s.Dose)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (child == null || child.AgentId != agentId)
+                return NotFound(new { IsSuccess = false, Message = "Patient not found." });
+
+            var today = DateTime.UtcNow.AddHours(5).Date;
+            var doses = child.Schedules
+                .OrderBy(s => s.Date)
+                .Select(s => new
+                {
+                    s.Id,
+                    VaccineName = s.Dose != null ? s.Dose.Name : "",
+                    DueDate = s.Date.ToString("yyyy-MM-dd"),
+                    GivenDate = s.GivenDate.HasValue ? s.GivenDate.Value.ToString("yyyy-MM-dd") : null,
+                    Status = s.IsDone ? "Given" : (s.Date.Date < today ? "Overdue" : "Due")
+                })
+                .ToList();
+
+            return Ok(new
+            {
+                IsSuccess = true,
+                ResponseData = new
+                {
+                    child.Id,
+                    child.Name,
+                    Guardian = child.FatherName,
+                    child.Gender,
+                    DOB = child.DOB.ToString("yyyy-MM-dd"),
+                    MobileNumber = child.User != null ? child.User.MobileNumber : null,
+                    Doses = doses
+                }
+            });
+        }
     }
 }

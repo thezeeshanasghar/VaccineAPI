@@ -282,16 +282,38 @@ namespace VaccineAPI.Controllers
                             var prevScheduleForGap = _db.Schedules
                                 .FirstOrDefault(x => x.ChildId == dbSchedule.ChildId && x.DoseId == prevDoseForGap.Id);
                             var doseName = dose.Name ?? "This dose";
-                            // BUG-9 — the previous dose must be recorded as given first. This is a
-                            // hard block for everyone (no override): a later dose cannot be given
-                            // while its predecessor is unrecorded.
-                            if (prevScheduleForGap == null || !prevScheduleForGap.IsDone || !prevScheduleForGap.GivenDate.HasValue)
+
+                            bool predecessorGivenSameVaccine = prevScheduleForGap != null
+                                && prevScheduleForGap.IsDone
+                                && prevScheduleForGap.GivenDate.HasValue;
+
+                            // DTaP combo coverage: this vaccine's predecessor slot may never have
+                            // been given directly, but a combo (or another standalone) dose flagged
+                            // ContainsDTaP can satisfy it instead. Only applies when this dose's own
+                            // vaccine is ContainsDTaP — never loosens the check for any other vaccine.
+                            bool predecessorCoveredByDTaP = !predecessorGivenSameVaccine
+                                && dose.Vaccine != null && dose.Vaccine.ContainsDTaP
+                                && GetDTaPCoverageCount(_db, dbSchedule.ChildId) >= (dose.DoseOrder - 1);
+
+                            // BUG-9 — the previous dose must be recorded as given first (directly, or
+                            // via DTaP coverage above). This is a hard block for everyone (no
+                            // override): a later dose cannot be given while its predecessor is
+                            // unrecorded and uncovered.
+                            if (!predecessorGivenSameVaccine && !predecessorCoveredByDTaP)
                             {
                                 return new Response<ScheduleDTO>(false,
                                     doseName + " cannot be given until the previous dose of this vaccine is recorded as given.", null);
                             }
 
-                            var minGapDate = calculateDate(prevScheduleForGap.GivenDate.Value.Date, dose.MinGap.Value).Date;
+                            // Anchor the MinGap floor off the real given date. When the predecessor
+                            // was given directly, use its own GivenDate as before; when it was only
+                            // satisfied via DTaP coverage, anchor off the most recent DTaP-equivalent
+                            // dose actually given (there is no same-vaccine GivenDate to use).
+                            DateTime minGapAnchor = predecessorGivenSameVaccine
+                                ? prevScheduleForGap!.GivenDate!.Value.Date
+                                : GetLastDTaPCoverageGivenDate(_db, dbSchedule.ChildId)!.Value.Date;
+
+                            var minGapDate = calculateDate(minGapAnchor, dose.MinGap.Value).Date;
                             // CDC 4-day grace: unless this vaccine requires exact intervals
                             // (cholera/rabies), a give within 4 days before the floor is valid.
                             var exactInterval = dose.Vaccine != null && dose.Vaccine.ExactIntervalRequired;
@@ -2072,9 +2094,26 @@ namespace VaccineAPI.Controllers
                         {
                             var prevSchedChk = _db.Schedules
                                 .FirstOrDefault(x => x.ChildId == chk.ChildId && x.DoseId == prevDoseChk.Id);
-                            // BUG-9 — previous dose must be recorded as given first (hard block,
-                            // no override). Added plain (no [Warning] prefix) so it hard-blocks.
-                            if (prevSchedChk == null || !prevSchedChk.IsDone || !prevSchedChk.GivenDate.HasValue)
+
+                            bool bulkPredecessorGivenSameVaccine = prevSchedChk != null
+                                && prevSchedChk.IsDone
+                                && prevSchedChk.GivenDate.HasValue;
+
+                            // DTaP combo coverage — see the single-give path above for the full
+                            // rationale. chkDose is loaded without the Vaccine nav, so read the flag
+                            // directly rather than via chkDose.Vaccine.
+                            var chkContainsDTaP = _db.Vaccines
+                                .Where(v => v.Id == chkDose.VaccineId)
+                                .Select(v => v.ContainsDTaP)
+                                .FirstOrDefault();
+                            bool bulkPredecessorCoveredByDTaP = !bulkPredecessorGivenSameVaccine
+                                && chkContainsDTaP
+                                && GetDTaPCoverageCount(_db, chk.ChildId) >= (chkDose.DoseOrder - 1);
+
+                            // BUG-9 — previous dose must be recorded as given first, directly or via
+                            // DTaP coverage (hard block, no override). Added plain (no [Warning]
+                            // prefix) so it hard-blocks.
+                            if (!bulkPredecessorGivenSameVaccine && !bulkPredecessorCoveredByDTaP)
                             {
                                 var blockMsg = (chkDose.Name ?? "A dose") + " cannot be given until the previous dose of this vaccine is recorded as given.";
                                 if (!bulkErrors.Contains(blockMsg))
@@ -2082,7 +2121,10 @@ namespace VaccineAPI.Controllers
                             }
                             else
                             {
-                                var minGapDate = calculateDate(prevSchedChk.GivenDate.Value.Date, chkDose.MinGap.Value).Date;
+                                DateTime bulkMinGapAnchor = bulkPredecessorGivenSameVaccine
+                                    ? prevSchedChk!.GivenDate!.Value.Date
+                                    : GetLastDTaPCoverageGivenDate(_db, chk.ChildId)!.Value.Date;
+                                var minGapDate = calculateDate(bulkMinGapAnchor, chkDose.MinGap.Value).Date;
                                 // CDC 4-day grace (MinGap only), unless the vaccine requires exact
                                 // intervals (cholera/rabies). chkDose is loaded without the Vaccine
                                 // nav, so read the flag directly.
@@ -2965,6 +3007,50 @@ namespace VaccineAPI.Controllers
         private static string Pluralize(int value, string unit)
         {
             return value + " " + unit + (value == 1 ? "" : "s");
+        }
+
+        // DTaP combo-coverage: how many DTaP-equivalent doses has this child already been
+        // GIVEN, summed across every vaccine flagged Vaccine.ContainsDTaP (any mix of combo
+        // and standalone). Shared by DoseController.GetSDosesForChild (Add Dose grey-out
+        // display) and the give-time predecessor checks below (single-give + bulk-give) —
+        // one implementation so the three call sites can't drift apart. Positional/flat
+        // count only, per the confirmed design: not per-slot combo attribution.
+        public static int GetDTaPCoverageCount(Context db, long childId)
+        {
+            return db.Schedules
+                .Count(s => s.ChildId == childId
+                    && s.IsDone
+                    && s.Dose.Vaccine.ContainsDTaP);
+        }
+
+        // Distinct names of the ContainsDTaP vaccines that contributed to
+        // GetDTaPCoverageCount for this child — used for the "Covered by X, Y" label.
+        // Flat set, not tied to which specific slot came from which vaccine.
+        public static List<string> GetDTaPCoverageSourceNames(Context db, long childId)
+        {
+            return db.Schedules
+                .Where(s => s.ChildId == childId
+                    && s.IsDone
+                    && s.Dose.Vaccine.ContainsDTaP)
+                .Select(s => s.Dose.Vaccine.Name)
+                .Distinct()
+                .ToList();
+        }
+
+        // Most recent GivenDate among this child's given DTaP-equivalent doses (across all
+        // ContainsDTaP vaccines). Used to anchor the MinGap floor when a standalone dose's
+        // "previous dose" was never given directly but is covered by combo doses instead —
+        // there is no same-vaccine predecessor Schedule.GivenDate to anchor off in that case.
+        public static DateTime? GetLastDTaPCoverageGivenDate(Context db, long childId)
+        {
+            return db.Schedules
+                .Where(s => s.ChildId == childId
+                    && s.IsDone
+                    && s.Dose.Vaccine.ContainsDTaP
+                    && s.GivenDate.HasValue)
+                .OrderByDescending(s => s.GivenDate)
+                .Select(s => (DateTime?)s.GivenDate)
+                .FirstOrDefault();
         }
 
         //date Function

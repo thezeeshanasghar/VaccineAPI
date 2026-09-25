@@ -245,11 +245,36 @@ namespace VaccineAPI.Controllers
             // Retrieve special doses that are not already scheduled for the child
             var Doses = await _db.Doses
                                         .Where(x => !scheduledDosesIds.Contains(x.Id))
+                                        .Include(x => x.Vaccine)
                                         .OrderBy(x => x.MinAge)
                                         .ToListAsync();
 
             // Map the special doses to DTOs
             List<DoseDTO> specialDoseDTOs = _mapper.Map<List<DoseDTO>>(Doses);
+
+            // DTaP combo-coverage grey-out: how many DTaP-equivalent doses has this child
+            // already been given (across every Vaccine.ContainsDTaP vaccine), and which
+            // vaccines contributed. See ScheduleController.GetDTaPCoverageCount for the
+            // shared computation — reused here so the Add Dose display and the give-time
+            // gate can never drift apart.
+            int dtapCoverageCount = ScheduleController.GetDTaPCoverageCount(_db, childId);
+            string coveredByLabel = dtapCoverageCount > 0
+                ? string.Join(", ", ScheduleController.GetDTaPCoverageSourceNames(_db, childId))
+                : "";
+
+            foreach (var doseDTO in specialDoseDTOs)
+            {
+                if (doseDTO.Vaccine != null && doseDTO.Vaccine.ContainsDTaP
+                    && doseDTO.DoseOrder.HasValue
+                    && doseDTO.DoseOrder.Value <= dtapCoverageCount)
+                {
+                    doseDTO.IsCoveredByDTaP = true;
+                    doseDTO.CoveredByVaccineNames = coveredByLabel;
+                }
+                // Otherwise leave IsCoveredByDTaP false / CoveredByVaccineNames "" — including
+                // for non-ContainsDTaP vaccines and for doses with a null DoseOrder, which can
+                // never be positionally compared and so must always stay selectable.
+            }
 
             return new Response<List<DoseDTO>>(true, null, specialDoseDTOs);
         }

@@ -14,6 +14,10 @@ namespace VaccineAPI.ModelDTO
         public bool isInfinite { get; set; }
         public int Validity { get; set; }
         public int? Type { get; set; }
+
+        // See Vaccine.ContainsDTaP — generic "this vaccine contains a DTaP/DPT component"
+        // marker, admin/doctor-toggled. Drives the combo-coverage grey-out check.
+        public bool ContainsDTaP { get; set; }
     }
 
 }

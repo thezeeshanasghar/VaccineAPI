@@ -32,6 +32,17 @@ namespace VaccineAPI.Models
         // change needed to exempt a future vaccine).
         public bool ExactIntervalRequired { get; set; }
 
+        // Marks this vaccine as containing a DTaP/DPT (diphtheria-tetanus-pertussis)
+        // component — whether standalone DTaP itself or any combo product with DTaP/DPT
+        // bundled in (e.g. HBV+DPT+Hib, OPV+DPT+HBV, OPV/IPV+HBV+DPT+Hib). Admin/doctor-
+        // toggled manually per vaccine; generic flag, not brand-specific and not a
+        // hardcoded name list. Drives the "DTaP dose already covered by a combo vaccine"
+        // grey-out check in DoseController.GetSDosesForChild and the give-time predecessor
+        // check in ScheduleController (see GetDTaPCoverageCount) — doses are counted
+        // positionally across ALL of the child's ContainsDTaP-flagged vaccines, not
+        // matched by name. Default false.
+        public bool ContainsDTaP { get; set; }
+
         public virtual ICollection<Dose> Doses { get; set; } = new HashSet<Dose>();
     }
 

@@ -1071,7 +1071,7 @@ namespace VaccineAPI.Controllers
                         case "Given": return "#008000"; 
                         case "Missed": return "#FF0000"; 
                         case "Due": return "#808080"; 
-                        case "Diseased": return "#808080"; 
+                        case "Disease": return "#808080"; 
                         default: return "#808080";
                     }
                 }
@@ -1151,7 +1151,7 @@ namespace VaccineAPI.Controllers
                     else if (dbSchedule.IsDone == false && dbSchedule.IsDisease != true && checkForMissed(dbSchedule.Date))
                         return "Missed";
                     else
-                        return "Diseased";
+                        return "Disease";
                 }
 
                Font GetStatusFont(string status)
@@ -1293,7 +1293,7 @@ namespace VaccineAPI.Controllers
                             }
                             else
                             {
-                                PdfPCell statusCell = new PdfPCell(new Phrase("Diseased", font));
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Disease", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 statusCell.NoWrap = true;
@@ -1428,7 +1428,7 @@ namespace VaccineAPI.Controllers
                                 }
                                 else
                                 {
-                                    flustatus2 = "Diseased";
+                                    flustatus2 = "Disease";
                                 }
                                 if (dbSchedule.IsDone == true)
                                 {
@@ -1461,7 +1461,7 @@ namespace VaccineAPI.Controllers
                             }
                             else
                             {
-                                typestatus2 = "Diseased";
+                                typestatus2 = "Disease";
                             }
                             if (dbSchedule.IsDone == true )
                             {
@@ -1495,7 +1495,7 @@ namespace VaccineAPI.Controllers
                             }
                             else
                             {
-                                vitstatus2 = "Diseased";
+                                vitstatus2 = "Disease";
                             }
                             if (dbSchedule.IsDone == true )
                             {
@@ -1688,7 +1688,7 @@ namespace VaccineAPI.Controllers
                 }
                 else
                 {
-                    status = "Diseased";
+                    status = "Disease";
                 }
 
                 vaccineRows.Append($@"
@@ -2103,7 +2103,7 @@ namespace VaccineAPI.Controllers
                             }
                             else
                             {
-                                PdfPCell statusCell = new PdfPCell(new Phrase("Diseased", font));
+                                PdfPCell statusCell = new PdfPCell(new Phrase("Disease", font));
                                 statusCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 statusCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(statusCell);

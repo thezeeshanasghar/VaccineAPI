@@ -202,14 +202,18 @@ namespace VaccineAPI.Controllers
                 // BUG-16 — a give must carry a real GivenDate. A missing/default value
                 // (0001-01-01) or a date on/before the child's DOB is invalid and would slip
                 // past the age/future guards below. Reject it before any other give-time check.
-                if (scheduleDTO.IsDone == true)
+                // Disease entries (Chicken Pox / Hepatitis A "had the disease, not the vaccine")
+                // are the one exception — there is no given date to record, only the
+                // DiseaseYear the frontend collects instead. See the matching IsDisease bypass
+                // on the future-date guard below.
+                if (scheduleDTO.IsDone == true && scheduleDTO.IsDisease != true)
                 {
                     if (!scheduleDTO.GivenDate.HasValue || scheduleDTO.GivenDate.Value.Date <= dbSchedule.Child.DOB.Date)
                         return new Response<ScheduleDTO>(false,
                             "The given date is invalid — it must be after the child's date of birth.", null);
                 }
 
-                if (scheduleDTO.IsDone == true && scheduleDTO.BrandId.HasValue)
+                if (scheduleDTO.IsDone == true && scheduleDTO.IsDisease != true && scheduleDTO.BrandId.HasValue)
                 {
                     var brand = _db.Brands.FirstOrDefault(b => b.Id == scheduleDTO.BrandId.Value);
                     if (brand != null && brand.MinAge.HasValue)
@@ -222,8 +226,9 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                // Step 2 — Dose.MinAge check at give-time
-                if (scheduleDTO.IsDone == true && !scheduleDTO.IgnoreMinAgeAtGiveTime)
+                // Step 2 — Dose.MinAge check at give-time. Skipped for disease entries — there's
+                // no given date to check an age floor against (see the BUG-16 bypass above).
+                if (scheduleDTO.IsDone == true && scheduleDTO.IsDisease != true && !scheduleDTO.IgnoreMinAgeAtGiveTime)
                 {
                     var dose = dbSchedule.Dose;
                     if (dose != null && dose.MinAge > 0)
@@ -242,8 +247,8 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                // Step 2b — Dose.MaxAge check at give-time
-                if (scheduleDTO.IsDone == true && !scheduleDTO.IgnoreMaxAgeAtGiveTime)
+                // Step 2b — Dose.MaxAge check at give-time. Same disease exclusion as above.
+                if (scheduleDTO.IsDone == true && scheduleDTO.IsDisease != true && !scheduleDTO.IgnoreMaxAgeAtGiveTime)
                 {
                     var dose = dbSchedule.Dose;
                     if (dose != null && dose.MaxAge.HasValue)
@@ -262,8 +267,10 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                // Step 3 — MinGap check at give-time
-                if (scheduleDTO.IsDone == true && (dbSchedule.Dose.DoseOrder ?? 0) > 1 && !scheduleDTO.IgnoreMinGapAtGiveTime)
+                // Step 3 — MinGap check at give-time. Same disease exclusion — a disease record
+                // has no given date to measure a gap from, and (being dose 1 of these two
+                // vaccines in practice) there's no meaningful previous-dose gap to enforce.
+                if (scheduleDTO.IsDone == true && scheduleDTO.IsDisease != true && (dbSchedule.Dose.DoseOrder ?? 0) > 1 && !scheduleDTO.IgnoreMinGapAtGiveTime)
                 {
                     var dose = dbSchedule.Dose;
                     if (dose != null && dose.MinGap.HasValue)
@@ -638,7 +645,10 @@ namespace VaccineAPI.Controllers
                     return new Response<ScheduleDTO>(true, "Congratulations", newData2);
                 }
 
-                if (!wasGiven)
+                // Disease entries carry no GivenDate at all (see the BUG-16 bypass above) and
+                // never touch a brand/stock, so none of the date/inventory work below applies —
+                // skip straight past it to the disease-skip block just after this if.
+                if (!wasGiven && scheduleDTO.IsDisease != true)
                 {
                     // v2 date policy (§8): a dose can never be marked given with a FUTURE date,
                     // on any path. Reject before any inventory/IsDone work.

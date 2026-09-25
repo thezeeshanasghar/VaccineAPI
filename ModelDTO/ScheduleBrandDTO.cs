@@ -16,5 +16,11 @@ namespace VaccineAPI.ModelDTO
         public string? Lot { get; set; }
         public DateTime? Expiry { get; set; }
         public int? Validity { get; set; }
+        // Disease entry (Chicken Pox / Hepatitis A "had the disease, not the vaccine"), per row —
+        // a bulk give can mix a disease row with real injected doses in the same batch (one shared
+        // GivenDate applies to the real doses only; a disease row is excluded from it). See
+        // UpdateBulkInjection's per-row IsDisease handling.
+        public bool? IsDisease { get; set; }
+        public string? DiseaseYear { get; set; }
     }
 }

@@ -1966,9 +1966,23 @@ namespace VaccineAPI.Controllers
                 }
             }
 
+            // Disease rows (Chicken Pox / Hepatitis A "had the disease, not the vaccine") in this
+            // batch — resolved once, by ScheduleId, and reused everywhere below. A batch can mix a
+            // disease row with real injected doses in the same visit: the shared GivenDate and its
+            // age/gap validation apply only to the real doses; a disease row is excluded from all
+            // of it and keeps no GivenDate. isDiseaseSchedule(id) is false for any schedule not
+            // actually part of this submission's ScheduleBrands (i.e. untouched siblings loaded
+            // into dbChildSchedules only for their own unrelated validation).
+            bool IsDiseaseSchedule(long scheduleId) => scheduleDTO.ScheduleBrands
+                .Any(x => x.ScheduleId == scheduleId && x.IsDisease == true);
+            bool allSelectedAreDisease = scheduleDTO.ScheduleBrands.Count > 0
+                && scheduleDTO.ScheduleBrands.All(x => x.IsDisease == true);
+
             // BUG-16 (bulk) — mirror the single-give guard: a bulk give must carry a real
-            // GivenDate before any of the age/gap checks below trust it.
-            if (scheduleDTO.IsDone == true && !scheduleDTO.GivenDate.HasValue)
+            // GivenDate before any of the age/gap checks below trust it. Skipped only when EVERY
+            // row in this submission is a disease row — a mixed batch still needs a real date for
+            // its non-disease doses.
+            if (scheduleDTO.IsDone == true && !scheduleDTO.GivenDate.HasValue && !allSelectedAreDisease)
             {
                 return new Response<ScheduleDTO>(false,
                     "The given date is invalid — it must be after the child's date of birth.", null);
@@ -1977,11 +1991,13 @@ namespace VaccineAPI.Controllers
             // Step 4 — MinAge, MaxAge, Brand.MinAge and MinGap checks for bulk give (accumulate all errors)
             bool bulkGraceApplied = false;
             var bulkGraceMessages = new System.Collections.Generic.List<string>();
-            if (scheduleDTO.IsDone == true)
+            if (scheduleDTO.IsDone == true && !allSelectedAreDisease)
             {
                 var bulkErrors = new System.Collections.Generic.List<string>();
                 foreach (var chk in dbChildSchedules)
                 {
+                    if (IsDiseaseSchedule(chk.Id)) continue;
+
                     var chkDose = _db.Doses.FirstOrDefault(x => x.Id == chk.DoseId);
                     if (chkDose == null) continue;
 
@@ -2129,6 +2145,7 @@ namespace VaccineAPI.Controllers
                     foreach (var chk in dbChildSchedules)
                     {
                         if (chk.IsDone == true) continue; // already given, not part of this transition
+                        if (IsDiseaseSchedule(chk.Id)) continue; // no brand/stock for a disease row
 
                         var chkBrandId2 = scheduleDTO.ScheduleBrands
                             .Where(x => x.ScheduleId == chk.Id)
@@ -2156,8 +2173,10 @@ namespace VaccineAPI.Controllers
             }
 
             // v2 date policy (§8): no give with a FUTURE date, on any path — reject the whole
-            // bulk request before any dose is marked done. Only applies when actually giving.
-            if (scheduleDTO.IsDone && scheduleDTO.GivenDate!.Value.Date > ClinicClock.TodayPkt())
+            // bulk request before any dose is marked done. Only applies when actually giving, and
+            // only when there's a real date to check — skipped for an all-disease batch, which
+            // never sends one.
+            if (scheduleDTO.IsDone && !allSelectedAreDisease && scheduleDTO.GivenDate!.Value.Date > ClinicClock.TodayPkt())
             {
                 return new Response<ScheduleDTO>(false, "The given date cannot be in the future.", null);
             }
@@ -2177,12 +2196,22 @@ namespace VaccineAPI.Controllers
                 }
 
                 var wasIsDone = schedule.IsDone;
+                var scheduleIsDisease = scheduleDTO.IsDone && IsDiseaseSchedule(schedule.Id);
                 schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
                 schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
                 schedule.Circle =(scheduleDTO.Circle > 0) ? scheduleDTO.Circle : schedule.Circle;
                 schedule.IsDone = scheduleDTO.IsDone;
-                schedule.GivenDate = scheduleDTO.IsDone ? scheduleDTO.GivenDate!.Value.Date : (DateTime?)null;
+                // A disease row carries no given date — same as the single-give endpoint. Every
+                // other (real) row in the batch still gets the batch's one shared GivenDate.
+                schedule.GivenDate = scheduleDTO.IsDone && !scheduleIsDisease
+                    ? scheduleDTO.GivenDate!.Value.Date : (DateTime?)null;
                 schedule.DoneAt = scheduleDTO.IsDone ? DateTime.UtcNow : (DateTime?)null;
+                if (scheduleIsDisease)
+                {
+                    var scheduleBrandForDisease = scheduleDTO.ScheduleBrands.Find(x => x.ScheduleId == schedule.Id);
+                    schedule.IsDisease = true;
+                    schedule.DiseaseYear = scheduleBrandForDisease?.DiseaseYear ?? "";
+                }
                 if (scheduleDTO.PaymentMode != null) schedule.PaymentMode = scheduleDTO.PaymentMode;
                 schedule.OnlineService = scheduleDTO.OnlineService;
                 schedule.IsPaymentApproved = false;
@@ -2471,10 +2500,35 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                // Only reschedule future doses for non-infinite vaccines
-                if (!IsInfiniteDose(schedule.Dose))
+                // Only reschedule future doses for non-infinite vaccines. Skipped for a disease
+                // row — there's no real GivenDate to re-anchor the vaccine's later doses off, and
+                // the auto-skip below removes them from the pipeline entirely instead.
+                if (!IsInfiniteDose(schedule.Dose) && !scheduleIsDisease)
                 {
                     ChangeDueDatesOfInjectedSchedule(scheduleDTO, schedule);
+                }
+
+                // Disease row: skip every OTHER dose of the same vaccine for this child, same as
+                // the single-give endpoint (ScheduleController.Update) — a documented disease
+                // means the remaining doses of that vaccine are never needed.
+                if (scheduleIsDisease)
+                {
+                    var diseaseVaccineId = schedule.Dose?.VaccineId;
+                    if (diseaseVaccineId.HasValue)
+                    {
+                        var siblingDoseIds = _db.Doses
+                            .Where(x => x.VaccineId == diseaseVaccineId.Value && x.Id != schedule.DoseId)
+                            .Select(x => x.Id)
+                            .ToList();
+                        if (siblingDoseIds.Count > 0)
+                        {
+                            var siblingSchedules = _db.Schedules
+                                .Where(x => x.ChildId == schedule.ChildId && siblingDoseIds.Contains(x.DoseId))
+                                .ToList();
+                            foreach (var sibling in siblingSchedules)
+                                sibling.IsSkip = true;
+                        }
+                    }
                 }
             }
             // Auto-create assignment when PA bulk-gives vaccines with no prior open assignment,

@@ -511,11 +511,17 @@ namespace VaccineAPI.Controllers
             // CHANGES (reassignment, or the orphan-invoice-link case), never on the ordinary
             // "PA submits their own invoice and nothing about the assignment changes afterward"
             // path — so trusting it here silently mislabels the majority of PA-attributed
-            // invoices as "Doctor". Same fix as PaCashHandoverController.GetReconciliation
-            // (2026-09-25): derive the label from the live PaId FK every time instead.
-            var givenByPaIds = invoiceSubs.Where(x => x.PaId.HasValue).Select(x => x.PaId!.Value).Distinct().ToList();
+            // invoices as "Doctor". Derive the label from the live PaId FK every time instead
+            // (same fix as PaCashHandoverController.GetReconciliation, 2026-09-25).
+            //
+            // GivenByManagerId absent does NOT mean "a doctor gave it" — Schedule has a
+            // positive, reliably-stamped "a PA gave this" fact of its own (GivenByPaId, set on
+            // every PA-side give) that must be checked too, or a PA who registered, gave, AND
+            // invoiced entirely solo gets mislabeled "Doctor/(PA Name)" instead of a bare PA
+            // label (confirmed live 2026-09-26: OSAMA IMADI / HAIQA under PA Sapna).
+            var referencedPaIds = invoiceSubs.Where(x => x.PaId.HasValue).Select(x => x.PaId!.Value).Distinct().ToList();
             var givenByPaNames = await _db.PersonalAssistant
-                .Where(p => givenByPaIds.Contains(p.Id))
+                .Where(p => referencedPaIds.Contains(p.Id))
                 .Select(p => new { p.Id, p.Name })
                 .ToDictionaryAsync(p => p.Id, p => p.Name);
 
@@ -524,6 +530,13 @@ namespace VaccineAPI.Controllers
                 .Where(s => s.InvoiceSubmissionId.HasValue
                          && invoiceIdsForGivenBy.Contains(s.InvoiceSubmissionId.Value)
                          && s.GivenByManagerId.HasValue)
+                .Select(s => s.InvoiceSubmissionId!.Value)
+                .Distinct()
+                .ToListAsync());
+            var givenByPaInvoiceIds = new HashSet<long>(await _db.Schedules
+                .Where(s => s.InvoiceSubmissionId.HasValue
+                         && invoiceIdsForGivenBy.Contains(s.InvoiceSubmissionId.Value)
+                         && s.GivenByPaId.HasValue)
                 .Select(s => s.InvoiceSubmissionId!.Value)
                 .Distinct()
                 .ToListAsync());
@@ -643,7 +656,7 @@ namespace VaccineAPI.Controllers
                 {
                     var scheduleRows = visit.OrderBy(s => s.Brand != null ? s.Brand.Name : "").ToList();
                     decimal consFee = ResolveVaccinationFee(visit.Key.ChildId, visit.Key.Date, invoiceSubs, invoiceRecords, feeRecords);
-                    string givenBy = ResolveGivenByLabel(visit.Key.ChildId, visit.Key.Date, invoiceSubs, givenByPaNames, givenByManagerInvoiceIds);
+                    string givenBy = ResolveGivenByLabel(visit.Key.ChildId, visit.Key.Date, invoiceSubs, givenByPaNames, givenByManagerInvoiceIds, givenByPaInvoiceIds);
                     string patientName = scheduleRows.Count > 0 && scheduleRows[0].Child != null ? scheduleRows[0].Child.Name : "";
                     string visitDate = visit.Key.Date.ToString("dd-MM-yyyy");
 
@@ -1656,18 +1669,23 @@ namespace VaccineAPI.Controllers
 
     // "Given By" column for the Sales & Collection PDF — same InvoiceSubmission match as
     // ResolveVaccinationFee (ChildId + InvoiceDate). Derives the label live from PaId + a
-    // fresh PA-name lookup + whether any of this invoice's schedules were given by a Manager,
-    // rather than trusting InvoiceSubmission.SubmittedByLabel: that cached string is only ever
-    // written on the narrow "PaId is actually changing" code paths (reassignment, or the
-    // orphan-invoice-link case) and is left null for the ordinary case of a PA submitting their
-    // own invoice with nothing later changing — which silently defaulted every such row to
-    // "Doctor" even though a PA fully owned it. Same live-derivation fix already applied to
-    // PaCashHandoverController.GetReconciliation (2026-09-25).
+    // fresh PA-name lookup + whether any of this invoice's schedules were given by a Manager
+    // or a PA, rather than trusting InvoiceSubmission.SubmittedByLabel: that cached string is
+    // only ever written on the narrow "PaId is actually changing" code paths (reassignment, or
+    // the orphan-invoice-link case) and is left null otherwise. Same live-derivation fix already
+    // applied to PaCashHandoverController.GetReconciliation (2026-09-25).
+    //
+    // GivenByManagerId absent does NOT mean "a doctor gave it" — that was the bug in this
+    // method's first live-derivation pass earlier today. Schedule.GivenByPaId is a positive,
+    // reliably-stamped "a PA gave this" fact that must be checked before falling back to
+    // "Doctor" — otherwise a PA who registered, gave, and invoiced entirely solo (no doctor or
+    // manager involvement) gets mislabeled "Doctor/(PA Name)" instead of a bare PA label.
     private static string ResolveGivenByLabel(
         long childId, DateTime visitDate,
         List<InvoiceSubmission> invoiceSubs,
         Dictionary<long, string> paNames,
-        HashSet<long> givenByManagerInvoiceIds)
+        HashSet<long> givenByManagerInvoiceIds,
+        HashSet<long> givenByPaInvoiceIds)
     {
         var sub = invoiceSubs.FirstOrDefault(x =>
             x.ChildId == childId && x.InvoiceDate.Date == visitDate.Date);
@@ -1675,8 +1693,11 @@ namespace VaccineAPI.Controllers
             return "Doctor";
 
         string paName = paNames.ContainsKey(sub.PaId.Value) ? paNames[sub.PaId.Value] : "";
-        string prefix = givenByManagerInvoiceIds.Contains(sub.Id) ? "Manager/(" : "Doctor/(";
-        return prefix + paName + ")";
+        if (givenByManagerInvoiceIds.Contains(sub.Id))
+            return "Manager/(" + paName + ")";
+        if (givenByPaInvoiceIds.Contains(sub.Id))
+            return "(" + paName + ")";
+        return "Doctor/(" + paName + ")";
     }
     }
 }

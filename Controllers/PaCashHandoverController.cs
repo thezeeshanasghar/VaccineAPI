@@ -541,10 +541,19 @@ namespace VaccineAPI.Controllers
                 .GroupBy(a => a.InvoiceSubmissionId)
                 .ToDictionary(g => g.Key, g => g.First());
 
-            // Which invoices actually have a schedule given by a Manager (vs a Doctor) —
-            // computed once, per-invoice, so the label prefix below is always live rather
-            // than trusting SubmittedByLabel's prefix, which the same reassignment bug can
-            // desync just as easily as the PA name in parentheses.
+            // Which invoices actually have a schedule given by a Manager, and which have one
+            // given by a PA — computed once, per-invoice, so the label prefix below is always
+            // live rather than trusting SubmittedByLabel's prefix, which the same reassignment
+            // bug can desync just as easily as the PA name in parentheses.
+            //
+            // GivenByManagerId absent does NOT mean "a doctor gave it" — that was the original
+            // (buggy) assumption this code and DetermineSubmittedByLabel both made. Schedule has
+            // a positive, reliably-stamped "a PA gave this" fact of its own (GivenByPaId, set on
+            // every PA-side give) that neither ever consulted, so a PA who registered, gave, AND
+            // invoiced entirely on their own — no doctor or manager involvement at all — got
+            // mislabeled "Doctor/(PA Name)" instead of the PA-alone label they earned (confirmed
+            // live 2026-09-26: OSAMA IMADI / HAIQA under PA Sapna). "Doctor" only applies when
+            // NEITHER a PA nor a Manager gave it — the true doctor-personally-gave-it case.
             var invoiceIdsForLabel = invoices.Select(i => i.Id).ToList();
             var invoicesGivenByManager = _db.Schedules
                 .Where(s => s.InvoiceSubmissionId.HasValue
@@ -555,17 +564,27 @@ namespace VaccineAPI.Controllers
                 .ToList();
             var givenByManagerSet = new HashSet<long>(invoicesGivenByManager);
 
+            var invoicesGivenByPa = _db.Schedules
+                .Where(s => s.InvoiceSubmissionId.HasValue
+                         && invoiceIdsForLabel.Contains(s.InvoiceSubmissionId.Value)
+                         && s.GivenByPaId.HasValue)
+                .Select(s => s.InvoiceSubmissionId!.Value)
+                .Distinct()
+                .ToList();
+            var givenByPaSet = new HashSet<long>(invoicesGivenByPa);
+
             var invoiceRows = invoices.Select(i =>
             {
                 pendingAmendmentByInvoiceId.TryGetValue(i.Id, out var pending);
 
-                // Live label: current PaId's name, current Doctor/Manager prefix — this is
-                // what fixes the "reassigned but still shows the old PA's name" bug (row
-                // correctly filters under the new PA, but the old cached SubmittedByLabel
-                // string, baked in once at invoice-creation time, never got updated to match).
-                // The one exception is the 2026-08-28 historical backfill's sentinel label,
-                // which isn't a real PA-attributed transaction and must pass through as-is
-                // rather than being overwritten with a fabricated "Doctor/(PA Name)".
+                // Live label: current PaId's name, current Manager/PA-alone/Doctor prefix — this
+                // is what fixes both the "reassigned but still shows the old PA's name" bug (row
+                // correctly filters under the new PA, but the old cached SubmittedByLabel string,
+                // baked in once at invoice-creation time, never got updated to match) and the
+                // "PA did everything solo but still shows Doctor/" bug (see the comment above
+                // givenByPaSet). The one exception is the 2026-08-28 historical backfill's
+                // sentinel label, which isn't a real PA-attributed transaction and must pass
+                // through as-is rather than being overwritten with a fabricated label.
                 string livePaName;
                 if (i.SubmittedByLabel == "Historical Backfill")
                 {
@@ -574,7 +593,11 @@ namespace VaccineAPI.Controllers
                 else
                 {
                     string currentPaName = paNames.ContainsKey(i.PaId.Value) ? paNames[i.PaId.Value] : "";
-                    livePaName = (givenByManagerSet.Contains(i.Id) ? "Manager/(" : "Doctor/(") + currentPaName + ")";
+                    livePaName = givenByManagerSet.Contains(i.Id)
+                        ? "Manager/(" + currentPaName + ")"
+                        : givenByPaSet.Contains(i.Id)
+                            ? "(" + currentPaName + ")"
+                            : "Doctor/(" + currentPaName + ")";
                 }
 
                 return new

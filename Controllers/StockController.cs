@@ -506,6 +506,28 @@ namespace VaccineAPI.Controllers
                           && x.InvoiceDate.Date <= to.Date)
                 .ToListAsync();
 
+            // Live "Given By" lookups — InvoiceSubmission.SubmittedByLabel is a snapshot string
+            // that's only ever written on the specific code paths where a PA's ID actually
+            // CHANGES (reassignment, or the orphan-invoice-link case), never on the ordinary
+            // "PA submits their own invoice and nothing about the assignment changes afterward"
+            // path — so trusting it here silently mislabels the majority of PA-attributed
+            // invoices as "Doctor". Same fix as PaCashHandoverController.GetReconciliation
+            // (2026-09-25): derive the label from the live PaId FK every time instead.
+            var givenByPaIds = invoiceSubs.Where(x => x.PaId.HasValue).Select(x => x.PaId!.Value).Distinct().ToList();
+            var givenByPaNames = await _db.PersonalAssistant
+                .Where(p => givenByPaIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.Name })
+                .ToDictionaryAsync(p => p.Id, p => p.Name);
+
+            var invoiceIdsForGivenBy = invoiceSubs.Select(x => x.Id).ToList();
+            var givenByManagerInvoiceIds = new HashSet<long>(await _db.Schedules
+                .Where(s => s.InvoiceSubmissionId.HasValue
+                         && invoiceIdsForGivenBy.Contains(s.InvoiceSubmissionId.Value)
+                         && s.GivenByManagerId.HasValue)
+                .Select(s => s.InvoiceSubmissionId!.Value)
+                .Distinct()
+                .ToListAsync());
+
             // Fee table fallback: join Invoice → Fee to get vaccination charge per patient per day
             // This covers doctor-generated invoices where InvoiceSubmission may not exist yet
             var invoiceRecords = await _db.Invoices
@@ -621,7 +643,7 @@ namespace VaccineAPI.Controllers
                 {
                     var scheduleRows = visit.OrderBy(s => s.Brand != null ? s.Brand.Name : "").ToList();
                     decimal consFee = ResolveVaccinationFee(visit.Key.ChildId, visit.Key.Date, invoiceSubs, invoiceRecords, feeRecords);
-                    string givenBy = ResolveGivenByLabel(visit.Key.ChildId, visit.Key.Date, invoiceSubs);
+                    string givenBy = ResolveGivenByLabel(visit.Key.ChildId, visit.Key.Date, invoiceSubs, givenByPaNames, givenByManagerInvoiceIds);
                     string patientName = scheduleRows.Count > 0 && scheduleRows[0].Child != null ? scheduleRows[0].Child.Name : "";
                     string visitDate = visit.Key.Date.ToString("dd-MM-yyyy");
 
@@ -1633,20 +1655,28 @@ namespace VaccineAPI.Controllers
     }
 
     // "Given By" column for the Sales & Collection PDF — same InvoiceSubmission match as
-    // ResolveVaccinationFee (ChildId + InvoiceDate), reading SubmittedByLabel: the authoritative
-    // "Doctor" / "Doctor/(PA Name)" / "Manager/(PA Name)" text already used by the reconciliation
-    // page (PaCashHandoverController.GetReconciliation). No attribution logic re-derived here —
-    // a blank/never-stamped label defaults to "Doctor", matching ScheduleController's own
-    // DetermineSubmittedByLabel default.
+    // ResolveVaccinationFee (ChildId + InvoiceDate). Derives the label live from PaId + a
+    // fresh PA-name lookup + whether any of this invoice's schedules were given by a Manager,
+    // rather than trusting InvoiceSubmission.SubmittedByLabel: that cached string is only ever
+    // written on the narrow "PaId is actually changing" code paths (reassignment, or the
+    // orphan-invoice-link case) and is left null for the ordinary case of a PA submitting their
+    // own invoice with nothing later changing — which silently defaulted every such row to
+    // "Doctor" even though a PA fully owned it. Same live-derivation fix already applied to
+    // PaCashHandoverController.GetReconciliation (2026-09-25).
     private static string ResolveGivenByLabel(
         long childId, DateTime visitDate,
-        List<InvoiceSubmission> invoiceSubs)
+        List<InvoiceSubmission> invoiceSubs,
+        Dictionary<long, string> paNames,
+        HashSet<long> givenByManagerInvoiceIds)
     {
         var sub = invoiceSubs.FirstOrDefault(x =>
             x.ChildId == childId && x.InvoiceDate.Date == visitDate.Date);
-        return (sub != null && !string.IsNullOrWhiteSpace(sub.SubmittedByLabel))
-            ? sub.SubmittedByLabel
-            : "Doctor";
+        if (sub == null || !sub.PaId.HasValue)
+            return "Doctor";
+
+        string paName = paNames.ContainsKey(sub.PaId.Value) ? paNames[sub.PaId.Value] : "";
+        string prefix = givenByManagerInvoiceIds.Contains(sub.Id) ? "Manager/(" : "Doctor/(";
+        return prefix + paName + ")";
     }
     }
 }

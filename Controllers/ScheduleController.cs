@@ -742,6 +742,89 @@ namespace VaccineAPI.Controllers
                     return new Response<ScheduleDTO>(true, "Congratulations", newData2);
                 }
 
+                // v2 true→true brand-correction fix: a dose already marked given, submitted again
+                // as given but with a DIFFERENT brand (e.g. a PA picked the wrong brand and it's
+                // being corrected), used to fall straight through to overwriting BrandId at the
+                // bottom of this method with no stock re-evaluation at all — the old brand's
+                // deduction was never reversed and the new brand was never deducted. Reverse the
+                // old brand here, exactly the way a real ungive would (same UnadministerSync,
+                // keyed off this schedule's own last Administer ledger row), then fall into the
+                // normal consuming-give block below, which is already scoped to the NEW BrandId.
+                if (wasGiven && scheduleDTO.IsDone == true && scheduleDTO.IsDisease != true
+                    && previousBrandId != scheduleDTO.BrandId)
+                {
+                    if (inventoryEnabled && previousBrandId.HasValue)
+                    {
+                        var brandChangeRollbackClinicId = ResolveClinicIdForUngive(
+                            dbSchedule, scheduleDTO.DoctorId, onlineClinicId, scheduleDTO.PaId);
+                        var brandChangeRollbackDoctorId = _db.Clinics
+                            .Where(c => c.Id == brandChangeRollbackClinicId)
+                            .Select(c => c.DoctorId)
+                            .FirstOrDefault();
+
+                        if (brandChangeRollbackDoctorId <= 0)
+                        {
+                            return new Response<ScheduleDTO>(
+                                false,
+                                $"Unable to resolve inventory owner doctor for rollback clinic {brandChangeRollbackClinicId}.",
+                                null
+                            );
+                        }
+
+                        var previousBrandInventory = _db.BrandAmounts
+                            .Where(
+                                b =>
+                                    b.BrandId == previousBrandId
+                                    && b.DoctorId == brandChangeRollbackDoctorId
+                                    && b.ClinicId == brandChangeRollbackClinicId
+                            )
+                            .FirstOrDefault();
+
+                        if (previousBrandInventory == null)
+                        {
+                            return new Response<ScheduleDTO>(
+                                false,
+                                BuildInventoryContextMessage(
+                                    "Inventory row not found for previous brand",
+                                    previousBrandId,
+                                    brandChangeRollbackClinicId
+                                ),
+                                null
+                            );
+                        }
+
+                        var brandChangeEventDate = dbSchedule.GivenDate ?? scheduleDTO.GivenDate ?? DateTime.UtcNow;
+                        _inventory.UnadministerSync(brandChangeRollbackDoctorId, brandChangeRollbackClinicId,
+                            previousBrandId.Value, dbSchedule.Id, brandChangeEventDate, scheduleDTO.PaId);
+
+                        using (var tx = _db.Database.BeginTransaction())
+                        {
+                            try
+                            {
+                                _db.SaveChanges();
+                                tx.Commit();
+                            }
+                            catch (DbUpdateConcurrencyException)
+                            {
+                                tx.Rollback();
+                                return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
+                            }
+                            catch
+                            {
+                                tx.Rollback();
+                                throw;
+                            }
+                        }
+                    }
+
+                    // Now treat this exactly like a fresh give for the NEW brand — same decision
+                    // model, same FEFO deduction, same unbatched-confirmation gate. wasGiven is
+                    // deliberately NOT reset (ungive-vs-give branches above already ran); this
+                    // local override only widens the gate below so the new brand actually gets
+                    // consumed instead of silently skipped.
+                    wasGiven = false;
+                }
+
                 // Disease entries carry no GivenDate at all (see the BUG-16 bypass above) and
                 // never touch a brand/stock, so none of the date/inventory work below applies —
                 // skip straight past it to the disease-skip block just after this if.
@@ -2479,6 +2562,53 @@ namespace VaccineAPI.Controllers
                         // v2: the old `GivenDate.Date == today` gate is REMOVED. The deduct/don't
                         // decision is now the §6.2a model, uniform with single give. Backdated,
                         // in-period, brand gives deduct unless the operator chose "just recording".
+
+                        // v2 true→true brand-correction fix (bulk mirror of the single-give fix
+                        // above): a dose already given, resubmitted still-given but with a
+                        // DIFFERENT brand, used to fall through both transition blocks below (which
+                        // only fire on false→true / true→false) with zero stock re-evaluation. The
+                        // old brand's deduction was never reversed and the new brand was never
+                        // deducted — permanent, silent drift. Reverse the old brand here exactly
+                        // like a real ungive, then let the "give transition" block below run against
+                        // the NEW scheduleBrand.BrandId by treating this row as not-yet-given.
+                        if (wasIsDone == true && scheduleDTO.IsDone == true && previousBrandId.HasValue
+                            && previousBrandId != scheduleBrand.BrandId)
+                        {
+                            var brandChangeClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId,
+                                dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0, scheduleDTO.PaId);
+
+                            if (brandChangeClinicId > 0 && IsInventoryEnabledForActor(scheduleDTO.DoctorId, brandChangeClinicId))
+                            {
+                                var brandChangeDoctorId = _db.Clinics
+                                    .Where(c => c.Id == brandChangeClinicId)
+                                    .Select(c => c.DoctorId)
+                                    .FirstOrDefault();
+
+                                if (brandChangeDoctorId <= 0)
+                                {
+                                    return new Response<ScheduleDTO>(false,
+                                        $"Unable to resolve inventory owner doctor for rollback clinic {brandChangeClinicId} (schedule {schedule.Id}).", null);
+                                }
+
+                                var brandChangeInventory = _db.BrandAmounts
+                                    .Where(b => b.BrandId == previousBrandId
+                                             && b.DoctorId == brandChangeDoctorId
+                                             && b.ClinicId == brandChangeClinicId)
+                                    .FirstOrDefault();
+
+                                if (brandChangeInventory == null)
+                                {
+                                    return new Response<ScheduleDTO>(false,
+                                        $"Inventory row not found for brand {previousBrandId} at clinic {brandChangeClinicId} (schedule {schedule.Id}).", null);
+                                }
+
+                                var brandChangeEventDate = scheduleDTO.GivenDate ?? schedule.GivenDate ?? DateTime.UtcNow;
+                                _inventory.UnadministerBulkSync(brandChangeInventory, brandChangeClinicId,
+                                    previousBrandId.Value, schedule.Id, brandChangeEventDate, scheduleDTO.PaId);
+                            }
+
+                            wasIsDone = false;
+                        }
 
                         // Ungive transition: dose was given before, now being ungiven. Restore
                         // inventory for whatever brand was actually deducted (previousBrandId).

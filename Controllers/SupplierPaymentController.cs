@@ -63,8 +63,12 @@ namespace VaccineAPI.Controllers
             // Merge bills and payments into chronological order
             var billItems = bills.Select(b =>
             {
-                // Stock.StockAmount is already AWT-inclusive — do not add AwtAmount again
-                decimal totalPayable = b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount);
+                // Payable is frozen at purchase/edit time — OriginalQuantity, not the live
+                // Quantity (which shrinks as doses are given/sold/transferred). Matches
+                // BillController's totalPayable exactly; using Quantity here made this ledger's
+                // "owed" figure silently drift toward zero as stock was consumed. Stock.StockAmount
+                // is already AWT-inclusive — do not add AwtAmount again.
+                decimal totalPayable = b.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount);
                 return new { Date = b.BillDate, SortKey = (long)b.Id, IsBill = true, Bill = b, TotalPayable = totalPayable };
             }).ToList();
 
@@ -85,8 +89,8 @@ namespace VaccineAPI.Controllers
                 if (item.IsBill)
                 {
                     var b = billItems.First(x => x.SortKey == item.SortKey).Bill;
-                    // Stock.StockAmount is already AWT-inclusive — do not add AwtAmount again
-                    decimal totalPayable = b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount);
+                    // OriginalQuantity, not Quantity — see comment on billItems above.
+                    decimal totalPayable = b.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount);
                     balance += totalPayable;
                     entries.Add(new
                     {
@@ -133,8 +137,8 @@ namespace VaccineAPI.Controllers
                 }
             }
 
-            // Stock.StockAmount is already AWT-inclusive — do not add AwtAmount again
-            decimal totalBills = bills.Sum(b => b.Stocks.Sum(s => (decimal)s.Quantity * s.StockAmount));
+            // OriginalQuantity, not Quantity — see comment on billItems above.
+            decimal totalBills = bills.Sum(b => b.Stocks.Sum(s => s.OriginalQuantity * s.StockAmount));
             decimal totalAWT = bills.Sum(b => b.AwtAmount ?? 0);
             decimal totalPaidOnBills = bills.Sum(b => b.AmountPaid ?? 0);
             decimal totalStandalonePayments = payments.Sum(p => p.Amount);

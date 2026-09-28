@@ -261,6 +261,34 @@ namespace VaccineAPI.Controllers
                             vaccineIdsToCleanUp.Add(s.Dose.VaccineId);
                         }
 
+                        // Same archive-before-reset as Reassign() — a FullReset wipes this PA's
+                        // fingerprints from the schedule (give/skip history, payment state), and
+                        // the give/ungive/skip/unskip caps need to go with it, or whichever PA
+                        // picks this dose up next inherits a maxed-out counter that isn't theirs.
+                        if (s.GiveCount != 0 || s.UngiveCount != 0 || s.SkipCount != 0 || s.UnskipCount != 0)
+                        {
+                            _db.PaActivityLogs.Add(new PaActivityLog
+                            {
+                                PaId = paId,
+                                DoctorId = doctorId,
+                                ClinicId = assignment.ClinicId,
+                                PatientId = childId,
+                                ActionCode = "ReassignCounterSnapshot",
+                                Description = $"PA counters archived on FullReset of schedule {s.Id}",
+                                Notes = $"Give={s.GiveCount}, Ungive={s.UngiveCount}, Skip={s.SkipCount}, Unskip={s.UnskipCount}",
+                                ArchivedGiveCount = s.GiveCount,
+                                ArchivedUngiveCount = s.UngiveCount,
+                                ArchivedSkipCount = s.SkipCount,
+                                ArchivedUnskipCount = s.UnskipCount,
+                                ActionDate = DateTime.UtcNow
+                            });
+
+                            s.GiveCount = 0;
+                            s.UngiveCount = 0;
+                            s.SkipCount = 0;
+                            s.UnskipCount = 0;
+                        }
+
                         s.IsDone = false;
                         s.GivenDate = null;
                         s.DoneAt = null;
@@ -662,6 +690,49 @@ namespace VaccineAPI.Controllers
                 link.AssignmentId = newAssignment.Id;
             if (linksToMove.Count > 0)
                 await _db.SaveChangesAsync();
+
+            // Archive the outgoing PA's give/ungive/skip/unskip counts before resetting them
+            // for the incoming PA. Without this, a reassigned dose's Schedule.*Count fields
+            // carry the old PA's history forward — the new PA can get blocked by a "given/
+            // ungiven twice" cap they never triggered themselves. One PaActivityLog row per
+            // affected Schedule that actually has a non-zero count, so the old PA's history is
+            // preserved (queryable via ArchivedGiveCount etc.) rather than just discarded.
+            if (linksToMove.Count > 0)
+            {
+                var scheduleIds = linksToMove.Select(l => l.ScheduleId).ToList();
+                var schedulesToReset = await _db.Schedules
+                    .Where(s => scheduleIds.Contains(s.Id))
+                    .ToListAsync();
+
+                foreach (var s in schedulesToReset)
+                {
+                    if (s.GiveCount == 0 && s.UngiveCount == 0 && s.SkipCount == 0 && s.UnskipCount == 0)
+                        continue;
+
+                    _db.PaActivityLogs.Add(new PaActivityLog
+                    {
+                        PaId = old.PersonalAssistantId,
+                        DoctorId = old.DoctorId,
+                        ClinicId = old.ClinicId,
+                        PatientId = old.ChildId,
+                        ActionCode = "ReassignCounterSnapshot",
+                        Description = $"PA counters archived on reassignment away from schedule {s.Id}",
+                        Notes = $"Give={s.GiveCount}, Ungive={s.UngiveCount}, Skip={s.SkipCount}, Unskip={s.UnskipCount}",
+                        ArchivedGiveCount = s.GiveCount,
+                        ArchivedUngiveCount = s.UngiveCount,
+                        ArchivedSkipCount = s.SkipCount,
+                        ArchivedUnskipCount = s.UnskipCount,
+                        ActionDate = DateTime.UtcNow
+                    });
+
+                    s.GiveCount = 0;
+                    s.UngiveCount = 0;
+                    s.SkipCount = 0;
+                    s.UnskipCount = 0;
+                }
+
+                await _db.SaveChangesAsync();
+            }
 
             // Move the linked invoice's PaId to the new PA — exact, via the FK just carried
             // forward above, not a date-window guess.

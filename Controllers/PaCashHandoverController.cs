@@ -501,6 +501,34 @@ namespace VaccineAPI.Controllers
 
             var invoices = invQuery.OrderByDescending(i => i.InvoiceDate).ToList();
 
+            // A pending amendment (e.g. an approved-in-the-past edit that zeroed TotalAmount, or
+            // one still awaiting approval on an invoice that would otherwise fail TotalAmount>0)
+            // must never lose its landing row here — that was the actual cause of the "two rows,
+            // two totals, no delete option" bug: the parent invoice fell out of `invoices` above
+            // purely on the TotalAmount>0 check, so its pending amendment had nowhere to fold
+            // into and rendered as a standalone EditReversal/UngiveReversal row instead (see the
+            // fallback block below). Clinic/PA/date-range scoping is preserved — only the
+            // TotalAmount>0 exclusion is bypassed, and only for invoices that actually have a
+            // live pending amendment.
+            var invoiceIdsAlreadyIncluded = invoices.Select(i => i.Id).ToHashSet();
+            var orphanedByZeroAmountQuery = _db.InvoiceSubmissions
+                .Where(i =>
+                    i.PaId.HasValue &&
+                    i.DoctorId == doctorId &&
+                    i.InvoiceStatus != "Cancelled" &&
+                    i.HasPendingAmendment &&
+                    (i.ClinicId == null || clinicIds.Contains(i.ClinicId.Value)));
+            if (clinicId.HasValue) orphanedByZeroAmountQuery = orphanedByZeroAmountQuery.Where(i => i.ClinicId == clinicId.Value);
+            if (paId.HasValue)     orphanedByZeroAmountQuery = orphanedByZeroAmountQuery.Where(i => i.PaId == paId.Value);
+            if (from.HasValue)     orphanedByZeroAmountQuery = orphanedByZeroAmountQuery.Where(i => i.InvoiceDate.Date >= from.Value);
+            if (to.HasValue)       orphanedByZeroAmountQuery = orphanedByZeroAmountQuery.Where(i => i.InvoiceDate.Date < to.Value);
+
+            var orphanedByZeroAmount = orphanedByZeroAmountQuery
+                .Where(i => !invoiceIdsAlreadyIncluded.Contains(i.Id))
+                .ToList();
+            if (orphanedByZeroAmount.Count > 0)
+                invoices = invoices.Concat(orphanedByZeroAmount).OrderByDescending(i => i.InvoiceDate).ToList();
+
             var invChildIds = invoices.Select(i => i.ChildId).Distinct().ToList();
             var childNames = _db.Childs
                 .Where(c => invChildIds.Contains(c.Id))
@@ -515,7 +543,11 @@ namespace VaccineAPI.Controllers
             // parallel actions. One invoice now always renders as exactly one row. (Doctor's own
             // edits never reach this dictionary — they're auto-approved in the same call that
             // creates them, see ScheduleController's doctor-edit branch, so they never leave
-            // HasPendingAmendment set.)
+            // HasPendingAmendment set.) Sourced from `invoices` AFTER the orphan-union above, so
+            // every pending amendment whose parent is now present (original or unioned-in) folds
+            // in here — this is what actually closes the fold-in gap; widening this dictionary
+            // alone, without also widening `invoices`, would just silently drop the row instead
+            // of fixing it.
             var invoiceIdsForAmendments = invoices.Select(i => i.Id).ToList();
             var pendingAmendmentByInvoiceId = _db.InvoiceAmendments
                 .Where(a =>
@@ -614,7 +646,10 @@ namespace VaccineAPI.Controllers
                     Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
                     AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? assignmentByInvoiceId[i.Id].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                     PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
-                    Amount              = i.TotalAmount,
+                    // i.TotalAmount can be 0/stale on an invoice that only landed here via the
+                    // orphan-rescue above (its own TotalAmount>0 check is what excluded it) — the
+                    // pending amendment's OldAmount is the real pre-edit total to show in that case.
+                    Amount              = (i.TotalAmount <= 0 && pending != null) ? pending.OldAmount : i.TotalAmount,
                     PaymentMode         = i.PaymentMode ?? "",
                     IsConfirmed         = i.IsConfirmedByDoctor,
                     ConfirmedAt         = i.ConfirmedAt.HasValue ? i.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,

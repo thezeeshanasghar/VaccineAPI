@@ -22,6 +22,14 @@ namespace VaccineAPI.Models
         public bool IsReversalRejected { get; set; } = false;
         public long? ReversalOfLogId { get; set; }
         public DateTime ActionDate { get; set; } = DateTime.UtcNow;
+        // Populated only when ActionCode == "ReassignCounterSnapshot" — the outgoing PA's
+        // give/ungive/skip/unskip counts on a Schedule, archived here right before the live
+        // Schedule.*Count fields are reset to 0 for the incoming PA (see PAAssignmentController
+        // Reassign()/DeleteAssignment FullReset). Every other PaActivityLog row leaves these null.
+        public int? ArchivedGiveCount { get; set; }
+        public int? ArchivedUngiveCount { get; set; }
+        public int? ArchivedSkipCount { get; set; }
+        public int? ArchivedUnskipCount { get; set; }
         [ForeignKey("PaId")]
         public PersonalAssistant PersonalAssistant { get; set; } = null!;
     }

@@ -15,6 +15,13 @@ namespace VaccineAPI.ModelDTO
         public decimal AmountPaid { get; set; }
         public string? PaymentMethod { get; set; }
         public List<BillLineDTO> Lines { get; set; } = new List<BillLineDTO>();
+
+        // Caller identity for StockActionGuard — see AdjustStockCreateDTO for why all four
+        // are needed together.
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class BillLineDTO
@@ -81,6 +88,11 @@ namespace VaccineAPI.ModelDTO
         public long ClinicId { get; set; }
         public decimal AwtPercent { get; set; }
         public List<BillLineDTO> Lines { get; set; } = new List<BillLineDTO>();
+
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class ConsumedCheckDTO
@@ -111,6 +123,11 @@ namespace VaccineAPI.ModelDTO
         public string PaymentMethod { get; set; } = "Cash";
         public string? Notes { get; set; }
         public DateTime PaymentDate { get; set; }
+
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class SupplierPaymentDTO

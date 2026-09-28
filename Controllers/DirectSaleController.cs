@@ -30,6 +30,12 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] DirectSaleCreateDTO dto)
         {
+            var guard = StockActionGuard.CheckStockAction(
+                _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
+                perm => perm.StockDirectSale, "record a direct sale");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             if (dto.Items == null || dto.Items.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "At least one item is required" });
             if (string.IsNullOrWhiteSpace(dto.ClientName))
@@ -217,8 +223,16 @@ namespace VaccineAPI.Controllers
         // Doctor's confirmation on the Payment Reconciliation page that this
         // sale's payment has been received. Mirrors ScheduleController.ConfirmInvoice.
         [HttpPatch("by-bill/{saleBillNo}/confirm")]
-        public IActionResult Confirm(string saleBillNo, [FromQuery] long doctorId)
+        public IActionResult Confirm(
+            string saleBillNo,
+            [FromQuery] long doctorId,
+            [FromQuery] long? callerUserId = null,
+            [FromQuery] string? securityStamp = null)
         {
+            var doctor = _db.Doctors.Find(doctorId);
+            if (doctor == null || !CallerGuard.VerifyCaller(_db, callerUserId, securityStamp) || callerUserId!.Value != doctor.UserId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised to confirm this sale." });
+
             var rows = _db.DirectSales.Where(d => d.SaleBillNo == saleBillNo).ToList();
             if (rows.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "Sale not found." });
@@ -358,8 +372,19 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public async Task<IActionResult> Delete(
+            long id,
+            [FromQuery] long? paId = null,
+            [FromQuery] long? managerId = null,
+            [FromQuery] long? callerUserId = null,
+            [FromQuery] string? securityStamp = null)
         {
+            var guard = StockActionGuard.CheckStockAction(
+                _db, paId, managerId, callerUserId, securityStamp,
+                perm => perm.StockDirectSale, "reverse a direct sale");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             var sale = await _db.DirectSales.FirstOrDefaultAsync(s => s.Id == id);
             if (sale == null)
                 return Ok(new { IsSuccess = false, Message = "Sale not found" });

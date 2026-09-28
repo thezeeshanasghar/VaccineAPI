@@ -68,6 +68,13 @@ namespace VaccineAPI.Controllers
         {
             if (dto == null)
                 return Ok(new { IsSuccess = false, Message = "Invalid request" });
+
+            var guard = StockActionGuard.CheckStockAction(
+                _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
+                perm => perm.StockAdjust, "adjust stock");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             if (dto.BrandId <= 0)
                 return Ok(new { IsSuccess = false, Message = "Brand is required" });
             if (dto.Quantity <= 0)
@@ -180,10 +187,21 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        // DELETE /api/adjuststock/{id}
+        // DELETE /api/adjuststock/{id}?paId=&managerId=&callerUserId=&securityStamp=
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public async Task<IActionResult> Delete(
+            long id,
+            [FromQuery] long? paId = null,
+            [FromQuery] long? managerId = null,
+            [FromQuery] long? callerUserId = null,
+            [FromQuery] string? securityStamp = null)
         {
+            var guard = StockActionGuard.CheckStockAction(
+                _db, paId, managerId, callerUserId, securityStamp,
+                perm => perm.StockAdjust, "delete a stock adjustment");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             var row = await _db.AdjustStocks.FindAsync(id);
             if (row == null)
                 return Ok(new { IsSuccess = false, Message = "Adjustment not found" });

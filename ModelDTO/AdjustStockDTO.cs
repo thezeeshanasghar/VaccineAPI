@@ -22,6 +22,14 @@ namespace VaccineAPI.ModelDTO
         //           are marked reconciled against this purchase (see ReconciledByTransactionId).
         //   false = "skip" — purchase proceeds normally, backlog stays open.
         public bool? ClearUnbatchedBacklog { get; set; }
+
+        // Caller identity for StockActionGuard — null/null means a Doctor caller. See
+        // project_give_ungive_permission_enforcement for why CallerUserId/SecurityStamp are
+        // required whenever PaId/ManagerId is set (a client-supplied id alone proves nothing).
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class AdjustStockListDTO

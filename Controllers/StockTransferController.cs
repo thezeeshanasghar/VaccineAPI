@@ -30,6 +30,12 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] StockTransferCreateDTO dto)
         {
+            var guard = StockActionGuard.CheckStockAction(
+                _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
+                perm => perm.StockTransfer, "transfer stock");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             if (dto.Items == null || dto.Items.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "At least one item is required" });
             if (dto.FromClinicId == dto.ToClinicId)
@@ -214,8 +220,19 @@ namespace VaccineAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public async Task<IActionResult> Delete(
+            long id,
+            [FromQuery] long? paId = null,
+            [FromQuery] long? managerId = null,
+            [FromQuery] long? callerUserId = null,
+            [FromQuery] string? securityStamp = null)
         {
+            var guard = StockActionGuard.CheckStockAction(
+                _db, paId, managerId, callerUserId, securityStamp,
+                perm => perm.StockTransfer, "reverse a stock transfer");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             var transfer = await _db.StockTransfers.FirstOrDefaultAsync(t => t.Id == id);
             if (transfer == null)
                 return Ok(new { IsSuccess = false, Message = "Transfer not found" });

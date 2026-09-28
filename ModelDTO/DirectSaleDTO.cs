@@ -23,6 +23,13 @@ namespace VaccineAPI.ModelDTO
         public DateTime SaleDate { get; set; }
         public List<DirectSaleItemDTO> Items { get; set; } = new List<DirectSaleItemDTO>();
         public long? PaymentCollectorPaId { get; set; }
+
+        // Caller identity for StockActionGuard — the actor performing the sale (may differ
+        // from PaymentCollectorPaId above, which is who ends up owing the cash).
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class DirectSalePaymentModeDTO

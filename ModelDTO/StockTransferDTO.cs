@@ -21,6 +21,11 @@ namespace VaccineAPI.ModelDTO
         public string Reason { get; set; } = "";
         public DateTime TransferDate { get; set; }
         public List<StockTransferItemDTO> Items { get; set; } = new List<StockTransferItemDTO>();
+
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class StockTransferListDTO

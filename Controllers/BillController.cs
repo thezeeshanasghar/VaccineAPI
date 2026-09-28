@@ -139,6 +139,12 @@ namespace VaccineAPI.Controllers
             if (dto == null || dto.Lines == null || dto.Lines.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "At least one line item is required" });
 
+            var guard = StockActionGuard.CheckStockAction(
+                _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
+                perm => perm.StockPurchaseBills, "manage purchase bills");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             if (dto.Lines.Any(l => l.Quantity <= 0 || l.UnitPrice <= 0))
                 return Ok(new { IsSuccess = false, Message = "Each line item must have quantity and price greater than 0. Remove the row instead of zeroing it." });
 
@@ -220,6 +226,12 @@ namespace VaccineAPI.Controllers
         {
             if (dto == null || dto.Lines == null || dto.Lines.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "At least one line item is required" });
+
+            var guard = StockActionGuard.CheckStockAction(
+                _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
+                perm => perm.StockPurchaseBills, "manage purchase bills");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
 
             if (dto.Lines.Any(l => l.Quantity <= 0 || l.UnitPrice <= 0))
                 return Ok(new { IsSuccess = false, Message = "Each line item must have quantity and price greater than 0. Remove the row instead of zeroing it." });
@@ -308,6 +320,12 @@ namespace VaccineAPI.Controllers
         [HttpPost("{id}/payment")]
         public async Task<IActionResult> AddPayment(int id, [FromBody] SupplierPaymentCreateDTO dto)
         {
+            var guard = StockActionGuard.CheckStockAction(
+                _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
+                perm => perm.StockPurchaseBills, "manage purchase bills");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             var bill = await _db.Bills
                 .Include(b => b.Stocks)
                 .FirstOrDefaultAsync(b => b.Id == id);
@@ -503,10 +521,22 @@ namespace VaccineAPI.Controllers
             }
         }
 
-        // DELETE /api/bill/{id}/reverse
+        // DELETE /api/bill/{id}/reverse?force=&paId=&managerId=&callerUserId=&securityStamp=
         [HttpDelete("{id}/reverse")]
-        public async Task<IActionResult> Reverse(int id, [FromQuery] bool force = false)
+        public async Task<IActionResult> Reverse(
+            int id,
+            [FromQuery] bool force = false,
+            [FromQuery] long? paId = null,
+            [FromQuery] long? managerId = null,
+            [FromQuery] long? callerUserId = null,
+            [FromQuery] string? securityStamp = null)
         {
+            var guard = StockActionGuard.CheckStockAction(
+                _db, paId, managerId, callerUserId, securityStamp,
+                perm => perm.StockPurchaseBills, "reverse purchase bills");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
             var bill = await _db.Bills
                 .Include(b => b.Stocks)
                 .FirstOrDefaultAsync(b => b.Id == id);

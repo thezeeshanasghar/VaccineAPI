@@ -64,6 +64,57 @@ namespace VaccineAPI.Controllers
             return user != null && user.SecurityStamp == securityStamp;
         }
 
+        // Give/ungive permission gate for PA/Manager actors, single + bulk. A Doctor actor
+        // (no PaId/ManagerId on the DTO) is never checked here — doctors have no permission
+        // flags to check against. For a non-doctor actor this both (a) verifies the caller's
+        // identity via VerifyCaller/SecurityStamp — a client-supplied PaId/ManagerId with no
+        // matching session proves nothing on its own — and (b) checks the specific
+        // PaPermission/ManagerPermission flag for the transition being attempted. Returns null
+        // when the action is allowed; returns the exact error Response to hand back otherwise.
+        // See feedback/project_no_api_auth_middleware and the 2026-09-28 stock audit — this was
+        // the single most severe finding: GiveVaccine/UngiveVaccine/BulkGiveVaccines/
+        // BulkUngiveVaccines were written by the settings screen and read nowhere else.
+        private Response<ScheduleDTO>? CheckGiveUngivePermission(
+            long? paId, long? managerId, long? callerUserId, string? securityStamp,
+            bool isGive, bool isBulk)
+        {
+            if (!paId.HasValue && !managerId.HasValue)
+                return null; // doctor actor — no flags apply
+
+            if (!VerifyCaller(callerUserId, securityStamp))
+                return new Response<ScheduleDTO>(false, "Session could not be verified. Please sign in again.", null);
+
+            if (paId.HasValue)
+            {
+                var user = _db.Users.Find(callerUserId!.Value);
+                var pa = _db.PersonalAssistant.Find(paId.Value);
+                if (pa == null || user == null || pa.UserId != user.Id)
+                    return new Response<ScheduleDTO>(false, "Caller does not match the assigned PA.", null);
+
+                var perm = _db.PaPermissions.FirstOrDefault(p => p.PaId == paId.Value);
+                bool allowed = isGive
+                    ? (isBulk ? perm?.BulkGiveVaccines : perm?.GiveVaccine) ?? false
+                    : (isBulk ? perm?.BulkUngiveVaccines : perm?.UngiveVaccine) ?? false;
+                if (!allowed)
+                    return new Response<ScheduleDTO>(false,
+                        $"You do not have permission to {(isGive ? "give" : "ungive")} vaccines. Ask the doctor to enable this.", null);
+            }
+            else
+            {
+                var user = _db.Users.Find(callerUserId!.Value);
+                var manager = _db.Manager.Find(managerId!.Value);
+                if (manager == null || user == null || manager.UserId != user.Id)
+                    return new Response<ScheduleDTO>(false, "Caller does not match the assigned Manager.", null);
+
+                var perm = _db.ManagerPermissions.FirstOrDefault(p => p.ManagerId == managerId.Value);
+                if (!((perm?.CanGiveVaccine) ?? false))
+                    return new Response<ScheduleDTO>(false,
+                        $"You do not have permission to {(isGive ? "give" : "ungive")} vaccines. Ask the doctor to enable this.", null);
+            }
+
+            return null;
+        }
+
         [HttpGet]
         public async Task<Response<List<ScheduleDTO>>> GetAll()
         {
@@ -192,6 +243,21 @@ namespace VaccineAPI.Controllers
                 if (dbSchedule == null)
                 {
                     return new Response<ScheduleDTO>(false, "Schedule not found", null);
+                }
+
+                // Server-side give/ungive permission gate — must run before any other logic
+                // touches inventory or IsDone. Only fires for a PA/Manager actor (a Doctor has
+                // no permission flags to check). scheduleDTO.IsDone==true covers both a fresh
+                // give (false->true) and an edit of an already-given dose (true->true, which can
+                // still change the recorded brand/date) — both require GiveVaccine/CanGiveVaccine.
+                if (scheduleDTO.IsDone != dbSchedule.IsDone || scheduleDTO.IsDone == true)
+                {
+                    var permError = CheckGiveUngivePermission(
+                        scheduleDTO.PaId, scheduleDTO.ManagerId,
+                        scheduleDTO.CallerUserId, scheduleDTO.SecurityStamp,
+                        isGive: scheduleDTO.IsDone == true, isBulk: false);
+                    if (permError != null)
+                        return permError;
                 }
 
                 // CDC 4-day grace outcome for this give (set in the MinGap check below, carried
@@ -1968,6 +2034,16 @@ namespace VaccineAPI.Controllers
             bool bulkIsNonDoctorActor = scheduleDTO.PaId.HasValue || scheduleDTO.ManagerId.HasValue;
             if (bulkIsNonDoctorActor)
             {
+                // Server-side bulk give/ungive permission gate — BulkGiveVaccines/
+                // BulkUngiveVaccines (PA) or CanGiveVaccine (Manager). Same identity
+                // verification as the single-give path; see CheckGiveUngivePermission.
+                var bulkPermError = CheckGiveUngivePermission(
+                    scheduleDTO.PaId, scheduleDTO.ManagerId,
+                    scheduleDTO.CallerUserId, scheduleDTO.SecurityStamp,
+                    isGive: scheduleDTO.IsDone == true, isBulk: true);
+                if (bulkPermError != null)
+                    return bulkPermError;
+
                 var today = DateTime.UtcNow.AddHours(5).Date;
                 foreach (var checkSchedule in dbChildSchedules)
                 {

@@ -76,7 +76,7 @@ namespace VaccineAPI.Controllers
         // BulkUngiveVaccines were written by the settings screen and read nowhere else.
         private Response<ScheduleDTO>? CheckGiveUngivePermission(
             long? paId, long? managerId, long? callerUserId, string? securityStamp,
-            bool isGive, bool isBulk)
+            bool isGive, bool isBulk, long childId)
         {
             if (!paId.HasValue && !managerId.HasValue)
                 return null; // doctor actor — no flags apply
@@ -110,6 +110,15 @@ namespace VaccineAPI.Controllers
                 if (!((perm?.CanGiveVaccine) ?? false))
                     return new Response<ScheduleDTO>(false,
                         $"You do not have permission to {(isGive ? "give" : "ungive")} vaccines. Ask the doctor to enable this.", null);
+
+                // A Manager must never end up as the responsible party for cash reconciliation on
+                // a dose — that always has to land on an assigned PA (GetActivePaIdForChild is the
+                // same lookup PaymentCollectorPaId itself resolves through). Without an active
+                // assignment there is no PA to attribute the payment to, so block the give/ungive
+                // outright rather than let it proceed and leave the payment unassigned.
+                if (!GetActivePaIdForChild(childId).HasValue)
+                    return new Response<ScheduleDTO>(false,
+                        "A PA must be assigned to this patient before a vaccine can be given or undone by a Manager.", null);
             }
 
             return null;
@@ -255,7 +264,7 @@ namespace VaccineAPI.Controllers
                     var permError = CheckGiveUngivePermission(
                         scheduleDTO.PaId, scheduleDTO.ManagerId,
                         scheduleDTO.CallerUserId, scheduleDTO.SecurityStamp,
-                        isGive: scheduleDTO.IsDone == true, isBulk: false);
+                        isGive: scheduleDTO.IsDone == true, isBulk: false, childId: dbSchedule.ChildId);
                     if (permError != null)
                         return permError;
                 }
@@ -2040,7 +2049,7 @@ namespace VaccineAPI.Controllers
                 var bulkPermError = CheckGiveUngivePermission(
                     scheduleDTO.PaId, scheduleDTO.ManagerId,
                     scheduleDTO.CallerUserId, scheduleDTO.SecurityStamp,
-                    isGive: scheduleDTO.IsDone == true, isBulk: true);
+                    isGive: scheduleDTO.IsDone == true, isBulk: true, childId: dbSchedule.ChildId);
                 if (bulkPermError != null)
                     return bulkPermError;
 

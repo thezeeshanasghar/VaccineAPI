@@ -104,6 +104,12 @@ namespace VaccineAPI.Services
             {
                 existingStock.Quantity += quantity;
                 existingStock.OriginalQuantity += quantity;
+                // v2: reopen if a bill edit revives a row ReverseBillLine had just closed (see
+                // Update() below) — same fix as AdjustIncrease's identical reopen guard. Without
+                // this, editing a bill's price/quantity on an unchanged brand+batch+expiry line
+                // silently re-inflated a CLOSED row: BrandAmount.Count looked right, but FEFO
+                // (which filters !IsClosed) could never dispense from it again.
+                if (existingStock.IsClosed) existingStock.IsClosed = false;
                 stock = existingStock;
             }
             else

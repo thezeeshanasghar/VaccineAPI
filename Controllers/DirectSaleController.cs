@@ -72,7 +72,7 @@ namespace VaccineAPI.Controllers
                 {
                     var sourceBa = await _db.BrandAmounts
                         .FirstOrDefaultAsync(b => b.BrandId == item.BrandId && b.DoctorId == dto.DoctorId && b.ClinicId == dto.ClinicId);
-                    if (sourceBa == null || sourceBa.Count == 0)
+                    if (sourceBa == null || sourceBa.Quantity == 0)
                         return Ok(new { IsSuccess = false, Message = $"No stock available for brand ID {item.BrandId}" });
 
                     var sourceStock = await _db.Stocks

@@ -6,7 +6,7 @@ namespace VaccineAPI.ModelDTO
         public long BrandId { get; set; }
         public string BrandName { get; set; } = "";
         public string VaccineName { get; set; } = "";
-        public decimal Amount { get; set; }
+        public decimal SalePrice { get; set; }
         public long? PaId { get; set; }
     }
 }

@@ -213,9 +213,9 @@ namespace VaccineAPI.Controllers
                 //         foreach (var brand in brands)
                 //         {
                 //             BrandAmount ba = new BrandAmount();
-                //             ba.Amount = 0;
+                //             ba.SalePrice = 0;
                 //             ba.DoctorId = doctorDB.Id;
-                //             ba.Count = 0;
+                //             ba.Quantity = 0;
                 //             ba.BrandId = brand.Id;
                 //             _db.BrandAmounts.Add(ba);
                 //             _db.SaveChanges();

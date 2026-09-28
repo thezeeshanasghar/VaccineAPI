@@ -82,8 +82,8 @@ namespace VaccineAPI.Controllers
                         ClinicId = clinic.Id, // Use the clinic's ID
                         DoctorId = doctor.Id, // Use the doctor's ID
                         BrandId = dbVaccineBrand.Id, // Use the newly created brand's ID
-                        Amount = 0,
-                        Count = 0,
+                        SalePrice = 0,
+                        Quantity = 0,
                     };
                     brandAmounts.Add(newBrandAmount);
                 }

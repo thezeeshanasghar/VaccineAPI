@@ -125,7 +125,7 @@ namespace VaccineAPI.Controllers
                                           && x.DoctorId == clinic.DoctorId
                                           && x.ClinicId == clinicId.Value);
                     if (brandAmt != null)
-                        return Ok(new Response<decimal>(true, "Brand price found.", brandAmt.Amount));
+                        return Ok(new Response<decimal>(true, "Brand price found.", brandAmt.SalePrice));
                 }
             }
 
@@ -2936,8 +2936,8 @@ namespace VaccineAPI.Controllers
                             _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId).FirstOrDefault();
                         if (brandAmount != null)
                         {
-                            amount = amount + Convert.ToInt32(brandAmount.Amount);
-                            table.AddCell(CreateCell(brandAmount.Amount.ToString(), "", 1, "right", "invoiceRecords"));
+                            amount = amount + Convert.ToInt32(brandAmount.SalePrice);
+                            table.AddCell(CreateCell(brandAmount.SalePrice.ToString(), "", 1, "right", "invoiceRecords"));
                         }
                         else
                         {
@@ -3357,7 +3357,7 @@ namespace VaccineAPI.Controllers
 
                         if (brandAmount != null && isAmountEmptyOrZero)
                         {
-                            existingInvoice.Amount = brandAmount.Amount != 0 ? brandAmount.Amount : 0;
+                            existingInvoice.Amount = brandAmount.SalePrice != 0 ? brandAmount.SalePrice : 0;
                         }
                         else if (schedule.Amount != null && schedule.Amount != 0)
                         {
@@ -3381,9 +3381,9 @@ namespace VaccineAPI.Controllers
                             _db.BrandAmounts.Where(x => x.BrandId == schedule.BrandId && x.DoctorId == DoctorId && x.Clinic.IsOnline == true).FirstOrDefault();
                         if (brandAmount != null && schedule.Amount == null)
                         {
-                            amount = amount + Convert.ToInt32(brandAmount.Amount);
-                            vaccinetable.AddCell(CreateCell(brandAmount.Amount.ToString(), "", 1, "right", "invoiceRecords"));
-                            vaccinetable.AddCell(CreateCell(brandAmount.Amount.ToString(), "", 1, "right", "invoiceRecords"));
+                            amount = amount + Convert.ToInt32(brandAmount.SalePrice);
+                            vaccinetable.AddCell(CreateCell(brandAmount.SalePrice.ToString(), "", 1, "right", "invoiceRecords"));
+                            vaccinetable.AddCell(CreateCell(brandAmount.SalePrice.ToString(), "", 1, "right", "invoiceRecords"));
                         }
                         else if (brandAmount != null && schedule.Amount != null)
                         {

@@ -8,8 +8,13 @@ namespace VaccineAPI.Models
     public class BrandAmount
     {
         public long Id { get; set; }
-        public decimal Amount { get; set; }
-        public int Count { get; set; }
+        // Sale price per unit (what a patient is charged for one dose of this brand).
+        public decimal SalePrice { get; set; }
+        // Live quantity on hand for this brand at this clinic — the running counter every
+        // give/ungive/purchase/adjust/transfer/sale keeps in lockstep with the physical Stock
+        // rows. See InventoryTransactionService — "the only code allowed to mutate Stock.Quantity/
+        // OriginalQuantity or BrandAmount.Quantity."
+        public int Quantity { get; set; }
 
         // v2: set true when a give drove stock to/below 0 (a physically-given dose is always
         // recordable — §6.3). Signals the owner to physically recount and post an AdjustIncrease.
@@ -21,7 +26,6 @@ namespace VaccineAPI.Models
         public int RowVersion { get; set; }
 
         // public string SupName { get; set; } // Supplier Name
-        public decimal PurchasedAmt { get; set; } // Purchased Vaccine Amount
         // public bool IsPaid { get; set; } // Payment Status
 
         public long BrandId { get; set; }

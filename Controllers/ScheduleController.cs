@@ -1908,7 +1908,7 @@ namespace VaccineAPI.Controllers
                         .Where(x => x.BrandId == schedule.BrandId && x.DoctorId == doctorId && x.Clinic.IsOnline == true)
                         .FirstOrDefault();
                     if (brandAmount != null)
-                        scheduleDTO.Amount = brandAmount?.Amount;
+                        scheduleDTO.Amount = brandAmount?.SalePrice;
                     else
                         scheduleDTO.Amount = schedule.Amount?? 0;
                     scheduleDTO.Date = schedule.Date;
@@ -4358,8 +4358,12 @@ namespace VaccineAPI.Controllers
                     {
                         var brandAmount = schedule.Brand?.BrandAmounts?
                             .FirstOrDefault(ba => ba.DoctorId == doctorId);
-                        decimal purchaseAmount = brandAmount?.PurchasedAmt ?? 0;
-                        decimal saleAmount = brandAmount?.Amount ?? 0;
+                        // BrandAmount.PurchasedAmt was removed — it was always written as 0, so
+                        // this was always 0 in practice; preserved as a literal. This report's
+                        // purchase/profit math has been silently wrong since PurchasedAmt was
+                        // never populated — fixing that is a separate, later task.
+                        decimal purchaseAmount = 0;
+                        decimal saleAmount = brandAmount?.SalePrice ?? 0;
                         decimal profit = saleAmount - purchaseAmount;
                         decimal consultation = 0;
 

@@ -72,9 +72,9 @@ namespace VaccineAPI.Controllers
             {
                 BrandAmount ba = new BrandAmount
                 {
-                    Amount = 0,
+                    SalePrice = 0,
                     DoctorId = clinicDTO.DoctorId,
-                    Count = 0,
+                    Quantity = 0,
                     BrandId = brand.Id,
                     ClinicId = dbClinic.Id,
                 };

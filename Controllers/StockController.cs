@@ -91,7 +91,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/stock/integrity?clinicId=X
-        // v2 §7 — drift audit. The counter (BrandAmount.Count) is a transactional cache; the
+        // v2 §7 — drift audit. The counter (BrandAmount.Quantity) is a transactional cache; the
         // ledger (Σ InventoryTransaction.QuantityDelta on/after StockPeriodStart) is truth. This
         // reports every brand where the two disagree, so drift is caught the moment it appears.
         // Read-only; run it anytime, especially right after the reset to confirm a clean slate.
@@ -107,7 +107,7 @@ namespace VaccineAPI.Controllers
             var counters = await _db.BrandAmounts
                 .Include(b => b.Brand)
                 .Where(b => b.ClinicId == clinicId)
-                .Select(b => new { b.BrandId, BrandName = b.Brand.Name, b.Count, b.NeedsReconcile })
+                .Select(b => new { b.BrandId, BrandName = b.Brand.Name, b.Quantity, b.NeedsReconcile })
                 .ToListAsync();
 
             // Ledger balance per brand for this clinic, floored at the reset.
@@ -121,15 +121,15 @@ namespace VaccineAPI.Controllers
             foreach (var c in counters)
             {
                 int ledgerBal = ledger.TryGetValue(c.BrandId, out var v) ? v : 0;
-                if (ledgerBal != c.Count || c.NeedsReconcile)
+                if (ledgerBal != c.Quantity || c.NeedsReconcile)
                 {
                     mismatches.Add(new
                     {
                         c.BrandId,
                         c.BrandName,
-                        CounterCount = c.Count,
+                        CounterCount = c.Quantity,
                         LedgerBalance = ledgerBal,
-                        Drift = c.Count - ledgerBal,
+                        Drift = c.Quantity - ledgerBal,
                         c.NeedsReconcile
                     });
                 }
@@ -147,7 +147,7 @@ namespace VaccineAPI.Controllers
         }
 
         // POST /api/stock/reconcile?clinicId=X[&brandId=Y]
-        // v2 §7 — repair. Rewrites BrandAmount.Count from the ledger (Σ QuantityDelta floored at
+        // v2 §7 — repair. Rewrites BrandAmount.Quantity from the ledger (Σ QuantityDelta floored at
         // StockPeriodStart) and clears NeedsReconcile. This is the ONLY sanctioned way to overwrite
         // a counter: it makes the cache match truth, it never invents stock. Scope to one brand via
         // brandId, or omit to reconcile the whole clinic. Doctor-triggered maintenance.
@@ -180,9 +180,9 @@ namespace VaccineAPI.Controllers
                 // v2: floor at zero like every other write path (InventoryTransactionService.cs
                 // lines 169/308/322) — a raw negative ledger sum must never be written verbatim.
                 int flooredBal = Math.Max(0, ledgerBal);
-                if (c.Count != flooredBal || c.NeedsReconcile)
+                if (c.Quantity != flooredBal || c.NeedsReconcile)
                 {
-                    c.Count = flooredBal;
+                    c.Quantity = flooredBal;
                     // Only clear the flag once the floored value actually matches the ledger —
                     // if flooring masked real drift (ledgerBal was negative), leave NeedsReconcile
                     // true so the purchase-time backlog prompt still fires for this brand.
@@ -275,7 +275,7 @@ namespace VaccineAPI.Controllers
                 .Select(g =>
                 {
                     var ba = brandAmounts.FirstOrDefault(b => b.BrandId == g.Key);
-                    decimal price = ba != null ? ba.Amount : 0;
+                    decimal price = ba != null ? ba.SalePrice : 0;
                     return new
                     {
                         BrandName = g.First().Brand != null ? g.First().Brand.Name : "",
@@ -603,7 +603,7 @@ namespace VaccineAPI.Controllers
                     {
                         bool hasAmount = s.Amount.HasValue && s.Amount.Value != 0;
                         var ba = brandAmounts.FirstOrDefault(b => s.BrandId.HasValue && b.BrandId == s.BrandId.Value);
-                        decimal price = hasAmount ? s.Amount.Value : (ba != null ? ba.Amount : 0);
+                        decimal price = hasAmount ? s.Amount.Value : (ba != null ? ba.SalePrice : 0);
                         totalItemsPrice += price;
                     }
                 }
@@ -670,7 +670,7 @@ namespace VaccineAPI.Controllers
                     {
                         bool hasAmount = s.Amount.HasValue && s.Amount.Value != 0;
                         var ba = brandAmounts.FirstOrDefault(b => s.BrandId.HasValue && b.BrandId == s.BrandId.Value);
-                        decimal price = hasAmount ? s.Amount.Value : (ba != null ? ba.Amount : 0);
+                        decimal price = hasAmount ? s.Amount.Value : (ba != null ? ba.SalePrice : 0);
                         patientTotal += price;
                         string brandName = s.Brand != null ? s.Brand.Name : "";
 
@@ -1635,7 +1635,7 @@ namespace VaccineAPI.Controllers
             {
                 bool hasAmount = s.Amount.HasValue && s.Amount.Value != 0;
                 var ba = brandAmounts.FirstOrDefault(b => s.BrandId.HasValue && b.BrandId == s.BrandId.Value);
-                totalItemsPrice += hasAmount ? s.Amount!.Value : (ba != null ? ba.Amount : 0);
+                totalItemsPrice += hasAmount ? s.Amount!.Value : (ba != null ? ba.SalePrice : 0);
             }
         }
         foreach (var ds in directSales)

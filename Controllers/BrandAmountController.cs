@@ -35,9 +35,8 @@ namespace VaccineAPI.Controllers
                     BrandId = b.Id,
                     DoctorId = doctorId,
                     ClinicId = clinicId,
-                    Amount = 0,
-                    Count = 0,
-                    PurchasedAmt = 0
+                    SalePrice = 0,
+                    Quantity = 0
                 })
                 .ToList();
 
@@ -62,7 +61,7 @@ namespace VaccineAPI.Controllers
                         BrandId = ba.BrandId,
                         BrandName = b.Name,
                         VaccineName = "",
-                        Amount = ba.Amount
+                        SalePrice = ba.SalePrice
                     })
                 .OrderBy(d => d.BrandName)
                 .ToList();
@@ -83,7 +82,7 @@ namespace VaccineAPI.Controllers
                 var ba = await _db.BrandAmounts.FindAsync(dto.Id);
                 if (ba != null)
                 {
-                    ba.Amount = dto.Amount;
+                    ba.SalePrice = dto.SalePrice;
                 }
             }
             await _db.SaveChangesAsync();

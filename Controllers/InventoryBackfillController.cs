@@ -80,9 +80,9 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = report });
         }
 
-        // Corrects BrandAmount.Count for every row that drifts from the ledger sum.
+        // Corrects BrandAmount.Quantity for every row that drifts from the ledger sum.
         // Safe to call any time — only writes rows that are actually wrong, and only to
-        // the Count field. Does not touch Stock.Quantity, InventoryTransactions, or any
+        // the Quantity field. Does not touch Stock.Quantity, InventoryTransactions, or any
         // other table. Call POST /verify after to confirm drift is gone.
         [HttpPost("correct-drift")]
         public async Task<IActionResult> CorrectDrift()
@@ -101,9 +101,9 @@ namespace VaccineAPI.Controllers
                         x.BrandId == drift.BrandId && x.DoctorId == drift.DoctorId && x.ClinicId == drift.ClinicId);
                     if (ba == null) continue;
                     // v2: floor at zero, same as StockController.Reconcile — a raw negative
-                    // ledger sum must never be written verbatim to Count.
+                    // ledger sum must never be written verbatim to Quantity.
                     int flooredCount = Math.Max(0, drift.LedgerCount);
-                    ba.Count = flooredCount;
+                    ba.Quantity = flooredCount;
                     ba.NeedsReconcile = flooredCount == drift.LedgerCount ? false : true;
                     corrected++;
                 }
@@ -272,7 +272,7 @@ namespace VaccineAPI.Controllers
         // BackfillPurchases()'s consumedGap rows above where the Stock row itself still exists.
         //
         // Per-clinic cutoff: this app went through a full stock-system reset (deleted/recreated
-        // Bills+Stocks, zeroed BrandAmount.Count) on a date that varies per clinic depending on
+        // Bills+Stocks, zeroed BrandAmount.Quantity) on a date that varies per clinic depending on
         // when each doctor's data was rebuilt — Schedules (given-dose history) was never
         // truncated in that reset. Backfilling Administer rows for doses given BEFORE a clinic's
         // earliest surviving Bill would subtract historical consumption that has no matching

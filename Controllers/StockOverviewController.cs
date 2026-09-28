@@ -77,7 +77,7 @@ namespace VaccineAPI.Controllers
                         .ThenBy(b => b.Expiry)
                         .ToList();
 
-                    // v2: TotalCount (BrandAmount.Count) and the batch table below it come from
+                    // v2: TotalCount (BrandAmount.Quantity) and the batch table below it come from
                     // two independent sources with no shared origin — surface a disagreement
                     // instead of letting the page silently print two different numbers.
                     var batchSum = batches.Sum(b => b.Quantity);
@@ -86,10 +86,10 @@ namespace VaccineAPI.Controllers
                         BrandId = ba.BrandId,
                         BrandName = ba.Brand != null ? ba.Brand.Name : "",
                         VaccineName = vb != null && vb.Vaccine != null ? vb.Vaccine.Name : "",
-                        TotalCount = ba.Count,
-                        SalePrice = ba.Amount,
+                        TotalCount = ba.Quantity,
+                        SalePrice = ba.SalePrice,
                         Batches = batches,
-                        IsOutOfSync = ba.Count != batchSum
+                        IsOutOfSync = ba.Quantity != batchSum
                     };
                 })
                 .Where(x => x.TotalCount > 0 || x.Batches.Count > 0)
@@ -173,9 +173,9 @@ namespace VaccineAPI.Controllers
                         return new
                         {
                             BrandName  = ba.Brand != null ? ba.Brand.Name : "",
-                            TotalCount = ba.Count,
+                            TotalCount = ba.Quantity,
                             Batches    = batches,
-                            IsOutOfSync = ba.Count != batchSum
+                            IsOutOfSync = ba.Quantity != batchSum
                         };
                     })
                     .Where(x => x.TotalCount > 0 || x.Batches.Count > 0)

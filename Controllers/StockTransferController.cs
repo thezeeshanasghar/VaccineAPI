@@ -63,7 +63,7 @@ namespace VaccineAPI.Controllers
                 {
                     var sourceBa = await _db.BrandAmounts
                         .FirstOrDefaultAsync(b => b.BrandId == item.BrandId && b.DoctorId == dto.DoctorId && b.ClinicId == dto.FromClinicId);
-                    if (sourceBa == null || sourceBa.Count == 0)
+                    if (sourceBa == null || sourceBa.Quantity == 0)
                         return Ok(new { IsSuccess = false, Message = $"No stock available for brand ID {item.BrandId} at the source clinic" });
 
                     var sourceStock = await _db.Stocks
@@ -148,7 +148,7 @@ namespace VaccineAPI.Controllers
                     await _db.SaveChangesAsync();
 
                     await _inventory.TransferOut(dto.DoctorId, dto.FromClinicId, sourceStock, sourceBa, item.Quantity, transferRow.Id, dto.TransferDate);
-                    await _inventory.TransferIn(dto.DoctorId, dto.ToClinicId, item.BrandId, bill.Id, item.Quantity, item.UnitPrice, item.BatchLot, item.ExpiryDate, transferRow.Id, sourceBa.Amount, dto.TransferDate);
+                    await _inventory.TransferIn(dto.DoctorId, dto.ToClinicId, item.BrandId, bill.Id, item.Quantity, item.UnitPrice, item.BatchLot, item.ExpiryDate, transferRow.Id, sourceBa.SalePrice, dto.TransferDate);
                 }
 
                 await _db.SaveChangesAsync();

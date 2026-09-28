@@ -122,8 +122,8 @@ namespace VaccineAPI.Controllers
                 var brandAmount = new BrandAmount
                 {
                     BrandId = brand.Id,
-                    Count = 0,
-                    Amount = 0,
+                    Quantity = 0,
+                    SalePrice = 0,
                     DoctorId = DoctorSchedueDTO.DoctorId,
                     ClinicId = clinic.Id,
                 };

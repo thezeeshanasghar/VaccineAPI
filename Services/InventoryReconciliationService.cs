@@ -33,7 +33,7 @@ namespace VaccineAPI.Services
         public bool HasDrift => StockDrift.Count > 0 || BrandAmountDrift.Count > 0;
     }
 
-    // Read-only safety net: recomputes what Stock.Quantity / BrandAmount.Count *should* be by
+    // Read-only safety net: recomputes what Stock.Quantity / BrandAmount.Quantity *should* be by
     // summing InventoryTransaction rows, and flags anywhere that disagrees with the live
     // cached value. Never writes anything — drift is reported, not auto-corrected, since the
     // live value is what every doctor-facing screen and invoice is already built on.
@@ -80,14 +80,14 @@ namespace VaccineAPI.Services
             foreach (var ba in allBrandAmounts)
             {
                 int ledgerCount = baSumLookup.TryGetValue((ba.BrandId, ba.DoctorId, ba.ClinicId), out var sum) ? sum : 0;
-                if (ledgerCount != ba.Count)
+                if (ledgerCount != ba.Quantity)
                 {
                     report.BrandAmountDrift.Add(new BrandAmountDriftRow
                     {
                         BrandId = ba.BrandId,
                         DoctorId = ba.DoctorId,
                         ClinicId = ba.ClinicId,
-                        LiveCount = ba.Count,
+                        LiveCount = ba.Quantity,
                         LedgerCount = ledgerCount
                     });
                 }

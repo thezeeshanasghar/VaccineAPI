@@ -2592,7 +2592,7 @@ namespace VaccineAPI.Controllers
                             Title = title,
                             Message = message,
                             IsRead = false,
-                            CreatedAt = DateTime.Now
+                            CreatedAt = DateTime.UtcNow
                         });
                         _db.SaveChanges();
                     }

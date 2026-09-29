@@ -118,7 +118,7 @@ namespace VaccineAPI.Controllers
                     PreferredDate = ParseDate(bookingDTO.PreferredDate),
                     Comments = bookingDTO.Comments,
                     DoctorComment = "",
-                    CreatedAt = DateTime.Now
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 _db.Bookings.Add(booking);
@@ -169,7 +169,7 @@ namespace VaccineAPI.Controllers
                         Title = title,
                         Message = message,
                         IsRead = false,
-                        CreatedAt = DateTime.Now
+                        CreatedAt = DateTime.UtcNow
                     });
                     await _db.SaveChangesAsync();
 
@@ -359,7 +359,7 @@ namespace VaccineAPI.Controllers
                         Title = title,
                         Message = message,
                         IsRead = false,
-                        CreatedAt = DateTime.Now
+                        CreatedAt = DateTime.UtcNow
                     });
                     await _db.SaveChangesAsync();
 
@@ -423,7 +423,7 @@ namespace VaccineAPI.Controllers
                     Title = notificationTitle,
                     Message = messageBuilder(booking),
                     IsRead = false,
-                    CreatedAt = DateTime.Now
+                    CreatedAt = DateTime.UtcNow
                 });
                 await _db.SaveChangesAsync();
 

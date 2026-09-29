@@ -805,7 +805,7 @@ namespace VaccineAPI.Controllers
                 PaPhoneWhatsApp = ToWhatsAppNumber(paPhone, paCountryCode),
                 PaProfileImage  = assignedPa.ProfileImage,   // filename; VacParent prefixes RESOURCE_URL
                 IsRead          = false,
-                CreatedAt       = DateTime.Now
+                CreatedAt       = DateTime.UtcNow
             });
             await _db.SaveChangesAsync();
         }

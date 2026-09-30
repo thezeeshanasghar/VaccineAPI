@@ -4382,6 +4382,79 @@ namespace VaccineAPI.Controllers
            }
         }
 
+        // Public read-only record for the vaccinepk.com/verify page (Doctor 1 QR flow).
+        // Accepts whatever MR format is printed on a document: raw child id (schedule),
+        // "YYYY-id"/"YY-id" (travel) or "yy"+id (PID card).
+        [HttpGet("VerifyRecord")]
+        public IActionResult VerifyRecord([FromQuery] string mr)
+        {
+            var compact = new string((mr ?? "").Where(c => !char.IsWhiteSpace(c)).ToArray());
+            var candidates = new List<long>();
+            var dashed = System.Text.RegularExpressions.Regex.Match(compact, @"^(?:\d{2}|\d{4})[-_](\d{1,10})$");
+            if (dashed.Success)
+            {
+                candidates.Add(long.Parse(dashed.Groups[1].Value));
+            }
+            else if (compact.Length > 0 && compact.Length <= 12 && compact.All(char.IsDigit))
+            {
+                candidates.Add(long.Parse(compact));
+                // PID card MR is the 2-digit year followed by the child id.
+                if (compact.Length > 3 && int.TryParse(compact.Substring(0, 2), out var yy)
+                    && yy >= 20 && yy <= DateTime.Now.Year % 100)
+                {
+                    candidates.Add(long.Parse(compact.Substring(2)));
+                }
+            }
+            if (candidates.Count == 0)
+                return NotFound(new { message = "Please enter a valid MR No." });
+
+            Child child = null;
+            foreach (var id in candidates)
+            {
+                child = _db.Childs
+                    .Include(c => c.Clinic).ThenInclude(cl => cl.Doctor)
+                    .FirstOrDefault(c => c.Id == id);
+                if (child != null) break;
+            }
+            if (child == null)
+                return NotFound(new { message = "No record found for this MR No." });
+
+            var given = _db.Schedules
+                .Include(s => s.Brand)
+                .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
+                .Where(s => s.ChildId == child.Id && s.IsDone && s.GivenDate != null
+                            && s.IsDisease != true && s.IsSkip != true)
+                .OrderBy(s => s.GivenDate).ThenBy(s => s.Id)
+                .ToList();
+
+            var doctor = child.Clinic?.Doctor;
+            var doctorLine = doctor == null ? "" :
+                string.IsNullOrWhiteSpace(doctor.AdditionalInfo)
+                    ? doctor.DisplayName
+                    : $"{doctor.DisplayName} - {doctor.AdditionalInfo}";
+
+            return Ok(new
+            {
+                Status = given.Count > 0 ? "Vaccinated" : "Not vaccinated",
+                MrNo = child.Id,
+                Name = child.Name,
+                FatherName = child.FatherName,
+                Passport = child.CNIC,
+                City = child.City,
+                Vaccines = given.Select(s => new
+                {
+                    Vaccine = s.Dose?.Vaccine?.Name ?? "",
+                    Brand = s.Brand?.Name ?? "",
+                    Manufacturer = !string.IsNullOrWhiteSpace(s.Manufacturer) ? s.Manufacturer : (s.Brand?.Manufacturer ?? ""),
+                    BatchLot = s.Lot ?? "",
+                    DateGiven = s.GivenDate.Value.ToString("dd MMM yyyy"),
+                    Validity = s.Validity != null ? GetYearOrMonthFromDays((int)s.Validity) : ""
+                }).ToList(),
+                Doctor = doctorLine,
+                Center = child.Clinic == null ? "" : $"{child.Clinic.Name} ({child.Clinic.RegNo})"
+            });
+        }
+
         [HttpGet("PIDVerify/{id}")]
         public IActionResult GeneratePIDPdf(int id)
         {

@@ -4455,6 +4455,85 @@ namespace VaccineAPI.Controllers
             });
         }
 
+        // Public read-only invoice summary for the vaccinepk.com/verify invoice QR flow.
+        [HttpGet("VerifyInvoice")]
+        public IActionResult VerifyInvoice([FromQuery] string inv)
+        {
+            var invoiceNo = new string((inv ?? "").Where(c => !char.IsWhiteSpace(c)).ToArray());
+            if (invoiceNo.Length == 0 || invoiceNo.Length > 40)
+                return NotFound(new { message = "Please enter a valid Invoice No." });
+
+            var rows = _db.Invoices.Where(i => i.InvoiceId == invoiceNo).ToList();
+            if (rows.Count == 0)
+                return NotFound(new { message = "No invoice found for this Invoice No." });
+
+            var voided = rows.FirstOrDefault(r => r.IsVoided);
+            if (voided != null)
+            {
+                return Ok(new
+                {
+                    Status = "Cancelled",
+                    InvoiceNo = invoiceNo,
+                    ReplacedBy = voided.SupersededBy ?? ""
+                });
+            }
+
+            var childId = rows[0].ChildId;
+            var child = _db.Childs
+                .Include(c => c.Clinic).ThenInclude(cl => cl.Doctor)
+                .FirstOrDefault(c => c.Id == childId);
+            if (child == null)
+                return NotFound(new { message = "No invoice found for this Invoice No." });
+
+            var doseIds = rows.Select(r => r.DoseId).ToList();
+            var schedules = _db.Schedules
+                .Include(s => s.Brand)
+                .Include(s => s.Dose).ThenInclude(d => d.Vaccine)
+                .Where(s => s.ChildId == childId && doseIds.Contains(s.DoseId) && s.IsDone && s.GivenDate != null)
+                .ToList();
+
+            var lines = rows.Select(r =>
+            {
+                var sch = schedules.Where(s => s.DoseId == r.DoseId)
+                    .OrderByDescending(s => s.GivenDate).FirstOrDefault();
+                return new
+                {
+                    Vaccine = sch?.Dose?.Vaccine?.Name ?? "",
+                    Brand = sch?.Brand?.Name ?? "",
+                    DateGiven = sch?.GivenDate?.ToString("dd MMM yyyy") ?? "",
+                    Amount = r.Amount
+                };
+            }).ToList();
+
+            var submissionId = schedules.Select(s => s.InvoiceSubmissionId).FirstOrDefault(x => x != null);
+            DateTime? invoiceDate = null;
+            if (submissionId != null)
+                invoiceDate = _db.InvoiceSubmissions.Where(x => x.Id == submissionId).Select(x => (DateTime?)x.InvoiceDate).FirstOrDefault();
+            if (invoiceDate == null)
+                invoiceDate = schedules.Max(s => s.GivenDate);
+
+            var charges = _db.Fee.Where(f => f.InvoiceId == invoiceNo).Sum(f => (decimal?)f.Amount) ?? 0m;
+            var doctor = child.Clinic?.Doctor;
+            var doctorLine = doctor == null ? "" :
+                string.IsNullOrWhiteSpace(doctor.AdditionalInfo)
+                    ? doctor.DisplayName
+                    : $"{doctor.DisplayName} - {doctor.AdditionalInfo}";
+
+            return Ok(new
+            {
+                Status = "Valid",
+                InvoiceNo = invoiceNo,
+                InvoiceDate = invoiceDate?.ToString("dd MMM yyyy") ?? "",
+                Patient = child.Name,
+                MrNo = child.Id,
+                Lines = lines,
+                Charges = charges,
+                Total = lines.Sum(l => l.Amount) + charges,
+                Doctor = doctorLine,
+                Center = child.Clinic == null ? "" : $"{child.Clinic.Name} ({child.Clinic.RegNo})"
+            });
+        }
+
         [HttpGet("PIDVerify/{id}")]
         public IActionResult GeneratePIDPdf(int id)
         {

@@ -30,19 +30,11 @@ namespace VaccineAPI.Controllers
 
             var toAdd = allBrands
                 .Where(b => !existingBrandIds.Contains(b.Id))
-                .Select(b => new BrandAmount
-                {
-                    BrandId = b.Id,
-                    DoctorId = doctorId,
-                    ClinicId = clinicId,
-                    SalePrice = 0,
-                    Quantity = 0
-                })
+                .Select(b => VaccineAPI.Services.BrandAmountProvisioner.Ensure(_db, b.Id, doctorId, clinicId))
                 .ToList();
 
             if (toAdd.Count > 0)
             {
-                _db.BrandAmounts.AddRange(toAdd);
                 await _db.SaveChangesAsync();
                 existingBas.AddRange(toAdd);
             }

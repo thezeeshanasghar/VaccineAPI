@@ -49,15 +49,24 @@ namespace VaccineAPI.Controllers
                     return Ok(new { IsSuccess = false, Message = "Batch is required for all items" });
             }
 
+            // Including pending doses in a batch is a doctor decision: PA and Manager requests cannot do it.
+            if ((dto.PaId.HasValue || dto.ManagerId.HasValue) && (dto.ClaimUnbatchedUseIds != null && dto.ClaimUnbatchedUseIds.Count > 0))
+                return Ok(new { IsSuccess = false, Message = "Only the doctor can include pending doses in a batch." });
+
+            var replay = Idempotency.TryReplay(_db, dto.DoctorId, dto.ClientRequestId, "stocktransfer.create");
+            if (replay != null) return replay;
+
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
                 var fromClinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == dto.FromClinicId);
                 var toClinic = await _db.Clinics.FirstOrDefaultAsync(c => c.Id == dto.ToClinicId);
 
-                // Validate all source stocks before mutating anything
-                var sourceStocks = new List<Stock>();
-                var sourceBas = new List<BrandAmount>();
+                // Validate every line (and every batch it draws from) before mutating anything. A lot
+                // spanning several batches is drawn earliest-expiry first; one transfer row is written
+                // per batch drawn so each row reverses exactly onto its own batches.
+                var planned = new Dictionary<int, int>();
+                var lines = new List<(StockTransferItemDTO item, Stock stock, int take, BrandAmount ba, bool multi)>();
 
                 foreach (var item in dto.Items)
                 {
@@ -66,21 +75,12 @@ namespace VaccineAPI.Controllers
                     if (sourceBa == null || sourceBa.Quantity == 0)
                         return Ok(new { IsSuccess = false, Message = $"No stock available for brand ID {item.BrandId} at the source clinic" });
 
-                    var sourceStock = await _db.Stocks
-                        .Include(s => s.Bill)
-                        .Where(s => s.BrandId == item.BrandId
-                                 && s.BatchLot == item.BatchLot
-                                 && s.Quantity > 0
-                                 && (s.ClinicId == dto.FromClinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == dto.FromClinicId)))
-                        .FirstOrDefaultAsync();
-
-                    if (sourceStock == null)
-                        return Ok(new { IsSuccess = false, Message = $"Batch '{item.BatchLot}' not found or has no remaining stock at the source clinic" });
-                    if (item.Quantity > sourceStock.Quantity)
-                        return Ok(new { IsSuccess = false, Message = $"Cannot transfer more than available ({sourceStock.Quantity}) in batch '{item.BatchLot}'" });
-
-                    sourceStocks.Add(sourceStock);
-                    sourceBas.Add(sourceBa);
+                    var draws = new List<(Stock stock, int take)>();
+                    var plan = _inventory.PlanLotDraw(item.BrandId, dto.FromClinicId, item.BatchLot, item.ExpiryDate,
+                        item.Quantity, planned, draws, "transfer");
+                    if (!plan.IsSuccess)
+                        return Ok(new { IsSuccess = false, Message = plan.Message });
+                    foreach (var d in draws) lines.Add((item, d.stock, d.take, sourceBa, draws.Count > 1));
                 }
 
                 // Auto-generate XFER bill number — doctor-wide uniqueness
@@ -94,8 +94,11 @@ namespace VaccineAPI.Controllers
                 string billNo = $"{prefix}{seq:D4}";
 
                 // Calculate totals
-                decimal subTotal = dto.Items.Sum(i => i.UnitPrice * i.Quantity);
-                decimal awtAmount = Math.Round(subTotal * dto.AwtPercent / 100, 2);
+                // The received units cost exactly what the source batch cost when it was purchased
+                // (Stock.StockAmount is already AWT-inclusive), so the client-typed price and any
+                // extra AWT are ignored: a transfer never changes a unit's cost.
+                decimal subTotal = lines.Sum(l => l.stock.StockAmount * l.take);
+                decimal awtAmount = 0m;
                 decimal totalPayable = subTotal + awtAmount;
 
                 // Create purchase bill at destination clinic
@@ -107,7 +110,7 @@ namespace VaccineAPI.Controllers
                     SupplierId = null,
                     DoctorId = dto.DoctorId,
                     ClinicId = dto.ToClinicId,
-                    AwtPercent = dto.AwtPercent,
+                    AwtPercent = 0m,
                     AwtAmount = awtAmount,
                     AmountPaid = totalPayable,
                     PaymentMethod = "Transfer",
@@ -117,16 +120,13 @@ namespace VaccineAPI.Controllers
                 };
                 _db.Bills.Add(bill);
                 await _db.SaveChangesAsync(); // get bill.Id
+                int claimed = 0;
 
-                // Process each item
-                for (int i = 0; i < dto.Items.Count; i++)
+                // Process each planned line
+                foreach (var (item, sourceStock, take, sourceBa, multi) in lines)
                 {
-                    var item = dto.Items[i];
-                    var sourceStock = sourceStocks[i];
-                    var sourceBa = sourceBas[i];
-
                     // Audit record — created first so its Id is available as the ledger SourceId
-                    decimal lineAwt = Math.Round(item.UnitPrice * item.Quantity * dto.AwtPercent / 100, 2);
+                    decimal lineAwt = 0m;
                     var transferRow = new StockTransfer
                     {
                         DoctorId = dto.DoctorId,
@@ -134,10 +134,10 @@ namespace VaccineAPI.Controllers
                         ToClinicId = dto.ToClinicId,
                         BrandId = item.BrandId,
                         BatchLot = item.BatchLot,
-                        ExpiryDate = item.ExpiryDate,
-                        Quantity = item.Quantity,
-                        UnitPrice = item.UnitPrice,
-                        AwtPercent = dto.AwtPercent,
+                        ExpiryDate = (multi || item.ExpiryDate == null) ? sourceStock.Expiry : item.ExpiryDate,
+                        Quantity = take,
+                        UnitPrice = sourceStock.StockAmount,
+                        AwtPercent = 0m,
                         AwtAmount = lineAwt,
                         Reason = dto.Reason ?? "",
                         TransferDate = dto.TransferDate,
@@ -147,14 +147,18 @@ namespace VaccineAPI.Controllers
                     _db.StockTransfers.Add(transferRow);
                     await _db.SaveChangesAsync();
 
-                    await _inventory.TransferOut(dto.DoctorId, dto.FromClinicId, sourceStock, sourceBa, item.Quantity, transferRow.Id, dto.TransferDate);
-                    await _inventory.TransferIn(dto.DoctorId, dto.ToClinicId, item.BrandId, bill.Id, item.Quantity, item.UnitPrice, item.BatchLot, item.ExpiryDate, transferRow.Id, sourceBa.SalePrice, dto.TransferDate);
+                    await _inventory.TransferOut(dto.DoctorId, dto.FromClinicId, sourceStock, sourceBa, take, transferRow.Id, dto.TransferDate);
+                    var received = await _inventory.TransferIn(dto.DoctorId, dto.ToClinicId, item.BrandId, bill.Id, take, sourceStock.StockAmount, item.BatchLot, transferRow.ExpiryDate, transferRow.Id, sourceBa.SalePrice, dto.TransferDate);
+                    // Opt-in: allocate the destination clinic's pending doses to the received batch.
+                    claimed += _inventory.ClaimPendingForNewBatch(dto.DoctorId, received, dto.ClaimUnbatchedUseIds);
                 }
 
-                await _db.SaveChangesAsync();
+                var transferResponse = new { IsSuccess = true, Message = "Transfer recorded", ResponseData = new { BillId = bill.Id, BillNo = billNo, ClaimedUnbatched = claimed } };
+                Idempotency.Record(_db, dto.DoctorId, dto.ClientRequestId, "stocktransfer.create", transferResponse);
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
-                return Ok(new { IsSuccess = true, Message = "Transfer recorded", ResponseData = new { BillId = bill.Id, BillNo = billNo } });
+                return Ok(transferResponse);
             }
             catch (Exception ex)
             {
@@ -247,30 +251,32 @@ namespace VaccineAPI.Controllers
                     ? await _db.StockTransfers.Where(t => t.BillId == billId).ToListAsync()
                     : new List<StockTransfer> { transfer };
 
+                // Check EVERY line first: nothing is changed unless the whole transfer can be undone
+                // (the transferred units must still be whole at the destination).
                 foreach (var row in allRows)
                 {
-                    await _inventory.ReverseTransferOut(row.DoctorId, row.FromClinicId, row.BrandId, row.Quantity, row.BatchLot, row.UnitPrice, row.ExpiryDate, row.Id);
-                    await _inventory.ReverseTransferIn(row.DoctorId, row.ToClinicId, row.BrandId, row.Quantity, row.Id);
+                    var check = _inventory.CheckTransferReversible(row.Id);
+                    if (!check.IsSuccess)
+                        return Ok(new { IsSuccess = false, Message = check.Message });
                 }
-
-                // v2: close, never hard-delete (Models/Stock.cs:29-31) — these destination rows,
-                // and the XFER bill that anchors them, can already be referenced by ledger rows
-                // from real gives/sales that happened at the destination clinic after the transfer
-                // landed. Deleting either throws once such a reference exists (same root cause as
-                // the SellDirect/TransferOut/ReverseBillLine fixes above), and deleting the Bill
-                // alone would orphan Stock.BillId even if the Stock row itself were kept.
-                if (billId.HasValue)
+                foreach (var row in allRows)
                 {
-                    var destStocks = await _db.Stocks.Where(s => s.BillId == billId).ToListAsync();
-                    foreach (var destStock in destStocks)
-                    {
-                        destStock.Quantity = 0;
-                        destStock.IsClosed = true;
-                    }
+                    var res = await _inventory.ReverseTransfer(row.DoctorId, row.FromClinicId, row.ToClinicId, row.BrandId, row.Id);
+                    if (!res.IsSuccess)
+                        return Ok(new { IsSuccess = false, Message = res.Message });
                 }
 
                 _db.StockTransfers.RemoveRange(allRows);
-                await _db.SaveChangesAsync();
+                // The destination XFER bill only ever existed to carry this transfer's received
+                // batches. Once they are reversed it is an empty, "paid" bill: remove it too.
+                if (billId.HasValue)
+                {
+                    var xferBill = await _db.Bills.FirstOrDefaultAsync(b => b.Id == billId.Value && b.BillNo.StartsWith("XFER-"));
+                    var billBatches = await _db.Stocks.Where(x => x.BillId == billId.Value).ToListAsync();   // tracked: includes the reversal above
+                    bool carriesLiveStock = billBatches.Any(x => x.Quantity > 0 || x.OriginalQuantity > 0);
+                    if (xferBill != null && !carriesLiveStock) _db.Bills.Remove(xferBill);
+                }
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
                 return Ok(new { IsSuccess = true, Message = "Transfer reversed" });

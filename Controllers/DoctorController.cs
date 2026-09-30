@@ -443,6 +443,9 @@ namespace VaccineAPI.Controllers
         public Response<string> Delete(int Id)
         {
             {
+                var stockBlock = VaccineAPI.Services.InventoryDeleteGuard.ForDoctor(_db, Id);
+                if (stockBlock != null)
+                    return new Response<string>(false, stockBlock, null);
                 var dbDoctor = _db.Doctors.Include(x => x.User).Include(x => x.DoctorSchedules).Include(x => x.FollowUps)
                     .Include(x => x.Clinics).ThenInclude(x => x.Childs).Where(c => c.Id == Id).FirstOrDefault();
                 if (dbDoctor == null)

@@ -61,12 +61,17 @@ namespace VaccineAPI.Controllers
                     return Ok(new { IsSuccess = false, Message = "Sale price cannot be negative" });
             }
 
+            var replay = Idempotency.TryReplay(_db, dto.DoctorId, dto.ClientRequestId, "directsale.create");
+            if (replay != null) return replay;
+
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Validate all source stocks before mutating anything
-                var sourceStocks = new List<Stock>();
-                var sourceBas = new List<BrandAmount>();
+                // Validate every line (and every batch it draws from) before mutating anything.
+                // A lot that spans several batches is drawn earliest-expiry first; one sale row is
+                // written per batch drawn so each row reverses exactly onto its own batch.
+                var planned = new Dictionary<int, int>();
+                var lines = new List<(DirectSaleItemDTO item, Stock stock, int take, BrandAmount ba)>();
 
                 foreach (var item in dto.Items)
                 {
@@ -75,21 +80,12 @@ namespace VaccineAPI.Controllers
                     if (sourceBa == null || sourceBa.Quantity == 0)
                         return Ok(new { IsSuccess = false, Message = $"No stock available for brand ID {item.BrandId}" });
 
-                    var sourceStock = await _db.Stocks
-                        .Include(s => s.Bill)
-                        .Where(s => s.BrandId == item.BrandId
-                                 && s.BatchLot == item.BatchLot
-                                 && s.Quantity > 0
-                                 && (s.ClinicId == dto.ClinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == dto.ClinicId)))
-                        .FirstOrDefaultAsync();
-
-                    if (sourceStock == null)
-                        return Ok(new { IsSuccess = false, Message = $"Batch '{item.BatchLot}' not found or has no remaining stock" });
-                    if (item.Quantity > sourceStock.Quantity)
-                        return Ok(new { IsSuccess = false, Message = $"Cannot sell more than available ({sourceStock.Quantity}) in batch '{item.BatchLot}'" });
-
-                    sourceStocks.Add(sourceStock);
-                    sourceBas.Add(sourceBa);
+                    var draws = new List<(Stock stock, int take)>();
+                    var plan = _inventory.PlanLotDraw(item.BrandId, dto.ClinicId, item.BatchLot, item.ExpiryDate,
+                        item.Quantity, planned, draws, "sell");
+                    if (!plan.IsSuccess)
+                        return Ok(new { IsSuccess = false, Message = plan.Message });
+                    foreach (var d in draws) lines.Add((item, d.stock, d.take, sourceBa));
                 }
 
                 // Auto-generate SALE bill number — doctor-wide uniqueness
@@ -103,16 +99,12 @@ namespace VaccineAPI.Controllers
                 while (usedNos.Contains($"{prefix}{seq:D4}")) seq++;
                 string saleBillNo = $"{prefix}{seq:D4}";
 
-                // Process each item
-                for (int i = 0; i < dto.Items.Count; i++)
+                // Process each planned line
+                foreach (var (item, sourceStock, take, sourceBa) in lines)
                 {
-                    var item = dto.Items[i];
-                    var sourceStock = sourceStocks[i];
-                    var sourceBa = sourceBas[i];
-
                     decimal purchasePrice = sourceStock.StockAmount;
-                    decimal totalSale = item.SalePricePerUnit * item.Quantity;
-                    decimal totalCost = purchasePrice * item.Quantity;
+                    decimal totalSale = item.SalePricePerUnit * take;
+                    decimal totalCost = purchasePrice * take;
                     decimal profit = totalSale - totalCost;
 
                     var saleRow = new DirectSale
@@ -121,8 +113,8 @@ namespace VaccineAPI.Controllers
                         ClinicId = dto.ClinicId,
                         DoctorId = dto.DoctorId,
                         BatchLot = item.BatchLot,
-                        ExpiryDate = item.ExpiryDate,
-                        Quantity = item.Quantity,
+                        ExpiryDate = sourceStock.Expiry ?? item.ExpiryDate,
+                        Quantity = take,
                         SalePricePerUnit = item.SalePricePerUnit,
                         PurchasePricePerUnit = purchasePrice,
                         TotalSaleValue = totalSale,
@@ -141,10 +133,12 @@ namespace VaccineAPI.Controllers
                     _db.DirectSales.Add(saleRow);
                     await _db.SaveChangesAsync(); // need saleRow.Id for the ledger SourceId
 
-                    await _inventory.SellDirect(dto.DoctorId, dto.ClinicId, sourceStock, sourceBa, item.Quantity, saleRow.Id, dto.SaleDate);
+                    await _inventory.SellDirect(dto.DoctorId, dto.ClinicId, sourceStock, sourceBa, take, saleRow.Id, dto.SaleDate);
                 }
 
-                await _db.SaveChangesAsync();
+                var saleResponse = new { IsSuccess = true, Message = "Sale recorded", ResponseData = new { SaleBillNo = saleBillNo } };
+                Idempotency.Record(_db, dto.DoctorId, dto.ClientRequestId, "directsale.create", saleResponse);
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
                 // Notify the assigned PA by email (fire-and-forget)
@@ -164,7 +158,7 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
-                return Ok(new { IsSuccess = true, Message = "Sale recorded", ResponseData = new { SaleBillNo = saleBillNo } });
+                return Ok(saleResponse);
             }
             catch (Exception ex)
             {
@@ -400,17 +394,19 @@ namespace VaccineAPI.Controllers
             {
                 // All rows sharing the same bill (reverse whole sale)
                 var allRows = !string.IsNullOrEmpty(saleBillNo)
-                    ? await _db.DirectSales.Where(s => s.SaleBillNo == saleBillNo).ToListAsync()
+                    ? await _db.DirectSales.Where(s => s.SaleBillNo == saleBillNo && s.DoctorId == sale.DoctorId).ToListAsync()
                     : new List<DirectSale> { sale };
 
                 foreach (var row in allRows)
                 {
-                    await _inventory.ReverseDirectSale(row.DoctorId, row.ClinicId, row.BrandId, row.Quantity,
+                    var rev = await _inventory.ReverseDirectSale(row.DoctorId, row.ClinicId, row.BrandId, row.Quantity,
                         row.BatchLot, row.PurchasePricePerUnit, row.ExpiryDate, row.Id);
+                    if (!rev.IsSuccess)
+                        return Ok(new { IsSuccess = false, Message = rev.Message });
                 }
 
                 _db.DirectSales.RemoveRange(allRows);
-                await _db.SaveChangesAsync();
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
                 return Ok(new { IsSuccess = true, Message = "Sale reversed" });

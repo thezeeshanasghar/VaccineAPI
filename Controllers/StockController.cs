@@ -49,6 +49,15 @@ namespace VaccineAPI.Controllers
             if (dto == null || dto.Lines == null || dto.Lines.Count == 0)
                 return Ok(new { IsSuccess = false, Message = "No opening-balance lines provided." });
 
+            var guard = StockActionGuard.CheckStockAction(
+                _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
+                perm => perm.StockAdjust, "record an opening balance");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
+            var replay = VaccineAPI.Services.Idempotency.TryReplay(_db, dto.DoctorId, dto.ClientRequestId, "stock.openingbalance");
+            if (replay != null) return replay;
+
             var clinic = await _db.Clinics.FindAsync(dto.ClinicId);
             if (clinic == null)
                 return Ok(new { IsSuccess = false, Message = "Clinic not found." });
@@ -70,10 +79,7 @@ namespace VaccineAPI.Controllers
                     if (res.IsSuccess) posted++;
                     else errors.Add($"Brand {line.BrandId}: {res.Message}");
                 }
-                await _db.SaveChangesAsync();
-                await tx.CommitAsync();
-
-                return Ok(new
+                var obResponse = new
                 {
                     IsSuccess = posted > 0,
                     Message = posted > 0
@@ -81,7 +87,12 @@ namespace VaccineAPI.Controllers
                         : "No opening balance recorded. " + string.Join(" ", errors),
                     PostedCount = posted,
                     Errors = errors
-                });
+                };
+                if (posted > 0) VaccineAPI.Services.Idempotency.Record(_db, dto.DoctorId, dto.ClientRequestId, "stock.openingbalance", obResponse);
+                await _inventory.SaveAndAssertAsync();
+                await tx.CommitAsync();
+
+                return Ok(obResponse);
             }
             catch (Exception ex)
             {
@@ -91,10 +102,10 @@ namespace VaccineAPI.Controllers
         }
 
         // GET /api/stock/integrity?clinicId=X
-        // v2 §7 — drift audit. The counter (BrandAmount.Quantity) is a transactional cache; the
-        // ledger (Σ InventoryTransaction.QuantityDelta on/after StockPeriodStart) is truth. This
-        // reports every brand where the two disagree, so drift is caught the moment it appears.
-        // Read-only; run it anytime, especially right after the reset to confirm a clean slate.
+        // Drift audit. BrandAmount is a projection of the batch rows, so this reports every brand
+        // where the counter disagrees with the batches it must equal (and any brand that still has
+        // pending doses). Read-only. The full report (every batch, ledger, and anomaly class) is
+        // GET /api/InventoryAudit.
         [HttpGet("integrity")]
         public async Task<IActionResult> CheckIntegrity([FromQuery] long clinicId)
         {
@@ -102,38 +113,21 @@ namespace VaccineAPI.Controllers
             if (clinic == null)
                 return Ok(new { IsSuccess = false, Message = "Clinic not found." });
 
-            DateTime floor = clinic.StockPeriodStart?.Date ?? DateTime.MinValue;
-
-            var counters = await _db.BrandAmounts
-                .Include(b => b.Brand)
-                .Where(b => b.ClinicId == clinicId)
-                .Select(b => new { b.BrandId, BrandName = b.Brand.Name, b.Quantity, b.NeedsReconcile })
-                .ToListAsync();
-
-            // Ledger balance per brand for this clinic, floored at the reset.
-            var ledger = await _db.InventoryTransactions
-                .Where(t => t.ClinicId == clinicId && t.EventDate.Date >= floor)
-                .GroupBy(t => t.BrandId)
-                .Select(g => new { BrandId = g.Key, Balance = g.Sum(x => (int?)x.QuantityDelta) ?? 0 })
-                .ToDictionaryAsync(x => x.BrandId, x => x.Balance);
-
-            var mismatches = new System.Collections.Generic.List<object>();
-            foreach (var c in counters)
-            {
-                int ledgerBal = ledger.TryGetValue(c.BrandId, out var v) ? v : 0;
-                if (ledgerBal != c.Quantity || c.NeedsReconcile)
+            var audit = new VaccineAPI.Services.InventoryAuditService(_db).Report(null, clinicId);
+            var names = await _db.Brands.ToDictionaryAsync(b => b.Id, b => b.Name);
+            var mismatches = audit.Brands
+                .Where(b => b.BrandAmountVsBatches != 0 || b.LedgerVsBatches != 0 || b.PendingDoses > 0)
+                .Select(b => new
                 {
-                    mismatches.Add(new
-                    {
-                        c.BrandId,
-                        c.BrandName,
-                        CounterCount = c.Quantity,
-                        LedgerBalance = ledgerBal,
-                        Drift = c.Quantity - ledgerBal,
-                        c.NeedsReconcile
-                    });
-                }
-            }
+                    b.BrandId,
+                    BrandName = names.TryGetValue(b.BrandId, out var n) ? n : "",
+                    CounterCount = b.BrandAmount,
+                    LedgerBalance = b.BatchSum,          // the value the counter must equal
+                    Drift = b.BrandAmountVsBatches,
+                    NeedsReconcile = b.PendingDoses > 0 || b.BrandAmountVsBatches != 0,
+                    b.PendingDoses,
+                    LedgerSum = b.LedgerSum
+                }).ToList();
 
             return Ok(new
             {
@@ -142,15 +136,14 @@ namespace VaccineAPI.Controllers
                 StockPeriodStart = clinic.StockPeriodStart,
                 IsClean = mismatches.Count == 0,
                 MismatchCount = mismatches.Count,
-                Mismatches = mismatches
+                Mismatches = mismatches,
+                Findings = audit.Findings.Where(f => f.Severity != "INFO").Select(f => new { f.Code, f.Severity, f.BrandId, f.StockId, f.Message })
             });
         }
 
         // POST /api/stock/reconcile?clinicId=X[&brandId=Y]
-        // v2 §7 — repair. Rewrites BrandAmount.Quantity from the ledger (Σ QuantityDelta floored at
-        // StockPeriodStart) and clears NeedsReconcile. This is the ONLY sanctioned way to overwrite
-        // a counter: it makes the cache match truth, it never invents stock. Scope to one brand via
-        // brandId, or omit to reconcile the whole clinic. Doctor-triggered maintenance.
+        // Rebuilds the BrandAmount projection from the batch rows. It never invents stock, never
+        // touches batches, and records every correction as a ledger note (BA_REPROJECTED).
         [HttpPost("reconcile")]
         public async Task<IActionResult> Reconcile([FromQuery] long clinicId, [FromQuery] long brandId = 0)
         {
@@ -158,46 +151,24 @@ namespace VaccineAPI.Controllers
             if (clinic == null)
                 return Ok(new { IsSuccess = false, Message = "Clinic not found." });
 
-            DateTime floor = clinic.StockPeriodStart?.Date ?? DateTime.MinValue;
-
-            var counters = await _db.BrandAmounts
-                .Where(b => b.ClinicId == clinicId && (brandId == 0 || b.BrandId == brandId))
-                .ToListAsync();
-            if (counters.Count == 0)
-                return Ok(new { IsSuccess = false, Message = "No stock counters found for this clinic/brand." });
-
-            var ledger = await _db.InventoryTransactions
-                .Where(t => t.ClinicId == clinicId && t.EventDate.Date >= floor
-                         && (brandId == 0 || t.BrandId == brandId))
-                .GroupBy(t => t.BrandId)
-                .Select(g => new { BrandId = g.Key, Balance = g.Sum(x => (int?)x.QuantityDelta) ?? 0 })
-                .ToDictionaryAsync(x => x.BrandId, x => x.Balance);
-
-            int fixedCount = 0;
-            foreach (var c in counters)
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
             {
-                int ledgerBal = ledger.TryGetValue(c.BrandId, out var v) ? v : 0;
-                // v2: floor at zero like every other write path (InventoryTransactionService.cs
-                // lines 169/308/322) — a raw negative ledger sum must never be written verbatim.
-                int flooredBal = Math.Max(0, ledgerBal);
-                if (c.Quantity != flooredBal || c.NeedsReconcile)
+                var fixedRows = _inventory.RebuildBrandAmounts(clinicId, brandId);
+                await _inventory.SaveAndAssertAsync();
+                await tx.CommitAsync();
+                return Ok(new
                 {
-                    c.Quantity = flooredBal;
-                    // Only clear the flag once the floored value actually matches the ledger —
-                    // if flooring masked real drift (ledgerBal was negative), leave NeedsReconcile
-                    // true so the purchase-time backlog prompt still fires for this brand.
-                    c.NeedsReconcile = flooredBal == ledgerBal ? false : true;
-                    fixedCount++;
-                }
+                    IsSuccess = true,
+                    Message = fixedRows.Count == 0 ? "Already reconciled — no drift." : $"Rebuilt {fixedRows.Count} counter(s) from the batches.",
+                    ReconciledCount = fixedRows.Count
+                });
             }
-            await _db.SaveChangesAsync();
-
-            return Ok(new
+            catch (Exception ex)
             {
-                IsSuccess = true,
-                Message = fixedCount == 0 ? "Already reconciled — no drift." : $"Reconciled {fixedCount} item(s) to the ledger.",
-                ReconciledCount = fixedCount
-            });
+                await tx.RollbackAsync();
+                return Ok(new { IsSuccess = false, Message = ex.Message });
+            }
         }
 
         // GET /api/stock/batch-lots?brandId=X&clinicId=Y
@@ -213,6 +184,7 @@ namespace VaccineAPI.Controllers
                 .OrderBy(s => s.Expiry)
                 .Select(s => new
                 {
+                    StockId = s.Id,     // lets write-off / claim target this exact batch
                     s.BatchLot,
                     s.Expiry,
                     s.Quantity,

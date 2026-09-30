@@ -148,6 +148,13 @@ namespace VaccineAPI.Controllers
             if (dto.Lines.Any(l => l.Quantity <= 0 || l.UnitPrice <= 0))
                 return Ok(new { IsSuccess = false, Message = "Each line item must have quantity and price greater than 0. Remove the row instead of zeroing it." });
 
+            // Including pending doses in a batch is a doctor decision: PA and Manager requests cannot do it.
+            if ((dto.PaId.HasValue || dto.ManagerId.HasValue) && (dto.ClaimUnbatchedUseIds != null && dto.ClaimUnbatchedUseIds.Count > 0))
+                return Ok(new { IsSuccess = false, Message = "Only the doctor can include pending doses in a batch." });
+
+            var replay = Idempotency.TryReplay(_db, dto.DoctorId, dto.ClientRequestId, "bill.create");
+            if (replay != null) return replay;
+
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
@@ -200,17 +207,22 @@ namespace VaccineAPI.Controllers
                 _db.Bills.Add(bill);
                 await _db.SaveChangesAsync();
 
+                int claimed = 0;
                 foreach (var line in dto.Lines)
                 {
                     decimal stockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4);
-                    await _inventory.PostPurchaseLine(dto.DoctorId, dto.ClinicId, bill.Id, line.BrandId,
+                    var batch = await _inventory.PostPurchaseLine(dto.DoctorId, dto.ClinicId, bill.Id, line.BrandId,
                         line.Quantity, stockAmount, line.BatchLot, line.Expiry, bill.BillDate);
+                    // Opt-in: allocate the doses the doctor chose to this batch (real deduction).
+                    claimed += _inventory.ClaimPendingForNewBatch(dto.DoctorId, batch, dto.ClaimUnbatchedUseIds);
                 }
 
-                await _db.SaveChangesAsync();
+                var createdResponse = new { IsSuccess = true, Message = "Bill saved", ResponseData = new { bill.Id, bill.BillNo, ClaimedUnbatched = claimed } };
+                Idempotency.Record(_db, dto.DoctorId, dto.ClientRequestId, "bill.create", createdResponse);
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
-                return Ok(new { IsSuccess = true, Message = "Bill saved", ResponseData = new { bill.Id, bill.BillNo } });
+                return Ok(createdResponse);
             }
             catch (Exception ex)
             {
@@ -259,13 +271,6 @@ namespace VaccineAPI.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Reverse old stock rows
-                foreach (var stock in bill.Stocks.ToList())
-                {
-                    await _inventory.ReverseBillLine(bill.DoctorId, bill.ClinicId, stock, bill.Id, bill.BillDate);
-                }
-                await _db.SaveChangesAsync();
-
                 // Update bill header
                 string supplierName = "";
                 if (!string.IsNullOrWhiteSpace(dto.SupplierName))
@@ -294,17 +299,14 @@ namespace VaccineAPI.Controllers
                 bill.IsPaid = paid >= totalPayable && totalPayable > 0;
                 bill.PaidDate = bill.IsPaid && bill.PaidDate == null ? (DateTime?)DateTime.Now : bill.PaidDate;
 
-                // Create new stock rows (consolidate only against a row already on THIS bill —
-                // old rows for this bill were just removed above, so this only matters if
-                // dto.Lines itself contains duplicate Brand+Batch+Expiry entries)
-                foreach (var line in dto.Lines)
-                {
-                    decimal stockAmount = Math.Round(line.UnitPrice * (1 + dto.AwtPercent / 100), 4);
-                    await _inventory.PostPurchaseLine(bill.DoctorId, bill.ClinicId, bill.Id, line.BrandId,
-                        line.Quantity, stockAmount, line.BatchLot, line.Expiry, bill.BillDate);
-                }
+                // Edit the existing batches in place (price-only edit = cost only, quantity change =
+                // one signed movement on the same batch, never a close-and-re-add). Fails before any
+                // change if a line would drop below its already-consumed units.
+                var edit = await _inventory.EditBillLines(bill, dto.Lines, dto.AwtPercent, bill.BillDate);
+                if (!edit.IsSuccess)
+                    return Ok(new { IsSuccess = false, Message = edit.Message });
 
-                await _db.SaveChangesAsync();
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
                 return Ok(new { IsSuccess = true, Message = "Bill updated", ResponseData = new { bill.Id, bill.BillNo } });
@@ -483,26 +485,10 @@ namespace VaccineAPI.Controllers
                 _db.Bills.Add(newBill);
                 await _db.SaveChangesAsync();
 
-                var newStock = new Stock
-                {
-                    BrandId = stock.BrandId,
-                    BillId = newBill.Id,
-                    Quantity = consumed,
-                    OriginalQuantity = consumed,
-                    StockAmount = stock.StockAmount,
-                    BatchLot = stock.BatchLot,
-                    Expiry = stock.Expiry
-                };
-                _db.Stocks.Add(newStock);
-                await _db.SaveChangesAsync(); // need newStock.Id for the ledger row
+                // The consumed units' cost history moves to the new bill without creating live stock.
+                await _inventory.SplitConsumedLine(bill.DoctorId, bill.ClinicId, stock, consumed, bill.Id, newBill, bill.BillDate);
 
-                // Shrink the original line to the unconsumed remainder
-                stock.OriginalQuantity = stock.Quantity;
-
-                _inventory.LogSplitConsumed(bill.DoctorId, bill.ClinicId, stock.BrandId, stock.Id, newStock.Id,
-                    stock.BatchLot, stock.Expiry, consumed, stock.StockAmount, bill.Id, newBill.Id, bill.BillDate);
-
-                await _db.SaveChangesAsync();
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
                 var result = new SplitConsumedResultDTO
@@ -559,6 +545,21 @@ namespace VaccineAPI.Controllers
                 });
             }
 
+            // A purchase whose units were already used cannot be cancelled as if it never happened:
+            // that would erase the cost of those units and let a later restore recreate stock from a
+            // bill that no longer exists. Split the used units off first, then reverse the remainder.
+            var usedLines = bill.Stocks.Where(x => x.OriginalQuantity - x.Quantity > 0).ToList();
+            if (usedLines.Count > 0)
+            {
+                int usedUnits = usedLines.Sum(x => x.OriginalQuantity - x.Quantity);
+                return Ok(new
+                {
+                    IsSuccess = false,
+                    Message = $"{usedUnits} unit(s) of this bill were already used, so it cannot be reversed. Use \"Split consumed\" to move the used units to their own paid bill first, then reverse this bill.",
+                    ResponseData = new { ConsumedStockIds = usedLines.Select(x => x.Id).ToList() }
+                });
+            }
+
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
@@ -571,7 +572,7 @@ namespace VaccineAPI.Controllers
                 _db.SupplierPayments.RemoveRange(payments);
 
                 _db.Bills.Remove(bill);
-                await _db.SaveChangesAsync();
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
                 return Ok(new { IsSuccess = true, Message = "Bill reversed" });

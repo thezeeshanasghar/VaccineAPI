@@ -14,6 +14,10 @@ namespace VaccineAPI.ModelDTO
 
     public class StockTransferCreateDTO
     {
+        // Optional. Send the same value when retrying: a repeated request is answered from the first
+        // result and never posts twice.
+        public string? ClientRequestId { get; set; }
+
         public long DoctorId { get; set; }
         public long FromClinicId { get; set; }
         public long ToClinicId { get; set; }
@@ -21,6 +25,9 @@ namespace VaccineAPI.ModelDTO
         public string Reason { get; set; } = "";
         public DateTime TransferDate { get; set; }
         public List<StockTransferItemDTO> Items { get; set; } = new List<StockTransferItemDTO>();
+
+        // Opt-in: pending doses at the DESTINATION clinic to allocate to the received batches.
+        public List<long>? ClaimUnbatchedUseIds { get; set; }
 
         public long? PaId { get; set; }
         public long? ManagerId { get; set; }

@@ -12,7 +12,19 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddScoped<VaccineAPI.Services.InventoryTransactionService>();
-builder.Services.AddScoped<VaccineAPI.Services.InventoryReconciliationService>();
+
+// Inventory safety switches (appsettings "Inventory": {...}).
+//  StrictInvariants        : true = a batch whose quantity disagrees with its ledger rows aborts the
+//                            request; false (default until legacy drift is corrected) = it is only logged.
+//  EnforceSingleWriter     : true = any inventory write that did not come from the inventory service is
+//                            refused at SaveChanges; false (default) = it is only logged.
+//  ExcludeExpiredFromFefo  : true (default) = an expired batch is never picked for a give; the expiry date
+//                            itself is still usable (the last valid day).
+VaccineAPI.Services.InventoryTransactionService.StrictInvariants = builder.Configuration.GetValue<bool>("Inventory:StrictInvariants");
+// An expiry date is the LAST day a batch may be used; an expired batch is never given. On unless config says otherwise.
+VaccineAPI.Services.InventoryTransactionService.ExcludeExpiredFromFefo = builder.Configuration.GetValue<bool?>("Inventory:ExcludeExpiredFromFefo") ?? true;
+VaccineAPI.Models.Context.EnforceSingleInventoryWriter = builder.Configuration.GetValue<bool>("Inventory:EnforceSingleWriter");
+VaccineAPI.Services.InventoryTransactionService.OnInvariantViolation = msg => Console.Error.WriteLine("[INVENTORY-INVARIANT] " + msg);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? Environment.GetEnvironmentVariable("DefaultConnection");
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 31));

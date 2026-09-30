@@ -28,18 +28,72 @@ namespace VaccineAPI.Models
             foreach (var entry in ChangeTracker.Entries<BrandAmount>())
                 if (entry.State == EntityState.Modified)
                     entry.Entity.RowVersion++;
+
+            foreach (var entry in ChangeTracker.Entries<UnbatchedUse>())
+                if (entry.State == EntityState.Modified)
+                    entry.Entity.RowVersion++;
+        }
+
+        // ---- single-writer enforcement -------------------------------------------------------
+        // Inventory state (batch quantity / purchased quantity / closed flag / clinic, the BrandAmount
+        // counter, and every ledger row) may only be written by InventoryTransactionService, which
+        // marks each entity it writes. Any other write that reaches SaveChanges is reported (and, when
+        // EnforceSingleInventoryWriter is true, refused). This is a runtime check, unlike a source scan.
+        public static bool EnforceSingleInventoryWriter { get; set; } = false;
+        private readonly System.Collections.Generic.HashSet<object> _inventoryWriteMarks =
+            new System.Collections.Generic.HashSet<object>(ReferenceEqualityComparer.Instance);
+        public void MarkInventoryWrite(object entity) => _inventoryWriteMarks.Add(entity);
+        // Test fixtures only: a context that seeds baseline rows directly (never used by API code).
+        public bool BypassInventoryWriterCheck { get; set; }
+
+        private void CheckInventoryWriters()
+        {
+            if (BypassInventoryWriterCheck) return;
+            var violations = new System.Collections.Generic.List<string>();
+            foreach (var e in ChangeTracker.Entries())
+            {
+                if (e.State != EntityState.Added && e.State != EntityState.Modified) continue;
+                if (_inventoryWriteMarks.Contains(e.Entity)) continue;
+                switch (e.Entity)
+                {
+                    case Stock st when e.State == EntityState.Added || Touched(e, nameof(Stock.Quantity), nameof(Stock.OriginalQuantity), nameof(Stock.IsClosed), nameof(Stock.ClinicId), nameof(Stock.BrandId)):
+                        violations.Add($"Stock {st.Id} written outside the inventory service"); break;
+                    case BrandAmount ba when e.State == EntityState.Added || Touched(e, nameof(BrandAmount.Quantity)):
+                        violations.Add($"BrandAmount {ba.Id} counter written outside the inventory service"); break;
+                    case InventoryTransaction tx:
+                        violations.Add($"Ledger row {tx.Id} written outside the inventory service"); break;
+                }
+            }
+            if (violations.Count == 0) return;
+            var msg = "UNAUTHORISED INVENTORY WRITE: " + string.Join("; ", violations);
+            VaccineAPI.Services.InventoryTransactionService.OnInvariantViolation?.Invoke(msg);
+            if (EnforceSingleInventoryWriter)
+                throw new VaccineAPI.Services.InventoryInvariantException(msg);
+        }
+
+        private static bool Touched(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry e, params string[] props)
+        {
+            foreach (var p in props)
+                if (e.Property(p).IsModified) return true;
+            return false;
         }
 
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             BumpConcurrencyTokens();
-            return base.SaveChanges(acceptAllChangesOnSuccess);
+            CheckInventoryWriters();
+            var n = base.SaveChanges(acceptAllChangesOnSuccess);
+            _inventoryWriteMarks.Clear();
+            return n;
         }
 
-        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
             BumpConcurrencyTokens();
-            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            CheckInventoryWriters();
+            var n = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            _inventoryWriteMarks.Clear();
+            return n;
         }
 
         public DbSet<Vaccine> Vaccines { get; set; }
@@ -87,6 +141,8 @@ namespace VaccineAPI.Models
         public DbSet<PaPayableAdjustment> PaPayableAdjustments { get; set; }
         public DbSet<InvoiceAmendment> InvoiceAmendments { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
+        public DbSet<UnbatchedUse> UnbatchedUses { get; set; }
+        public DbSet<IdempotencyKey> IdempotencyKeys { get; set; }
         public DbSet<PAAssignmentSchedule> PAAssignmentSchedules { get; set; }
         public DbSet<Refrigerator> Refrigerators { get; set; }
         public DbSet<TemperatureReading> TemperatureReadings { get; set; }
@@ -105,6 +161,14 @@ namespace VaccineAPI.Models
                 }
             }
             modelBuilder.Entity<HomeServiceCity>().ToTable("home_service_cities");
+            // One movement can be reversed at most once (NULLs are allowed to repeat).
+            modelBuilder.Entity<InventoryTransaction>().HasIndex(t => t.ReversesTransactionId).IsUnique();
+            // A ClientRequestId can be accepted at most once per doctor and endpoint.
+            modelBuilder.Entity<IdempotencyKey>().HasIndex(k => new { k.DoctorId, k.Endpoint, k.ClientRequestId }).IsUnique();
+            // One BrandAmount row per (brand, doctor, clinic).
+            modelBuilder.Entity<BrandAmount>().HasIndex(b => new { b.BrandId, b.DoctorId, b.ClinicId }).IsUnique();
+            // One live (pending or claimed) unbatched use per schedule.
+            modelBuilder.Entity<UnbatchedUse>().HasIndex(u => u.ActiveScheduleKey).IsUnique();
             modelBuilder.Entity<User>().HasData(new User() { Id = 1, MobileNumber = "3331231231", Password = "1234", UserType = "SUPERADMIN", CountryCode = "92" });
         }
     }

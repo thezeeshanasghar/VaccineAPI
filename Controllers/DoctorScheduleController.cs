@@ -119,15 +119,8 @@ namespace VaccineAPI.Controllers
                 {
                     continue;
                 }
-                var brandAmount = new BrandAmount
-                {
-                    BrandId = brand.Id,
-                    Quantity = 0,
-                    SalePrice = 0,
-                    DoctorId = DoctorSchedueDTO.DoctorId,
-                    ClinicId = clinic.Id,
-                };
-                _db.BrandAmounts.Add(brandAmount);
+                // one row per (brand, doctor, clinic): never a duplicate on repeated schedule posts
+                VaccineAPI.Services.BrandAmountProvisioner.Ensure(_db, brand.Id, DoctorSchedueDTO.DoctorId, clinic.Id);
                 _db.SaveChanges();
             }
             return new Response<IEnumerable<DoctorScheduleDTO>>(true, null, dsDTOS);

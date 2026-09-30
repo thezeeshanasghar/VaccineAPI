@@ -237,8 +237,30 @@ namespace VaccineAPI.Controllers
             return new Response<ScheduleDTO>(true, null, scheduleDTO);
         }
 
+        // Every stock effect of a give / ungive / brand-change and the dose record itself are one
+        // database transaction: any rejection after stock was touched rolls EVERYTHING back, so a
+        // refused request can never leave stock consumed (and a retry can never double-consume).
+        private Response<ScheduleDTO> InOneTransaction(Func<Response<ScheduleDTO>> work)
+        {
+            using var tx = _db.Database.BeginTransaction();
+            try
+            {
+                var result = work();
+                if (result != null && result.IsSuccess) tx.Commit(); else tx.Rollback();
+                return result!;
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
+        }
+
         [HttpPut("child-schedule")]
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
+            => InOneTransaction(() => UpdateCore(scheduleDTO));
+
+        private Response<ScheduleDTO> UpdateCore(ScheduleDTO scheduleDTO)
         {
             if (String.IsNullOrEmpty(scheduleDTO.DiseaseYear)) { scheduleDTO.DiseaseYear = ""; }
             {
@@ -424,6 +446,7 @@ namespace VaccineAPI.Controllers
                 // Schedule.StockId and the certificate lot/expiry. null = OHF / non-consuming /
                 // give-at-zero → lot/expiry stay blank (no fabricated fallback, §6.3).
                 int? giveConsumedStockId = null;
+                bool giveConsumedStockThisRequest = false;   // a stock-consuming give ran in THIS request
                 var onlineClinicId = ResolveClinicIdForStock(
                     scheduleDTO.DoctorId,
                     dbSchedule.Child?.ClinicId ?? 0,
@@ -721,23 +744,22 @@ namespace VaccineAPI.Controllers
                                 previousBrandId.Value, dbSchedule.Id, ungiveEventDate, scheduleDTO.PaId);
                         }
                     }
-                    using (var tx = _db.Database.BeginTransaction())
+                    else if (!inventoryEnabled && wasGiven && previousBrandId.HasValue && _inventory.HasLiveGive(dbSchedule.Id))
                     {
-                        try
-                        {
-                            _db.SaveChanges();
-                            tx.Commit();
-                        }
-                        catch (DbUpdateConcurrencyException)
-                        {
-                            tx.Rollback();
-                            return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
-                        }
-                        catch
-                        {
-                            tx.Rollback();
-                            throw;
-                        }
+                        // Inventory was switched off after this dose consumed stock: the recorded
+                        // movement must still be reversed (it carries its own batch and clinic).
+                        var ungiveEventDate = scheduleDTO.GivenDate ?? dbSchedule.GivenDate ?? DateTime.UtcNow;
+                        _inventory.UnadministerSync(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0,
+                            previousBrandId.Value, dbSchedule.Id, ungiveEventDate, scheduleDTO.PaId);
+                    }
+                    // Runs inside the request-wide transaction opened by Update() — committed or rolled back as one.
+                    try
+                    {
+                        _inventory.SaveAndAssert();
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
                     }
                     return new Response<ScheduleDTO>(true, "Congratulations", newData2);
                 }
@@ -797,23 +819,14 @@ namespace VaccineAPI.Controllers
                         _inventory.UnadministerSync(brandChangeRollbackDoctorId, brandChangeRollbackClinicId,
                             previousBrandId.Value, dbSchedule.Id, brandChangeEventDate, scheduleDTO.PaId);
 
-                        using (var tx = _db.Database.BeginTransaction())
+                        // Runs inside the request-wide transaction opened by Update() — committed or rolled back as one.
+                        try
                         {
-                            try
-                            {
-                                _db.SaveChanges();
-                                tx.Commit();
-                            }
-                            catch (DbUpdateConcurrencyException)
-                            {
-                                tx.Rollback();
-                                return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
-                            }
-                            catch
-                            {
-                                tx.Rollback();
-                                throw;
-                            }
+                            _inventory.SaveAndAssert();
+                        }
+                        catch (DbUpdateConcurrencyException)
+                        {
+                            return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
                         }
                     }
 
@@ -876,7 +889,7 @@ namespace VaccineAPI.Controllers
                         // asked about a missing one. Belt-and-suspenders: reject rather than
                         // silently record unbatched if the client hasn't answered yet.
                         if (decision.ConsumesStock
-                            && !_inventory.HasFillableBatch(scheduleDTO.BrandId.Value, onlineClinicId)
+                            && !_inventory.HasFillableBatch(scheduleDTO.BrandId.Value, onlineClinicId, scheduleDTO.GivenDate)
                             && scheduleDTO.ConfirmUnbatchedGive == null)
                         {
                             return new Response<ScheduleDTO>(false,
@@ -890,28 +903,20 @@ namespace VaccineAPI.Controllers
                         _inventory.AdministerSync(dbBrandInventory, onlineClinicId, dbSchedule.Id,
                             scheduleDTO.GivenDate.Value, scheduleDTO.PaId,
                             decision.ConsumesStock, decision.Reason, out giveConsumedStockId);
+                        giveConsumedStockThisRequest = decision.ConsumesStock;
 
                         // Persist the inventory deduction in its own transaction, right here,
                         // rather than deferring to whichever SaveChanges() this method happens to
                         // hit later (there are two further down, on different branches). Same
                         // narrow-transaction pattern used across the stock controllers.
-                        using (var tx = _db.Database.BeginTransaction())
+                        // Runs inside the request-wide transaction opened by Update() — committed or rolled back as one.
+                        try
                         {
-                            try
-                            {
-                                _db.SaveChanges();
-                                tx.Commit();
-                            }
-                            catch (DbUpdateConcurrencyException)
-                            {
-                                tx.Rollback();
-                                return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
-                            }
-                            catch
-                            {
-                                tx.Rollback();
-                                throw;
-                            }
+                            _inventory.SaveAndAssert();
+                        }
+                        catch (DbUpdateConcurrencyException)
+                        {
+                            return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
                         }
                     }
                 }
@@ -1006,7 +1011,7 @@ namespace VaccineAPI.Controllers
                         dbSchedule.Validity = scheduleDTO.Validity;
 
                         ScheduleDTO newData1 = _mapper.Map<ScheduleDTO>(dbSchedule);
-                        _db.SaveChanges();
+                        _inventory.SaveAndAssert();
                         return new Response<ScheduleDTO>(true, "congratulations", newData1)
                         { GraceApplied = graceApplied, GraceMessage = graceMessage };
                     }
@@ -1197,7 +1202,17 @@ namespace VaccineAPI.Controllers
                 dbSchedule.DiseaseYear = scheduleDTO.DiseaseYear;
                 dbSchedule.IsDisease = scheduleDTO.IsDisease;
                 var onlineStockClinicId = ResolveClinicIdForStock(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0, scheduleDTO.PaId);
-                ApplyStockSourceFields(dbSchedule, scheduleDTO, onlineStockClinicId);
+                if (giveConsumedStockThisRequest)
+                {
+                    // Stamp the batch the give ACTUALLY consumed (or blank for a pending dose) — never a
+                    // "latest batch" guess that can differ from what FEFO deducted.
+                    dbSchedule.StockId = giveConsumedStockId;
+                    ApplyStockSourceFields(dbSchedule, scheduleDTO, onlineStockClinicId, giveConsumedStockId, true);
+                }
+                else
+                {
+                    ApplyStockSourceFields(dbSchedule, scheduleDTO, onlineStockClinicId);
+                }
                 dbSchedule.Validity = scheduleDTO.Validity;
                 dbSchedule.IsPAApprove = scheduleDTO.IsPAApprove;
                 ChangeDueDatesOfInjectedSchedule(scheduleDTO, dbSchedule);
@@ -1210,7 +1225,7 @@ namespace VaccineAPI.Controllers
                     var assignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null);
                     LinkScheduleToAssignment(assignmentId, dbSchedule.Id);
                 }
-                _db.SaveChanges();
+                _inventory.SaveAndAssert();
                 return new Response<ScheduleDTO>(true, "congratulations", newData)
                 { GraceApplied = graceApplied, GraceMessage = graceMessage };
             }
@@ -2097,8 +2112,61 @@ namespace VaccineAPI.Controllers
             return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
         }
 
+        // Restores stock for one dose being ungiven through the bulk endpoint. Returns a failure
+        // response, or null when the restore succeeded (or there was nothing to restore).
+        private Response<ScheduleDTO>? BulkUngiveRestore(Schedule schedule, ScheduleDTO scheduleDTO, long previousBrandId)
+        {
+            var ungiveClinicId = ResolveClinicIdForUngive(schedule, scheduleDTO.DoctorId,
+                schedule.Child != null ? schedule.Child.ClinicId : 0, scheduleDTO.PaId);
+
+            if (ungiveClinicId > 0)
+            {
+                var ungiveInventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, ungiveClinicId);
+                if (ungiveInventoryEnabled)
+                {
+                    var ungiveDoctorId = _db.Clinics
+                        .Where(c => c.Id == ungiveClinicId)
+                        .Select(c => c.DoctorId)
+                        .FirstOrDefault();
+
+                    if (ungiveDoctorId <= 0)
+                    {
+                        return new Response<ScheduleDTO>(false,
+                            $"Unable to resolve inventory owner doctor for rollback clinic {ungiveClinicId} (schedule {schedule.Id}).", null);
+                    }
+
+                    var ungiveInventory = _db.BrandAmounts
+                        .Where(b => b.BrandId == previousBrandId
+                                 && b.DoctorId == ungiveDoctorId
+                                 && b.ClinicId == ungiveClinicId)
+                        .FirstOrDefault();
+
+                    if (ungiveInventory == null)
+                    {
+                        // Never silently skip a stock restore — that leaves the dose
+                        // ungiven with nothing credited back, a permanent invisible gap.
+                        return new Response<ScheduleDTO>(false,
+                            $"Inventory row not found for brand {previousBrandId} at clinic {ungiveClinicId} (schedule {schedule.Id}).", null);
+                    }
+
+                    // UnadministerBulkSync mirrors the original give (restores
+                    // only if that give actually consumed); safe to call even
+                    // for OHF/historical/pre-reset gives (it no-ops the stock).
+                    // scheduleDTO.GivenDate isn't sent on an ungive request — use the
+                    // dose's own recorded given date for the ledger event.
+                    var ungiveEventDate = scheduleDTO.GivenDate ?? schedule.GivenDate ?? DateTime.UtcNow;
+                    _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId, schedule.Id, ungiveEventDate, scheduleDTO.PaId);
+                }
+            }
+        
+            return null;
+        }
+
         [HttpPut("update-bulk-injection")]
         public Response<ScheduleDTO> UpdateBulkInjection(ScheduleDTO scheduleDTO)
+            => InOneTransaction(() => UpdateBulkInjectionCore(scheduleDTO));
+
+        private Response<ScheduleDTO> UpdateBulkInjectionCore(ScheduleDTO scheduleDTO)
         {
             var dbSchedule = _db.Schedules
                 .Where(x => x.Id == scheduleDTO.Id)
@@ -2367,7 +2435,7 @@ namespace VaccineAPI.Controllers
                             chkBrandId2, scheduleDTO.GivenDate!.Value, chkPeriodStart, scheduleDTO.ReRecordHistorical);
                         if (!chkDecision.ConsumesStock) continue;
 
-                        if (!_inventory.HasFillableBatch(chkBrandId2.Value, chkClinicId))
+                        if (!_inventory.HasFillableBatch(chkBrandId2.Value, chkClinicId, scheduleDTO.GivenDate))
                         {
                             var chkBrandName = _db.Brands.Where(b => b.Id == chkBrandId2.Value).Select(b => b.Name).FirstOrDefault();
                             unbatchedNames.Add($"{chkBrandName} ({chk.Dose?.Name ?? chk.Dose?.Vaccine?.Name ?? "dose"})");
@@ -2533,6 +2601,7 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                bool bulkBrandEntryHandled = false;
                 if (scheduleDTO.ScheduleBrands.Count > 0)
                 {
                     var scheduleBrand = scheduleDTO.ScheduleBrands.Find(
@@ -2540,6 +2609,7 @@ namespace VaccineAPI.Controllers
                     );
                     if (scheduleBrand != null)
                     {
+                        bulkBrandEntryHandled = true;
                         if (scheduleBrand.Validity.HasValue)
                             schedule.Validity = scheduleBrand.Validity;
 
@@ -2625,48 +2695,8 @@ namespace VaccineAPI.Controllers
                         // hard failure instead, matching the single-give/ungive path's own contract.
                         if (wasIsDone == true && scheduleDTO.IsDone == false && previousBrandId.HasValue)
                         {
-                            var ungiveClinicId = ResolveClinicIdForUngive(dbSchedule, scheduleDTO.DoctorId,
-                                dbSchedule.Child != null ? dbSchedule.Child.ClinicId : 0, scheduleDTO.PaId);
-
-                            if (ungiveClinicId > 0)
-                            {
-                                var ungiveInventoryEnabled = IsInventoryEnabledForActor(scheduleDTO.DoctorId, ungiveClinicId);
-                                if (ungiveInventoryEnabled)
-                                {
-                                    var ungiveDoctorId = _db.Clinics
-                                        .Where(c => c.Id == ungiveClinicId)
-                                        .Select(c => c.DoctorId)
-                                        .FirstOrDefault();
-
-                                    if (ungiveDoctorId <= 0)
-                                    {
-                                        return new Response<ScheduleDTO>(false,
-                                            $"Unable to resolve inventory owner doctor for rollback clinic {ungiveClinicId} (schedule {schedule.Id}).", null);
-                                    }
-
-                                    var ungiveInventory = _db.BrandAmounts
-                                        .Where(b => b.BrandId == previousBrandId
-                                                 && b.DoctorId == ungiveDoctorId
-                                                 && b.ClinicId == ungiveClinicId)
-                                        .FirstOrDefault();
-
-                                    if (ungiveInventory == null)
-                                    {
-                                        // Never silently skip a stock restore — that leaves the dose
-                                        // ungiven with nothing credited back, a permanent invisible gap.
-                                        return new Response<ScheduleDTO>(false,
-                                            $"Inventory row not found for brand {previousBrandId} at clinic {ungiveClinicId} (schedule {schedule.Id}).", null);
-                                    }
-
-                                    // UnadministerBulkSync mirrors the original give (restores
-                                    // only if that give actually consumed); safe to call even
-                                    // for OHF/historical/pre-reset gives (it no-ops the stock).
-                                    // scheduleDTO.GivenDate isn't sent on an ungive request — use the
-                                    // dose's own recorded given date for the ledger event.
-                                    var ungiveEventDate = scheduleDTO.GivenDate ?? schedule.GivenDate ?? DateTime.UtcNow;
-                                    _inventory.UnadministerBulkSync(ungiveInventory, ungiveClinicId, previousBrandId.Value, schedule.Id, ungiveEventDate, scheduleDTO.PaId);
-                                }
-                            }
+                            var bulkUngiveErr = BulkUngiveRestore(schedule, scheduleDTO, previousBrandId.Value);
+                            if (bulkUngiveErr != null) return bulkUngiveErr;
                         }
 
                         // Give transition: dose was not given before, now being given.
@@ -2757,6 +2787,15 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+
+                // Ungive with no brand entry for this dose in the request (a client may send none):
+                // the stock must still come back, exactly as when brands are sent.
+                if (!bulkBrandEntryHandled && wasIsDone == true && scheduleDTO.IsDone == false && schedule.BrandId.HasValue)
+                {
+                    var bulkUngiveErr2 = BulkUngiveRestore(schedule, scheduleDTO, schedule.BrandId.Value);
+                    if (bulkUngiveErr2 != null) return bulkUngiveErr2;
+                }
+
                 // Only reschedule future doses for non-infinite vaccines. Skipped for a disease
                 // row — there's no real GivenDate to re-anchor the vaccine's later doses off, and
                 // the auto-skip below removes them from the pipeline entirely instead.
@@ -2802,23 +2841,14 @@ namespace VaccineAPI.Controllers
             // SaveChanges()-for-everything semantics above) — a concurrent give/ungive on any
             // brand touched by this batch now fails the whole batch with a clear retry message
             // instead of silently racing past a stale Count/Quantity read.
-            using (var tx = _db.Database.BeginTransaction())
+            // Runs inside the request-wide transaction opened by Update() — committed or rolled back as one.
+            try
             {
-                try
-                {
-                    _db.SaveChanges();
-                    tx.Commit();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    tx.Rollback();
-                    return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
-                }
-                catch
-                {
-                    tx.Rollback();
-                    throw;
-                }
+                _inventory.SaveAndAssert();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new Response<ScheduleDTO>(false, "Inventory was updated by another action just now. Please retry.", null);
             }
             var bulkMsg = preResetSkipped > 0
                 ? $"schedule updated successfully. {preResetSkipped} historical dose(s) from before the current stock period were left untouched — the doctor can undo them one at a time."

@@ -229,6 +229,9 @@ namespace VaccineAPI.Controllers
             {
                 return new Response<string>(false, "Dose not found", null);
             }
+            var doseBlock = VaccineAPI.Services.InventoryDeleteGuard.ForDose(_db, Id);
+            if (doseBlock != null)
+                return new Response<string>(false, doseBlock, null);
             _db.Doses.Remove(dbDose);
             _db.SaveChanges();
             return new Response<string>(true, null, "record deleted");

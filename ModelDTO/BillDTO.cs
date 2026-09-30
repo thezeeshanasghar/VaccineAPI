@@ -5,6 +5,10 @@ namespace VaccineAPI.ModelDTO
 {
     public class BillCreateDTO
     {
+        // Optional. Send the same value when retrying: a repeated request is answered from the first
+        // result and never posts twice.
+        public string? ClientRequestId { get; set; }
+
         public string? BillNo { get; set; }
         public DateTime BillDate { get; set; }
         public long? SupplierId { get; set; }
@@ -16,6 +20,11 @@ namespace VaccineAPI.ModelDTO
         public string? PaymentMethod { get; set; }
         public List<BillLineDTO> Lines { get; set; } = new List<BillLineDTO>();
 
+        // Opt-in: pending doses (UnbatchedUse ids) the doctor chose to allocate to the batches this
+        // bill creates ("include this batch details and deduct the units already used"). Absent =
+        // the doses stay pending and the bill saves exactly as before.
+        public List<long>? ClaimUnbatchedUseIds { get; set; }
+
         // Caller identity for StockActionGuard — see AdjustStockCreateDTO for why all four
         // are needed together.
         public long? PaId { get; set; }
@@ -26,6 +35,9 @@ namespace VaccineAPI.ModelDTO
 
     public class BillLineDTO
     {
+        // Optional. When the client sends the batch id of an existing line, an edit updates THAT
+        // batch in place; without it the line is matched by brand + lot + expiry.
+        public int? StockId { get; set; }
         public long BrandId { get; set; }
         public string BatchLot { get; set; } = "";
         public DateTime Expiry { get; set; }

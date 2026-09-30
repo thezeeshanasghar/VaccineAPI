@@ -9,6 +9,12 @@ namespace VaccineAPI.ModelDTO
     {
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }
+        // Optional. Send the same value when retrying: a repeated request posts once.
+        public string? ClientRequestId { get; set; }
+        public long? PaId { get; set; }
+        public long? ManagerId { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
         public List<OpeningBalanceLine> Lines { get; set; } = new List<OpeningBalanceLine>();
     }
 

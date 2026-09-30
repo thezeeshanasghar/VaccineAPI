@@ -251,6 +251,11 @@ namespace VaccineAPI.Controllers
 
                             _inventory.UnadministerSync(doctorId, childClinicId, s.BrandId.Value, s.Id, s.GivenDate ?? DateTime.Today, paId);
                         }
+                        else if (!inventoryEnabled && s.IsDone == true && s.BrandId.HasValue && _inventory.HasLiveGive(s.Id))
+                        {
+                            // Inventory was switched off after this dose consumed stock: still reverse it.
+                            _inventory.UnadministerSync(doctorId, childClinicId, s.BrandId.Value, s.Id, s.GivenDate ?? DateTime.Today, paId);
+                        }
 
                         // This dose was given, which (for an infinite/repeating vaccine like Flu)
                         // already inserted a brand-new future Schedule row dated GivenDate+MinGap.

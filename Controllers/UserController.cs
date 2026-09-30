@@ -562,6 +562,10 @@ namespace VaccineAPI.Controllers
             if (obj == null)
                 return NotFound();
 
+            var stockBlock = VaccineAPI.Services.InventoryDeleteGuard.ForUser(_db, id);
+            if (stockBlock != null)
+                return Conflict(new { IsSuccess = false, Message = stockBlock });
+
             _db.Users.Remove(obj);
             await _db.SaveChangesAsync();
 

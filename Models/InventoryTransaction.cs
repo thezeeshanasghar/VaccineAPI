@@ -29,7 +29,10 @@ namespace VaccineAPI.Models
         // Moves NO stock (QuantityDelta = 0, ConsumesStock = false). BatchLot/Expiry hold
         // the NEW values; the previous values are recoverable from the dose's prior
         // Administer row on the same SourceId (= ScheduleId). Pure audit trail.
-        BatchCorrection   // = 18
+        BatchCorrection,  // = 18
+        // Typed write-offs (a batch's units leave stock as wastage/breakage or because they expired).
+        Wastage,          // = 19
+        Expiry            // = 20
     }
 
     // Why an Administer/Unadminister row did or did not move stock (§6.2a deduction model).
@@ -98,5 +101,10 @@ namespace VaccineAPI.Models
         // outstanding. Cleared back to null if the give is ever ungiven, so the purchase
         // that claimed it stops overclaiming a dose that no longer exists as given.
         public long? ReconciledByTransactionId { get; set; }
+
+        // Stock-integrity refactor: on a reversal row (Unadminister, BillReverse, AdjustReverse,
+        // TransferReverse, DirectSaleReverse) this is the Id of the original movement it undoes.
+        // A movement can be reversed at most once (unique index, see Context.OnModelCreating).
+        public long? ReversesTransactionId { get; set; }
     }
 }

@@ -70,15 +70,7 @@ namespace VaccineAPI.Controllers
 
             foreach (var brand in brands)
             {
-                BrandAmount ba = new BrandAmount
-                {
-                    SalePrice = 0,
-                    DoctorId = clinicDTO.DoctorId,
-                    Quantity = 0,
-                    BrandId = brand.Id,
-                    ClinicId = dbClinic.Id,
-                };
-                _db.BrandAmounts.Add(ba);
+                VaccineAPI.Services.BrandAmountProvisioner.Ensure(_db, brand.Id, clinicDTO.DoctorId, dbClinic.Id);
             }
             _db.SaveChanges();
 
@@ -158,6 +150,10 @@ namespace VaccineAPI.Controllers
         [HttpDelete("{id}")]
         public Response<string> Delete(int Id)
         {
+            var stockBlock = VaccineAPI.Services.InventoryDeleteGuard.ForClinic(_db, Id);
+            if (stockBlock != null)
+                return new Response<string>(false, stockBlock, null);
+
             var relatedBills = _db.Bills.Where(b => b.ClinicId == Id);
             _db.Bills.RemoveRange(relatedBills);
 

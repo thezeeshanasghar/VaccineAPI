@@ -14,6 +14,10 @@ namespace VaccineAPI.ModelDTO
 
     public class DirectSaleCreateDTO
     {
+        // Optional. Send the same value when retrying: a repeated request is answered from the first
+        // result and never posts twice.
+        public string? ClientRequestId { get; set; }
+
         public long DoctorId { get; set; }
         public long ClinicId { get; set; }
         public string ClientName { get; set; } = "";

@@ -32,6 +32,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Test project lives in a subfolder; keep it out of the API compilation. -->
+    <Compile Remove="VaccineAPI.Tests/**" />
+    <Content Remove="VaccineAPI.Tests/**" />
+    <EmbeddedResource Remove="VaccineAPI.Tests/**" />
+    <None Remove="VaccineAPI.Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- IBM Plex faces embedded into the Travel immunization certificate PDF. -->
     <None Include="Resources\Fonts\*.ttf" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

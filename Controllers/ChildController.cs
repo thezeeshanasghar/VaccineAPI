@@ -3883,6 +3883,9 @@ namespace VaccineAPI.Controllers
                 return new Response<string>(false, "Child not found", null);
             }
 
+            // Doses waiting for batch details die with the patient record; consumed batches keep
+            // their ledger rows (the vial was really used).
+            new VaccineAPI.Services.InventoryTransactionService(_db).VoidPendingForSchedules(dbChild.Schedules.Select(x => x.Id));
             _db.Schedules.RemoveRange(dbChild.Schedules);
             _db.FollowUps.RemoveRange(dbChild.FollowUps);
             if (dbChild.User.Childs.Count == 1) _db.Users.Remove(dbChild.User);

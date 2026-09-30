@@ -62,6 +62,69 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
+        // POST /api/adjuststock/writeoff
+        // Typed write-off of units from one specific batch (wastage / breakage / expired vials).
+        [HttpPost("writeoff")]
+        public async Task<IActionResult> WriteOff([FromBody] WriteOffDTO dto)
+        {
+            if (dto == null)
+                return Ok(new { IsSuccess = false, Message = "Invalid request" });
+
+            var guard = StockActionGuard.CheckStockAction(
+                _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
+                perm => perm.StockAdjust, "write off stock");
+            if (!guard.allowed)
+                return Ok(new { IsSuccess = false, Message = guard.error });
+
+            if (dto.Kind != "Wastage" && dto.Kind != "Expiry")
+                return Ok(new { IsSuccess = false, Message = "Kind must be Wastage or Expiry" });
+            if (string.IsNullOrWhiteSpace(dto.Reason))
+                return Ok(new { IsSuccess = false, Message = "A reason is required" });
+            if (dto.Quantity <= 0)
+                return Ok(new { IsSuccess = false, Message = "Quantity must be greater than 0" });
+
+            var replay = Idempotency.TryReplay(_db, dto.DoctorId, dto.ClientRequestId, "adjuststock.writeoff");
+            if (replay != null) return replay;
+
+            var batch = await _db.Stocks.FirstOrDefaultAsync(s => s.Id == dto.StockId);
+            if (batch == null)
+                return Ok(new { IsSuccess = false, Message = "Batch not found" });
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var row = new AdjustStock
+                {
+                    BrandId = batch.BrandId,
+                    ClinicId = dto.ClinicId,
+                    DoctorId = dto.DoctorId,
+                    Adjustment = -dto.Quantity,
+                    Price = 0,
+                    Reason = $"{dto.Kind}: {dto.Reason.Trim()}",
+                    Date = dto.Date,
+                    BatchLot = batch.BatchLot,
+                    ExpiryDate = batch.Expiry
+                };
+                _db.AdjustStocks.Add(row);
+                await _db.SaveChangesAsync(); // need row.Id for the ledger SourceId
+
+                var res = _inventory.WriteOff(dto.DoctorId, dto.ClinicId, dto.StockId, dto.Quantity, dto.Kind == "Expiry", row.Id, dto.Date);
+                if (!res.IsSuccess)
+                    return Ok(new { IsSuccess = false, Message = res.Message });   // tx disposed = rolled back
+
+                var response = new { IsSuccess = true, Message = "Stock written off", ResponseData = new { row.Id } };
+                Idempotency.Record(_db, dto.DoctorId, dto.ClientRequestId, "adjuststock.writeoff", response);
+                await _inventory.SaveAndAssertAsync();
+                await tx.CommitAsync();
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return Ok(new { IsSuccess = false, Message = ex.Message });
+            }
+        }
+
         // POST /api/adjuststock
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] AdjustStockCreateDTO dto)
@@ -86,26 +149,25 @@ namespace VaccineAPI.Controllers
             if (dto.Type == "Increase" && dto.Price <= 0)
                 return Ok(new { IsSuccess = false, Message = "Price per unit is required for Increase" });
 
-            // v2: purchase-time unbatched-backlog prompt — only for Increase (adding stock).
-            // One query, all four conditions together (StockId IS NULL, SourceType=Administer,
-            // ConsumesStock=true, ReconciledByTransactionId IS NULL) — omitting the "not yet
-            // claimed" filter here is exactly how a second small purchase would re-offer an
-            // already-claimed backlog and risk double-counting.
-            if (dto.Type == "Increase" && dto.ClearUnbatchedBacklog == null)
+            // Including pending doses in a batch is a doctor decision: PA and Manager requests cannot do it.
+            if ((dto.PaId.HasValue || dto.ManagerId.HasValue) && ((dto.ClaimUnbatchedUseIds != null && dto.ClaimUnbatchedUseIds.Count > 0) || dto.ClearUnbatchedBacklog == true))
+                return Ok(new { IsSuccess = false, Message = "Only the doctor can include pending doses in a batch." });
+
+            var replay = Idempotency.TryReplay(_db, dto.DoctorId, dto.ClientRequestId, "adjuststock.create");
+            if (replay != null) return replay;
+
+            // Pending (unbatched) doses: doses recorded as given while no batch was on the shelf. When
+            // stock is added, ask once whether to include this batch and deduct those units.
+            // (Message prefix "recorded as given with no batch" is what the VacDoc page matches on.)
+            if (dto.Type == "Increase" && dto.ClearUnbatchedBacklog == null && dto.ClaimUnbatchedUseIds == null)
             {
-                var backlogCount = await _db.InventoryTransactions
-                    .Where(t => t.BrandId == dto.BrandId && t.ClinicId == dto.ClinicId
-                             && t.StockId == null
-                             && t.SourceType == InventoryTransactionType.Administer
-                             && t.ConsumesStock == true
-                             && t.ReconciledByTransactionId == null)
-                    .CountAsync();
-                if (backlogCount > 0)
+                var pending = _inventory.PendingCount(dto.DoctorId, dto.ClinicId, dto.BrandId);
+                if (pending > 0)
                 {
                     return Ok(new
                     {
                         IsSuccess = false,
-                        Message = $"You have {backlogCount} dose(s) recorded as given with no batch. Clear this backlog with this purchase?"
+                        Message = $"You have {pending} dose(s) recorded as given with no batch. Include this batch details and deduct the units from this purchase as they were already used?"
                     });
                 }
             }
@@ -140,45 +202,23 @@ namespace VaccineAPI.Controllers
                     return Ok(new { IsSuccess = false, Message = result.Message });
                 }
 
-                // v2: if the doctor/PA confirmed clearing the backlog, claim those outstanding
-                // unbatched Administer rows against this purchase — plain note only, no rewriting
-                // of StockId/BatchLot/Expiry on the old rows (that detail was already lost when
-                // they were recorded unbatched; retroactive lot attribution would be a fiction the
-                // data can't support).
-                if (dto.Type == "Increase" && dto.ClearUnbatchedBacklog == true)
+                // "Yes": allocate the chosen pending doses to the batch just created (real deduction).
+                int claimed = 0;
+                if (dto.Type == "Increase" && result.Batch != null)
                 {
-                    var backlogRows = await _db.InventoryTransactions
-                        .Where(t => t.BrandId == dto.BrandId && t.ClinicId == dto.ClinicId
-                                 && t.StockId == null
-                                 && t.SourceType == InventoryTransactionType.Administer
-                                 && t.ConsumesStock == true
-                                 && t.ReconciledByTransactionId == null)
-                        .ToListAsync();
-                    foreach (var backlogRow in backlogRows)
-                        backlogRow.ReconciledByTransactionId = row.Id;
-
-                    if (backlogRows.Count > 0)
-                    {
-                        _db.InventoryTransactions.Add(new InventoryTransaction
-                        {
-                            DoctorId = dto.DoctorId,
-                            ClinicId = dto.ClinicId,
-                            BrandId = dto.BrandId,
-                            StockId = null,
-                            QuantityDelta = 0,
-                            SourceType = InventoryTransactionType.AdjustIncrease,
-                            SourceId = row.Id,
-                            EventDate = dto.Date,
-                            ConsumesStock = false,
-                            DecisionReason = $"{backlogRows.Count} unbatched dose(s) absorbed by this purchase."
-                        });
-                    }
+                    var chosen = dto.ClaimUnbatchedUseIds
+                        ?? (dto.ClearUnbatchedBacklog == true
+                            ? _inventory.PendingUses(dto.DoctorId, dto.ClinicId, dto.BrandId).Select(u => u.Id).ToList()
+                            : null);
+                    claimed = _inventory.ClaimPendingForNewBatch(dto.DoctorId, result.Batch, chosen);
                 }
 
-                await _db.SaveChangesAsync();
+                var adjustResponse = new { IsSuccess = true, Message = "Adjustment saved", ResponseData = new { row.Id, ClaimedUnbatched = claimed } };
+                Idempotency.Record(_db, dto.DoctorId, dto.ClientRequestId, "adjuststock.create", adjustResponse);
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
-                return Ok(new { IsSuccess = true, Message = "Adjustment saved", ResponseData = new { row.Id } });
+                return Ok(adjustResponse);
             }
             catch (Exception ex)
             {
@@ -209,10 +249,12 @@ namespace VaccineAPI.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                await _inventory.ReverseAdjustment(row.DoctorId, row.ClinicId, row.BrandId, row.Adjustment, row.BatchLot, row.Id);
+                var rev = await _inventory.ReverseAdjustment(row.DoctorId, row.ClinicId, row.BrandId, row.Adjustment, row.BatchLot, row.Id);
+                if (!rev.IsSuccess)
+                    return Ok(new { IsSuccess = false, Message = rev.Message });
 
                 _db.AdjustStocks.Remove(row);
-                await _db.SaveChangesAsync();
+                await _inventory.SaveAndAssertAsync();
                 await tx.CommitAsync();
 
                 return Ok(new { IsSuccess = true, Message = "Adjustment deleted" });

@@ -77,20 +77,10 @@ namespace VaccineAPI.Controllers
                 foreach (var clinic in doctor.Clinics)
                 {
                     // Create a BrandAmount entry for each clinic
-                    BrandAmount newBrandAmount = new BrandAmount
-                    {
-                        ClinicId = clinic.Id, // Use the clinic's ID
-                        DoctorId = doctor.Id, // Use the doctor's ID
-                        BrandId = dbVaccineBrand.Id, // Use the newly created brand's ID
-                        SalePrice = 0,
-                        Quantity = 0,
-                    };
-                    brandAmounts.Add(newBrandAmount);
+                    VaccineAPI.Services.BrandAmountProvisioner.Ensure(_db, dbVaccineBrand.Id, doctor.Id, clinic.Id);
                 }
             }
 
-            // Add all BrandAmount entries to the database
-            _db.BrandAmounts.AddRange(brandAmounts);
 
             // Save changes to the database
             await _db.SaveChangesAsync();
@@ -157,6 +147,10 @@ namespace VaccineAPI.Controllers
             {
                 return new Response<string>(false, "Brand not found", null);
             }
+
+            var stockBlock = VaccineAPI.Services.InventoryDeleteGuard.ForBrand(_db, id);
+            if (stockBlock != null)
+                return new Response<string>(false, stockBlock, null);
 
             var brandAmounts = await _db.BrandAmounts.Where(ba => ba.BrandId == id).ToListAsync();
 

@@ -749,7 +749,7 @@ namespace VaccineAPI.Controllers
                 writer.PageEvent = new PDFFooter(child);
                 document.Open();
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Schedule-PDF";
+                var qrCodeUrl = VerifyQrUrl(dbDoctor, "vaccination", $"{baseUrl}/Child/{childId}/Download-Schedule-PDF");
 
                 try
                 {
@@ -1882,7 +1882,7 @@ namespace VaccineAPI.Controllers
                 document.Open();
                 // QR Code URL
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Custom-PDF";
+                var qrCodeUrl = VerifyQrUrl(dbDoctor, "vaccination", $"{baseUrl}/Child/{childId}/Download-Custom-PDF");
                 try
                 {
                     using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
@@ -3498,7 +3498,7 @@ namespace VaccineAPI.Controllers
                 FatherName = childData.FatherName ?? "Unknown",
             };
 
-            var qrCodeUrl = $"{baseUrl}/child/invoice/{invoiceNumber}/invoice-file";
+            var qrCodeUrl = VerifyQrUrl(childData?.Clinic?.Doctor, "invoice", $"{baseUrl}/child/invoice/{invoiceNumber}/invoice-file");
             try
             {
 
@@ -4457,6 +4457,13 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf");
         }
 
+        // Dr. Salman (Doctor.Id == 1) verifies on vaccinepk.com/verify. QR codes never prefill
+        // the MR / invoice number: the visitor types it and presses Submit.
+        private const string VaccinePkVerifyBase = "https://vaccinepk.com/verify/";
+
+        private static string VerifyQrUrl(Doctor doctor, string type, string fallbackUrl) =>
+            doctor?.Id == 1 ? $"{VaccinePkVerifyBase}?type={type}" : fallbackUrl;
+
         private MemoryStream CreatePID(long childId)
         {
              var dbChild = _db.Childs
@@ -4554,9 +4561,7 @@ namespace VaccineAPI.Controllers
             var baseUrl = "https://myapi.vaccinationcentre.com/api";
             // Dr. Salman (Doctor.Id == 1) verifies patients on vaccinepk.com/verify instead of
             // the built-in HTML landing page.
-            var qrCodeUrl = dbChild.Clinic.Doctor?.Id == 1
-                ? $"https://vaccinepk.com/verify/?type=pid&mr={childId}"
-                : $"{baseUrl}/Child/PID/{childId}";
+            var qrCodeUrl = VerifyQrUrl(dbChild.Clinic.Doctor, "vaccination", $"{baseUrl}/Child/PID/{childId}");
 
             using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
             using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
@@ -4906,7 +4911,7 @@ namespace VaccineAPI.Controllers
                 // Payload is UNCHANGED from the existing pipeline.
                 Image qrImage = null;
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/Child/Travel-PDF-Download/{childId}";
+                var qrCodeUrl = VerifyQrUrl(childDetails.Clinic.Doctor, "vaccination", $"{baseUrl}/Child/Travel-PDF-Download/{childId}");
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
                 using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
                 {
@@ -5221,7 +5226,7 @@ namespace VaccineAPI.Controllers
 
                 Image qrImage = null;
                 var baseUrl = "https://myapi.vaccinationcentre.com/api";
-                var qrCodeUrl = $"{baseUrl}/Child/{childId}/Download-Custom-PDF";
+                var qrCodeUrl = VerifyQrUrl(dbChild.Clinic.Doctor, "vaccination", $"{baseUrl}/Child/{childId}/Download-Custom-PDF");
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
                 using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
                 {

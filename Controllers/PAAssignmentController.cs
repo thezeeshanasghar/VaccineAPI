@@ -992,6 +992,7 @@ namespace VaccineAPI.Controllers
                     // doctor to "go tap Confirm" would be a dead end — there's nothing left to tap.
                     bool alreadyConfirmedButUnsynced = false;
                     DateTime? blockingConfirmedAt = null;
+                    long? blockingInvoiceId = existingRow.InvoiceSubmissionId;
                     if (hasInvoice)
                     {
                         var blockingInvoice = await _db.InvoiceSubmissions.FindAsync(existingRow.InvoiceSubmissionId!.Value);
@@ -999,6 +1000,30 @@ namespace VaccineAPI.Controllers
                         {
                             alreadyConfirmedButUnsynced = true;
                             blockingConfirmedAt = blockingInvoice.ConfirmedAt;
+                        }
+                    }
+                    else
+                    {
+                        // Never-linked variant (2026-09-30, Salahuddin Sadi / assignment 136): the
+                        // invoice was submitted under a Doctor/(PA) label and confirmed, but the
+                        // assignment's InvoiceSubmissionId was never written, so it looked like "PA
+                        // hasn't submitted yet". If this PA's confirmed active invoice for the child
+                        // exists on/after the assignment date, it's the same sync gap — point at it so
+                        // the Fix & Continue path (ConfirmInvoice's self-heal re-links + closes) runs.
+                        var assignedDay = existingRow.AssignedAt.AddHours(5).Date;
+                        var unlinkedInvoice = await _db.InvoiceSubmissions
+                            .Where(i => i.ChildId == dto.ChildId
+                                     && i.PaId == existingRow.PersonalAssistantId
+                                     && i.IsConfirmedByDoctor
+                                     && i.InvoiceStatus == "Active"
+                                     && i.InvoiceDate >= assignedDay)
+                            .OrderBy(i => i.InvoiceDate)
+                            .FirstOrDefaultAsync();
+                        if (unlinkedInvoice != null)
+                        {
+                            alreadyConfirmedButUnsynced = true;
+                            blockingConfirmedAt = unlinkedInvoice.ConfirmedAt;
+                            blockingInvoiceId = unlinkedInvoice.Id;
                         }
                     }
 
@@ -1013,7 +1038,7 @@ namespace VaccineAPI.Controllers
                         BlockingAssignedDate = assignedDate,
                         BlockingClinicId = existingRow.ClinicId,
                         BlockingHasInvoice = hasInvoice,
-                        BlockingInvoiceSubmissionId = existingRow.InvoiceSubmissionId,
+                        BlockingInvoiceSubmissionId = blockingInvoiceId,
                         AlreadyConfirmedButUnsynced = alreadyConfirmedButUnsynced,
                         BlockingConfirmedAt = blockingConfirmedAt
                     });

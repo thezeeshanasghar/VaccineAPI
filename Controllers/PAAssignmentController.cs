@@ -197,24 +197,46 @@ namespace VaccineAPI.Controllers
                     var paId = assignment.PersonalAssistantId;
                     var childId = assignment.ChildId;
 
-                    var invoiceIds = await _db.InvoiceSubmissions
-                        .Where(i => i.ChildId == childId && i.PaId == paId)
-                        .Select(i => i.Id)
-                        .ToListAsync();
+                    // FullReset is scoped to THIS assignment's visit only. The old filter
+                    // (ChildId + PA) matched every dose that PA ever collected for the child, so
+                    // reversing a later visit silently un-gave earlier, unrelated visits and
+                    // deleted their invoices. The visit is identified by the invoice stamped on
+                    // the assignment / its doses (Schedule.InvoiceSubmissionId).
+                    var visitInvoiceId = assignment.InvoiceSubmissionId;
 
-                    if (invoiceIds.Count > 0)
+                    if (visitInvoiceId.HasValue)
                     {
-                        var amendments = _db.InvoiceAmendments.Where(am => invoiceIds.Contains(am.InvoiceSubmissionId));
+                        var amendments = _db.InvoiceAmendments.Where(am => am.InvoiceSubmissionId == visitInvoiceId.Value);
                         _db.InvoiceAmendments.RemoveRange(amendments);
 
-                        var invoices = _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id));
+                        var invoices = _db.InvoiceSubmissions.Where(i => i.Id == visitInvoiceId.Value && i.ChildId == childId);
                         _db.InvoiceSubmissions.RemoveRange(invoices);
                     }
 
-                    var schedules = await _db.Schedules
+                    var schedulesQuery = _db.Schedules
                         .Include(s => s.Dose)
-                        .Where(s => s.ChildId == childId && s.PaymentCollectorPaId == paId)
-                        .ToListAsync();
+                        .Where(s => s.ChildId == childId);
+
+                    List<Schedule> schedules;
+                    if (visitInvoiceId.HasValue)
+                    {
+                        schedules = await schedulesQuery
+                            .Where(s => s.InvoiceSubmissionId == visitInvoiceId.Value)
+                            .ToListAsync();
+                    }
+                    else
+                    {
+                        // Visit never got an invoice linked: only the PA's not-yet-invoiced doses
+                        // done since this assignment was created. Anything invoiced, or done before
+                        // the assignment existed, belongs to an earlier visit and is left alone.
+                        var assignedAt = assignment.AssignedAt;
+                        schedules = await schedulesQuery
+                            .Where(s => s.PaymentCollectorPaId == paId
+                                        && s.InvoiceSubmissionId == null
+                                        && s.DoneAt != null
+                                        && s.DoneAt >= assignedAt)
+                            .ToListAsync();
+                    }
 
                     var inventoryEnabled = IsInventoryEnabledForDoctor(doctorId);
 
@@ -297,6 +319,7 @@ namespace VaccineAPI.Controllers
                         s.IsDone = false;
                         s.GivenDate = null;
                         s.DoneAt = null;
+                        s.InvoiceSubmissionId = null;
                         s.GivenByPaId = null;
                         s.PaymentMode = "Cash";
                         s.OnlineService = null;

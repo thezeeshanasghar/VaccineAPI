@@ -5138,13 +5138,12 @@ namespace VaccineAPI.Controllers
                     headerTable.AddCell(new PdfPCell(new Phrase(" ")) { Border = PdfPCell.NO_BORDER });
                 }
 
-                // Wrap the whole header in a single rounded box (per the reference template).
+                // Header wrapper: no frame (a grey outline looked unacceptable in print).
                 var headerWrapper = new PdfPTable(1) { WidthPercentage = 100, SpacingAfter = 2f };
                 var headerBox = new PdfPCell(headerTable)
                 {
-                    Border = PdfPCell.NO_BORDER, // drawn by the rounded-corner cell event instead
+                    Border = PdfPCell.NO_BORDER,
                     Padding = 4f,
-                    CellEvent = new RoundedBorderCellEvent(),
                 };
                 headerWrapper.AddCell(headerBox);
                 document.Add(headerWrapper);
@@ -5451,7 +5450,6 @@ namespace VaccineAPI.Controllers
                 {
                     Border = PdfPCell.NO_BORDER,
                     Padding = 4f,
-                    CellEvent = new RoundedBorderCellEvent(),
                 };
                 headerWrapper.AddCell(headerBox);
                 document.Add(headerWrapper);
@@ -5503,6 +5501,7 @@ namespace VaccineAPI.Controllers
                 var child = _db.Childs
                     .Include(x => x.Schedules.Where(s => s.IsSkip != true))
                         .ThenInclude(s => s.Dose)
+                            .ThenInclude(d => d.Vaccine)
                     .Include(x => x.Schedules.Where(s => s.IsSkip != true))
                         .ThenInclude(s => s.Brand)
                     .FirstOrDefault(c => c.Id == childId);
@@ -5592,7 +5591,8 @@ namespace VaccineAPI.Controllers
                     }
                     string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due: " + schedule.Date.ToString("dd/MM/yyyy");
                     string expiry = !isGiven ? DASH : (latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH);
-                    string validity = (isGiven && schedule.Validity != null) ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
+                    int? validityDays = schedule.Validity ?? (schedule.Dose?.Vaccine != null ? schedule.Dose.Vaccine.Validity : (int?)null);
+                    string validity = (isGiven && validityDays.HasValue && validityDays.Value > 0) ? GetYearOrMonthFromDays(validityDays.Value) : DASH;
 
                     PdfPCell Cell(string text, int col, int align)
                     {

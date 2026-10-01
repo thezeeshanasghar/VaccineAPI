@@ -5677,6 +5677,7 @@ namespace VaccineAPI.Controllers
             c.Clinic.RegNo,
             c.Clinic.Address,
             c.Clinic.PhoneNumber,
+            c.Clinic.DoctorId,
         })
         .FirstOrDefault();
 
@@ -5740,9 +5741,13 @@ namespace VaccineAPI.Controllers
         cb.Stroke();
         cb.RestoreState();
 
+        // Dr. Salman (Doctor.Id == 1) has a dedicated site + verify page on vaccinepk.com.
+        string verifyHost = clinicDetails.DoctorId == 1
+            ? "https://vaccinepk.com/verify"
+            : "https://vaccinationcentre.com/verify";
         Phrase verificationNote = new Phrase(
             "This is a computer generated verifiable certificate. It does not require physical stamp/signatures. " +
-            "For verification, scan the QR code or visit https://vaccinationcentre.com/verify and enter MR number.",
+            $"For verification, scan the QR code or visit {verifyHost} and enter MR number.",
             regularFont
         );
 

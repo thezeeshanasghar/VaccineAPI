@@ -5114,11 +5114,11 @@ namespace VaccineAPI.Controllers
                 string monogramPath = !string.IsNullOrWhiteSpace(childDetails.Clinic?.MonogramImage)
                     ? Path.Combine(_host.ContentRootPath, childDetails.Clinic.MonogramImage) : null;
                 if (monogramPath != null && System.IO.File.Exists(monogramPath))
-                    logo = Image.GetInstance(monogramPath);
+                    logo = LoadOpaqueLogo(monogramPath);
                 else
                 {
                     string fallbackLogo = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
-                    if (System.IO.File.Exists(fallbackLogo)) logo = Image.GetInstance(fallbackLogo);
+                    if (System.IO.File.Exists(fallbackLogo)) logo = LoadOpaqueLogo(fallbackLogo);
                 }
                 if (logo != null)
                 {
@@ -5421,11 +5421,11 @@ namespace VaccineAPI.Controllers
                 string monogramPath = !string.IsNullOrWhiteSpace(dbChild.Clinic?.MonogramImage)
                     ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
                 if (monogramPath != null && System.IO.File.Exists(monogramPath))
-                    logo = Image.GetInstance(monogramPath);
+                    logo = LoadOpaqueLogo(monogramPath);
                 else
                 {
                     string fallbackLogo = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
-                    if (System.IO.File.Exists(fallbackLogo)) logo = Image.GetInstance(fallbackLogo);
+                    if (System.IO.File.Exists(fallbackLogo)) logo = LoadOpaqueLogo(fallbackLogo);
                 }
                 if (logo != null)
                 {
@@ -5625,22 +5625,31 @@ namespace VaccineAPI.Controllers
         }
 
         // Draws a light-grey rounded rectangle around a cell — used for the header box.
-        private class RoundedBorderCellEvent : IPdfPCellEvent
+        // Loads a logo flattened onto white with no alpha channel. A transparent PNG becomes a PDF soft-mask
+        // image, which many printers/drivers render as a grey rectangle behind the logo.
+        private static Image LoadOpaqueLogo(string path)
         {
-            public void CellLayout(PdfPCell cell, Rectangle position, PdfContentByte[] canvases)
+            try
             {
-                PdfContentByte cb = canvases[PdfPTable.LINECANVAS];
-                cb.SaveState();
-                cb.SetLineWidth(0.7f);
-                cb.SetColorStroke(BaseColor.LightGray);
-                cb.RoundRectangle(
-                    position.Left + 1f,
-                    position.Bottom + 1f,
-                    position.Width - 2f,
-                    position.Height - 2f,
-                    5f);
-                cb.Stroke();
-                cb.RestoreState();
+                using (var src = new System.Drawing.Bitmap(path))
+                using (var flat = new System.Drawing.Bitmap(src.Width, src.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb))
+                {
+                    flat.SetResolution(src.HorizontalResolution, src.VerticalResolution);
+                    using (var g = System.Drawing.Graphics.FromImage(flat))
+                    {
+                        g.Clear(System.Drawing.Color.White);
+                        g.DrawImage(src, 0, 0, src.Width, src.Height);
+                    }
+                    using (var ms = new MemoryStream())
+                    {
+                        flat.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                        return Image.GetInstance(ms.ToArray());
+                    }
+                }
+            }
+            catch
+            {
+                return Image.GetInstance(path);
             }
         }
 

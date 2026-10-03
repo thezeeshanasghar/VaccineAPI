@@ -762,7 +762,7 @@ namespace VaccineAPI.Controllers
                         {
                             using (MemoryStream ms = new MemoryStream(qrCodeImage))
                             {
-                                var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
+                                var pdfQrCode = VectorQrImage(writer, qrCodeData, 60f);
                                 pdfQrCode.ScaleAbsolute(60f, 60f);
                                 float marginLeft = document.PageSize.Width / 2 - pdfQrCode.ScaledWidth / 2;
                                 float qrCodeXPosition = marginLeft;
@@ -803,7 +803,7 @@ namespace VaccineAPI.Controllers
                 };
                 if (logoPath != null && System.IO.File.Exists(logoPath))
                 {
-                    var img = Image.GetInstance(logoPath);
+                    var img = LoadHeaderLogo(writer, logoPath);
                     img.ScaleAbsolute(160f, 50f);
                     imageCell = new PdfPCell(img, false)
                     {
@@ -1894,7 +1894,7 @@ namespace VaccineAPI.Controllers
                         {
                             using (MemoryStream ms = new MemoryStream(qrCodeImage))
                             {
-                                var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
+                                var pdfQrCode = VectorQrImage(writer, qrCodeData, 60f);
                                 pdfQrCode.ScaleAbsolute(60f, 60f);
                                 float marginLeft = document.PageSize.Width / 2 - pdfQrCode.ScaledWidth / 2;
                                 float qrCodeXPosition = marginLeft;
@@ -1935,7 +1935,7 @@ namespace VaccineAPI.Controllers
                 };
                 if (logoPath != null && System.IO.File.Exists(logoPath))
                 {
-                    var img = Image.GetInstance(logoPath);
+                    var img = LoadHeaderLogo(writer, logoPath);
                     img.ScaleAbsolute(160f, 50f);
                     imageCell = new PdfPCell(img, false)
                     {
@@ -3202,7 +3202,7 @@ namespace VaccineAPI.Controllers
 
             if (System.IO.File.Exists(imgPath))
             {
-                Image img = Image.GetInstance(imgPath);
+                Image img = LoadHeaderLogo(writer, imgPath);
                 img.ScaleAbsolute(160f, 50f);
                 PdfPCell imageCell = new PdfPCell(img, false)
                 {
@@ -3509,7 +3509,7 @@ namespace VaccineAPI.Controllers
                     byte[] qrCodeImage = qrCode.GetGraphic(20);
                     using (MemoryStream ms = new MemoryStream(qrCodeImage))
                     {
-                        var pdfQrCode = iTextSharpImage.GetInstance(ms.ToArray());
+                        var pdfQrCode = VectorQrImage(writer, qrCodeData, 60f);
                         pdfQrCode.ScaleAbsolute(80f, 80f);
 
                         float pageWidth = document.PageSize.Width;
@@ -3837,8 +3837,9 @@ namespace VaccineAPI.Controllers
                     dbChild.UserId = targetUser.Id;
                     dbChild.User = targetUser;
                     // Remove the old account only if this child was its last patient.
-                    if (oldUser.Childs != null && oldUser.Childs.Count == 1
-                        || _db.Childs.Count(c => c.UserId == oldUser.Id && c.Id != dbChild.Id) == 0)
+                    // Must query the DB: oldUser.Childs only holds the siblings EF happens to have
+                    // loaded (just this child here), so its Count==1 wrongly deleted the whole family.
+                    if (_db.Childs.Count(c => c.UserId == oldUser.Id && c.Id != dbChild.Id) == 0)
                     {
                         _db.Users.Remove(oldUser);
                     }
@@ -4723,7 +4724,7 @@ namespace VaccineAPI.Controllers
 
                 using (MemoryStream ms = new MemoryStream(qrCodeImage))
                 {
-                    var pdfQrCode = iTextSharp.text.Image.GetInstance(ms.ToArray());
+                    var pdfQrCode = VectorQrImage(writer, qrCodeData, 60f);
                     const float qrBaseSize = 60f;
                     const float qrScale = 1.10f;
                     const float qrRightPadding = 35f;
@@ -5067,10 +5068,7 @@ namespace VaccineAPI.Controllers
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
                 using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
                 {
-                    var qrCode = new BitmapByteQRCode(qrCodeData);
-                    byte[] qrCodeImage = qrCode.GetGraphic(18);
-                    qrImage = iTextSharp.text.Image.GetInstance(qrCodeImage);
-                    qrImage.ScaleAbsolute(52f, 52f);
+                    qrImage = VectorQrImage(writer, qrCodeData, 52f);
                 }
 
                 // Header: [doctor info | QR + MR No | clinic logo], the logo wide enough
@@ -5114,7 +5112,10 @@ namespace VaccineAPI.Controllers
                 string monogramPath = !string.IsNullOrWhiteSpace(childDetails.Clinic?.MonogramImage)
                     ? Path.Combine(_host.ContentRootPath, childDetails.Clinic.MonogramImage) : null;
                 if (monogramPath != null && System.IO.File.Exists(monogramPath))
+                {
                     logo = LoadOpaqueLogo(monogramPath);
+                    if (IsVaccinePkLogo(Image.GetInstance(monogramPath))) logo = VectorVaccinePkLogo(writer, 130f);
+                }
                 else
                 {
                     string fallbackLogo = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
@@ -5381,10 +5382,7 @@ namespace VaccineAPI.Controllers
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
                 using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrCodeUrl, QRCodeGenerator.ECCLevel.Q))
                 {
-                    var qrCode = new BitmapByteQRCode(qrCodeData);
-                    byte[] qrCodeImage = qrCode.GetGraphic(18);
-                    qrImage = iTextSharp.text.Image.GetInstance(qrCodeImage);
-                    qrImage.ScaleAbsolute(52f, 52f);
+                    qrImage = VectorQrImage(writer, qrCodeData, 52f);
                 }
 
                 var headerTable = new PdfPTable(3);
@@ -5421,7 +5419,10 @@ namespace VaccineAPI.Controllers
                 string monogramPath = !string.IsNullOrWhiteSpace(dbChild.Clinic?.MonogramImage)
                     ? Path.Combine(_host.ContentRootPath, dbChild.Clinic.MonogramImage) : null;
                 if (monogramPath != null && System.IO.File.Exists(monogramPath))
+                {
                     logo = LoadOpaqueLogo(monogramPath);
+                    if (IsVaccinePkLogo(Image.GetInstance(monogramPath))) logo = VectorVaccinePkLogo(writer, 130f);
+                }
                 else
                 {
                     string fallbackLogo = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Images", "Vaccine.pdflogo.png");
@@ -5625,6 +5626,90 @@ namespace VaccineAPI.Controllers
         }
 
         // Draws a light-grey rounded rectangle around a cell — used for the header box.
+        // QR drawn as vector squares (PDF template) instead of an embedded bitmap: printers can ink the white
+        // pixels of a raster image, which prints as a grey box behind the QR. Vector prints crisp, no box.
+        private static Image VectorQrImage(PdfWriter writer, QRCodeData data, float size)
+        {
+            var m = data.ModuleMatrix;
+            int n = m.Count;
+            float cell = size / n;
+            var tpl = writer.DirectContent.CreateTemplate(size, size);
+            tpl.SetColorFill(BaseColor.Black);
+            for (int y = 0; y < n; y++)
+            {
+                int x = 0;
+                while (x < n)
+                {
+                    if (!m[y][x]) { x++; continue; }
+                    int start = x;
+                    while (x < n && m[y][x]) x++;
+                    // overlap by a hair so adjacent squares never show seams
+                    tpl.Rectangle(start * cell, size - (y + 1) * cell, (x - start) * cell + 0.01f, cell + 0.01f);
+                }
+            }
+            tpl.Fill();
+            var img = Image.GetInstance(tpl);
+            img.ScaleAbsolute(size, size);
+            return img;
+        }
+
+        // Vaccine.pk logo traced to vector paths (889x340 source). Printers on the clinic floor render any
+        // embedded bitmap with a grey box, so the standard logo is drawn as vector instead. Clinics with their
+        // own uploaded logo keep the bitmap path (see LoadOpaqueLogo).
+        private const string VaccinePkLogoRgbMd5 = "3e4e275d921ede289922fe79dd96d048";
+        private const float VaccinePkLogoW = 889f, VaccinePkLogoH = 340f;
+        private static readonly (int r, int g, int b, string path)[] VaccinePkLogoLayers =
+        {
+            (79, 176, 94, "M 116.7 254.3 C 115.4 253.1 116.0 249.2 117.6 248.6 C 119.6 247.8 137.4 247.8 139.4 248.6 C 140.4 249.0 141.0 250.4 141.0 252.1 L 141.0 255.0 L 129.2 255.0 C 122.7 255.0 117.0 254.7 116.7 254.3 Z M 117.0 244.5 C 116.4 243.7 116.0 242.3 116.2 241.3 C 116.5 239.7 117.9 239.5 128.8 239.2 L 141.0 238.9 L 141.0 241.9 C 141.0 245.6 139.9 246.0 128.0 246.0 C 120.7 246.0 117.9 245.6 117.0 244.5 Z M 117.2 235.1 C 116.4 234.7 116.0 233.2 116.2 231.9 C 116.5 229.5 116.6 229.5 128.5 229.5 L 140.5 229.5 L 140.5 232.5 L 140.5 235.5 L 129.5 235.8 C 123.5 235.9 117.9 235.6 117.2 235.1 Z M 117.2 225.1 C 116.4 224.7 116.0 223.2 116.2 221.9 C 116.5 219.5 116.6 219.5 128.5 219.5 L 140.5 219.5 L 140.5 222.5 L 140.5 225.5 L 129.5 225.8 C 123.5 225.9 117.9 225.6 117.2 225.1 Z M 116.7 190.8 C 116.3 173.7 116.5 165.3 117.2 164.9 C 120.7 162.7 136.7 163.3 139.0 165.6 C 139.5 166.1 140.2 177.6 140.6 191.2 L 141.3 216.0 L 129.3 216.0 L 117.3 216.0 L 116.7 190.8 Z"),
+            (0, 109, 168, "M 102.5 332.0 C 62.7 323.9 33.5 302.7 17.6 270.5 C 8.0 251.1 5.5 238.7 5.5 210.0 C 5.5 184.1 8.2 168.4 16.5 145.3 C 25.7 120.1 45.0 88.0 70.3 56.1 C 81.3 42.3 118.8 4.0 121.4 4.0 C 124.2 4.0 123.2 6.0 117.2 12.9 C 103.8 28.1 81.4 57.4 69.0 75.8 C 34.5 127.2 17.8 175.4 21.9 211.5 C 25.6 244.1 50.2 277.6 82.4 294.1 C 91.7 298.8 92.5 300.1 88.2 302.5 C 86.7 303.4 86.3 303.9 87.3 303.6 C 88.3 303.3 91.6 302.7 94.6 302.4 C 101.1 301.6 101.7 302.9 96.8 307.2 L 93.5 310.1 L 99.4 307.1 C 108.7 302.2 111.4 303.2 106.5 309.6 C 102.8 314.4 103.4 314.6 108.9 310.6 C 116.1 305.3 117.7 306.1 114.5 313.7 C 112.3 319.0 113.3 318.8 117.0 313.0 C 121.6 305.8 123.0 306.3 123.0 315.2 L 123.1 322.5 L 125.7 316.2 C 128.7 308.8 130.4 308.5 133.0 314.9 C 134.9 319.8 136.0 318.8 136.0 311.9 C 136.0 306.5 137.9 306.9 142.1 312.9 C 143.9 315.7 145.5 317.8 145.7 317.7 C 145.8 317.5 145.3 315.2 144.5 312.5 C 143.7 309.9 143.0 307.3 143.0 306.8 C 143.0 305.2 146.7 306.0 148.5 308.0 C 149.5 309.1 150.8 310.0 151.4 310.0 C 152.0 310.0 151.9 309.5 151.2 308.8 C 149.6 307.2 149.7 305.0 151.4 305.0 C 152.1 305.0 155.3 306.1 158.5 307.5 C 165.3 310.6 166.3 310.3 161.5 306.6 C 158.0 303.9 156.8 301.0 159.2 301.0 C 159.9 301.1 163.4 301.7 167.0 302.5 C 174.3 304.0 175.5 303.9 171.0 302.0 C 166.7 300.2 167.1 297.6 171.9 296.2 C 174.0 295.5 176.5 295.0 177.4 295.0 C 178.3 295.0 179.0 294.4 179.0 293.6 C 179.0 292.9 181.8 290.3 185.2 287.9 C 193.7 282.1 208.7 267.0 214.0 259.1 C 230.0 235.2 235.4 207.6 228.9 182.0 C 224.0 162.7 216.0 149.6 187.4 113.9 C 162.7 83.0 146.0 59.4 146.0 55.3 C 146.0 52.3 148.8 54.5 154.2 61.8 C 160.1 69.8 168.3 79.2 197.9 111.8 C 242.2 160.6 252.0 179.1 252.0 213.8 C 252.0 235.5 248.6 250.9 239.9 268.5 C 223.0 302.8 193.8 324.0 152.5 332.0 C 138.5 334.6 115.6 334.7 102.5 332.0 Z M 112.4 292.5 C 111.4 288.6 112.6 287.1 117.0 286.4 L 121.0 285.7 L 121.0 276.4 L 121.0 267.0 L 128.5 267.0 L 136.0 267.0 L 136.0 276.3 L 136.0 285.6 L 140.2 286.6 C 144.3 287.4 144.5 287.7 144.5 291.0 L 144.5 294.5 L 128.8 294.8 L 113.1 295.1 L 112.4 292.5 Z M 104.4 262.6 C 103.3 259.7 104.5 257.5 107.3 257.2 L 110.0 256.9 L 110.0 209.6 C 110.0 158.0 109.7 160.6 115.8 159.4 L 119.0 158.8 L 119.0 148.3 L 119.0 137.9 L 121.9 136.9 L 124.8 135.9 L 125.4 112.2 C 126.1 88.1 126.8 84.0 130.1 84.0 C 131.7 84.0 131.8 85.8 131.3 109.9 L 130.7 135.7 L 133.6 137.1 C 136.5 138.5 136.5 138.6 136.8 148.5 L 137.1 158.5 L 142.1 160.7 L 147.0 162.9 L 147.0 200.8 C 147.0 221.6 147.3 242.8 147.6 247.8 C 148.2 256.2 148.5 256.9 150.6 257.4 C 152.5 257.9 153.0 258.7 153.0 261.0 L 153.0 264.0 L 129.0 264.0 C 109.0 264.0 104.8 263.8 104.4 262.6 Z M 142.0 212.0 L 142.0 167.1 L 138.9 165.5 C 134.6 163.2 127.0 162.6 121.3 163.9 L 116.3 165.1 L 115.7 179.3 C 115.3 187.1 115.0 207.8 115.0 225.2 L 115.0 257.0 L 128.5 257.0 L 142.0 257.0 L 142.0 212.0 Z M 132.0 150.1 C 132.0 143.0 131.8 142.1 130.0 141.5 C 125.1 139.9 124.0 141.5 124.0 150.1 L 124.0 158.0 L 128.0 158.0 L 132.0 158.0 L 132.0 150.1 Z"),
+            (0, 0, 0, "M 756.0 195.7 L 756.0 152.3 L 762.4 151.2 C 788.4 146.4 802.8 151.4 810.4 167.9 C 813.8 175.4 813.4 192.5 809.7 200.5 C 806.2 208.1 802.8 211.6 796.5 214.6 C 789.9 217.7 777.6 217.9 771.2 215.0 L 767.0 213.1 L 767.0 226.0 L 767.0 239.0 L 761.5 239.0 L 756.0 239.0 L 756.0 195.7 Z M 727.1 216.9 C 718.8 213.5 721.3 201.0 730.3 201.0 C 734.8 201.0 738.4 204.8 738.4 209.5 C 738.4 215.4 732.6 219.2 727.1 216.9 Z M 376.7 215.8 C 365.4 212.6 359.8 198.1 365.5 186.9 C 369.9 178.5 388.1 173.8 401.4 177.7 C 403.1 178.2 403.2 177.8 402.6 172.9 C 401.1 161.9 396.3 158.4 384.1 159.4 C 379.9 159.7 375.3 160.2 373.9 160.6 C 371.5 161.1 371.2 160.9 370.6 157.0 C 369.7 151.5 369.9 151.4 378.2 150.0 C 397.0 146.8 409.5 152.0 412.9 164.5 C 413.5 166.9 414.0 178.0 414.0 191.6 L 414.0 214.8 L 411.2 215.4 C 405.9 216.6 380.6 217.0 376.7 215.8 Z M 448.6 215.0 C 433.5 209.1 426.2 189.8 431.9 171.0 C 436.0 157.6 447.4 149.0 461.1 149.0 C 466.5 149.0 476.0 150.8 477.4 152.1 C 479.0 153.5 476.0 162.2 474.1 161.5 C 464.4 157.8 454.1 159.0 448.5 164.6 C 440.0 173.1 440.1 194.5 448.7 202.2 C 453.6 206.7 464.7 208.3 473.3 205.9 C 478.0 204.6 477.8 204.5 478.6 210.2 L 479.2 214.7 L 474.7 215.9 C 467.5 217.7 454.3 217.2 448.6 215.0 Z M 505.4 214.1 C 494.5 208.9 488.9 199.0 488.7 184.5 C 488.5 161.3 502.4 147.4 523.9 149.3 C 534.0 150.2 537.1 151.6 536.3 154.8 C 534.6 161.9 534.7 161.9 528.9 160.4 C 519.2 157.9 512.5 159.3 506.9 164.9 C 500.2 171.6 498.7 187.1 503.8 197.0 C 508.6 206.5 513.8 208.0 534.0 205.8 C 536.1 205.5 536.5 206.0 537.1 209.5 C 537.5 211.7 537.5 213.9 537.0 214.3 C 535.6 215.9 528.6 217.0 520.0 217.0 C 512.7 217.0 510.7 216.6 505.4 214.1 Z M 669.6 215.0 C 663.3 212.5 656.8 206.1 653.8 199.6 C 650.3 191.8 650.5 174.7 654.1 167.0 C 659.9 154.6 667.8 149.5 681.0 149.5 C 690.4 149.5 695.2 151.3 700.1 156.7 C 705.1 162.0 708.0 171.0 708.0 181.0 L 708.0 186.0 L 686.1 186.0 C 672.3 186.0 663.9 186.4 663.5 187.0 C 663.1 187.6 663.6 190.4 664.4 193.3 C 666.1 199.2 670.6 204.1 675.9 205.9 C 680.6 207.4 691.7 207.3 697.3 205.6 L 701.9 204.2 L 702.6 208.5 C 702.9 210.9 702.9 213.3 702.6 213.8 C 700.4 217.3 677.6 218.1 669.6 215.0 Z M 307.9 209.2 C 298.2 187.8 277.0 133.3 277.0 129.8 C 277.0 129.3 280.0 129.0 283.7 129.2 C 290.1 129.5 290.4 129.6 291.3 132.5 C 299.4 157.8 316.0 201.4 317.1 200.3 C 318.3 198.9 328.4 172.4 336.1 150.2 L 343.5 129.0 L 349.7 129.0 C 353.2 129.0 356.0 129.4 356.0 129.8 C 356.0 132.9 333.3 191.7 325.9 207.8 L 322.1 216.0 L 316.5 216.0 L 310.9 216.0 L 307.9 209.2 Z M 551.0 183.5 L 551.0 151.0 L 556.5 151.0 L 562.0 151.0 L 562.0 183.5 L 562.0 216.0 L 556.5 216.0 L 551.0 216.0 L 551.0 183.5 Z M 582.2 184.3 L 582.5 152.5 L 588.0 151.2 C 591.0 150.5 598.9 149.8 605.5 149.7 C 617.2 149.5 617.6 149.6 623.0 152.6 C 627.5 155.2 629.0 156.8 631.5 161.5 L 634.5 167.4 L 634.8 191.7 L 635.2 216.0 L 629.1 216.0 L 623.0 216.0 L 623.0 193.8 C 622.9 162.0 621.6 159.7 603.7 160.2 L 594.5 160.5 L 594.2 188.2 L 594.0 216.0 L 588.0 216.0 L 582.0 216.0 L 582.2 184.3 Z M 830.0 168.1 L 830.0 120.3 L 833.8 119.6 C 841.7 118.3 841.0 115.6 841.0 148.0 C 841.0 164.9 841.4 177.0 841.9 177.0 C 842.4 177.0 848.4 171.1 855.2 163.9 L 867.6 150.9 L 874.0 151.2 L 880.4 151.5 L 867.2 165.7 L 854.0 179.9 L 860.9 186.8 C 867.6 193.6 883.0 213.2 883.0 215.1 C 883.0 215.6 880.1 216.0 876.7 216.0 L 870.3 216.0 L 863.7 207.1 C 857.5 198.9 843.9 185.0 841.9 185.0 C 841.4 185.0 841.0 192.0 841.0 200.5 L 841.0 216.0 L 835.5 216.0 L 830.0 216.0 L 830.0 168.1 Z M 402.2 206.3 C 402.7 206.1 403.0 201.7 403.0 196.5 L 403.0 187.1 L 399.5 186.4 C 393.0 185.2 382.3 186.4 379.3 188.6 C 371.4 194.5 374.5 205.0 384.8 207.1 C 388.4 207.8 400.7 207.3 402.2 206.3 Z M 792.9 204.1 C 801.6 197.9 803.7 178.2 796.7 167.9 C 792.8 162.1 787.8 160.0 778.0 160.0 C 773.3 160.0 768.9 160.4 768.2 160.8 C 767.3 161.5 767.0 166.4 767.2 182.1 L 767.5 202.5 L 772.0 204.8 C 778.1 208.0 787.9 207.6 792.9 204.1 Z M 695.5 173.3 C 693.9 164.8 689.3 159.9 682.2 159.2 C 673.4 158.4 667.3 163.0 664.4 172.6 L 663.1 177.0 L 679.7 177.0 L 696.2 177.0 L 695.5 173.3 Z M 551.7 137.0 C 547.0 133.3 548.9 124.6 554.5 123.9 C 564.9 122.5 567.7 136.6 557.5 138.6 C 555.3 139.0 553.7 138.6 551.7 137.0 Z"),
+        };
+
+        private static bool IsVaccinePkLogo(Image img)
+        {
+            try
+            {
+                if ((int)img.Width != 889 || (int)img.Height != 340 || img.Bpc != 8 || img.Colorspace != 3) return false;
+                using (var md5 = System.Security.Cryptography.MD5.Create())
+                    return BitConverter.ToString(md5.ComputeHash(RawImageBytes(img))).Replace("-", "").ToLowerInvariant() == VaccinePkLogoRgbMd5;
+            }
+            catch { return false; }
+        }
+
+        private static Image VectorVaccinePkLogo(PdfWriter writer, float width)
+        {
+            float height = width * VaccinePkLogoH / VaccinePkLogoW, k = width / VaccinePkLogoW;
+            var t = writer.DirectContent.CreateTemplate(width, height);
+            foreach (var layer in VaccinePkLogoLayers)
+            {
+                t.SetColorFill(new BaseColor(layer.r, layer.g, layer.b));
+                var tok = layer.path.Split(' ');
+                float F(int j) => float.Parse(tok[j], CultureInfo.InvariantCulture);
+                for (int i = 0; i < tok.Length;)
+                {
+                    switch (tok[i])
+                    {
+                        case "M": t.MoveTo(F(i + 1) * k, height - F(i + 2) * k); i += 3; break;
+                        case "L": t.LineTo(F(i + 1) * k, height - F(i + 2) * k); i += 3; break;
+                        case "C": t.CurveTo(F(i + 1) * k, height - F(i + 2) * k, F(i + 3) * k, height - F(i + 4) * k, F(i + 5) * k, height - F(i + 6) * k); i += 7; break;
+                        case "Z": t.ClosePath(); i++; break;
+                        default: i++; break;
+                    }
+                }
+                t.EoFill();
+            }
+            var img = Image.GetInstance(t);
+            img.ScaleAbsolute(width, height);
+            return img;
+        }
+
+        // Header logo for the schedule/invoice PDFs: vector for the standard Vaccine.pk logo, else the bitmap as-is.
+        private static Image LoadHeaderLogo(PdfWriter writer, string path)
+        {
+            var img = Image.GetInstance(path);
+            return IsVaccinePkLogo(img) ? VectorVaccinePkLogo(writer, 160f) : img;
+        }
+
         // Loads the clinic logo with TRUE transparency but without a soft mask. An alpha PNG is embedded by
         // iTextSharp as RGB + /SMask, and many printer drivers rasterize that as a grey rectangle. Here the
         // alpha is converted to a 1-bit stencil (/Mask): printers treat it as a clip, and the paper colour

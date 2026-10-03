@@ -5625,31 +5625,48 @@ namespace VaccineAPI.Controllers
         }
 
         // Draws a light-grey rounded rectangle around a cell — used for the header box.
-        // Loads a logo flattened onto white with no alpha channel. A transparent PNG becomes a PDF soft-mask
-        // image, which many printers/drivers render as a grey rectangle behind the logo.
+        // Loads the clinic logo with TRUE transparency but without a soft mask. An alpha PNG is embedded by
+        // iTextSharp as RGB + /SMask, and many printer drivers rasterize that as a grey rectangle. Here the
+        // alpha is converted to a 1-bit stencil (/Mask): printers treat it as a clip, and the paper colour
+        // (white or yellow) shows through. Pure iTextSharp (no System.Drawing, unsupported on the Linux host).
+        // Falls back to the original image if anything is unexpected.
         private static Image LoadOpaqueLogo(string path)
         {
+            var img = Image.GetInstance(path);
             try
             {
-                using (var src = new System.Drawing.Bitmap(path))
-                using (var flat = new System.Drawing.Bitmap(src.Width, src.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb))
-                {
-                    flat.SetResolution(src.HorizontalResolution, src.VerticalResolution);
-                    using (var g = System.Drawing.Graphics.FromImage(flat))
-                    {
-                        g.Clear(System.Drawing.Color.White);
-                        g.DrawImage(src, 0, 0, src.Width, src.Height);
-                    }
-                    using (var ms = new MemoryStream())
-                    {
-                        flat.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                        return Image.GetInstance(ms.ToArray());
-                    }
-                }
+                var smask = img.ImageMask;
+                if (smask == null) return img;
+                int w = (int)img.Width, h = (int)img.Height;
+                if (img.Bpc != 8 || img.Colorspace != 3 || smask.Bpc != 8 || smask.Colorspace != 1) return img;
+                byte[] rgb = RawImageBytes(img), alpha = RawImageBytes(smask);
+                if (rgb.Length != w * h * 3 || alpha.Length != w * h) return img;
+                int stride = (w + 7) / 8;
+                var bits = new byte[stride * h];
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        if (alpha[y * w + x] < 128) bits[y * stride + x / 8] |= (byte)(0x80 >> (x % 8)); // 1 = masked out
+                var mask = Image.GetInstance(w, h, 1, 1, bits);
+                mask.MakeMask();
+                var res = Image.GetInstance(w, h, 3, 8, rgb);
+                res.ImageMask = mask;
+                return res;
             }
             catch
             {
-                return Image.GetInstance(path);
+                return img;
+            }
+        }
+
+        private static byte[] RawImageBytes(Image i)
+        {
+            if (!i.Deflated) return i.RawData;
+            using (var ms = new MemoryStream(i.RawData))
+            using (var z = new System.IO.Compression.ZLibStream(ms, System.IO.Compression.CompressionMode.Decompress))
+            using (var o = new MemoryStream())
+            {
+                z.CopyTo(o);
+                return o.ToArray();
             }
         }
 

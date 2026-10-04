@@ -689,6 +689,26 @@ namespace VaccineAPI.Controllers
                 RequestedAt = DateTime.UtcNow
             });
 
+            // In-app bell notification for the doctor (shown in the top-bar bell + Notifications page)
+            var notifPa = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
+            var notifChild = await _db.Childs.FindAsync(assignment.ChildId);
+            var priorRefusals = await _db.VaccineRefusals
+                .CountAsync(r => r.ChildId == assignment.ChildId && r.Status == "Approved");
+            _db.Notifications.Add(new Notification
+            {
+                Type          = "PaRefusal",
+                RecipientType = "DOCTOR",
+                RecipientId   = assignment.DoctorId,
+                ChildId       = assignment.ChildId,
+                ClinicId      = assignment.ClinicId,
+                Title         = $"Refused at home: {notifChild?.Name ?? "a patient"}",
+                Message       = $"{notifPa?.Name ?? "Your PA"} reports the family refused. Tap to approve or reject."
+                                + (priorRefusals > 0 ? $" Refused before: {priorRefusals} time{(priorRefusals > 1 ? "s" : "")}." : "")
+                                + (string.IsNullOrWhiteSpace(dto.Reason) ? "" : $" Reason: {dto.Reason}"),
+                IsRead        = false,
+                CreatedAt     = DateTime.UtcNow
+            });
+
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
             {
@@ -698,9 +718,9 @@ namespace VaccineAPI.Controllers
             var doctor = await _db.Doctors.FindAsync(assignment.DoctorId);
             if (doctor != null && !string.IsNullOrEmpty(doctor.Email))
             {
-                var paUser = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
+                var paUser = notifPa;
                 var paNameStr = paUser?.Name ?? "Your PA";
-                var child = await _db.Childs.FindAsync(assignment.ChildId);
+                var child = notifChild;
                 var childNameStr = child?.Name ?? "a patient";
                 var reasonStr = dto.Reason ?? "No reason given";
                 var refusalSender = EmailSenderResolver.Resolve(doctor, _db);

@@ -97,6 +97,13 @@ namespace VaccineAPI.Controllers
                 ? await _db.Bookings.Where(b => bookingIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id)
                 : new Dictionary<long, Booking>();
 
+            var rawAssignmentIds = rawAssignments.Select(a => a.Id).ToList();
+            var pendingRefusalAssignmentIds = new HashSet<long>(
+                await _db.VaccineRefusals
+                    .Where(r => r.Status == "Pending" && rawAssignmentIds.Contains(r.AssignmentId))
+                    .Select(r => r.AssignmentId)
+                    .ToListAsync());
+
             // Enrich each assignment with child info, schedules, and invoice
             var result = rawAssignments.Select(a =>
             {
@@ -158,6 +165,7 @@ namespace VaccineAPI.Controllers
                     ParentWhatsApp = child?.User != null ? ToWhatsAppNumber(child.User.MobileNumber, child.User.CountryCode) : "",
                     a.IsAutoCreated,
                     a.AssignmentStatus,
+                    RefusalPending = pendingRefusalAssignmentIds.Contains(a.Id),
                     a.IsCompleted,
                     a.IsCashConfirmedByDoctor,
                     InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
@@ -231,7 +239,7 @@ namespace VaccineAPI.Controllers
                         // the assignment existed, belongs to an earlier visit and is left alone.
                         var assignedAt = assignment.AssignedAt;
                         schedules = await schedulesQuery
-                            .Where(s => s.PaymentCollectorPaId == paId
+                            .Where(s => (s.PaymentCollectorPaId == paId || s.GivenByPaId == paId)
                                         && s.InvoiceSubmissionId == null
                                         && s.DoneAt != null
                                         && s.DoneAt >= assignedAt)
@@ -336,6 +344,20 @@ namespace VaccineAPI.Controllers
                     foreach (var vaccineId in vaccineIdsToCleanUp)
                     {
                         InfiniteDoseCleanup.RemoveExtraUndoneRows(_db, childId, vaccineId);
+                    }
+                }
+
+                // A FullReset resolves any pending "patient refused at home" request for this
+                // assignment, in the same transaction — so Approved always means really reversed.
+                if (mode == "FullReset")
+                {
+                    var pendingRefusals = await _db.VaccineRefusals
+                        .Where(r => r.AssignmentId == assignment.Id && r.Status == "Pending")
+                        .ToListAsync();
+                    foreach (var r in pendingRefusals)
+                    {
+                        r.Status = "Approved";
+                        r.ResolvedAt = DateTime.UtcNow;
                     }
                 }
 
@@ -630,6 +652,188 @@ namespace VaccineAPI.Controllers
             }
 
             return Ok(new { IsSuccess = true, Message = "Cancellation request rejected" });
+        }
+
+        // POST /api/PAAssignment/{id}/request-refusal
+        // PA-only: the patient refused at home. Allowed from assignment until the payment mode
+        // is recorded. Nothing is reversed here — the doctor's approval does that.
+        [HttpPost("{id}/request-refusal")]
+        public async Task<IActionResult> RequestRefusal(long id, [FromBody] CancelAssignmentDto dto)
+        {
+            var assignment = await _db.PAAssignments.FindAsync(id);
+            if (assignment == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+            if (assignment.IsCompleted || assignment.IsCancelled)
+                return Ok(new { IsSuccess = false, Message = "This assignment is already closed" });
+            if (assignment.PersonalAssistantId != dto.CallerId)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised for this assignment" });
+
+            if (await _db.VaccineRefusals.AnyAsync(r => r.AssignmentId == id && r.Status == "Pending"))
+                return Ok(new { IsSuccess = false, Message = "A refusal request is already awaiting the doctor" });
+
+            var paymentRecorded = await _db.PAAssignmentSchedules
+                .Where(l => l.AssignmentId == id)
+                .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
+                .AnyAsync(s => s.IsPaymentCollected);
+            if (paymentRecorded)
+                return Ok(new { IsSuccess = false, Message = "Payment mode is already recorded, so this can no longer be reversed from here. Please contact the doctor." });
+
+            _db.VaccineRefusals.Add(new VaccineRefusal
+            {
+                AssignmentId = assignment.Id,
+                ChildId = assignment.ChildId,
+                DoctorId = assignment.DoctorId,
+                PaId = assignment.PersonalAssistantId,
+                Reason = dto.Reason,
+                Status = "Pending",
+                RequestedAt = DateTime.UtcNow
+            });
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            var doctor = await _db.Doctors.FindAsync(assignment.DoctorId);
+            if (doctor != null && !string.IsNullOrEmpty(doctor.Email))
+            {
+                var paUser = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
+                var paNameStr = paUser?.Name ?? "Your PA";
+                var child = await _db.Childs.FindAsync(assignment.ChildId);
+                var childNameStr = child?.Name ?? "a patient";
+                var reasonStr = dto.Reason ?? "No reason given";
+                var refusalSender = EmailSenderResolver.Resolve(doctor, _db);
+                _ = Task.Run(() => UserEmail.SendEmail(
+                    doctor.Email,
+                    $"The family of {childNameStr} refused the vaccination at home (reported by {paNameStr}). Reason: {reasonStr}. Approve in the VacDoc app to reverse the visit, or reject to keep it.",
+                    "Patient Refused at Home — Approval Needed",
+                    sender: refusalSender
+                ));
+            }
+
+            return Ok(new { IsSuccess = true });
+        }
+
+        // GET /api/PAAssignment/pending-refusals/{doctorId}
+        [HttpGet("pending-refusals/{doctorId}")]
+        public async Task<IActionResult> GetPendingRefusals(long doctorId)
+        {
+            var pending = await _db.VaccineRefusals
+                .Where(r => r.DoctorId == doctorId && r.Status == "Pending")
+                .OrderByDescending(r => r.RequestedAt)
+                .ToListAsync();
+
+            var childIds = pending.Select(r => r.ChildId).Distinct().ToList();
+            var childNames = await _db.Childs
+                .Where(c => childIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name ?? "");
+            var paIds = pending.Select(r => r.PaId).Distinct().ToList();
+            var paNames = await _db.PersonalAssistant
+                .Where(p => paIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Name ?? "");
+            var priorCounts = await _db.VaccineRefusals
+                .Where(r => childIds.Contains(r.ChildId) && r.Status == "Approved")
+                .GroupBy(r => r.ChildId)
+                .Select(g => new { ChildId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.ChildId, x => x.Count);
+
+            var result = pending.Select(r => new
+            {
+                RefusalId = r.Id,
+                AssignmentId = r.AssignmentId,
+                ChildId = r.ChildId,
+                ChildName = childNames.ContainsKey(r.ChildId) ? childNames[r.ChildId] : "",
+                PaId = r.PaId,
+                PaName = paNames.ContainsKey(r.PaId) ? paNames[r.PaId] : "",
+                RequestedAt = r.RequestedAt,
+                Reason = r.Reason,
+                PriorRefusals = priorCounts.ContainsKey(r.ChildId) ? priorCounts[r.ChildId] : 0
+            });
+
+            return Ok(new { IsSuccess = true, ResponseData = result });
+        }
+
+        // PATCH /api/PAAssignment/{id}/approve-refusal?doctorId=
+        // Approving IS the reversal: runs the existing FullReset (ungive, stock back, invoice
+        // deleted, payment cleared, assignment removed), which marks the request Approved in
+        // its own transaction. If the reset fails the request stays Pending.
+        [HttpPatch("{id}/approve-refusal")]
+        public async Task<IActionResult> ApproveRefusal(long id, [FromQuery] long doctorId)
+        {
+            var request = await _db.VaccineRefusals
+                .FirstOrDefaultAsync(r => r.AssignmentId == id && r.Status == "Pending");
+            if (request == null)
+                return Ok(new { IsSuccess = false, Message = "This request has already been resolved" });
+            if (request.DoctorId != doctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised" });
+
+            return await DeleteAssignment(id, doctorId, "FullReset");
+        }
+
+        // PATCH /api/PAAssignment/{id}/reject-refusal
+        [HttpPatch("{id}/reject-refusal")]
+        public async Task<IActionResult> RejectRefusal(long id, [FromBody] RejectCancelDto dto)
+        {
+            var request = await _db.VaccineRefusals
+                .FirstOrDefaultAsync(r => r.AssignmentId == id && r.Status == "Pending");
+            if (request == null)
+                return Ok(new { IsSuccess = false, Message = "This request has already been resolved" });
+            if (request.DoctorId != dto.DoctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised" });
+
+            request.Status = "Rejected";
+            request.ResolvedAt = DateTime.UtcNow;
+            request.RejectionNote = dto.Notes;
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+
+            var pa = await _db.PersonalAssistant.FindAsync(request.PaId);
+            if (pa != null && !string.IsNullOrEmpty(pa.Email))
+            {
+                var child = await _db.Childs.FindAsync(request.ChildId);
+                var childNameStr = child?.Name ?? "the patient";
+                var reason = !string.IsNullOrEmpty(dto.Notes) ? dto.Notes : "No reason given";
+                var rejectDoctor = await _db.Doctors.FindAsync(request.DoctorId);
+                var rejectSender = EmailSenderResolver.Resolve(rejectDoctor, _db);
+                _ = Task.Run(() => UserEmail.SendEmail(
+                    pa.Email,
+                    $"Hi {pa.Name},<br><br>Your \"refused at home\" request for patient <b>{childNameStr}</b> was <b>rejected</b>.<br>Note: {reason}<br><br>The assignment remains active.",
+                    "Refusal Request Rejected",
+                    sender: rejectSender
+                ));
+            }
+
+            return Ok(new { IsSuccess = true, Message = "Request rejected" });
+        }
+
+        // GET /api/PAAssignment/refusal-flag/{childId}
+        // Golden marker data. Active while the child has an approved refusal and no dose has
+        // been given since it was approved. Count is the child's total approved refusals.
+        [HttpGet("refusal-flag/{childId}")]
+        public async Task<IActionResult> GetRefusalFlag(long childId)
+        {
+            var approved = await _db.VaccineRefusals
+                .Where(r => r.ChildId == childId && r.Status == "Approved")
+                .OrderByDescending(r => r.ResolvedAt)
+                .ToListAsync();
+
+            if (!approved.Any())
+                return Ok(new { IsSuccess = true, ResponseData = new { Active = false, Count = 0 } });
+
+            var last = approved.First();
+            var givenSince = await _db.Schedules
+                .AnyAsync(s => s.ChildId == childId && s.IsDone == true && s.DoneAt != null && s.DoneAt > last.ResolvedAt);
+
+            return Ok(new
+            {
+                IsSuccess = true,
+                ResponseData = new { Active = !givenSince, Count = approved.Count, LastAt = last.ResolvedAt, LastReason = last.Reason }
+            });
         }
 
         // PATCH /api/PAAssignment/{id}/reassign

@@ -144,6 +144,7 @@ namespace VaccineAPI.Models
         public DbSet<UnbatchedUse> UnbatchedUses { get; set; }
         public DbSet<IdempotencyKey> IdempotencyKeys { get; set; }
         public DbSet<PAAssignmentSchedule> PAAssignmentSchedules { get; set; }
+        public DbSet<VaccineRefusal> VaccineRefusals { get; set; }
         public DbSet<Refrigerator> Refrigerators { get; set; }
         public DbSet<TemperatureReading> TemperatureReadings { get; set; }
         public DbSet<ColdChainApprovalLog> ColdChainApprovalLogs { get; set; }

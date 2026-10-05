@@ -1870,7 +1870,11 @@ namespace VaccineAPI.Controllers
 
                 var dbChild = _db.Childs.FirstOrDefault(x => x.Id == scheduleDTO.ChildId);
                 var dbDose = _db.Doses.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
-                scheduleDTO.Date = calculateDate(dbChild.DOB, dbDose.MinAge);
+                // Repeating doses (Flu/Typhoid/Vitamin A) have no age position: anchoring on DOB leaves
+                // a decades-old "overdue" phantom row, so they start from today (PKT) instead.
+                scheduleDTO.Date = IsInfiniteDose(dbDose)
+                    ? DateTime.UtcNow.AddHours(5).Date
+                    : calculateDate(dbChild.DOB, dbDose.MinAge);
                 if (string.IsNullOrEmpty(scheduleDTO.Expiry?.ToString()))
                 {
                     scheduleDTO.Expiry = null;
@@ -3728,7 +3732,7 @@ namespace VaccineAPI.Controllers
                     return new Response<List<Schedule>>(false, "No undone infinite doses found.", null);
                 }
 
-                InfiniteDoseCleanup.RemoveExtraUndoneRows(_db, ChildId, dose.VaccineId);
+                InfiniteDoseCleanup.RemoveExtraUndoneRows(_db, ChildId, dose.VaccineId, dateOfInjection);
 
                 if (paId.HasValue && doctorId.HasValue)
                 {

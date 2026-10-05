@@ -25,10 +25,10 @@ namespace VaccineAPI
                 || name.StartsWith("Vitamin A", System.StringComparison.OrdinalIgnoreCase);
         }
 
-        // Removes every undone future row for this child+vaccine except the earliest, leaving
-        // exactly one undone row in place (matching ScheduleController.Delete's contract).
+        // Removes every undone row for this child+vaccine except one (the ungiven row via keepDate,
+        // else the earliest), skipping rows linked to a PA assignment.
         // Call this once per distinct VaccineId after ungiving a dose belonging to that vaccine.
-        public static void RemoveExtraUndoneRows(Context db, long childId, long vaccineId)
+        public static void RemoveExtraUndoneRows(Context db, long childId, long vaccineId, System.DateTime? keepDate = null)
         {
             var undoneSchedules = db.Schedules
                 .Include(x => x.Dose)
@@ -42,7 +42,22 @@ namespace VaccineAPI
             if (undoneSchedules.Count <= 1)
                 return;
 
-            var schedulesToDelete = undoneSchedules.Skip(1).ToList();
+            // keepDate = the Date of the row the caller just ungave. That row must survive: keeping
+            // "the earliest" instead deletes it whenever an older (e.g. DOB-anchored) undone row
+            // exists. No match, or no keepDate (PA FullReset), falls back to the earliest row.
+            var keep = (keepDate.HasValue
+                ? undoneSchedules.Where(x => x.Date.Date == keepDate.Value.Date).OrderBy(x => x.Id).FirstOrDefault()
+                : null) ?? undoneSchedules[0];
+
+            // Never delete a row an assignment still points at.
+            var linkedIds = db.PAAssignmentSchedules
+                .Where(l => undoneSchedules.Select(u => u.Id).Contains(l.ScheduleId))
+                .Select(l => l.ScheduleId)
+                .ToList();
+
+            var schedulesToDelete = undoneSchedules
+                .Where(x => x.Id != keep.Id && !linkedIds.Contains(x.Id))
+                .ToList();
             db.Schedules.RemoveRange(schedulesToDelete);
         }
     }

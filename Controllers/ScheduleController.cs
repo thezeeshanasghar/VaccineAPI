@@ -2098,6 +2098,16 @@ namespace VaccineAPI.Controllers
             [FromQuery] bool ignoreMinGapFromPreviousDose = false,
             [FromQuery] bool isParent = false
         )
+            => InOneTransaction(() => BulkRescheduleCore(
+                scheduleDTO, ignoreMaxAgeRule, ignoreMinAgeFromDOB, ignoreMinGapFromPreviousDose, isParent));
+
+        private Response<ScheduleDTO> BulkRescheduleCore(
+            ScheduleDTO scheduleDTO,
+            bool ignoreMaxAgeRule,
+            bool ignoreMinAgeFromDOB,
+            bool ignoreMinGapFromPreviousDose,
+            bool isParent
+        )
         {
             if (isParent)
             {
@@ -2118,6 +2128,9 @@ namespace VaccineAPI.Controllers
                 .Where(x => x.Id == scheduleDTO.Id)
                 .FirstOrDefault();
 
+            if (dbSchedule == null)
+                return new Response<ScheduleDTO>(false, "Schedule not found", null);
+
             var dbSchedules = _db.Schedules
                 .Include(x => x.Dose)
                 .Include(x => x.Child)
@@ -2130,11 +2143,18 @@ namespace VaccineAPI.Controllers
                 .ToList();
             var dbDose = _db.Doses.Include(x => x.Vaccine).ToList();
             var dbVacc = _db.Vaccines.Include(x => x.Doses).ToList();
-            string message;
+
+            // Per-dose outcome: a dose blocked by its own rules (e.g. an infinite dose past its
+            // Max Age) is skipped and reported; it must not block its valid siblings. A rule
+            // failure returns before any date is changed, so a skipped row leaves nothing
+            // half-applied. The whole call runs in one transaction (see BulkReschedule).
+            var blocked = new List<string>();
+            string? firstMessage = null;
+            var moved = 0;
 
             foreach (var schedule in dbSchedules)
             {
-                message = ChangeDueDatesOfSchedule(
+                var message = ChangeDueDatesOfSchedule(
                     scheduleDTO,
                     _db,
                     schedule,
@@ -2143,12 +2163,28 @@ namespace VaccineAPI.Controllers
                     ignoreMinAgeFromDOB,
                     ignoreMinGapFromPreviousDose
                 );
-                if (message != "ok")
-                    return new Response<ScheduleDTO>(false, message, null)
-                    { RuleCode = RuleCodeForRescheduleMessage(message) };
+                if (message == "ok")
+                {
+                    moved++;
+                    continue;
+                }
+                firstMessage ??= message;
+                var reason = message.Replace("Cannot reschedule to your selected date: ", "");
+                blocked.Add(schedule.Dose.Name + " (" + reason + ")");
             }
 
-            return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
+            if (moved == 0)
+                return new Response<ScheduleDTO>(false, firstMessage ?? "Nothing to reschedule.", null)
+                { RuleCode = firstMessage == null ? null : RuleCodeForRescheduleMessage(firstMessage) };
+
+            if (blocked.Count == 0)
+                return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
+
+            return new Response<ScheduleDTO>(
+                true,
+                moved + " of " + dbSchedules.Count + " moved. Not moved: " + string.Join("; ", blocked),
+                null
+            );
         }
 
         // Restores stock for one dose being ungiven through the bulk endpoint. Returns a failure
@@ -3470,7 +3506,7 @@ namespace VaccineAPI.Controllers
                         .FirstOrDefault();
                     TargetSchedule1.Date = TargetSchedule1.Date.AddDays(daysDifference);
 
-                    _db.SaveChangesAsync();
+                    _db.SaveChanges();
                     message = "ok";
                     return message;
                 }

@@ -211,6 +211,23 @@ namespace VaccineAPI.Controllers
                 }
             }
 
+            // Repeating doses (Flu/Typhoid/Vitamin A) keep exactly one undone row per child+vaccine.
+            // The client spawns the next one after every give, so a double tap, retry or a
+            // reversal that left an orphan would otherwise stack a second future row.
+            var addDose = _db.Doses.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
+            if (IsInfiniteDose(addDose))
+            {
+                var existingUndone = _db.Schedules
+                    .Where(x => x.ChildId == scheduleDTO.ChildId
+                        && x.Dose.VaccineId == addDose!.VaccineId
+                        && x.IsDone == false
+                        && x.IsSkip != true)
+                    .OrderBy(x => x.Date)
+                    .FirstOrDefault();
+                if (existingUndone != null)
+                    return new Response<ScheduleDTO>(true, null, _mapper.Map<ScheduleDTO>(existingUndone));
+            }
+
             Schedule scheduleDb = _mapper.Map<Schedule>(scheduleDTO);
             scheduleDb.BrandId = null;
             _db.Schedules.Add(scheduleDb);

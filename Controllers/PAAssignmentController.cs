@@ -341,6 +341,12 @@ namespace VaccineAPI.Controllers
                         s.SkippedAt = null;
                     }
 
+                    // The cleanup queries the DB for undone rows: the doses reset above are still
+                    // IsDone=true there until saved, so without this flush it never sees the reset
+                    // row and leaves the dose's spawned next-year row behind (still inside the tx).
+                    if (vaccineIdsToCleanUp.Count > 0)
+                        await _db.SaveChangesAsync();
+
                     foreach (var vaccineId in vaccineIdsToCleanUp)
                     {
                         InfiniteDoseCleanup.RemoveExtraUndoneRows(_db, childId, vaccineId);

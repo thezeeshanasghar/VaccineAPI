@@ -524,8 +524,22 @@ namespace VaccineAPI.Controllers
 
                 }
 
+                // Step 6: the given date being undone, captured before the ungive branch below clears
+                // GivenDate, so the cascade can reverse exactly the due-date push that give caused.
+                DateTime? ungivenFromDate = (scheduleDTO.IsDone == false && dbSchedule.IsDone == true)
+                    ? dbSchedule.GivenDate : null;
+
                 if (scheduleDTO.IsDone == false)
                 {
+                    // Step 6: a dose can't be ungiven while a LATER dose of the same vaccine is still
+                    // given — that would leave the chain out of order. Undo the later dose first.
+                    if (dbSchedule.IsDone == true)
+                    {
+                        var laterGiven = FindLaterGivenDose(dbSchedule, null);
+                        if (laterGiven != null)
+                            return new Response<ScheduleDTO>(false, LaterDoseGivenMessage(laterGiven), null);
+                    }
+
                     // v2 §6.5a: ungiving a PRE-RESET historical dose (given before the clinic's
                     // StockPeriodStart) is doctor-only and never returns stock. A PA is blocked
                     // outright; the doctor is allowed (the frontend shows the "history only" warning
@@ -769,6 +783,9 @@ namespace VaccineAPI.Controllers
                         _inventory.UnadministerSync(scheduleDTO.DoctorId, dbSchedule.Child?.ClinicId ?? 0,
                             previousBrandId.Value, dbSchedule.Id, ungiveEventDate, scheduleDTO.PaId);
                     }
+                    // Step 6: take back the due-date push this give caused on the later doses.
+                    if (ungivenFromDate.HasValue)
+                        UndoDownstreamPushAfterUngive(dbSchedule, ungivenFromDate.Value);
                     // Runs inside the request-wide transaction opened by Update() — committed or rolled back as one.
                     try
                     {
@@ -1846,6 +1863,82 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // Step 6 — ungive cascade. -----------------------------------------------------------
+        // A later dose of the same vaccine that is still given (disease entries and repeating
+        // doses are exempt: they have no position in the chain). `excludeIds` are schedules being
+        // ungiven in the same bulk request.
+        private Schedule? FindLaterGivenDose(Schedule ungiving, ICollection<long>? excludeIds)
+        {
+            var dose = ungiving.Dose;
+            if (dose == null || !dose.DoseOrder.HasValue || IsInfiniteDose(dose) || ungiving.IsDisease == true)
+                return null;
+            var vaccineId = dose.VaccineId;
+            var order = dose.DoseOrder.Value;
+            var later = _db.Schedules
+                .Include(x => x.Dose)
+                .Where(x => x.ChildId == ungiving.ChildId
+                    && x.Id != ungiving.Id
+                    && x.IsDone
+                    && x.IsDisease != true
+                    && x.Dose.VaccineId == vaccineId
+                    && x.Dose.DoseOrder > order)
+                .OrderBy(x => x.Dose.DoseOrder)
+                .AsEnumerable()
+                .FirstOrDefault(x => excludeIds == null || !excludeIds.Contains(x.Id));
+            return later;
+        }
+
+        private static string LaterDoseGivenMessage(Schedule later)
+        {
+            var name = later.Dose?.Name;
+            if (string.IsNullOrWhiteSpace(name)) name = later.Dose?.Vaccine?.Name;
+            if (string.IsNullOrWhiteSpace(name)) name = "A later dose of this vaccine";
+            return name + " is already given. Ungive it first, then ungive this dose.";
+        }
+
+        // Giving a dose pushes later undone doses of the vaccine out to GivenDate + MinGap
+        // (ChangeDueDatesOfInjectedSchedule). Ungiving must take that push back, otherwise the
+        // child is told to return later than the schedule requires. Only rows sitting EXACTLY on
+        // the pushed date are moved — anything else was planned or hand-set by the doctor and is
+        // left alone. Given doses are never touched. Moved rows land on
+        // max(DOB + MinAge, ungiven dose's planned date + MinGap), chained down the vaccine.
+        private void UndoDownstreamPushAfterUngive(Schedule ungiven, DateTime oldGivenDate)
+        {
+            var dose = ungiven.Dose;
+            if (dose == null || !dose.DoseOrder.HasValue || IsInfiniteDose(dose) || ungiven.IsDisease == true)
+                return;
+            var dob = (ungiven.Child ?? _db.Childs.First(c => c.Id == ungiven.ChildId)).DOB;
+
+            var laterDoses = _db.Doses
+                .Where(x => x.VaccineId == dose.VaccineId && x.DoseOrder > dose.DoseOrder)
+                .OrderBy(x => x.DoseOrder)
+                .ToList();
+
+            var oldAnchor = oldGivenDate.Date;
+            var newAnchor = ungiven.Date.Date;
+            foreach (var d in laterDoses)
+            {
+                var s = _db.Schedules.FirstOrDefault(x => x.ChildId == ungiven.ChildId && x.DoseId == d.Id);
+                if (s == null) continue;
+
+                var before = s.Date.Date;
+                if (s.IsDone)
+                {
+                    oldAnchor = newAnchor = (s.GivenDate ?? s.Date).Date;
+                    continue;
+                }
+                if (d.MinGap.HasValue && before == calculateDate(oldAnchor, d.MinGap.Value).Date)
+                {
+                    var restored = calculateDate(newAnchor, d.MinGap.Value).Date;
+                    var minAgeDate = calculateDate(dob, d.MinAge).Date;
+                    if (restored < minAgeDate) restored = minAgeDate;
+                    s.Date = restored;
+                }
+                oldAnchor = before;
+                newAnchor = s.Date.Date;
+            }
+        }
+
         // Date for a dose being ADDED to an existing child's schedule: DOB + MinAge, floored at
         // the previous dose's real GivenDate (or planned Date if not yet given) + MinGap. Without
         // the floor, a late-registered child whose earlier dose was just given gets the new dose
@@ -1913,7 +2006,17 @@ namespace VaccineAPI.Controllers
                     return new Response<IEnumerable<ScheduleDTO>>(false, "You do not have permission to add vaccines to the schedule.", null);
             }
 
-            foreach (var scheduleDTO in dtoList)
+            // Process each vaccine's doses in DoseOrder so a dose is floored against an earlier
+            // dose of the same batch (saved one iteration before it) regardless of the order the
+            // picker happened to send them in. Response keeps the caller's order.
+            var batchDoseIds = dtoList.Select(x => (long)x.DoseId).Distinct().ToList();
+            var batchDoses = _db.Doses.Where(d => batchDoseIds.Contains(d.Id)).ToDictionary(d => d.Id);
+            var orderedDtos = dtoList
+                .OrderBy(x => batchDoses.TryGetValue(x.DoseId, out var bd) ? bd.VaccineId : long.MaxValue)
+                .ThenBy(x => batchDoses.TryGetValue(x.DoseId, out var bd2) ? (bd2.DoseOrder ?? int.MaxValue) : int.MaxValue)
+                .ToList();
+
+            foreach (var scheduleDTO in orderedDtos)
             {
                 if (String.IsNullOrEmpty(scheduleDTO.DiseaseYear))
                     scheduleDTO.DiseaseYear = "";
@@ -2316,6 +2419,20 @@ namespace VaccineAPI.Controllers
                 }
             }
 
+            // Step 6: bulk ungive may not leave a later dose of the same vaccine given. Doses in
+            // this batch are being ungiven together, so they don't count as "later given".
+            if (scheduleDTO.IsDone == false)
+            {
+                var batchUngiveIds = dbChildSchedules.Where(x => x.IsDone).Select(x => x.Id).ToList();
+                foreach (var ungiving in dbChildSchedules.Where(x => x.IsDone))
+                {
+                    var laterGiven = FindLaterGivenDose(ungiving, batchUngiveIds);
+                    if (laterGiven != null)
+                        return new Response<ScheduleDTO>(false, LaterDoseGivenMessage(laterGiven), null);
+                }
+            }
+            var bulkUngiven = new List<(Schedule Schedule, DateTime OldGiven)>();
+
             // Disease rows (Chicken Pox / Hepatitis A "had the disease, not the vaccine") in this
             // batch — resolved once, by ScheduleId, and reused everywhere below. A batch can mix a
             // disease row with real injected doses in the same visit: the shared GivenDate and its
@@ -2566,6 +2683,8 @@ namespace VaccineAPI.Controllers
                 }
 
                 var wasIsDone = schedule.IsDone;
+                if (wasIsDone && scheduleDTO.IsDone == false && schedule.GivenDate.HasValue)
+                    bulkUngiven.Add((schedule, schedule.GivenDate.Value));
                 var scheduleIsDisease = scheduleDTO.IsDone && IsDiseaseSchedule(schedule.Id);
                 schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
                 schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
@@ -2919,6 +3038,11 @@ namespace VaccineAPI.Controllers
                     }
                 }
             }
+            // Step 6: take back the due-date push of every dose ungiven in this batch, earliest
+            // dose first so a later dose in the batch is already reset when its turn comes.
+            foreach (var u in bulkUngiven.OrderBy(x => x.Schedule.Dose?.DoseOrder ?? int.MaxValue))
+                UndoDownstreamPushAfterUngive(u.Schedule, u.OldGiven);
+
             // Auto-create assignment when PA bulk-gives vaccines with no prior open assignment,
             // and pin every dose actually given in this batch to it.
             if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)

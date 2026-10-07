@@ -1953,7 +1953,7 @@ namespace VaccineAPI.Controllers
                 .Where(x => x.VaccineId == dbDose.VaccineId && x.DoseOrder < dbDose.DoseOrder)
                 .OrderByDescending(x => x.DoseOrder)
                 .Select(x => new { x.Id })
-                .AsEnumerable()
+                .ToList() // materialize: the predicate below runs its own query, which MySqlConnector rejects while this reader is open
                 .Select(x => (long?)x.Id)
                 .FirstOrDefault(id => pending != null && pending.ContainsKey(id.Value)
                     || _db.Schedules.Any(s => s.ChildId == dbChild.Id && s.DoseId == id.Value));

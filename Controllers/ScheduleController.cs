@@ -173,6 +173,22 @@ namespace VaccineAPI.Controllers
             return new Response<ScheduleDTO>(true, null, scheduleDTOs);
         }
 
+        // A child never holds two live rows for the same dose. Repeating doses (Flu/Typhoid/Vitamin A)
+        // keep exactly one undone row per vaccine; every other dose may exist once (done or not, not
+        // skipped). A retry after a failed/partial request therefore finds the row it already created
+        // instead of stacking another one.
+        private Schedule? FindExistingScheduleForAdd(long childId, Dose? dose, long doseId)
+        {
+            if (IsInfiniteDose(dose))
+                return _db.Schedules
+                    .Where(x => x.ChildId == childId && x.Dose.VaccineId == dose!.VaccineId
+                        && x.IsDone == false && x.IsSkip != true)
+                    .OrderBy(x => x.Date).FirstOrDefault();
+            return _db.Schedules
+                .Where(x => x.ChildId == childId && x.DoseId == doseId && x.IsSkip != true)
+                .OrderBy(x => x.Id).FirstOrDefault();
+        }
+
         [HttpPost("add-schedule")]
         public Response<ScheduleDTO> Insert([FromBody] ScheduleDTO scheduleDTO)
         {
@@ -215,18 +231,9 @@ namespace VaccineAPI.Controllers
             // The client spawns the next one after every give, so a double tap, retry or a
             // reversal that left an orphan would otherwise stack a second future row.
             var addDose = _db.Doses.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
-            if (IsInfiniteDose(addDose))
-            {
-                var existingUndone = _db.Schedules
-                    .Where(x => x.ChildId == scheduleDTO.ChildId
-                        && x.Dose.VaccineId == addDose!.VaccineId
-                        && x.IsDone == false
-                        && x.IsSkip != true)
-                    .OrderBy(x => x.Date)
-                    .FirstOrDefault();
-                if (existingUndone != null)
-                    return new Response<ScheduleDTO>(true, null, _mapper.Map<ScheduleDTO>(existingUndone));
-            }
+            var existingRow = FindExistingScheduleForAdd(scheduleDTO.ChildId, addDose, scheduleDTO.DoseId);
+            if (existingRow != null)
+                return new Response<ScheduleDTO>(true, null, _mapper.Map<ScheduleDTO>(existingRow));
 
             Schedule scheduleDb = _mapper.Map<Schedule>(scheduleDTO);
             scheduleDb.BrandId = null;
@@ -2016,44 +2023,64 @@ namespace VaccineAPI.Controllers
                 .ThenBy(x => batchDoses.TryGetValue(x.DoseId, out var bd2) ? (bd2.DoseOrder ?? int.MaxValue) : int.MaxValue)
                 .ToList();
 
-            foreach (var scheduleDTO in orderedDtos)
+            // The whole batch is one transaction: a failure on any dose rolls back the doses saved
+            // before it, so a failed attempt can't leave half a batch behind for the retry to stack on.
+            using var tx = _db.Database.BeginTransaction();
+            try
             {
-                if (String.IsNullOrEmpty(scheduleDTO.DiseaseYear))
-                    scheduleDTO.DiseaseYear = "";
-
-                var dbChild = _db.Childs.FirstOrDefault(x => x.Id == scheduleDTO.ChildId);
-                var dbDose = _db.Doses.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
-                // Repeating doses (Flu/Typhoid/Vitamin A) have no age position: anchoring on DOB leaves
-                // a decades-old "overdue" phantom row, so they start from today (PKT) instead.
-                scheduleDTO.Date = IsInfiniteDose(dbDose)
-                    ? DateTime.UtcNow.AddHours(5).Date
-                    : CalculateAddedDoseDate(dbChild, dbDose);
-                if (string.IsNullOrEmpty(scheduleDTO.Expiry?.ToString()))
+                foreach (var scheduleDTO in orderedDtos)
                 {
-                    scheduleDTO.Expiry = null;
-                }
-                Schedule scheduleDB = _mapper.Map<Schedule>(scheduleDTO);
-                _db.Schedules.Add(scheduleDB);
+                    if (String.IsNullOrEmpty(scheduleDTO.DiseaseYear))
+                        scheduleDTO.DiseaseYear = "";
 
-                if (scheduleDTO.PaId.HasValue)
-                {
-                    var doseName = dbDose?.Name ?? dbDose?.Vaccine?.Name ?? $"Dose {scheduleDTO.DoseId}";
-                    _db.PaActivityLogs.Add(new PaActivityLog
+                    var dbChild = _db.Childs.FirstOrDefault(x => x.Id == scheduleDTO.ChildId);
+                    var dbDose = _db.Doses.Include(x => x.Vaccine).FirstOrDefault(x => x.Id == scheduleDTO.DoseId);
+                    // Already on the child's schedule (earlier request, retry, or repeated in this batch):
+                    // reuse that row, never add a second one.
+                    var existingRow = FindExistingScheduleForAdd(scheduleDTO.ChildId, dbDose, scheduleDTO.DoseId);
+                    if (existingRow != null)
                     {
-                        PaId = scheduleDTO.PaId.Value,
-                        DoctorId = scheduleDTO.DoctorId,
-                        ClinicId = null,
-                        PatientId = scheduleDTO.ChildId,
-                        ActionCode = "SCHEDULE_ADD_VACCINE",
-                        Description = $"Added {doseName} to schedule for patient {scheduleDTO.ChildId}",
-                        Notes = "",
-                        IsReversal = false,
-                        ActionDate = DateTime.UtcNow
-                    });
-                }
+                        scheduleDTO.Id = existingRow.Id;
+                        continue;
+                    }
+                    // Repeating doses (Flu/Typhoid/Vitamin A) have no age position: anchoring on DOB leaves
+                    // a decades-old "overdue" phantom row, so they start from today (PKT) instead.
+                    scheduleDTO.Date = IsInfiniteDose(dbDose)
+                        ? DateTime.UtcNow.AddHours(5).Date
+                        : CalculateAddedDoseDate(dbChild, dbDose);
+                    if (string.IsNullOrEmpty(scheduleDTO.Expiry?.ToString()))
+                    {
+                        scheduleDTO.Expiry = null;
+                    }
+                    Schedule scheduleDB = _mapper.Map<Schedule>(scheduleDTO);
+                    _db.Schedules.Add(scheduleDB);
 
-                _db.SaveChanges();
-                scheduleDTO.Id = scheduleDB.Id;
+                    if (scheduleDTO.PaId.HasValue)
+                    {
+                        var doseName = dbDose?.Name ?? dbDose?.Vaccine?.Name ?? $"Dose {scheduleDTO.DoseId}";
+                        _db.PaActivityLogs.Add(new PaActivityLog
+                        {
+                            PaId = scheduleDTO.PaId.Value,
+                            DoctorId = scheduleDTO.DoctorId,
+                            ClinicId = null,
+                            PatientId = scheduleDTO.ChildId,
+                            ActionCode = "SCHEDULE_ADD_VACCINE",
+                            Description = $"Added {doseName} to schedule for patient {scheduleDTO.ChildId}",
+                            Notes = "",
+                            IsReversal = false,
+                            ActionDate = DateTime.UtcNow
+                        });
+                    }
+
+                    _db.SaveChanges();
+                    scheduleDTO.Id = scheduleDB.Id;
+                }
+                tx.Commit();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
             }
             return new Response<IEnumerable<ScheduleDTO>>(true, null, dtoList);
         }

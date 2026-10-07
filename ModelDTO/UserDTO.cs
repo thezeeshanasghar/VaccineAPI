@@ -28,6 +28,8 @@ namespace VaccineAPI.ModelDTO
         public bool IsVerified { get; set; }
         public string Name { get; set; } = "";
         public string SecurityStamp { get; set; } = "";
+        // Session token the app sends as "Authorization: Bearer <Token>" on every call. Set by login only.
+        public string Token { get; set; } = "";
     }
 
 }

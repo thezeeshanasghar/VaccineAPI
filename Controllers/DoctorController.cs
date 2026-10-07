@@ -272,6 +272,7 @@ namespace VaccineAPI.Controllers
             return new Response<DoctorDTO>(false, "invalid files in request", null);
         }
 
+        [Owns(OwnerKind.Doctor, "Id")]
         [HttpPut("{id}")]
         public Response<DoctorDTO> Put(int Id, DoctorDTO doctorDTO)
         {
@@ -300,6 +301,7 @@ namespace VaccineAPI.Controllers
 
         }
 
+        [RolesOnly("SUPERADMIN")]
         [HttpPut("{id}/update-permission")]
         public Response<DoctorDTO> UpdatePermissions(int Id, DoctorDTO doctorDTO)
         {
@@ -332,6 +334,7 @@ namespace VaccineAPI.Controllers
             return new Response<DoctorDTO>(true, null, doctorDTO);
         }
 
+        [RolesOnly("SUPERADMIN")]
         [HttpPut("{id}/validUpto")]
         public Response<DoctorDTO> ChangeValidity(int Id, DoctorDTO doctorDTO)
         {
@@ -347,6 +350,8 @@ namespace VaccineAPI.Controllers
             return new Response<DoctorDTO>(true, null, doctorDTOs);
         }
 
+         [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+         [Owns(OwnerKind.Doctor, "id")]
          [HttpGet("{id}/{currentPage}/childs/")]
         public Response<IEnumerable<ChildDTO>> GetAllChildsOfaDoctor(int id, int currentPage, [FromQuery] string searchKeyword)
         {
@@ -439,6 +444,7 @@ namespace VaccineAPI.Controllers
             return phoneNumber;
         }
 
+        [RolesOnly("SUPERADMIN")]
         [HttpDelete("{id}")]
         public Response<string> Delete(int Id)
         {
@@ -480,6 +486,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "id")]
         [HttpGet("{id}/appointments")]
         public async Task<ActionResult<string>> GetDoctorAppointmentsWithinDateRange(long id, DateTime fromDate, DateTime toDate)
         {
@@ -497,6 +505,9 @@ namespace VaccineAPI.Controllers
             return result;
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "id")]
+        [Owns(OwnerKind.Child, "childId")]
         [HttpGet("{id}/children/{childId}/schedules")]
         public async Task<ActionResult<IEnumerable<Schedule>>> GetSchedulesForChild(long id, long childId, DateTime fromDate, DateTime toDate)
         {
@@ -520,6 +531,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Child, "childId")]
         [HttpPatch]
         [Route("/update_date_for_Vacations")]
         public async Task<IActionResult> UpdateSchedulesForChild(long childId, [FromQuery] string fromDate, [FromQuery] string toDate)
@@ -569,6 +582,7 @@ namespace VaccineAPI.Controllers
             return new Response<List<DoctorDTO>>(true, null, doctorDTO);
         }
 
+        [Owns(OwnerKind.Child, "childId")]
         [HttpPatch("update-clinic-id")]
         public async Task<ActionResult<Response<string>>> UpdateClinicIdForChild(
             [FromQuery] int? doctorId,

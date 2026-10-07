@@ -42,6 +42,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "DoctorId")]
         [HttpPost]
         public async Task<Response<HomeServiceCityDTO>> AddCity(HomeServiceCityDTO dto)
         {
@@ -79,6 +81,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpDelete("{id}")]
         public async Task<Response<object>> DeleteCity(long id)
         {

@@ -17,6 +17,7 @@ namespace VaccineAPI.Controllers
             _db = context;
         }
 
+        [RolesOnly("SUPERADMIN")]
         [HttpGet]
         public ActionResult<IEnumerable<PersonalAssistant>> GetAll()
         {
@@ -24,6 +25,8 @@ namespace VaccineAPI.Controllers
             return Ok(personalAssistants);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "id")]
         [HttpGet("{id:long}")]
         public ActionResult<PersonalAssistant> GetById(long id)
         {
@@ -39,6 +42,8 @@ namespace VaccineAPI.Controllers
             return Ok(personalAssistant);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("doctor/{doctorId:long}")]
         public ActionResult GetByDoctorId(long doctorId)
         {
@@ -50,6 +55,8 @@ namespace VaccineAPI.Controllers
             return Ok(personalAssistants);
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "DoctorId")]
         [HttpPost]
         public ActionResult<PersonalAssistant> Create([FromBody] PersonalAssistant personalAssistant)
         {
@@ -64,6 +71,8 @@ namespace VaccineAPI.Controllers
             return CreatedAtAction(nameof(GetById), new { id = personalAssistant.Id }, personalAssistant);
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "id")]
         [HttpPut("{id:long}")]
         public ActionResult Update(long id, [FromBody] PersonalAssistant personalAssistant)
         {
@@ -92,6 +101,8 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<PersonalAssistant>(true, "Personal Assistant updated successfully.", existingAssistant));
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "id")]
         [HttpDelete("{id:long}")]
         public ActionResult Delete(long id)
         {
@@ -115,6 +126,8 @@ namespace VaccineAPI.Controllers
             return Ok(new { message = "Personal Assistant and related data deleted successfully." });
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "paId")]
         [HttpGet("clinics/{paId:long}")]
         public async Task<ActionResult<IEnumerable<object>>> GetClinicsByPaId(long paId)
         {
@@ -156,6 +169,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "id")]
         [HttpPut("{id:long}/profile")]
         public ActionResult UpdateProfile(long id, [FromBody] PersonalAssistantDTO dto)
         {
@@ -183,6 +198,8 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<PersonalAssistant>(true, "Profile updated successfully.", pa));
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "id")]
         [HttpPut("{id:long}/toggle-active")]
         public ActionResult ToggleActive(long id)
         {
@@ -198,6 +215,8 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<PersonalAssistant>(true, $"Personal Assistant {status} successfully.", pa));
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "id")]
         [HttpPut("{id:long}/toggle-verify")]
         public ActionResult ToggleVerify(long id)
         {

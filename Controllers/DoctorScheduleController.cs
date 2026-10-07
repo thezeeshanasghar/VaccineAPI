@@ -95,6 +95,8 @@ namespace VaccineAPI.Controllers
             return new Response<List<DoctorScheduleDTO>>(true, null, doctorScheduleDTOs);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "DoctorId")]
         [HttpPost]
         public Response<IEnumerable<DoctorScheduleDTO>> Post(IEnumerable<DoctorScheduleDTO> dsDTOS)
         {
@@ -126,6 +128,8 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<DoctorScheduleDTO>>(true, null, dsDTOS);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "DoctorId")]
         [HttpPut]
         public Response<List<DoctorSchedule>> Put([FromBody] List<DoctorSchedule> dsDTOS)
         {
@@ -143,6 +147,7 @@ namespace VaccineAPI.Controllers
             return new Response<List<DoctorSchedule>>(true, null, dsDTOS);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

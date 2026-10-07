@@ -32,50 +32,38 @@ namespace VaccineAPI.Controllers
                 ?? "";
         }
 
+        // The raw user table (passwords, stamps) is for the super admin only; no app screen reads it.
         [HttpGet]
         public async Task<Response<List<UserDTO>>> GetAll()
         {
+            if (!AuthContext.IsSuperAdmin)
+                return new Response<List<UserDTO>>(false, "Not allowed.", null);
+
             var list = await _db.Users.OrderBy(x => x.Id).ToListAsync();
             List<UserDTO> listDTO = _mapper.Map<List<UserDTO>>(list);
+            foreach (var u in listDTO) { u.Password = ""; u.SecurityStamp = ""; }
 
             return new Response<List<UserDTO>>(true, null, listDTO);
         }
 
         [HttpGet("{id}")]
-        public async Task<Response<User>> GetSingle(long id)
+        public async Task<Response<UserDTO>> GetSingle(long id)
         {
+            if (!AuthContext.IsSuperAdmin && !(AuthContext.Current != null && AuthContext.Current.UserId == id))
+                return new Response<UserDTO>(false, "Not allowed.", null);
+
             var single = await _db.Users.FindAsync(id);
             if (single == null)
-                return new Response<User>(false, "Not Found", null);
+                return new Response<UserDTO>(false, "Not Found", null);
 
-            return new Response<User>(true, null, single);
+            var dto = _mapper.Map<UserDTO>(single);
+            dto.Password = "";
+            dto.SecurityStamp = "";
+            return new Response<UserDTO>(true, null, dto);
         }
 
-        [HttpGet("{mobileNumber}/{dob}")]
-        public async Task<Response<User>> GetPassword(string mobileNumber, DateTime dob)
-        {
-            var user = await _db.Users
-                .Where(x => x.MobileNumber == mobileNumber)
-                .FirstOrDefaultAsync();
-            if (user == null)
-                return new Response<User>(false, "Not Found", null);
-            else
-            {
-                Console.WriteLine(dob);
-                var c = await _db.Childs.Where(x => x.UserId == user.Id).FirstOrDefaultAsync();
-                if (c != null)
-                {
-                    Console.WriteLine(c.DOB.Date);
-                }
-                var child = await _db.Childs
-                    .Where(x => (x.UserId == user.Id && x.DOB.Date == dob))
-                    .FirstOrDefaultAsync();
-                if (child == null)
-                    return new Response<User>(false, "Not Found", null);
-                else
-                    return new Response<User>(true, null, user);
-            }
-        }
+        // GET api/user/{mobile}/{dob} used to return the full user row (with password) to anyone who knew
+        // a mobile number and a child's date of birth. No app calls it, so it is removed.
 
         //  [HttpGet("checkUniqueMobile")]
         //  public HttpResponseMessage CheckUniqueMobile(string MobileNumber)
@@ -101,6 +89,10 @@ namespace VaccineAPI.Controllers
         [HttpPost("login")]
         public Response<UserDTO> login(UserDTO userDTO)
         {
+            string throttleKey = "u:" + userDTO.CountryCode + userDTO.MobileNumber;
+            if (LoginThrottle.IsBlocked(throttleKey))
+                return new Response<UserDTO>(false, "Too many failed attempts. Please try again in 15 minutes.", null);
+
             var dbUser = _db.Users.FirstOrDefault(
                 x =>
                     x.MobileNumber == userDTO.MobileNumber
@@ -126,10 +118,15 @@ namespace VaccineAPI.Controllers
             }
 
             if (dbUser == null)
+            {
+                LoginThrottle.Fail(throttleKey);
                 return new Response<UserDTO>(false, "Invalid Mobile Number and Password.", null);
+            }
+            LoginThrottle.Success(throttleKey);
 
             userDTO.Id = dbUser.Id;
             userDTO.SecurityStamp = dbUser.SecurityStamp;
+            userDTO.Token = AuthContext.IssueForUser(dbUser);
 
             if (userDTO.UserType.Equals("SUPERADMIN"))
                 return new Response<UserDTO>(true, null, userDTO);
@@ -223,6 +220,7 @@ namespace VaccineAPI.Controllers
             userDTO.Id = dbUser.Id;
             userDTO.SecurityStamp = dbUser.SecurityStamp;
             userDTO.ChildId = childDB.Id;
+            userDTO.Token = AuthContext.IssueForUser(dbUser);
             userDTO.Password = ""; // never echo the password back over a link login
 
             return new Response<UserDTO>(true, null, userDTO);
@@ -267,6 +265,7 @@ namespace VaccineAPI.Controllers
             userDTO.IsVerified = paDb.IsVerified;
             userDTO.Name = paDb.Name;
             userDTO.AllowInventory = doctorDb != null && doctorDb.AllowInventory;
+            userDTO.Token = AuthContext.IssueForUser(dbUser);
             userDTO.Password = ""; // never echo the password back over a link login
 
             return new Response<UserDTO>(true, null, userDTO);
@@ -463,6 +462,8 @@ namespace VaccineAPI.Controllers
         public Response<UserDTO> ChangePassword(ChangePasswordRequestDTO user)
         {
             {
+                if (!AuthContext.CallerIsUser(user.UserId))
+                    return new Response<UserDTO>(false, "Not allowed.", null);
                 User? userDB = _db.Users.Where(x => x.Id == user.UserId).FirstOrDefault();
                 if (userDB == null)
                     return new Response<UserDTO>(false, "User not found.", null);
@@ -474,6 +475,7 @@ namespace VaccineAPI.Controllers
                     // Rotate the stamp so every other device's cached stamp goes stale and gets logged out.
                     userDB.SecurityStamp = Guid.NewGuid().ToString();
                     _db.SaveChanges();
+                    AuthDirectory.Forget('U', userDB.Id);
                     return new Response<UserDTO>(true, "Password change successfully.", new UserDTO { SecurityStamp = userDB.SecurityStamp });
                 }
             }
@@ -506,9 +508,13 @@ namespace VaccineAPI.Controllers
                     return BadRequest(new Response<UserDTO>(false, "New password and confirm password do not match.", null));
                 }
 
+                // Previously matched the FIRST parent anywhere whose password equalled OldPassword.
+                if (request.UserId <= 0 || !AuthContext.CallerIsUser(request.UserId))
+                    return Unauthorized(new Response<UserDTO>(false, "Not allowed.", null));
+
                 var user = _db.Users
                     .Include(u => u.Childs)
-                    .FirstOrDefault(x => x.UserType == "PARENT" && x.Password == request.OldPassword);
+                    .FirstOrDefault(x => x.Id == request.UserId && x.UserType == "PARENT" && x.Password == request.OldPassword);
 
                 if (user == null)
                 {
@@ -517,6 +523,7 @@ namespace VaccineAPI.Controllers
 
                 // Update the password
                 user.Password = request.NewPassword;
+                user.SecurityStamp = Guid.NewGuid().ToString();
 
                 // If you want to update the Child's password as well (assuming it's stored there)
                 if (user.Childs != null && user.Childs.Any())
@@ -528,9 +535,11 @@ namespace VaccineAPI.Controllers
                 }
 
                 _db.SaveChanges();
+                AuthDirectory.Forget('U', user.Id);
 
                 // Map the updated user to UserDTO if needed
                 var userDTO = _mapper.Map<UserDTO>(user);
+                userDTO.Password = "";
 
                 return Ok(new Response<UserDTO>(true, "Password changed successfully.", userDTO));
             }
@@ -545,6 +554,8 @@ namespace VaccineAPI.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Put(long id, User User)
         {
+            if (!AuthContext.IsSuperAdmin)
+                return StatusCode(403, new { IsSuccess = false, Message = "Not allowed." });
             if (id != User.Id)
                 return BadRequest();
 
@@ -557,6 +568,8 @@ namespace VaccineAPI.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
+            if (!AuthContext.IsSuperAdmin)
+                return StatusCode(403, new { IsSuccess = false, Message = "Not allowed." });
             var obj = await _db.Users.FindAsync(id);
 
             if (obj == null)

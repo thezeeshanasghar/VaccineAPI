@@ -12,6 +12,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class BillController : ControllerBase
     {
         private readonly Context _db;
@@ -83,6 +88,9 @@ namespace VaccineAPI.Controllers
             if (bill == null)
                 return Ok(new { IsSuccess = false, Message = "Bill not found" });
 
+            if (!CallerGuard.OwnsDoctor(bill.DoctorId))
+                return Ok(new { IsSuccess = false, Message = "This record belongs to another practice." });
+
             var brandIds = bill.Stocks.Select(s => s.BrandId).Distinct().ToList();
             var vaccineBrands = await _db.VaccineBrands
                 .Include(vb => vb.Vaccine)
@@ -141,7 +149,7 @@ namespace VaccineAPI.Controllers
 
             var guard = StockActionGuard.CheckStockAction(
                 _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
-                perm => perm.StockPurchaseBills, "manage purchase bills");
+                perm => perm.StockPurchaseBills, "manage purchase bills", dto.DoctorId);
             if (!guard.allowed)
                 return Ok(new { IsSuccess = false, Message = guard.error });
 
@@ -241,7 +249,7 @@ namespace VaccineAPI.Controllers
 
             var guard = StockActionGuard.CheckStockAction(
                 _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
-                perm => perm.StockPurchaseBills, "manage purchase bills");
+                perm => perm.StockPurchaseBills, "manage purchase bills", dto.DoctorId);
             if (!guard.allowed)
                 return Ok(new { IsSuccess = false, Message = guard.error });
 
@@ -254,6 +262,9 @@ namespace VaccineAPI.Controllers
 
             if (bill == null)
                 return Ok(new { IsSuccess = false, Message = "Bill not found" });
+
+            if (!CallerGuard.OwnsDoctor(bill.DoctorId))
+                return Ok(new { IsSuccess = false, Message = "This record belongs to another practice." });
 
             // Any old line being removed (not present in dto.Lines by Brand+Batch+Expiry) that still
             // has consumed units must be split off via /split-consumed first — otherwise that
@@ -334,6 +345,9 @@ namespace VaccineAPI.Controllers
 
             if (bill == null)
                 return Ok(new { IsSuccess = false, Message = "Bill not found" });
+
+            if (!CallerGuard.OwnsDoctor(bill.DoctorId))
+                return Ok(new { IsSuccess = false, Message = "This record belongs to another practice." });
 
             if (dto.Amount <= 0)
                 return Ok(new { IsSuccess = false, Message = "Payment amount must be greater than 0" });
@@ -443,6 +457,9 @@ namespace VaccineAPI.Controllers
             if (bill == null)
                 return Ok(new { IsSuccess = false, Message = "Bill not found" });
 
+            if (!CallerGuard.OwnsDoctor(bill.DoctorId))
+                return Ok(new { IsSuccess = false, Message = "This record belongs to another practice." });
+
             var stock = await _db.Stocks.FirstOrDefaultAsync(s => s.Id == stockId && s.BillId == billId);
             if (stock == null)
                 return Ok(new { IsSuccess = false, Message = "Stock line not found for this bill" });
@@ -529,6 +546,9 @@ namespace VaccineAPI.Controllers
 
             if (bill == null)
                 return Ok(new { IsSuccess = false, Message = "Bill not found" });
+
+            if (!CallerGuard.OwnsDoctor(bill.DoctorId))
+                return Ok(new { IsSuccess = false, Message = "This record belongs to another practice." });
 
             // Legacy-data guard: a bill with money paid but no Stock rows of its own has nothing
             // here to structurally reverse (its purchase was never recorded against this bill —

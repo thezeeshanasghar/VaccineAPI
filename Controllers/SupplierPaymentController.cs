@@ -11,6 +11,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class SupplierPaymentController : ControllerBase
     {
         private readonly Context _db;
@@ -21,7 +26,7 @@ namespace VaccineAPI.Controllers
         public async Task<IActionResult> GetLedger([FromQuery] long supplierId, [FromQuery] long clinicId)
         {
             var supplier = await _db.Suppliers.FindAsync(supplierId);
-            if (supplier == null)
+            if (supplier == null || !CallerGuard.OwnsDoctor(supplier.DoctorId))
                 return Ok(new { IsSuccess = false, Message = "Supplier not found" });
 
             // Bills for this supplier at this clinic
@@ -168,6 +173,13 @@ namespace VaccineAPI.Controllers
             if (dto.Amount <= 0)
                 return Ok(new { IsSuccess = false, Message = "Amount must be greater than 0" });
 
+            if (dto.SupplierId.HasValue)
+            {
+                var paySupplier = await _db.Suppliers.FindAsync(dto.SupplierId.Value);
+                if (paySupplier == null || !CallerGuard.OwnsDoctor(paySupplier.DoctorId))
+                    return Ok(new { IsSuccess = false, Message = "Supplier not found" });
+            }
+
             var payment = new SupplierPayment
             {
                 SupplierId = dto.SupplierId ?? 0,
@@ -197,6 +209,10 @@ namespace VaccineAPI.Controllers
         {
             var payment = await _db.SupplierPayments.FindAsync(id);
             if (payment == null)
+                return Ok(new { IsSuccess = false, Message = "Payment not found" });
+
+            var paySupplier = await _db.Suppliers.FindAsync(payment.SupplierId);
+            if (paySupplier == null || !CallerGuard.OwnsDoctor(paySupplier.DoctorId))
                 return Ok(new { IsSuccess = false, Message = "Payment not found" });
 
             _db.SupplierPayments.Remove(payment);

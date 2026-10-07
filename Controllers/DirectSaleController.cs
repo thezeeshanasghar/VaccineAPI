@@ -16,6 +16,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class DirectSaleController : ControllerBase
     {
         private readonly Context _db;
@@ -32,7 +37,7 @@ namespace VaccineAPI.Controllers
         {
             var guard = StockActionGuard.CheckStockAction(
                 _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
-                perm => perm.StockDirectSale, "record a direct sale");
+                perm => perm.StockDirectSale, "record a direct sale", dto.DoctorId);
             if (!guard.allowed)
                 return Ok(new { IsSuccess = false, Message = guard.error });
 
@@ -382,6 +387,9 @@ namespace VaccineAPI.Controllers
             var sale = await _db.DirectSales.FirstOrDefaultAsync(s => s.Id == id);
             if (sale == null)
                 return Ok(new { IsSuccess = false, Message = "Sale not found" });
+
+            if (!CallerGuard.OwnsDoctor(sale.DoctorId))
+                return Ok(new { IsSuccess = false, Message = "This record belongs to another practice." });
 
             string saleBillNo = sale.SaleBillNo ?? "";
 

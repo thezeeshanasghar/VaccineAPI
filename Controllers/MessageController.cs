@@ -77,6 +77,8 @@ namespace VaccineAPI.Controllers
                    || input.StartsWith("[") && input.EndsWith("]");
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "id")]
         [HttpGet("{id}/doctor")]
         public Response<List<MessageDTO>> Get(int id)
         {
@@ -111,6 +113,7 @@ namespace VaccineAPI.Controllers
 
 
 
+        [RolesOnly("SUPERADMIN")]
         [HttpPost]
         public Response<MessageDTO> Post([FromBody] MessageDTO msg)
         {
@@ -128,6 +131,7 @@ namespace VaccineAPI.Controllers
         }
 
 
+        [RolesOnly("SUPERADMIN")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

@@ -7,6 +7,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class DoctorWebsiteController : ControllerBase
     {
         private readonly Context _db;
@@ -25,10 +30,18 @@ namespace VaccineAPI.Controllers
                 return NotFound(new Response<DoctorWebsiteDTO>(false, "Doctor not found", null));
             }
 
+            // Mirrors EmailSenderResolver's pattern: AllowOwnWebsite alone doesn't mean a
+            // usable link exists yet. A doctor who flipped the permission on but hasn't
+            // saved a URL should fall back to default (no custom website) behavior, not
+            // present a blank/broken link to callers that trust the flag.
+            var effectiveUrl = doctor.AllowOwnWebsite && !string.IsNullOrWhiteSpace(doctor.WebsiteUrl)
+                ? doctor.WebsiteUrl
+                : null;
+
             return Ok(new DoctorWebsiteDTO
             {
                 AllowOwnWebsite = doctor.AllowOwnWebsite,
-                WebsiteUrl = doctor.WebsiteUrl
+                WebsiteUrl = effectiveUrl
             });
         }
 

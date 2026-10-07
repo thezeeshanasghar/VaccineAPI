@@ -18,6 +18,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class BirthdayController : ControllerBase
     {
         private readonly Context _db;

@@ -7,7 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers(options => options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true).AddNewtonsoftJson(options => { options.UseMemberCasing(); });
-builder.Services.AddCors(p => p.AddPolicy("corsapp", builder => { builder.WithOrigins("*").AllowAnyMethod().AllowAnyHeader().WithExposedHeaders("Content-Disposition"); }));
+builder.Services.AddCors(p => p.AddPolicy("corsapp", builder => { builder.WithOrigins("*").AllowAnyMethod().AllowAnyHeader().WithExposedHeaders("Content-Disposition", "X-Auth-Token"); }));
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
@@ -26,22 +27,37 @@ VaccineAPI.Services.InventoryTransactionService.ExcludeExpiredFromFefo = builder
 VaccineAPI.Models.Context.EnforceSingleInventoryWriter = builder.Configuration.GetValue<bool>("Inventory:EnforceSingleWriter");
 VaccineAPI.Services.InventoryTransactionService.OnInvariantViolation = msg => Console.Error.WriteLine("[INVENTORY-INVARIANT] " + msg);
 
+// Session-token settings (appsettings "Auth": { "Mode": "Log|Enforce|Off", "TokenSecret": "<32+ chars>" }).
+VaccineAPI.AuthContext.Configure(builder.Configuration);
+
+// Swagger, stack-trace pages and full SQL logging are off unless "Diagnostics:Verbose" (or the
+// DiagnosticsVerbose env var) is true. Production runs with ASPNETCORE_ENVIRONMENT=Development,
+// so this flag is used instead of the environment name.
+bool verboseDiagnostics = builder.Configuration.GetValue<bool?>("Diagnostics:Verbose")
+    ?? string.Equals(Environment.GetEnvironmentVariable("DiagnosticsVerbose"), "true", StringComparison.OrdinalIgnoreCase);
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? Environment.GetEnvironmentVariable("DefaultConnection");
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 31));
 
 builder.Services.AddDbContext<VaccineAPI.Models.Context>(
     dbContextOptions => dbContextOptions
         .UseMySql(connectionString, serverVersion)
-        .LogTo(Console.WriteLine, LogLevel.Information)
-        .EnableSensitiveDataLogging()
-        .EnableDetailedErrors()
+        // Full SQL with parameter values (patient data, passwords) only while developing.
+        .LogTo(Console.WriteLine, verboseDiagnostics ? LogLevel.Information : LogLevel.Warning)
+        .EnableSensitiveDataLogging(verboseDiagnostics)
+        .EnableDetailedErrors(verboseDiagnostics)
 );
 
 var app = builder.Build();
 
-app.UseDeveloperExceptionPage();
-app.UseSwagger();
-app.UseSwaggerUI();
+VaccineAPI.AuthContext.Accessor = app.Services.GetRequiredService<IHttpContextAccessor>();
+
+if (verboseDiagnostics)
+{
+    app.UseDeveloperExceptionPage();
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseHttpsRedirection();
 app.UseCors("corsapp");
@@ -52,6 +68,9 @@ app.UseStaticFiles(new StaticFileOptions
            Path.Combine(builder.Environment.ContentRootPath, "Resources")),
     RequestPath = "/Resources"
 });
+
+// After static files so /Resources stays as it was; before controllers so every API call is checked.
+app.UseMiddleware<VaccineAPI.AuthMiddleware>();
 
 app.MapControllers();
 

@@ -10,6 +10,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class PAAssignmentController : ControllerBase
     {
         private readonly Context _db;
@@ -37,14 +42,8 @@ namespace VaccineAPI.Controllers
         // validate-session already produce/check this same pair — this just applies it here too).
         // Every login page (loginpa, login) stores SecurityStamp locally right after auth, so any
         // caller with a valid session already has it on hand to send.
-        private async Task<bool> VerifyCaller(long? userId, string? securityStamp)
-        {
-            if (!userId.HasValue || string.IsNullOrEmpty(securityStamp))
-                return false;
-
-            var user = await _db.Users.FindAsync(userId.Value);
-            return user != null && user.SecurityStamp == securityStamp;
-        }
+        private Task<bool> VerifyCaller(long? userId, string? securityStamp)
+            => Task.FromResult(CallerGuard.VerifyCaller(_db, userId, securityStamp));
 
         // GET /api/PAAssignment/pa/{paId}
         [HttpGet("pa/{paId}")]

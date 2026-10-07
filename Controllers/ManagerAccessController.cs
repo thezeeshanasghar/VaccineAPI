@@ -6,6 +6,7 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
     public class ManagerAccessController : ControllerBase
     {
         private readonly Context _db;
@@ -15,6 +16,7 @@ namespace VaccineAPI.Controllers
             _db = db;
         }
 
+        [RolesOnly("SUPERADMIN")]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ManagerAccess>>> GetAll()
         {
@@ -39,6 +41,7 @@ namespace VaccineAPI.Controllers
             return Ok(managerAccess);
         }
 
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("doctor/{doctorId:long}")]
         public async Task<ActionResult<IEnumerable<ManagerAccess>>> GetManagersByDoctorId(long doctorId)
         {
@@ -65,6 +68,9 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Manager, "ManagerId")]
+        [Owns(OwnerKind.Clinic, "ClinicId")]
         [HttpPost]
         public async Task<ActionResult<ManagerAccess>> Create(ManagerAccess managerAccess)
         {
@@ -88,6 +94,7 @@ namespace VaccineAPI.Controllers
             return CreatedAtAction(nameof(GetById), new { id = managerAccess.Id }, managerAccess);
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpPut("{id:long}")]
         public async Task<IActionResult> Update(long id, ManagerAccess managerAccess)
         {
@@ -107,6 +114,7 @@ namespace VaccineAPI.Controllers
             return NoContent();
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {

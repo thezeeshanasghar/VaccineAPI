@@ -6,6 +6,7 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
     public class PaPermissionController : ControllerBase
     {
         private readonly Context _db;
@@ -15,6 +16,7 @@ namespace VaccineAPI.Controllers
             _db = db;
         }
 
+        [Owns(OwnerKind.Pa, "paId")]
         [HttpGet("{paId:long}")]
         public ActionResult<PaPermission> GetByPaId(long paId)
         {
@@ -45,6 +47,8 @@ namespace VaccineAPI.Controllers
             return Ok(perm);
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "paId")]
         [HttpPut("{paId:long}")]
         public ActionResult Upsert(long paId, [FromBody] PaPermission incoming)
         {

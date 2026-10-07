@@ -34,6 +34,7 @@ namespace VaccineAPI.Controllers
             _mapper = mapper;
         }
 
+        [Owns(OwnerKind.Child, "childId")]
         [HttpGet("last/{childId}")]
         public async Task<Response<BookingDTO>> GetLastBooking(long childId)
         {
@@ -58,6 +59,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.UserSelf, "userId")]
         [HttpGet("parent/{userId}")]
         public async Task<Response<IEnumerable<BookingDTO>>> GetByParent(long userId)
         {
@@ -77,6 +79,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpPost]
         public async Task<Response<BookingDTO>> AddBooking(BookingDTO bookingDTO)
         {
@@ -193,6 +196,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "clinicId")]
         [HttpGet("clinic/{clinicId}")]
         public async Task<Response<IEnumerable<BookingDTO>>> GetByClinic(long clinicId, [FromQuery] string? status, [FromQuery] string? type)
         {
@@ -224,6 +229,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("doctor/{doctorId}")]
         public async Task<Response<IEnumerable<BookingDTO>>> GetByDoctor(long doctorId, [FromQuery] string? status, [FromQuery] string? type)
         {
@@ -272,6 +279,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPut("{id}/confirm")]
         public async Task<Response<BookingDTO>> ConfirmBooking(long id, BookingActionDTO actionDTO)
         {
@@ -282,6 +290,7 @@ namespace VaccineAPI.Controllers
                     (string.IsNullOrEmpty(booking.DoctorComment) ? "" : " Note: " + booking.DoctorComment));
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPut("{id}/cancel")]
         public async Task<Response<BookingDTO>> CancelBooking(long id, BookingActionDTO actionDTO)
         {
@@ -292,6 +301,7 @@ namespace VaccineAPI.Controllers
                     (string.IsNullOrEmpty(booking.DoctorComment) ? "" : " Note: " + booking.DoctorComment));
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPut("{id}/comment")]
         public async Task<Response<BookingDTO>> AddComment(long id, BookingActionDTO actionDTO)
         {
@@ -383,6 +393,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "clinicId")]
         [HttpGet("pending-count/{clinicId}")]
         public async Task<Response<int>> GetPendingCount(long clinicId)
         {

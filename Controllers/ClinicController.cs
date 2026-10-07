@@ -43,6 +43,8 @@ namespace VaccineAPI.Controllers
             return new Response<ClinicDTO>(true, null, clinicDTO);
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "DoctorId")]
         [HttpPost]
         public Response<ClinicDTO> Add([FromBody] ClinicDTO clinicDTO)
         {
@@ -77,6 +79,8 @@ namespace VaccineAPI.Controllers
             return new Response<ClinicDTO>(true, null, clinicDTO);
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "Id")]
         [HttpPut("{id}")]
         public Response<ClinicDTO> Put(int Id, ClinicDTO clinicDTO)
         {
@@ -108,6 +112,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "Id")]
         [HttpPut("editClinic")]
         public Response<ClinicDTO> Edit([FromBody] ClinicDTO clinicDTO)
         {
@@ -147,6 +153,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "Id")]
         [HttpDelete("{id}")]
         public Response<string> Delete(int Id)
         {
@@ -173,6 +181,8 @@ namespace VaccineAPI.Controllers
             return new Response<string>(true, null, "record deleted");
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "fromClinicId", "toClinicId")]
         [HttpPost("{fromClinicId}/transfer/{toClinicId}")]
         public async Task<Response<string>> TransferPatients(long fromClinicId, long toClinicId)
         {

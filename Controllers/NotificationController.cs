@@ -23,6 +23,7 @@ namespace VaccineAPI.Controllers
             _mapper = mapper;
         }
 
+        [Owns(OwnerKind.UserSelf, "userId")]
         [HttpGet("parent/{userId}")]
         public async Task<Response<IEnumerable<NotificationDTO>>> GetByParent(long userId)
         {
@@ -65,6 +66,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.UserSelf, "userId")]
         [HttpPut("parent/{userId}/read-all")]
         public async Task<Response<object>> MarkAllReadParent(long userId)
         {
@@ -89,6 +91,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("doctor/{doctorId}")]
         public async Task<Response<IEnumerable<NotificationDTO>>> GetByDoctor(long doctorId)
         {
@@ -108,6 +112,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("doctor/{doctorId}/unread-count")]
         public async Task<Response<int>> GetUnreadCount(long doctorId)
         {
@@ -124,6 +130,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpPut("doctor/{doctorId}/read-all")]
         public async Task<Response<object>> MarkAllReadDoctor(long doctorId)
         {

@@ -7,6 +7,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class DoctorSmtpController : ControllerBase
     {
         private readonly Context _db;
@@ -16,6 +21,7 @@ namespace VaccineAPI.Controllers
             _db = db;
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpGet("{doctorId:long}")]
         public ActionResult<DoctorSmtpDTO> Get(long doctorId)
         {
@@ -38,6 +44,7 @@ namespace VaccineAPI.Controllers
             });
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpPut("{doctorId:long}")]
         public ActionResult<Response<DoctorSmtpDTO>> Save(long doctorId, [FromBody] DoctorSmtpDTO dto)
         {

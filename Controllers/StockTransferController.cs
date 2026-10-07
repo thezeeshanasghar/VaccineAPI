@@ -16,6 +16,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class StockTransferController : ControllerBase
     {
         private readonly Context _db;
@@ -32,7 +37,7 @@ namespace VaccineAPI.Controllers
         {
             var guard = StockActionGuard.CheckStockAction(
                 _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
-                perm => perm.StockTransfer, "transfer stock");
+                perm => perm.StockTransfer, "transfer stock", dto.DoctorId);
             if (!guard.allowed)
                 return Ok(new { IsSuccess = false, Message = guard.error });
 
@@ -240,6 +245,9 @@ namespace VaccineAPI.Controllers
             var transfer = await _db.StockTransfers.FirstOrDefaultAsync(t => t.Id == id);
             if (transfer == null)
                 return Ok(new { IsSuccess = false, Message = "Transfer not found" });
+
+            if (!CallerGuard.OwnsDoctor(transfer.DoctorId))
+                return Ok(new { IsSuccess = false, Message = "This record belongs to another practice." });
 
             int? billId = transfer.BillId;
 

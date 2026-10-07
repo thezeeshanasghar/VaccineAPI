@@ -56,13 +56,7 @@ namespace VaccineAPI.Controllers
         // that previously trusted a raw client-supplied doctorId/PaId with no identity check
         // at all (see feedback/project_no_api_auth_middleware).
         private bool VerifyCaller(long? userId, string? securityStamp)
-        {
-            if (!userId.HasValue || string.IsNullOrEmpty(securityStamp))
-                return false;
-
-            var user = _db.Users.Find(userId.Value);
-            return user != null && user.SecurityStamp == securityStamp;
-        }
+            => CallerGuard.VerifyCaller(_db, userId, securityStamp);
 
         // Give/ungive permission gate for PA/Manager actors, single + bulk. A Doctor actor
         // (no PaId/ManagerId on the DTO) is never checked here — doctors have no permission
@@ -78,6 +72,24 @@ namespace VaccineAPI.Controllers
             long? paId, long? managerId, long? callerUserId, string? securityStamp,
             bool isGive, bool isBulk, long childId)
         {
+            // With a session token, who is acting comes from the token, not from the body, and the
+            // child must belong to the caller's own practice. Parents and agents can never give or undo.
+            var tok = AuthContext.Current;
+            if (tok != null)
+            {
+                if (tok.Role != "DOCTOR" && tok.Role != "PA" && tok.Role != "MANAGER" && tok.Role != "SUPERADMIN")
+                    return new Response<ScheduleDTO>(false, "You do not have access to this.", null);
+                if (!CallerGuard.OwnsChild(_db, childId))
+                    return new Response<ScheduleDTO>(false, "This patient belongs to another practice.", null);
+                paId = tok.PaId;
+                managerId = tok.ManagerId;
+                callerUserId = tok.UserId;
+            }
+            else if (AuthContext.Enforcing)
+            {
+                return new Response<ScheduleDTO>(false, "Session could not be verified. Please sign in again.", null);
+            }
+
             if (!paId.HasValue && !managerId.HasValue)
                 return null; // doctor actor — no flags apply
 
@@ -124,6 +136,7 @@ namespace VaccineAPI.Controllers
             return null;
         }
 
+        [RolesOnly("SUPERADMIN")]
         [HttpGet]
         public async Task<Response<List<ScheduleDTO>>> GetAll()
         {
@@ -133,6 +146,7 @@ namespace VaccineAPI.Controllers
             return new Response<List<ScheduleDTO>>(true, null, listDTO);
         }
 
+        [Owns(OwnerKind.Schedule, "Id")]
         [HttpGet("{id}")]
         public Response<ScheduleDTO> GetSingle(int Id)
         {
@@ -189,6 +203,7 @@ namespace VaccineAPI.Controllers
                 .OrderBy(x => x.Id).FirstOrDefault();
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpPost("add-schedule")]
         public Response<ScheduleDTO> Insert([FromBody] ScheduleDTO scheduleDTO)
         {
@@ -280,6 +295,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
+        [Owns(OwnerKind.Schedule, "Id")]
         [HttpPut("child-schedule")]
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
             => InOneTransaction(() => UpdateCore(scheduleDTO));
@@ -1272,6 +1289,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
+        [Owns(OwnerKind.Schedule, "Id")]
         [HttpPatch("after-injection")]
         public Response<ScheduleDTO> AfterInjection(ScheduleDTO scheduleDTO)
         {
@@ -1999,6 +2018,7 @@ namespace VaccineAPI.Controllers
         //     }
         //     return new Response<IEnumerable<ScheduleDTO>>(true, null, dsDTOS);
         // }
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpPost]
         public Response<IEnumerable<ScheduleDTO>> Post(IEnumerable<ScheduleDTO> dsDTOS)
         {
@@ -2084,6 +2104,8 @@ namespace VaccineAPI.Controllers
             }
             return new Response<IEnumerable<ScheduleDTO>>(true, null, dtoList);
         }
+        [Owns(OwnerKind.Child, "ChildId")]
+        [Owns(OwnerKind.Doctor, "DoctorId")]
         [HttpPost("regular")]
         public IActionResult AddSchedule(long DoctorId, long ChildId)
         {
@@ -2142,6 +2164,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpPost("bulk-brand")]
         public Response<List<ScheduleDTO>> GetVaccineBrands(ScheduleDTO scheduleDto)
         {
@@ -2207,6 +2230,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpPost("add-vacation")]
         public Response<ScheduleDTO> AddVacations(ScheduleDTO obj)
         {
@@ -2237,6 +2261,7 @@ namespace VaccineAPI.Controllers
             );
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpPut("BulkReschedule")]
         public Response<ScheduleDTO> BulkReschedule(
             ScheduleDTO scheduleDTO,
@@ -2384,6 +2409,7 @@ namespace VaccineAPI.Controllers
             return null;
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpPut("update-bulk-injection")]
         public Response<ScheduleDTO> UpdateBulkInjection(ScheduleDTO scheduleDTO)
             => InOneTransaction(() => UpdateBulkInjectionCore(scheduleDTO));
@@ -3103,6 +3129,8 @@ namespace VaccineAPI.Controllers
             };
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
+        [Owns(OwnerKind.Doctor, "DoctorId")]
         [HttpPut("update-bulk-invoice")]
         public Response<object> updateInvoice([FromBody] BulkInvoiceSubmitDTO dto)
         {
@@ -3445,6 +3473,8 @@ namespace VaccineAPI.Controllers
         // PAYMENT action button on old doses that were never meant to go through PA cash collection.
         private static readonly DateTime PaPaymentSystemLaunch = new DateTime(2026, 5, 28);
 
+        [Owns(OwnerKind.Child, "childId")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("invoice-status")]
         public ActionResult GetInvoiceStatus([FromQuery] long childId, [FromQuery] long doctorId, [FromQuery] DateTime invoiceDate)
         {
@@ -3893,6 +3923,8 @@ namespace VaccineAPI.Controllers
             return "ok";
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
+        [Owns(OwnerKind.Schedule, "Id")]
         [HttpPut("Reschedule")]
         public Response<ScheduleDTO> Reschedule(
             ScheduleDTO scheduleDTO,
@@ -3940,6 +3972,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpDelete("{ChildId}/{DoseId}/{Date}")]
         public async Task<Response<List<Schedule>>> Delete(long ChildId, long DoseId, string date, [FromQuery] long? paId = null, [FromQuery] long? doctorId = null)
         {
@@ -4032,6 +4065,9 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "OnlineClinicId")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("alert/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ScheduleDTO>> GetAlert(DateTime inputDate, int GapDays, long OnlineClinicId, long? paId = null, long? doctorId = null)
         {
@@ -4153,6 +4189,8 @@ namespace VaccineAPI.Controllers
         }
 
         ///////////////
+       [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+       [Owns(OwnerKind.Clinic, "OnlineClinicId")]
        [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
         {
@@ -4217,6 +4255,8 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<ChildDTO>>(true, null, childInfoDTOs);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpGet("alertone/{ChildId}")]
         public Response<object> SendAlertEmail(long ChildId, long? paId = null, long? doctorId = null)
         {
@@ -4354,6 +4394,9 @@ namespace VaccineAPI.Controllers
             return uniqueSchedule;
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "OnlineClinicId")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("sms-alert/{GapDays}/{OnlineClinicId}")]
         public Response<IEnumerable<ScheduleDTO>> SendSMSAlertToParent(
             DateTime inputDate,
@@ -4388,6 +4431,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Child, "childId")]
         [HttpGet("individual-sms-alert/{GapDays}/{childId}")]
         public Response<IEnumerable<ScheduleDTO>> SendSMSAlertToOneChild(int GapDays, int childId, long? paId = null, long? doctorId = null)
         {
@@ -4465,6 +4510,9 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "OnlineClinicId")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("send-msg/{GapDays}/{OnlineClinicId}")]
         public Response<List<Messages>> SendMessages(int GapDays, long OnlineClinicId, long? paId = null, long? doctorId = null)
         {
@@ -4551,6 +4599,8 @@ namespace VaccineAPI.Controllers
             return new Response<List<Messages>>(true, null, listMessages);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "id")]
         [HttpPatch("{id}")]
         public async Task<ActionResult<IEnumerable<long>>> GetChildIdsWithSchedulesFromClinic(long id, [FromQuery] string fromDate, [FromQuery] string toDate)
         {
@@ -4600,6 +4650,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Child, "childId")]
         [HttpGet("doses-for-child/{childId}/{onlineClinicId}")]
         public Response<List<DoseDTO>> GetAllDosesDueForChild(int childId, long onlineClinicId, DateTime? date = null, long? paId = null, long? doctorId = null)
         {
@@ -4682,6 +4734,7 @@ namespace VaccineAPI.Controllers
         // reload/logout-login instead of living only in frontend memory. Called fire-and-forget
         // right after the WhatsApp deep link is opened; overwrites AlertSentAt on every resend
         // (no send history/log — see Schedule.AlertSentAt).
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPost("{id}/mark-alert-sent")]
         public Response<object> MarkAlertSent(long id)
         {
@@ -4695,6 +4748,8 @@ namespace VaccineAPI.Controllers
             return new Response<object>(true, null, new { schedule.Id, schedule.AlertSentAt });
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("doctor-sales-pdf/{doctorId}")]
         public IActionResult GetDoctorSalesPdf(long doctorId)
         {
@@ -4881,6 +4936,8 @@ namespace VaccineAPI.Controllers
             return cell;
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Schedule, "id")]
         [HttpPatch("{id}/ispaapprove")]
         public async Task<IActionResult> PatchIsPAApprove(long id)
         {
@@ -4918,6 +4975,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Clinic, "clinicId")]
         [HttpGet("clinic-report-pdf/{clinicId}")]
         public IActionResult GenerateClinicReportPdf(long clinicId,[FromQuery] string fromDate,[FromQuery] string toDate)
         {
@@ -5318,6 +5377,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("pa-collection-tasks/{paId}")]
         public IActionResult GetPaCollectionTasks(long paId)
         {
@@ -5334,6 +5394,8 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<List<ScheduleDTO>>(true, "OK", dtos));
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Schedule, "id")]
         [HttpPatch("{id}/mark-payment-collected")]
         public IActionResult MarkPaymentCollected(long id, [FromBody] ScheduleDTO dto)
         {
@@ -5358,6 +5420,8 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<ScheduleDTO>(true, "Payment marked as collected.", null));
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Schedule, "id")]
         [HttpPatch("{id}/record-payment-mode")]
         public IActionResult RecordPaymentMode(long id, [FromBody] ScheduleDTO dto)
         {
@@ -5383,6 +5447,8 @@ namespace VaccineAPI.Controllers
         // writes NO stock-moving ledger row — only an audit BatchCorrection row (who/when/new).
         // The certificate snapshot (Schedule.Lot/Expiry/Manufacturer) is what's edited; StockId
         // is untouched. Permitted for doctor + PA.
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Schedule, "id")]
         [HttpPatch("{id}/correct-batch")]
         public IActionResult CorrectBatch(long id, [FromBody] ScheduleDTO dto)
         {
@@ -5435,6 +5501,9 @@ namespace VaccineAPI.Controllers
 
         // PATCH /api/Schedule/{id}/verify-payment?doctorId=X
         // Doctor verifies a payment (cash or online). Sets IsPaymentApproved + audit trail.
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Schedule, "id")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpPatch("{id}/verify-payment")]
         public IActionResult VerifyPayment(long id, [FromQuery] long doctorId)
         {
@@ -5506,6 +5575,8 @@ namespace VaccineAPI.Controllers
         // nothing to trigger it. IsCompleted also feeds EnsurePAAssignment's dedup check —
         // closing settled assignments here keeps that check from reusing a stale one for an
         // unrelated later visit.
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpPatch("confirm-invoice/{id}")]
         public IActionResult ConfirmInvoice(long id, [FromQuery] long doctorId, [FromQuery] long? callerUserId, [FromQuery] string? securityStamp)
         {

@@ -15,6 +15,7 @@ namespace VaccineAPI.Controllers
             _db = context;
         }
 
+        [RolesOnly("SUPERADMIN")]
         [HttpGet]
         public ActionResult<IEnumerable<Manager>> GetAll()
         {
@@ -22,6 +23,8 @@ namespace VaccineAPI.Controllers
             return Ok(managers);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Manager, "id")]
         [HttpGet("{id:long}")]
         public ActionResult<Manager> GetById(long id)
         {
@@ -35,6 +38,8 @@ namespace VaccineAPI.Controllers
             return Ok(manager);
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("doctor/{doctorId:long}")]
         public ActionResult GetByDoctorId(long doctorId)
         {
@@ -46,6 +51,8 @@ namespace VaccineAPI.Controllers
             return Ok(managers);
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Manager, "id")]
         [HttpPut("{id:long}")]
         public ActionResult Update(long id, [FromBody] Manager manager)
         {
@@ -67,6 +74,8 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<Manager>(true, "Manager updated successfully.", existingManager));
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Manager, "id")]
         [HttpDelete("{id:long}")]
         public ActionResult Delete(long id)
         {
@@ -90,6 +99,8 @@ namespace VaccineAPI.Controllers
             return Ok(new { message = "Manager and related data deleted successfully." });
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Manager, "managerId")]
         [HttpGet("clinics/{managerId:long}")]
         public async Task<ActionResult<IEnumerable<object>>> GetClinicsByManagerId(long managerId)
         {
@@ -129,6 +140,8 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [Owns(OwnerKind.Manager, "id")]
         [HttpPut("{id:long}/profile")]
         public ActionResult UpdateProfile(long id, [FromBody] ManagerDTO dto)
         {
@@ -149,6 +162,8 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<Manager>(true, "Profile updated successfully.", manager));
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Manager, "id")]
         [HttpPut("{id:long}/toggle-active")]
         public ActionResult ToggleActive(long id)
         {
@@ -164,6 +179,8 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<Manager>(true, $"Manager {status} successfully.", manager));
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Manager, "id")]
         [HttpPut("{id:long}/toggle-verify")]
         public ActionResult ToggleVerify(long id)
         {

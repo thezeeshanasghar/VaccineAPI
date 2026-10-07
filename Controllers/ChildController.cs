@@ -43,6 +43,7 @@ namespace VaccineAPI.Controllers
                 ?? "";
         }
 
+        [Owns(OwnerKind.Child, "id")]
         [HttpPut("{id:long}/toggle-active")]
         public ActionResult<Response<ChildDTO>> ToggleActiveStatus(long id)
         {
@@ -82,6 +83,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+       [Owns(OwnerKind.Child, "childId")]
        [HttpGet("invoice-id")]
        public ActionResult<Response<InvoiceDTO>> GetInvoiceId([FromQuery] long doseId, [FromQuery] long childId)
        {
@@ -101,6 +103,7 @@ namespace VaccineAPI.Controllers
            }
        }
 
+       [Owns(OwnerKind.Child, "childId")]
        [HttpGet("schedule-amount")]
         public ActionResult<Response<decimal>> GetScheduleAmount(long Id, long doseId, long childId, long? clinicId = null)
         {
@@ -133,6 +136,7 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<decimal>(false, "Amount not found.", 0));
         }
 
+       [Owns(OwnerKind.Child, "childId")]
        [HttpGet("invoice-total")]
         public ActionResult<Response<decimal>> GetInvoiceTotal([FromQuery] long childId, [FromQuery] string scheduleDate)
         {
@@ -196,6 +200,7 @@ namespace VaccineAPI.Controllers
         // GetConsultationFeeByInvoiceId's legacy Fee-table lookup, which is keyed by
         // an InvoiceId that GetInvoiceId can resolve to any past visit for this
         // ChildId+DoseId (no date filter), silently resurfacing an old visit's fee.
+        [Owns(OwnerKind.Child, "childId")]
         [HttpGet("consultation-fee-for-visit")]
         public ActionResult<Response<decimal>> GetConsultationFeeForVisit([FromQuery] long childId, [FromQuery] string scheduleDate)
         {
@@ -268,6 +273,7 @@ namespace VaccineAPI.Controllers
         }
 
 
+        [RolesOnly("SUPERADMIN")]
         [HttpGet]
         public Response<IEnumerable<ChildDTO>> Get()
         {
@@ -284,6 +290,7 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
 
+        [Owns(OwnerKind.Clinic, "id")]
         [HttpGet("clinic/{id}/{page}")]
         public Response<IEnumerable<ChildDTO>> GetChildByClinic(long id, int page)
         {
@@ -306,6 +313,7 @@ namespace VaccineAPI.Controllers
         }
 
 
+        [Owns(OwnerKind.UserSelf, "id")]
         [HttpGet("user/{id}")]
         public Response<IEnumerable<ChildDTO>> GetChildByUser(long id)
         {
@@ -322,6 +330,7 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
 
+        [Owns(OwnerKind.Child, "Id")]
         [HttpGet("{Id}")]
         public Response<ChildDTO> GetSingle(int Id)
         {
@@ -336,6 +345,7 @@ namespace VaccineAPI.Controllers
             return new Response<ChildDTO>(true, null, childDTO);
         }
 
+       [Owns(OwnerKind.Child, "id")]
        [HttpGet("{id}/schedule")]
        public async Task<Response<IEnumerable<ScheduleDTO>>> GetChildSchedule(int id)
        {
@@ -369,6 +379,7 @@ namespace VaccineAPI.Controllers
            }
        }
 
+        [Owns(OwnerKind.Child, "id")]
         [HttpGet("{id}/downloadcsv")]
         public IActionResult MyExportAction(int id)
         {
@@ -402,6 +413,7 @@ namespace VaccineAPI.Controllers
         }
 
 
+        [Owns(OwnerKind.Child, "arr")]
         [HttpGet("downloadcsv")]
         public IActionResult MyExportAction2([FromQuery(Name = "arr[]")] long[] arr)
         {
@@ -473,6 +485,7 @@ namespace VaccineAPI.Controllers
             return nextVaccines;
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("{id}/GetChildAgainstMobile")]
         public Response<IEnumerable<ChildDTO>> GetChildAgainstMobile(string id)
         {
@@ -489,6 +502,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Clinic, "id")]
         [HttpGet("{id}/GetCustomScheduleAgainsClinic")]
         public Response<DoctorScheduleDTO> GetCustomScheduleAgainsClinic(int id)
         {
@@ -1645,6 +1659,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "id")]
         [HttpGet("{id}/Download-Schedule-PDF")]
         public IActionResult GenerateVerifySchedule(int id)
         {
@@ -2217,6 +2232,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "Id")]
         [HttpGet("{Id}/Download-Custom-PDF")]
         public IActionResult GenerateVerifyCustomPdf(int Id)
         {
@@ -2245,6 +2261,7 @@ namespace VaccineAPI.Controllers
             };
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)
         {
@@ -2255,6 +2272,7 @@ namespace VaccineAPI.Controllers
                 return false;
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("{keyword}/search")]
         public Response<IEnumerable<ChildDTO>> SearchChildren(string keyword)
         {
@@ -2279,6 +2297,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("search")]
         public Response<IEnumerable<ChildDTO>> SearchChildrenByCity(
             [FromQuery] string name = "", [FromQuery] string city = "", [FromQuery] string fromdob = "",
@@ -2349,6 +2368,7 @@ namespace VaccineAPI.Controllers
             return new Response<IEnumerable<ChildDTO>>(true, null, childDTOs);
         }
 
+        [Owns(OwnerKind.Clinic, "ClinicId")]
         [HttpPost]
         public Response<ChildDTO> Post(ChildDTO childDTO)
         {
@@ -2608,6 +2628,7 @@ namespace VaccineAPI.Controllers
             return result;
         }
 
+        [Owns(OwnerKind.Child, "ChildId")]
         [HttpPost("followup")]
         public Response<List<FollowUpDTO>> GetFollowUp(FollowUpDTO followUpDto)
         {
@@ -2809,6 +2830,7 @@ namespace VaccineAPI.Controllers
             return cell;
         }
 
+        [Owns(OwnerKind.Child, "Id")]
         [HttpGet("{Id}/{IsBrand}/{IsConsultationFee}/{InvoiceDate}/{DoctorId}/Download-Invoice-PDF")]
         public IActionResult DownloadInvoicePDF(int Id, bool IsBrand, bool IsConsultationFee, DateTime InvoiceDate,
                                                 int DoctorId)
@@ -2986,6 +3008,7 @@ namespace VaccineAPI.Controllers
         }
 
         // Serve saved invoice PDF by invoiceId (QR code target — used by insurance companies)
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("invoice/{invoiceId}/invoice-file")]
         public IActionResult GetInvoiceFileById(string invoiceId)
         {
@@ -3014,6 +3037,7 @@ namespace VaccineAPI.Controllers
         }
 
         // Serve saved invoice PDF by childId + scheduleDate (used by VacParent)
+        [Owns(OwnerKind.Child, "childId")]
         [HttpGet("{childId}/{scheduleDate}/invoice-file")]
         public IActionResult GetInvoiceFileByDate(long childId, DateTime scheduleDate)
         {
@@ -3035,6 +3059,7 @@ namespace VaccineAPI.Controllers
         }
 
         // Returns warning info so VacDoc can alert the doctor before editing
+        [Owns(OwnerKind.Child, "childId")]
         [HttpGet("{childId}/{scheduleDate}/invoice-warning")]
         public IActionResult GetInvoiceWarning(long childId, DateTime scheduleDate)
         {
@@ -3549,6 +3574,7 @@ namespace VaccineAPI.Controllers
             return output;
         }
 
+        [Owns(OwnerKind.Child, "Id")]
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Download-Invoice-PDF")]
         public IActionResult GenerateVerifyInvoicePdf(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
         {
@@ -3777,6 +3803,7 @@ namespace VaccineAPI.Controllers
             return word.Trim();
         }
 
+        [Owns(OwnerKind.Child, "Id")]
         [HttpPut]
         public Response<ChildDTO> Put([FromBody] ChildDTO childDTO)
         {
@@ -3857,6 +3884,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "Id")]
         [HttpDelete("{id}")]
         public Response<string> Delete(int Id, [FromQuery] string userType = null, [FromQuery] long? paId = null)
         {
@@ -4558,6 +4586,7 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
+        [Owns(OwnerKind.Child, "id")]
         [HttpGet("PID/{id}")]
         public IActionResult GenerateVerifyPID(int id)
         {
@@ -4586,6 +4615,7 @@ namespace VaccineAPI.Controllers
             };
         }
 
+        [Owns(OwnerKind.Child, "childId")]
         [HttpGet("PIDPDF/{childId}")]
         public IActionResult ViewPdf(int childId)
         {
@@ -4785,6 +4815,7 @@ namespace VaccineAPI.Controllers
             return File(output.ToArray(), "application/pdf");
         }
 
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("not-approved/{doctorId}")]
         public Response<IEnumerable<ChildDTO>> GetNotApprovedChildrenByClinic(long doctorId)
         {
@@ -4862,6 +4893,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("pending-count/{doctorId}")]
         public Response<int> GetPendingApprovalCount(long doctorId)
         {
@@ -4886,6 +4918,7 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [Owns(OwnerKind.Child, "id")]
         [HttpPut("approve/{id}")]
         public IActionResult ApproveChild(long id)
         {
@@ -5906,6 +5939,7 @@ namespace VaccineAPI.Controllers
 }
         }
 
+        [Owns(OwnerKind.Child, "id")]
         [HttpGet("Travel-PDF-Download/{id}")]
         public IActionResult GenerateVerifyTravelPdf(int id)
         {
@@ -6217,6 +6251,7 @@ namespace VaccineAPI.Controllers
         // Child.AgentId is now a real foreign key (see ChildDTO.AgentId / Child.AgentId).
 
         // ── IMMUNIZATION CARD: FRONT SIDE (Page 1) ────────────────────────
+        [Owns(OwnerKind.Child, "id")]
         [HttpGet("{id}/immunization-card-front")]
         public IActionResult ImmunizationCardFront(int id)
         {
@@ -6394,6 +6429,7 @@ namespace VaccineAPI.Controllers
         }
 
         // ── IMMUNIZATION CARD: VACCINE WISE (Page 2) ──────────────────────
+        [Owns(OwnerKind.Child, "id")]
         [HttpGet("{id}/immunization-card-vaccine")]
         public IActionResult ImmunizationCardVaccineWise(int id)
         {
@@ -6510,6 +6546,7 @@ namespace VaccineAPI.Controllers
         }
 
         // ── IMMUNIZATION CARD: AGE WISE (Page 3) ──────────────────────────
+        [Owns(OwnerKind.Child, "id")]
         [HttpGet("{id}/immunization-card-age")]
         public IActionResult ImmunizationCardAgeWise(int id)
         {
@@ -6652,6 +6689,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET: api/Child/agent-search?query=2025-123  OR  query=1234567890123
+        [RolesOnly("AGENT", "SUPERADMIN", "DOCTOR", "PA", "MANAGER")]
         [HttpGet("agent-search")]
         public ActionResult<object> AgentSearch([FromQuery] string query)
         {
@@ -6698,6 +6736,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET: api/Child/{id}/agent-travel-pdf  — same travel PDF with diagonal VERIFICATION COPY watermark
+        [RolesOnly("AGENT", "SUPERADMIN", "DOCTOR", "PA", "MANAGER")]
         [HttpGet("{id}/agent-travel-pdf")]
         public IActionResult AgentTravelPdf(int id)
         {
@@ -6759,6 +6798,7 @@ namespace VaccineAPI.Controllers
         // Intentionally NOT the full ScheduleDTO/vaccine.page shape — agents get given/due
         // status only, no payment mode, invoice IDs, brand/lot, or staff identity fields, same
         // boundary as what a travel certificate already shows publicly.
+        [Owns(OwnerKind.Agent, "agentId")]
         [HttpGet("{id}/agent-record")]
         public async Task<ActionResult<object>> GetAgentChildRecord(int id, [FromQuery] long agentId)
         {

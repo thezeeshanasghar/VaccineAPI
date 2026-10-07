@@ -6,6 +6,9 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId", "DoctorId")]
+    [Owns(OwnerKind.Pa, "paId", "PaId")]
     public class PaActivityLogController : ControllerBase
     {
         private readonly Context _db;
@@ -125,6 +128,7 @@ namespace VaccineAPI.Controllers
 
         // PATCH /api/PaActivityLog/{id}/approve-reversal
         // Doctor approves: invoice adjusted and PA payable reduced
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpPatch("{id:long}/approve-reversal")]
         public ActionResult ApproveReversal(long id)
         {
@@ -272,6 +276,7 @@ namespace VaccineAPI.Controllers
 
         // PATCH /api/PaActivityLog/{id}/reject-reversal
         // Doctor rejects: no financial change, reversal dismissed
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpPatch("{id:long}/reject-reversal")]
         public ActionResult RejectReversal(long id)
         {

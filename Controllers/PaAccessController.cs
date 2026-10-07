@@ -6,6 +6,7 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
     public class PAAccessController : ControllerBase
     {
         private readonly Context _db;
@@ -15,6 +16,7 @@ namespace VaccineAPI.Controllers
             _db = db;
         }
 
+        [RolesOnly("SUPERADMIN")]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<PaAccess>>> GetAll()
         {
@@ -39,6 +41,7 @@ namespace VaccineAPI.Controllers
             return Ok(paAccess);
         }
 
+        [Owns(OwnerKind.Doctor, "doctorId")]
         [HttpGet("doctor/{doctorId:long}")]
         public async Task<ActionResult<IEnumerable<PaAccess>>> GetPAsByDoctorId(long doctorId)
         {
@@ -65,6 +68,9 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
+        [Owns(OwnerKind.Pa, "PersonalAssistantId")]
+        [Owns(OwnerKind.Clinic, "ClinicId")]
         [HttpPost]
         public async Task<ActionResult<PaAccess>> Create(PaAccess paAccess)
         {
@@ -94,6 +100,7 @@ namespace VaccineAPI.Controllers
             return CreatedAtAction(nameof(GetById), new { id = paAccess.Id }, paAccess);
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpPut("{id:long}")]
         public async Task<IActionResult> Update(long id, PaAccess paAccess)
         {
@@ -153,6 +160,7 @@ namespace VaccineAPI.Controllers
             return Ok(new { message = "IsOnline status updated successfully.", isOnline = existingPaAccess.IsOnline });
         }
 
+        [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {

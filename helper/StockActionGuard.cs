@@ -4,41 +4,54 @@ using VaccineAPI.Models;
 namespace VaccineAPI
 {
     // Shared server-side permission gate for the stock-mutating controllers (AdjustStock,
-    // Bill, StockTransfer, DirectSale). These previously had zero identity or permission
-    // check at all — any caller could POST/DELETE against them for any DoctorId/ClinicId
-    // supplied in the body, and the PA flags meant to gate them (StockAdjust,
-    // StockPurchaseBills, StockTransfer, StockDirectSale) were written by the settings
-    // screen but read nowhere else. See the 2026-09-28 stock audit and
-    // project_give_ungive_permission_enforcement for the matching fix on give/ungive.
+    // Bill, StockTransfer, DirectSale, Stock opening balance).
     //
-    // A Doctor caller (paId/managerId both null) is always allowed — doctors have no
-    // permission flags to check. Manager is blocked outright for all 4 of these actions:
-    // unlike give/ungive (which requires an assigned PA to carry cash-reconciliation
-    // responsibility), there is no ManagerPermission flag and no PA-in-the-loop mechanism
-    // for stock adjustment/purchasing/transfers/direct-sale, so Manager stays fully out —
-    // consistent with the "Manager never touches cash" principle for everything except the
-    // PA-gated give/ungive exception (see feedback_manager_give_vaccine_intentional).
+    // Who is acting comes from the session token, never from the request body: the body's
+    // PaId/ManagerId/CallerUserId are only used while the API is still in Log mode and an older
+    // app sends no token. With a token:
+    //   DOCTOR   always allowed, but only for their own DoctorId.
+    //   PA       allowed when the matching PaPermission flag is on, for their own doctor.
+    //   MANAGER  blocked outright (no ManagerPermission flag or PA-in-the-loop exists for stock).
+    //   others   (parent, agent) blocked.
     public static class StockActionGuard
     {
         public static (bool allowed, string? error) CheckStockAction(
             Context db, long? paId, long? managerId, long? callerUserId, string? securityStamp,
-            System.Func<PaPermission, bool> paFlagSelector, string actionLabel)
+            System.Func<PaPermission, bool> paFlagSelector, string actionLabel, long? doctorId = null)
         {
+            var tok = AuthContext.Current;
+            if (tok != null)
+            {
+                if (tok.Role != "DOCTOR" && tok.Role != "PA" && tok.Role != "MANAGER" && tok.Role != "SUPERADMIN")
+                    return (false, "You do not have access to this.");
+                if (doctorId.HasValue && !CallerGuard.OwnsDoctor(doctorId.Value))
+                    return (false, "This record belongs to another practice.");
+
+                // Identity comes from the token; whatever the body claims is ignored.
+                paId = tok.PaId;
+                managerId = tok.ManagerId;
+                callerUserId = tok.UserId;
+            }
+            else if (AuthContext.Enforcing)
+            {
+                return (false, "Session could not be verified. Please sign in again.");
+            }
+
             if (!paId.HasValue && !managerId.HasValue)
-                return (true, null); // doctor actor — no flags apply
+            {
+                // No token (Log mode, older app): a missing PaId/ManagerId still reads as "doctor".
+                // With a token this means the caller really is a doctor (or super admin).
+                return (true, null);
+            }
 
             if (managerId.HasValue)
                 return (false, $"Managers cannot {actionLabel}. Ask the doctor.");
 
-            if (!callerUserId.HasValue || string.IsNullOrEmpty(securityStamp))
-                return (false, "Session could not be verified. Please sign in again.");
-
-            var user = db.Users.Find(callerUserId.Value);
-            if (user == null || user.SecurityStamp != securityStamp)
+            if (!CallerGuard.VerifyCaller(db, callerUserId, securityStamp))
                 return (false, "Session could not be verified. Please sign in again.");
 
             var pa = db.PersonalAssistant.Find(paId!.Value);
-            if (pa == null || pa.UserId != user.Id)
+            if (pa == null || pa.UserId != callerUserId)
                 return (false, "Caller does not match the assigned PA.");
 
             var perm = db.PaPermissions.FirstOrDefault(p => p.PaId == paId.Value);

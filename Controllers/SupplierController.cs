@@ -7,6 +7,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class SupplierController : ControllerBase
     {
         private readonly Context _db;
@@ -45,6 +50,8 @@ namespace VaccineAPI.Controllers
         {
             var s = await _db.Suppliers.FindAsync(id);
             if (s == null)
+                return new Response<SupplierDTO>(false, "Not found", null);
+            if (!CallerGuard.OwnsDoctor(s.DoctorId))
                 return new Response<SupplierDTO>(false, "Not found", null);
 
             return new Response<SupplierDTO>(true, null, new SupplierDTO
@@ -89,6 +96,8 @@ namespace VaccineAPI.Controllers
         {
             var supplier = await _db.Suppliers.FindAsync(id);
             if (supplier == null)
+                return new Response<SupplierDTO>(false, "Not found", null);
+            if (!CallerGuard.OwnsDoctor(supplier.DoctorId))
                 return new Response<SupplierDTO>(false, "Not found", null);
 
             supplier.Name = dto.Name;

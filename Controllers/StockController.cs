@@ -14,6 +14,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class StockController : ControllerBase
     {
         private readonly Context _db;
@@ -51,7 +56,7 @@ namespace VaccineAPI.Controllers
 
             var guard = StockActionGuard.CheckStockAction(
                 _db, dto.PaId, dto.ManagerId, dto.CallerUserId, dto.SecurityStamp,
-                perm => perm.StockAdjust, "record an opening balance");
+                perm => perm.StockAdjust, "record an opening balance", dto.DoctorId);
             if (!guard.allowed)
                 return Ok(new { IsSuccess = false, Message = guard.error });
 

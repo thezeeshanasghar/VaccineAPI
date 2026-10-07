@@ -10,6 +10,7 @@ namespace VaccineAPI.Controllers
     // Single row — created on first save if it doesn't exist yet.
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("SUPERADMIN")]
     public class AppEmailSettingsController : ControllerBase
     {
         private readonly Context _db;

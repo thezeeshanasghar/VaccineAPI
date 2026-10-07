@@ -12,6 +12,11 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class ExpenseController : ControllerBase
     {
         private readonly Context _db;
@@ -62,6 +67,8 @@ namespace VaccineAPI.Controllers
         {
             var e = await _db.Expenses.FindAsync(id);
             if (e == null)
+                return Ok(new { IsSuccess = false, Message = "Expense not found" });
+            if (!CallerGuard.OwnsDoctor(e.DoctorId))
                 return Ok(new { IsSuccess = false, Message = "Expense not found" });
 
             return Ok(new { IsSuccess = true, ResponseData = ToDto(e) });
@@ -142,6 +149,8 @@ namespace VaccineAPI.Controllers
             var expense = await _db.Expenses.FindAsync(id);
             if (expense == null)
                 return Ok(new { IsSuccess = false, Message = "Expense not found" });
+            if (!CallerGuard.OwnsDoctor(expense.DoctorId))
+                return Ok(new { IsSuccess = false, Message = "Expense not found" });
 
             expense.ClinicId    = dto.ClinicId;
             expense.IsShared    = dto.IsShared;
@@ -187,6 +196,8 @@ namespace VaccineAPI.Controllers
         {
             var expense = await _db.Expenses.FindAsync(id);
             if (expense == null)
+                return Ok(new { IsSuccess = false, Message = "Expense not found" });
+            if (!CallerGuard.OwnsDoctor(expense.DoctorId))
                 return Ok(new { IsSuccess = false, Message = "Expense not found" });
 
             _db.Expenses.Remove(expense);

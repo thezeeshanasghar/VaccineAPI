@@ -11,6 +11,7 @@ namespace VaccineAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN", "AGENT")]
     public class AgentController : ControllerBase
     {
         private readonly Context _context;
@@ -21,6 +22,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET: api/Agent
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Agent>>> GetAllAgents()
         {
@@ -28,6 +30,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET: api/Agent/Names
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("Names")]
         public async Task<ActionResult<IEnumerable<string>>> GetAllAgentNames()
         {
@@ -36,6 +39,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET: api/Agent/5
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("{id}")]
         public async Task<ActionResult<Agent>> GetAgent(int id)
         {
@@ -51,6 +55,7 @@ namespace VaccineAPI.Controllers
 
         // POST: api/Agent — doctor-side "Add Agent". Name + Phone only; every new agent gets
         // the default PIN "0000" and must change it on first VacAgent login (MustChangePassword).
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPost]
         public async Task<ActionResult<Agent>> PostAgent(Agent agent)
         {
@@ -75,6 +80,7 @@ namespace VaccineAPI.Controllers
         // Merges onto the existing row rather than replacing it wholesale, so this endpoint
         // never needs the agent's Password/MustChangePassword round-tripped from the client —
         // those are owned exclusively by login/change-password.
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPut("{id}")]
         public async Task<IActionResult> PutAgent(int id, Agent agent)
         {
@@ -101,6 +107,7 @@ namespace VaccineAPI.Controllers
         }
 
         // DELETE: api/Agent/5
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteAgent(int id)
         {
@@ -130,6 +137,7 @@ namespace VaccineAPI.Controllers
         // qualifying dose specifically fell inside [from, to], not just any dose in range.
         // Fee amount: AgentVaccineFeeOverride for that dose's vaccine if one exists, else the
         // agent's flat ReferralFeePerClient.
+        [Owns(OwnerKind.Agent, "id")]
         [HttpGet("{id}/report")]
         public async Task<ActionResult<object>> GetAgentReport(int id, [FromQuery] DateTime from, [FromQuery] DateTime to)
         {
@@ -204,6 +212,7 @@ namespace VaccineAPI.Controllers
         // agent's most-recent referrals; non-blank filters by name/guardian/mobile, case-
         // insensitive substring match, no MR/CNIC lookup here (that's agent-search's job for
         // Travel-only verification, a different, non-ownership-scoped use case).
+        [Owns(OwnerKind.Agent, "id")]
         [HttpGet("{id}/clients")]
         public async Task<ActionResult<object>> GetAgentClients(int id, [FromQuery] string query)
         {
@@ -245,6 +254,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET: api/Agent/AgentAlert
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("AgentAlert")]
         public async Task<IEnumerable<string>> GetLatestPatientAgentsNotInAgentTableAsync()
         {
@@ -271,11 +281,19 @@ namespace VaccineAPI.Controllers
             if (string.IsNullOrWhiteSpace(dto.PhoneNumber) || string.IsNullOrWhiteSpace(dto.Password))
                 return BadRequest(new { IsSuccess = false, Message = "Phone number and password are required." });
 
+            string throttleKey = "a:" + dto.PhoneNumber;
+            if (LoginThrottle.IsBlocked(throttleKey))
+                return Unauthorized(new { IsSuccess = false, Message = "Too many failed attempts. Please try again in 15 minutes." });
+
             var agent = await _context.Agents
                 .FirstOrDefaultAsync(a => a.PhoneNumber == dto.PhoneNumber && a.Password == dto.Password);
 
             if (agent == null)
+            {
+                LoginThrottle.Fail(throttleKey);
                 return Unauthorized(new { IsSuccess = false, Message = "Invalid phone number or password." });
+            }
+            LoginThrottle.Success(throttleKey);
 
             return Ok(new
             {
@@ -294,7 +312,8 @@ namespace VaccineAPI.Controllers
                     agent.CanRegisterRegular,
                     agent.CanRegisterEPI,
                     agent.CanRegisterCustomize,
-                    agent.CanRegisterTravel
+                    agent.CanRegisterTravel,
+                    Token = AuthContext.IssueForAgent(agent)
                 }
             });
         }
@@ -309,19 +328,30 @@ namespace VaccineAPI.Controllers
             if (dto.NewPassword.Length < 4)
                 return BadRequest(new { IsSuccess = false, Message = "New password must be at least 4 characters." });
 
+            string throttleKey = "a:" + dto.PhoneNumber;
+            if (LoginThrottle.IsBlocked(throttleKey))
+                return Unauthorized(new { IsSuccess = false, Message = "Too many failed attempts. Please try again in 15 minutes." });
+
             var agent = await _context.Agents
                 .FirstOrDefaultAsync(a => a.PhoneNumber == dto.PhoneNumber && a.Password == dto.OldPassword);
 
             if (agent == null)
+            {
+                LoginThrottle.Fail(throttleKey);
                 return Unauthorized(new { IsSuccess = false, Message = "Current password is incorrect." });
+            }
+            LoginThrottle.Success(throttleKey);
 
             agent.Password = dto.NewPassword;
             agent.MustChangePassword = false;
             await _context.SaveChangesAsync();
-            return Ok(new { IsSuccess = true, Message = "Password changed successfully." });
+            AuthDirectory.Forget('A', agent.Id);
+            // Agent tokens are tied to the password, so the old one stops working; hand back a new one.
+            return Ok(new { IsSuccess = true, Message = "Password changed successfully.", Token = AuthContext.IssueForAgent(agent) });
         }
 
         // PUT: api/Agent/update
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPut("update")]
         public async Task<ActionResult<Response<Object>>> UpdateAgent([FromBody] string newAgent)
         {
@@ -348,6 +378,7 @@ namespace VaccineAPI.Controllers
         // GET: api/Agent/summary — powers the Agent Module list page's per-agent stat columns
         // (referred / availed-1st-dose / owed-to-date, all-time, no date range). "Owed" here
         // is a running total, independent of whether it's been paid out via the monthly report.
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("summary")]
         public async Task<ActionResult<object>> GetAgentsSummary()
         {
@@ -442,6 +473,7 @@ namespace VaccineAPI.Controllers
         }
 
         // GET: api/Agent/{id}/fee-overrides
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpGet("{id}/fee-overrides")]
         public async Task<ActionResult<IEnumerable<AgentVaccineFeeOverride>>> GetFeeOverrides(int id)
         {
@@ -449,6 +481,7 @@ namespace VaccineAPI.Controllers
         }
 
         // PUT: api/Agent/{id}/fee-overrides/{vaccineId} — upsert a per-vaccine fee override.
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPut("{id}/fee-overrides/{vaccineId}")]
         public async Task<ActionResult<object>> UpsertFeeOverride(int id, long vaccineId, [FromBody] AgentFeeOverrideDTO dto)
         {
@@ -476,6 +509,7 @@ namespace VaccineAPI.Controllers
         }
 
         // DELETE: api/Agent/{id}/fee-overrides/{vaccineId}
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpDelete("{id}/fee-overrides/{vaccineId}")]
         public async Task<IActionResult> DeleteFeeOverride(int id, long vaccineId)
         {

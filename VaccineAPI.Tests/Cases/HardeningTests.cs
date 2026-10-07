@@ -188,8 +188,17 @@ public class HardeningTests
         long userId; using (var db = w.NewContext()) userId = db.Doctors.Find(w.DoctorId)!.UserId;
         using (var db = w.NewContext())
         {
-            var r = new UserController(db, null!, new ConfigurationBuilder().Build()).Delete(userId).GetAwaiter().GetResult();
-            Assert.IsType<ConflictObjectResult>(r);
+            // Deleting a user is a super-admin action; run it as one so the stock guard is what answers.
+            var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            http.Items["auth.identity"] = new AuthIdentity { UserId = 1, Role = "SUPERADMIN" };
+            var saved = AuthContext.Accessor;
+            AuthContext.Accessor = new Microsoft.AspNetCore.Http.HttpContextAccessor { HttpContext = http };
+            try
+            {
+                var r = new UserController(db, null!, new ConfigurationBuilder().Build()).Delete(userId).GetAwaiter().GetResult();
+                Assert.IsType<ConflictObjectResult>(r);
+            }
+            finally { AuthContext.Accessor = saved; }
         }
         // a dose that has been given cannot be deleted out from under its stock trail
         Assert.True(w.GiveDose1().IsSuccess);

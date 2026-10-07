@@ -8,6 +8,11 @@ namespace VaccineAPI.Controllers
     // clinic / brand / batch, plus every anomaly class. Never changes data.
     [Route("api/[controller]")]
     [ApiController]
+    [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+    [Owns(OwnerKind.Doctor, "doctorId")]
+    [Owns(OwnerKind.Clinic, "clinicId", "OnlineClinicId")]
+    [Owns(OwnerKind.Child, "childId")]
+    [Owns(OwnerKind.Pa, "paId")]
     public class InventoryAuditController : ControllerBase
     {
         private readonly Context _db;

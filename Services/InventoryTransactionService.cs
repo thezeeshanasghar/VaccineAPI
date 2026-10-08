@@ -49,8 +49,9 @@ namespace VaccineAPI.Services
         public static bool StrictInvariants { get; set; } = false;
         public static Action<string>? OnInvariantViolation { get; set; }
 
-        // Expired-stock exclusion from FEFO. OFF until the owner fixes the expiry cut-off rule.
-        public static bool ExcludeExpiredFromFefo { get; set; } = false;
+        // Expired-stock exclusion from FEFO. ON (owner decision 2026-10-08): an expired batch is never
+        // given. Expiry is the LAST usable day, judged against the dose's given date.
+        public static bool ExcludeExpiredFromFefo { get; set; } = true;
 
         private readonly List<Stock> _touchedStocks = new List<Stock>();
         private readonly Dictionary<(long brand, long doctor, long clinic), int> _touchedPairs =
@@ -814,7 +815,8 @@ namespace VaccineAPI.Services
         //   false -> OHF / pre-period / historical: a zero-delta audit row only.
         // `outStockId` returns the batch the dose consumed, or null (pending / no movement).
         public void AdministerSync(BrandAmount ba, long clinicId, long scheduleId, DateTime eventDate,
-            long? createdByPaId, bool consumesStock, string? decisionReason, out int? outStockId)
+            long? createdByPaId, bool consumesStock, string? decisionReason, out int? outStockId,
+            string? preferredLot = null, DateTime? preferredExpiry = null)
         {
             long doctorId = ba.DoctorId;
             long brandId = ba.BrandId;
@@ -828,7 +830,24 @@ namespace VaccineAPI.Services
                 return;
             }
 
-            var src = UsableBatches(brandId, clinicId, eventDate).FirstOrDefault();
+            var usable = UsableBatches(brandId, clinicId, eventDate);
+            // Honour the batch the nurse chose (batch picker / typed lot) when it is a usable batch of
+            // this brand at this clinic; its expiry narrows the choice among same-lot rows. Anything
+            // that doesn't match (blank, stale, other brand's lot) falls back to FEFO — a give is
+            // never rejected over a lot hint.
+            Stock? src = null;
+            var lotHint = (preferredLot ?? "").Trim();
+            if (lotHint.Length > 0)
+            {
+                var sameLot = usable.Where(s => (s.BatchLot ?? "").Trim() == lotHint).ToList();
+                if (preferredExpiry.HasValue)
+                {
+                    var sameExpiry = sameLot.Where(s => s.Expiry.HasValue && s.Expiry.Value.Date == preferredExpiry.Value.Date).ToList();
+                    if (sameExpiry.Count > 0) sameLot = sameExpiry;
+                }
+                src = sameLot.FirstOrDefault();
+            }
+            src ??= usable.FirstOrDefault();
             if (src == null)
             {
                 RecordPendingUse(doctorId, clinicId, brandId, scheduleId, eventDate, createdByPaId, decisionReason);
@@ -881,6 +900,15 @@ namespace VaccineAPI.Services
                 .Where(t => t.ReversesTransactionId != null && ids.Contains(t.ReversesTransactionId))
                 .Select(t => t.ReversesTransactionId).ToList();
             return gives.FirstOrDefault(g => !reversed.Contains(g.Id));
+        }
+
+        // The clinic the live stock-consuming give of this dose was booked against (from its ledger
+        // row), or null when there is none. The authoritative answer for "which clinic do I restore
+        // to" — independent of the dose's lot/expiry text, which can be blank or wrong.
+        public long? LiveGiveClinicId(long scheduleId)
+        {
+            var g = LatestUnreversedGive(scheduleId);
+            return (g != null && g.ConsumesStock && g.ClinicId > 0) ? g.ClinicId : (long?)null;
         }
 
         // True when the dose still has a stock effect to undo (a live pending dose, or an un-reversed

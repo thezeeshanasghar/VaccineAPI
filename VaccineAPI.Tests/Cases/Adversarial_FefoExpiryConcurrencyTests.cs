@@ -94,9 +94,9 @@ public class Adversarial_ExpiryTests
     }
 
     [Fact]
-    public void DefaultIsOff()
+    public void DefaultIsOn()
     {
-        Assert.False(InventoryTransactionService.ExcludeExpiredFromFefo);
+        Assert.True(InventoryTransactionService.ExcludeExpiredFromFefo);
     }
 
     [Fact]

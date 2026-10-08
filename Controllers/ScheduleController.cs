@@ -960,7 +960,8 @@ namespace VaccineAPI.Controllers
                         // Count<=0 rejection is removed for the consuming path.
                         _inventory.AdministerSync(dbBrandInventory, onlineClinicId, dbSchedule.Id,
                             scheduleDTO.GivenDate.Value, scheduleDTO.PaId,
-                            decision.ConsumesStock, decision.Reason, out giveConsumedStockId);
+                            decision.ConsumesStock, decision.Reason, out giveConsumedStockId,
+                            scheduleDTO.Lot, scheduleDTO.Expiry);
                         giveConsumedStockThisRequest = decision.ConsumesStock;
 
                         // Persist the inventory deduction in its own transaction, right here,
@@ -1702,7 +1703,12 @@ namespace VaccineAPI.Controllers
         {
             var childClinicId = schedule.Child?.ClinicId ?? 0;
 
-            // Prefer resolving from persisted stock source fields captured at give-time.
+            // Best source: the clinic the give's ledger row was booked against. Guessing from the
+            // dose's lot/expiry text breaks when that text is blank, stale or from a case-twin brand.
+            var ledgerClinicId = _inventory.LiveGiveClinicId(schedule.Id);
+            if (ledgerClinicId.HasValue) { return ledgerClinicId.Value; }
+
+            // Otherwise resolve from persisted stock source fields captured at give-time.
             if (schedule.BrandId.HasValue && schedule.BrandId.Value > 0)
             {
                 var candidateStocks = _db.Stocks
@@ -3036,7 +3042,8 @@ namespace VaccineAPI.Controllers
                                 // path records, floors Count at 0, and flags NeedsReconcile.
                                 _inventory.AdministerSync(brandInventory, onlineClinicId, schedule.Id,
                                     scheduleDTO.GivenDate!.Value, scheduleDTO.PaId,
-                                    bulkDecision.ConsumesStock, bulkDecision.Reason, out bulkConsumedStockId);
+                                    bulkDecision.ConsumesStock, bulkDecision.Reason, out bulkConsumedStockId,
+                                    scheduleBrand.Lot, scheduleBrand.Expiry);
 
                                 schedule.StockId = bulkConsumedStockId;
                                 bulkBlankIfNoBatch = bulkDecision.ConsumesStock;

@@ -41,6 +41,8 @@ namespace VaccineAPI.Models
         public bool EditVaccineSchedule { get; set; }
         public bool AddVaccineToPatientRecord { get; set; }
         public bool ViewPaAssignmentStatus { get; set; }
+        // Doctor 1 only: lets the PA start a shift and share live location with the doctor.
+        public bool TrackLocation { get; set; }
 
         // Follow-Up
         public bool ViewFollowUps { get; set; }

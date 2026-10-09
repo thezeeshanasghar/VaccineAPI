@@ -136,6 +136,8 @@ namespace VaccineAPI.Models
         public DbSet<Supplier> Suppliers { get; set; }
         public DbSet<SupplierPayment> SupplierPayments { get; set; }
         public DbSet<PaCashHandover> PaCashHandovers { get; set; }
+        public DbSet<PaShift> PaShifts { get; set; }
+        public DbSet<PaLocation> PaLocations { get; set; }
         public DbSet<Expense> Expenses { get; set; }
         public DbSet<PAAssignment> PAAssignments { get; set; }
         public DbSet<PaPayableAdjustment> PaPayableAdjustments { get; set; }

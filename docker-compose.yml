@@ -10,7 +10,11 @@ services:
     volumes:
       - ./certs:/app/certs
       - ./Resources:/app/Resources
+      # Firebase service-account key for push notifications. NOT in git: put it on the host at
+      # ~/VaccineAPI/push/firebase.json. If it is missing, pushes are simply disabled.
+      - ./push:/app/push:ro
     environment:
+      - Push__ServiceAccountPath=/app/push/firebase.json
       - ASPNETCORE_ENVIRONMENT=Development
       - AuthTokenSecret=${AUTH_TOKEN_SECRET:-}
       - AuthMode=${AUTH_MODE:-Log}

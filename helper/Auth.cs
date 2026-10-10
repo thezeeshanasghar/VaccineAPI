@@ -293,6 +293,7 @@ namespace VaccineAPI
 
             // Writes each app really makes
             if (method == "POST" && p == "/api/booking") return true;
+            if (method == "POST" && (p == "/api/device/register" || p == "/api/device/unregister")) return true;
             if (method == "POST" && p == "/api/child/followup") return true;
             if (method == "PATCH" && p == "/api/doctor/update-clinic-id") return true;
             if (method == "PUT" && p == "/api/schedule/reschedule") return true;

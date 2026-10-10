@@ -13,6 +13,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddScoped<VaccineAPI.Services.InventoryTransactionService>();
+builder.Services.AddHostedService<VaccineAPI.Services.PushReminderService>();
 
 // Inventory safety switches (appsettings "Inventory": {...}).
 //  StrictInvariants        : true = a batch whose quantity disagrees with its ledger rows aborts the
@@ -51,6 +52,7 @@ builder.Services.AddDbContext<VaccineAPI.Models.Context>(
 var app = builder.Build();
 
 VaccineAPI.AuthContext.Accessor = app.Services.GetRequiredService<IHttpContextAccessor>();
+VaccineAPI.Services.PushService.Configure(app.Configuration, app.Services.GetRequiredService<IServiceScopeFactory>());
 
 if (verboseDiagnostics)
 {

@@ -78,12 +78,34 @@ namespace VaccineAPI.Models
             return false;
         }
 
+        // Every Notification row inserted anywhere also becomes a push to that recipient's devices.
+        // Collected before the save (entities become Unchanged afterwards) and sent after it succeeds.
+        private System.Collections.Generic.List<Notification> PendingNotificationPushes() =>
+            ChangeTracker.Entries<Notification>().Where(e => e.State == EntityState.Added).Select(e => e.Entity).ToList();
+
+        private static void DispatchPushes(System.Collections.Generic.List<Notification> list)
+        {
+            foreach (var n in list)
+            {
+                var data = new System.Collections.Generic.Dictionary<string, string>
+                {
+                    ["type"] = n.Type ?? "",
+                    ["notificationId"] = n.Id.ToString()
+                };
+                if (n.ChildId.HasValue) data["childId"] = n.ChildId.Value.ToString();
+                if (n.BookingId.HasValue) data["bookingId"] = n.BookingId.Value.ToString();
+                VaccineAPI.Services.PushService.Send(n.RecipientType, n.RecipientId, n.Title, n.Message, data);
+            }
+        }
+
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             BumpConcurrencyTokens();
             CheckInventoryWriters();
+            var pushes = PendingNotificationPushes();
             var n = base.SaveChanges(acceptAllChangesOnSuccess);
             _inventoryWriteMarks.Clear();
+            DispatchPushes(pushes);
             return n;
         }
 
@@ -91,8 +113,10 @@ namespace VaccineAPI.Models
         {
             BumpConcurrencyTokens();
             CheckInventoryWriters();
+            var pushes = PendingNotificationPushes();
             var n = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
             _inventoryWriteMarks.Clear();
+            DispatchPushes(pushes);
             return n;
         }
 
@@ -137,6 +161,8 @@ namespace VaccineAPI.Models
         public DbSet<SupplierPayment> SupplierPayments { get; set; }
         public DbSet<PaCashHandover> PaCashHandovers { get; set; }
         public DbSet<PaShift> PaShifts { get; set; }
+        public DbSet<DeviceToken> DeviceTokens { get; set; }
+        public DbSet<PushLog> PushLogs { get; set; }
         public DbSet<PaLocation> PaLocations { get; set; }
         public DbSet<Expense> Expenses { get; set; }
         public DbSet<PAAssignment> PAAssignments { get; set; }

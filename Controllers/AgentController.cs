@@ -92,6 +92,10 @@ namespace VaccineAPI.Controllers
             var dbAgent = await _context.Agents.FindAsync(id);
             if (dbAgent == null) return NotFound();
 
+            var feeChanged = dbAgent.ReferralFeePerClient != agent.ReferralFeePerClient;
+            var rightsChanged = dbAgent.CanRegisterRegular != agent.CanRegisterRegular || dbAgent.CanRegisterEPI != agent.CanRegisterEPI
+                || dbAgent.CanRegisterCustomize != agent.CanRegisterCustomize || dbAgent.CanRegisterTravel != agent.CanRegisterTravel;
+
             dbAgent.Name = agent.Name;
             dbAgent.PhoneNumber = agent.PhoneNumber;
             dbAgent.ReferralFeePerClient = agent.ReferralFeePerClient;
@@ -101,6 +105,12 @@ namespace VaccineAPI.Controllers
             dbAgent.CanRegisterCustomize = agent.CanRegisterCustomize;
             dbAgent.CanRegisterTravel = agent.CanRegisterTravel;
 
+            if (feeChanged)
+                VaccineAPI.Services.NotifyHelper.Add(_context, "AgentFeeChanged", "AGENT", dbAgent.Id, "Referral fee updated",
+                    $"Your referral fee per client is now Rs. {dbAgent.ReferralFeePerClient:N0}.");
+            if (rightsChanged)
+                VaccineAPI.Services.NotifyHelper.Add(_context, "AgentRightsChanged", "AGENT", dbAgent.Id, "Registration access updated",
+                    "The patient types you can register were changed. Open the app to see what you can register now.");
             await _context.SaveChangesAsync();
 
             return NoContent();
@@ -504,6 +514,8 @@ namespace VaccineAPI.Controllers
                     Fee = dto.Fee
                 });
             }
+            VaccineAPI.Services.NotifyHelper.Add(_context, "AgentFeeChanged", "AGENT", id, "Referral fee updated",
+                "A vaccine-specific referral fee on your account was changed.");
             await _context.SaveChangesAsync();
             return Ok(new { IsSuccess = true, Message = "Fee override saved." });
         }

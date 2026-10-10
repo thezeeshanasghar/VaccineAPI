@@ -474,6 +474,11 @@ namespace VaccineAPI.Controllers
             // Notify doctor by email (fire-and-forget)
             if (dto.CallerType == "PA")
             {
+                var cKid = await _db.Childs.FindAsync(assignment.ChildId);
+                var cPa = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelled", "DOCTOR", assignment.DoctorId, "Assignment cancelled by PA",
+                    $"{cPa?.Name ?? "Your PA"} cancelled the assignment for {cKid?.Name ?? "a patient"}. Please reassign or reschedule.", assignment.ChildId, assignment.ClinicId);
+                await _db.SaveChangesAsync();
                 var doctor = await _db.Doctors.FindAsync(assignment.DoctorId);
                 if (doctor != null && !string.IsNullOrEmpty(doctor.Email))
                 {
@@ -537,6 +542,13 @@ namespace VaccineAPI.Controllers
 
             // Notify doctor by email (fire-and-forget)
             var doctor = await _db.Doctors.FindAsync(assignment.DoctorId);
+            {
+                var rqPa = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
+                var rqKid = await _db.Childs.FindAsync(assignment.ChildId);
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelRequest", "DOCTOR", assignment.DoctorId, "Cancellation request",
+                    $"{rqPa?.Name ?? "Your PA"} asks to cancel the assignment for {rqKid?.Name ?? "a patient"}. Tap to approve or reject.", assignment.ChildId, assignment.ClinicId);
+                await _db.SaveChangesAsync();
+            }
             if (doctor != null && !string.IsNullOrEmpty(doctor.Email))
             {
                 var paUser = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
@@ -613,6 +625,11 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
 
+            var apKid = await _db.Childs.FindAsync(assignment.ChildId);
+            VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelApproved", "PA", assignment.PersonalAssistantId, "Cancellation approved",
+                $"Your request to cancel the assignment for {apKid?.Name ?? "the patient"} was approved.", assignment.ChildId, assignment.ClinicId);
+            await _db.SaveChangesAsync();
+
             return Ok(new { IsSuccess = true, Message = "Cancellation approved" });
         }
 
@@ -638,6 +655,11 @@ namespace VaccineAPI.Controllers
             {
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
+
+            var rjKid = await _db.Childs.FindAsync(assignment.ChildId);
+            VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelRejected", "PA", assignment.PersonalAssistantId, "Cancellation rejected",
+                $"Your request to cancel the assignment for {rjKid?.Name ?? "the patient"} was rejected. The assignment stays active.", assignment.ChildId, assignment.ClinicId);
+            await _db.SaveChangesAsync();
 
             // Notify PA by email (fire-and-forget)
             var pa = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
@@ -793,7 +815,15 @@ namespace VaccineAPI.Controllers
             if (request.DoctorId != doctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised" });
 
-            return await DeleteAssignment(id, doctorId, "FullReset");
+            var approveResult = await DeleteAssignment(id, doctorId, "FullReset");
+            if (await _db.VaccineRefusals.AnyAsync(r => r.Id == request.Id && r.Status == "Approved"))
+            {
+                var apRefKid = await _db.Childs.FindAsync(request.ChildId);
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaRefusalApproved", "PA", request.PaId, "Refusal approved",
+                    $"Your \"refused at home\" report for {apRefKid?.Name ?? "the patient"} was approved.", request.ChildId, null);
+                await _db.SaveChangesAsync();
+            }
+            return approveResult;
         }
 
         // PATCH /api/PAAssignment/{id}/reject-refusal
@@ -816,6 +846,11 @@ namespace VaccineAPI.Controllers
             {
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
+
+            var rjRefKid = await _db.Childs.FindAsync(request.ChildId);
+            VaccineAPI.Services.NotifyHelper.Add(_db, "PaRefusalRejected", "PA", request.PaId, "Refusal rejected",
+                $"Your \"refused at home\" report for {rjRefKid?.Name ?? "the patient"} was rejected. The assignment stays active.", request.ChildId, null);
+            await _db.SaveChangesAsync();
 
             var pa = await _db.PersonalAssistant.FindAsync(request.PaId);
             if (pa != null && !string.IsNullOrEmpty(pa.Email))
@@ -1025,6 +1060,14 @@ namespace VaccineAPI.Controllers
             // reassignment (not just first assignment) — the parent needs to know who is
             // coordinating now. Same helper as Create; passes isReassignment for the wording.
             await NotifyParentOfAssignment(old.ChildId, dto.NewPaId, old.ClinicId, isReassignment: true);
+
+            var reKid = await _db.Childs.FindAsync(old.ChildId);
+            VaccineAPI.Services.NotifyHelper.Add(_db, "PaNewAssignment", "PA", dto.NewPaId, "New patient assigned",
+                $"{reKid?.Name ?? "A patient"} has been reassigned to you. Open Assignments to see the visit.", old.ChildId, old.ClinicId);
+            if (old.PersonalAssistantId != dto.NewPaId)
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaAssignmentRemoved", "PA", old.PersonalAssistantId, "Assignment reassigned",
+                    $"{reKid?.Name ?? "A patient"} has been reassigned to another assistant.", old.ChildId, old.ClinicId);
+            await _db.SaveChangesAsync();
 
             return Ok(new { IsSuccess = true, ResponseData = new { NewAssignmentId = newAssignment.Id } });
         }
@@ -1418,6 +1461,12 @@ namespace VaccineAPI.Controllers
                 // login). Kept synchronous — cheap DB row on the request's own _db context;
                 // backgrounding it would race a disposed context.
                 await NotifyParentOfAssignment(dto.ChildId, dto.PersonalAssistantId, dto.ClinicId);
+
+                // Push to the PA (the Notification row is what triggers it).
+                var createKid = await _db.Childs.FindAsync(dto.ChildId);
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaNewAssignment", "PA", dto.PersonalAssistantId, "New patient assigned",
+                    $"{createKid?.Name ?? "A patient"} has been assigned to you. Open Assignments to see the visit.", dto.ChildId, dto.ClinicId);
+                await _db.SaveChangesAsync();
 
                 return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id } });
             }

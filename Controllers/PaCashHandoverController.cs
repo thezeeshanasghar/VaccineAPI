@@ -134,6 +134,10 @@ namespace VaccineAPI.Controllers
             var pa = _db.PersonalAssistant.FirstOrDefault(p => p.Id == dto.PaId);
             var clinic = _db.Clinics.FirstOrDefault(c => c.Id == dto.ClinicId);
 
+            VaccineAPI.Services.NotifyHelper.Add(_db, "CashHandoverPending", "DOCTOR", dto.DoctorId, "Cash handover to confirm",
+                $"{(pa != null ? pa.Name : "A PA")} handed over Rs. {amount:N0}. Tap to confirm.", null, dto.ClinicId);
+            _db.SaveChanges();
+
             var result = new PaCashHandoverDTO
             {
                 Id = handover.Id,
@@ -235,6 +239,8 @@ namespace VaccineAPI.Controllers
 
             handover.Status = "Confirmed";
             handover.ConfirmedAt = DateTime.UtcNow;
+            VaccineAPI.Services.NotifyHelper.Add(_db, "CashHandoverConfirmed", "PA", handover.PaId, "Cash handover confirmed",
+                $"Your cash handover of Rs. {handover.Amount:N0} was confirmed.", null, handover.ClinicId);
             _db.SaveChanges();
             return Ok(new { IsSuccess = true, Message = "Handover confirmed." });
         }
@@ -253,6 +259,8 @@ namespace VaccineAPI.Controllers
 
             handover.Status = "Rejected";
             handover.RejectionNote = dto.RejectionNote;
+            VaccineAPI.Services.NotifyHelper.Add(_db, "CashHandoverRejected", "PA", handover.PaId, "Cash handover rejected",
+                $"Your cash handover of Rs. {handover.Amount:N0} was rejected." + (string.IsNullOrEmpty(dto.RejectionNote) ? "" : " Reason: " + dto.RejectionNote), null, handover.ClinicId);
             _db.SaveChanges();
 
             // Notify PA by email (fire-and-forget)

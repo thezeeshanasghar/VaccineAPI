@@ -46,6 +46,9 @@ Resources/Images/
 .env.local
 .env.*.local
 
+# Firebase service-account key (push notifications) lives only on the server
+push/
+
 # Keep example file
 !.env.example
 cert_renewal.log

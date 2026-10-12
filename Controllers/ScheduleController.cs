@@ -5401,6 +5401,73 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<List<ScheduleDTO>>(true, "OK", dtos));
         }
 
+        // Growth gate at payment-mode time. When a PA records payment on a given dose of a regular-
+        // schedule child, weight AND height must already be saved (or arrive in this request), or the
+        // PA must tick "Not measured". Doctors/Managers, non-regular children and disease rows are
+        // exempt. Returns an error message to hand back, or null when payment may proceed.
+        // Mutates `schedule` (growth values / GrowthNotMeasured) but does not save — caller saves.
+        private string? ApplyGrowthGate(Schedule schedule, ScheduleDTO dto)
+        {
+            if (!schedule.IsDone || schedule.IsDisease == true) return null;
+
+            long? paId = null;
+            var tok = AuthContext.Current;
+            if (tok != null)
+            {
+                if (tok.Role != "PA") return null;
+                paId = tok.PaId;
+            }
+            else if (dto.CallerUserId.HasValue)
+            {
+                paId = _db.PersonalAssistant.Where(p => p.UserId == dto.CallerUserId.Value)
+                    .Select(p => (long?)p.Id).FirstOrDefault();
+            }
+            if (!paId.HasValue) return null;
+
+            var childType = _db.Childs.Where(c => c.Id == schedule.ChildId).Select(c => c.Type).FirstOrDefault();
+            if (!string.Equals(childType, "regular", StringComparison.OrdinalIgnoreCase)) return null;
+
+            if (dto.GrowthNotMeasured)
+            {
+                if (!schedule.GrowthNotMeasured)
+                {
+                    var pa = _db.PersonalAssistant.Where(p => p.Id == paId.Value)
+                        .Select(p => new { p.DoctorId }).FirstOrDefault();
+                    _db.PaActivityLogs.Add(new PaActivityLog
+                    {
+                        PaId = paId.Value,
+                        DoctorId = pa?.DoctorId ?? 0,
+                        PatientId = schedule.ChildId,
+                        ActionCode = "GROWTH_NOT_MEASURED",
+                        Description = $"Growth marked Not measured for patient {schedule.ChildId} (schedule {schedule.Id})",
+                        Notes = "",
+                        IsReversal = false,
+                        ActionDate = DateTime.UtcNow
+                    });
+                }
+                schedule.GrowthNotMeasured = true;
+                return null;
+            }
+
+            var weight = dto.Weight > 0 ? dto.Weight : schedule.Weight;
+            var height = dto.Height > 0 ? dto.Height : schedule.Height;
+            if (!(weight > 0) || !(height > 0))
+                return "Record weight & height or mark Not measured before recording payment.";
+            if (weight < 2 || weight > 40 || height < 40 || height > 150)
+                return "Weight or height looks wrong. Please check and re-enter.";
+            if (dto.Circle > 0 && (dto.Circle < 30 || dto.Circle > 60))
+                return "OFC looks wrong. Please check and re-enter.";
+
+            var entered = dto.Weight > 0 || dto.Height > 0 || dto.Circle > 0;
+            schedule.Weight = weight;
+            schedule.Height = height;
+            if (dto.Circle > 0) schedule.Circle = dto.Circle;
+            schedule.GrowthNotMeasured = false;
+            if (entered)
+                UpsertFollowUpVitalsForToday(schedule, dto, (schedule.GivenDate ?? DateTime.UtcNow).Date);
+            return null;
+        }
+
         [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [Owns(OwnerKind.Schedule, "id")]
         [HttpPatch("{id}/mark-payment-collected")]
@@ -5416,6 +5483,9 @@ namespace VaccineAPI.Controllers
             var allowed = new[] { "Cash", "Online" };
             if (dto.PaymentMode != null && !allowed.Contains(dto.PaymentMode))
                 return Ok(new Response<ScheduleDTO>(false, "Invalid payment mode.", null));
+
+            var growthErr = ApplyGrowthGate(schedule, dto);
+            if (growthErr != null) return Ok(new Response<ScheduleDTO>(false, growthErr, null));
 
             schedule.IsPaymentCollected = true;
             schedule.PaymentMode = dto.PaymentMode ?? schedule.PaymentMode;
@@ -5440,6 +5510,10 @@ namespace VaccineAPI.Controllers
             var allowed = new[] { "Cash", "Online" };
             if (dto.PaymentMode != null && !allowed.Contains(dto.PaymentMode))
                 return Ok(new Response<ScheduleDTO>(false, "Invalid payment mode.", null));
+
+            var growthErr = ApplyGrowthGate(schedule, dto);
+            if (growthErr != null) return Ok(new Response<ScheduleDTO>(false, growthErr, null));
+
             schedule.PaymentMode = dto.PaymentMode ?? schedule.PaymentMode;
             schedule.OnlineService = dto.OnlineService ?? schedule.OnlineService;
             schedule.IsPaymentCollected = true;

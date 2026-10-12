@@ -12,6 +12,9 @@ namespace VaccineAPI.Models
         public float? Weight { get; set; }
         public float? Height { get; set; }
         public float? Circle { get; set; }
+        // PA ticked "Not measured" at payment time instead of documenting growth (regular-schedule
+        // children only). Set/cleared by ScheduleController.ApplyGrowthGate; logged to PaActivityLog.
+        public bool GrowthNotMeasured { get; set; } = false;
         public bool IsPAApprove{get; set;}
         public bool IsDone { get; set; }
         public bool? IsSkip { get; set; }

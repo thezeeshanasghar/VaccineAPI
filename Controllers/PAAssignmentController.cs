@@ -132,6 +132,8 @@ namespace VaccineAPI.Controllers
                             s.Weight,
                             s.Height,
                             s.Circle,
+                            s.GrowthNotMeasured,
+                            s.IsDisease,
                             s.PaymentCollectorPaId,
                             s.GivenByPaId
                         })
@@ -154,6 +156,7 @@ namespace VaccineAPI.Controllers
                     ChildId       = a.ChildId,
                     Name          = child != null ? child.Name      : "",
                     Gender        = child != null ? child.Gender    : "",
+                    ChildType     = child != null ? child.Type      : "",
                     DOB           = child != null ? child.DOB       : (DateTime?)null,
                     FatherName    = child != null ? child.FatherName: "",
                     ParentMobile  = child?.User != null ? child.User.MobileNumber : "",

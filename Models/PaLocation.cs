@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace VaccineAPI.Models
 {
-    // One GPS fix posted by the assistant app during a shift. Kept 30 days (purged on shift start).
+    // One GPS fix posted by the assistant app during a shift. Kept 35 days (lazy hourly purge).
     [Table("palocations")]
     public class PaLocation
     {

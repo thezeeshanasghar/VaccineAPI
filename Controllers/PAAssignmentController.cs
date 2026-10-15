@@ -1066,7 +1066,7 @@ namespace VaccineAPI.Controllers
 
             var reKid = await _db.Childs.FindAsync(old.ChildId);
             VaccineAPI.Services.NotifyHelper.Add(_db, "PaNewAssignment", "PA", dto.NewPaId, "New patient assigned",
-                $"{reKid?.Name ?? "A patient"} has been reassigned to you. Open Assignments to see the visit.", old.ChildId, old.ClinicId);
+                $"{reKid?.Name ?? "A patient"} has been reassigned to you: {await DoseListFor(newAssignment.Id)}. Open Assignments to see the visit.", old.ChildId, old.ClinicId);
             if (old.PersonalAssistantId != dto.NewPaId)
                 VaccineAPI.Services.NotifyHelper.Add(_db, "PaAssignmentRemoved", "PA", old.PersonalAssistantId, "Assignment reassigned",
                     $"{reKid?.Name ?? "A patient"} has been reassigned to another assistant.", old.ChildId, old.ClinicId);
@@ -1111,6 +1111,19 @@ namespace VaccineAPI.Controllers
                 CreatedAt       = DateTime.UtcNow
             });
             await _db.SaveChangesAsync();
+        }
+
+        // Comma-separated dose names pinned to an assignment, for push/notification text.
+        private async Task<string> DoseListFor(long assignmentId)
+        {
+            var names = await (
+                from pas in _db.PAAssignmentSchedules
+                join s in _db.Schedules on pas.ScheduleId equals s.Id
+                join d in _db.Doses on s.DoseId equals d.Id
+                where pas.AssignmentId == assignmentId
+                select d.Name
+            ).ToListAsync();
+            return names.Count > 0 ? string.Join(", ", names) : "vaccination";
         }
 
         // Builds the plain-text body for the PA-assignment email (Create + Reassign both use
@@ -1468,7 +1481,7 @@ namespace VaccineAPI.Controllers
                 // Push to the PA (the Notification row is what triggers it).
                 var createKid = await _db.Childs.FindAsync(dto.ChildId);
                 VaccineAPI.Services.NotifyHelper.Add(_db, "PaNewAssignment", "PA", dto.PersonalAssistantId, "New patient assigned",
-                    $"{createKid?.Name ?? "A patient"} has been assigned to you. Open Assignments to see the visit.", dto.ChildId, dto.ClinicId);
+                    $"{createKid?.Name ?? "A patient"} has been assigned to you: {await DoseListFor(assignment.Id)}. Open Assignments to see the visit.", dto.ChildId, dto.ClinicId);
                 await _db.SaveChangesAsync();
 
                 return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id } });

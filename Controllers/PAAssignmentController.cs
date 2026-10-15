@@ -1572,10 +1572,22 @@ namespace VaccineAPI.Controllers
                 ? await _db.PersonalAssistant.Where(p => paIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id)
                 : new Dictionary<long, VaccineAPI.Models.PersonalAssistant>();
 
+            // Schedule ids pinned to each assignment, so the child's vaccine page can colour
+            // the date-group(s) that belong to it.
+            var rawIds = raw.Select(a => a.Id).ToList();
+            var links = rawIds.Any()
+                ? await _db.PAAssignmentSchedules.Where(l => rawIds.Contains(l.AssignmentId))
+                      .Select(l => new { l.AssignmentId, l.ScheduleId }).ToListAsync()
+                : null;
+            var linkLookup = links == null
+                ? new Dictionary<long, List<long>>()
+                : links.GroupBy(l => l.AssignmentId).ToDictionary(g => g.Key, g => g.Select(x => x.ScheduleId).ToList());
+
             var assignments = raw.Select(a => new {
                 AssignmentId = a.Id,
                 a.AssignedAt,
                 a.Notes,
+                ScheduleIds  = linkLookup.ContainsKey(a.Id) ? linkLookup[a.Id] : new List<long>(),
                 ChildId      = a.ChildId,
                 ChildName    = children.ContainsKey(a.ChildId)             ? children[a.ChildId].Name       : "",
                 Gender       = children.ContainsKey(a.ChildId)             ? children[a.ChildId].Gender     : "",

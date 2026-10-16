@@ -5077,6 +5077,7 @@ namespace VaccineAPI.Controllers
         {
             EnsurePlexFonts();
             var childDetails = _db.Childs
+                .Include(c => c.User)
                 .Include(c => c.Clinic)
                 .ThenInclude(clinic => clinic.Doctor)
                 .FirstOrDefault(c => c.Id == childId);
@@ -5218,8 +5219,10 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell(V(relation), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell("Date of Birth:", cellFontBold, new BaseColor(205, 205, 205)));
                 patientTable.AddCell(CreateCell(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("Passport/CNIC No:", cellFontBold, new BaseColor(205, 205, 205)));
-                patientTable.AddCell(CreateCell(V(passport), cellFontNormal, BaseColor.White));
+                // No passport/CNIC on file -> show the parent's phone number instead of a blank dash.
+                var idByPhone = string.IsNullOrWhiteSpace(passport);
+                patientTable.AddCell(CreateCell(idByPhone ? "Phone:" : "Passport/CNIC No:", cellFontBold, new BaseColor(205, 205, 205)));
+                patientTable.AddCell(CreateCell(V(idByPhone ? childDetails.User?.MobileNumber : passport), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell("City:", cellFontBold, new BaseColor(205, 205, 205)));
                 // City renders uppercase at the display layer only; stored value is untouched.
                 patientTable.AddCell(CreateCell(string.IsNullOrWhiteSpace(city) ? "–" : city.ToUpper(), cellFontNormal, BaseColor.White));
@@ -5536,8 +5539,9 @@ namespace VaccineAPI.Controllers
                 patientTable.AddCell(CreateCell(V(relation), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell("Date of Birth:", cellFontBold, labelGray));
                 patientTable.AddCell(CreateCell(dob.ToString("dd/MM/yyyy"), cellFontNormal, BaseColor.White));
-                patientTable.AddCell(CreateCell("Passport/CNIC No:", cellFontBold, labelGray));
-                patientTable.AddCell(CreateCell(V(passport), cellFontNormal, BaseColor.White));
+                var idByPhone = string.IsNullOrWhiteSpace(passport);
+                patientTable.AddCell(CreateCell(idByPhone ? "Phone:" : "Passport/CNIC No:", cellFontBold, labelGray));
+                patientTable.AddCell(CreateCell(V(idByPhone ? dbChild.User?.MobileNumber : passport), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell("City:", cellFontBold, labelGray));
                 patientTable.AddCell(CreateCell(string.IsNullOrWhiteSpace(city) ? "–" : city.ToUpper(), cellFontNormal, BaseColor.White));
                 patientTable.AddCell(CreateCell("Nationality:", cellFontBold, labelGray));

@@ -717,14 +717,44 @@ namespace VaccineAPI.Controllers
             if (clinicId.HasValue) invoicedPairsQuery = invoicedPairsQuery.Where(i => i.ClinicId == clinicId.Value);
             if (paId.HasValue)     invoicedPairsQuery = invoicedPairsQuery.Where(i => i.PaId == paId.Value);
 
+            var invoicedPairRows = invoicedPairsQuery
+                .Select(i => new { i.ChildId, i.PaId, i.TotalAmount, i.HasPendingAmendment })
+                .ToList();
+
+            // Pairs whose invoice actually renders as an Invoice row above (total > 0, or carrying
+            // a pending amendment) — these suppress the placeholder, as before.
             var invoicedPairs = new HashSet<(long ChildId, long PaId)>(
-                invoicedPairsQuery
-                    .Select(i => new { i.ChildId, i.PaId })
-                    .ToList()
+                invoicedPairRows
+                    .Where(i => i.TotalAmount > 0 || i.HasPendingAmendment)
                     .Select(i => (i.ChildId, i.PaId.Value)));
+
+            // Pairs whose ONLY invoices have a zero total: the Invoice list hides these, so they
+            // suppress the placeholder only if nothing was actually given-and-uncollected. A PA
+            // who gave a dose and submitted a 0 invoice (live 2026-10-13/14: FAISAL ISHFAQ,
+            // MUHAMMAD HAROON) otherwise vanished from reconciliation entirely.
+            var zeroInvoicePairs = new HashSet<(long ChildId, long PaId)>(
+                invoicedPairRows
+                    .Where(i => !(i.TotalAmount > 0 || i.HasPendingAmendment))
+                    .Select(i => (i.ChildId, i.PaId.Value)));
+
+            var zeroPairAssignmentIds = assignments
+                .Where(a => !invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId))
+                         && zeroInvoicePairs.Contains((a.ChildId, a.PersonalAssistantId)))
+                .Select(a => a.Id)
+                .ToList();
+            var zeroPairUnbilledAssignmentIds = new HashSet<long>(
+                _db.PAAssignmentSchedules
+                    .Where(l => zeroPairAssignmentIds.Contains(l.AssignmentId))
+                    .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => new { l.AssignmentId, s.IsDone, s.IsPaymentCollected })
+                    .Where(x => x.IsDone && !x.IsPaymentCollected)
+                    .Select(x => x.AssignmentId)
+                    .Distinct()
+                    .ToList());
 
             var pendingAssignments = assignments
                 .Where(a => !invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId)))
+                .Where(a => !zeroInvoicePairs.Contains((a.ChildId, a.PersonalAssistantId))
+                         || zeroPairUnbilledAssignmentIds.Contains(a.Id))
                 .ToList();
 
             var pendingChildIds = pendingAssignments.Select(a => a.ChildId).Distinct().ToList();

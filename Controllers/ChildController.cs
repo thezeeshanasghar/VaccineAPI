@@ -5055,6 +5055,21 @@ namespace VaccineAPI.Controllers
 
         private static Font PlexSans(float size, bool bold = false) =>
             new Font(bold ? _plexSansBold : _plexSans, size);
+        // Certificate row order: doses of the same vaccine stay together (DoseOrder 1,2,3...),
+        // vaccines are ordered by their earliest date column (given date, else due date).
+        private static List<Schedule> OrderForCertificate(List<Schedule> rows)
+        {
+            DateTime RowDate(Schedule s) => s.GivenDate.HasValue && s.GivenDate.Value != DateTime.MinValue ? s.GivenDate.Value : s.Date;
+            return rows
+                .GroupBy(s => s.Dose?.VaccineId ?? -s.Id)
+                .OrderBy(g => g.Min(RowDate))
+                .SelectMany(g => g
+                    .OrderBy(s => s.Dose?.DoseOrder ?? int.MaxValue)
+                    .ThenBy(RowDate)
+                    .ThenBy(s => s.Id))
+                .ToList();
+        }
+
         private static Font PlexCond(float size, bool bold = false) =>
             new Font(bold ? _plexCondBold : _plexCond, size);
 
@@ -5246,6 +5261,7 @@ namespace VaccineAPI.Controllers
                 // Optionally hide not-yet-administered ("future"/due) doses.
                 if (!includeFuture)
                     dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
+                dbSchedules = OrderForCertificate(dbSchedules);
                 var brandIds = dbSchedules
                     .Where(s => s.BrandId.HasValue)
                     .Select(s => s.BrandId.Value)
@@ -5546,6 +5562,7 @@ namespace VaccineAPI.Controllers
                 var dbSchedules = child.Schedules.ToList();
                 if (!includeFuture)
                     dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
+                dbSchedules = OrderForCertificate(dbSchedules);
                 var brandIds = dbSchedules
                     .Where(s => s.BrandId.HasValue)
                     .Select(s => s.BrandId.Value)

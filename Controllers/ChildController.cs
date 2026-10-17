@@ -5265,24 +5265,6 @@ namespace VaccineAPI.Controllers
                 if (!includeFuture)
                     dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
                 dbSchedules = OrderForCertificate(dbSchedules);
-                var brandIds = dbSchedules
-                    .Where(s => s.BrandId.HasValue)
-                    .Select(s => s.BrandId.Value)
-                    .Distinct()
-                    .ToList();
-
-                var latestStockByBrand = _db.Stocks
-                    .Include(s => s.Bill)
-                    // v2: include opening/transfer rows (Stock.ClinicId) and purchase rows (Bill.ClinicId).
-                    .Where(s => brandIds.Contains(s.BrandId)
-                        && (s.ClinicId == childDetails.ClinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == childDetails.ClinicId)))
-                    .OrderByDescending(s => !string.IsNullOrWhiteSpace(s.BatchLot) || s.Expiry != null)
-                    .ThenByDescending(s => s.Bill != null ? s.Bill.BillDate : DateTime.MinValue)
-                    .ThenByDescending(s => s.Id)
-                    .AsEnumerable()
-                    .GroupBy(s => s.BrandId)
-                    .ToDictionary(g => g.Key, g => g.First());
-
                 // Font tier by row count:
                 //   <=3  -> 9pt   (few rows, larger & more legible)
                 //   4-12 -> 7.2pt (normal)
@@ -5341,9 +5323,9 @@ namespace VaccineAPI.Controllers
                     // occurrence) must never look administered — no brand/batch, and the date
                     // column shows the real due date, not a given date.
                     string brand = !isGiven ? "Pending" : (string.IsNullOrWhiteSpace(schedule.Brand?.Name) ? DASH : schedule.Brand.Name);
-                    string manufacturer = !isGiven ? DASH : (string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer);
-                    latestStockByBrand.TryGetValue(schedule.BrandId ?? 0, out var latestStock);
-                    string batchLot = !isGiven ? DASH : (string.IsNullOrWhiteSpace(latestStock?.BatchLot) ? DASH : latestStock.BatchLot);
+                    string manufacturer = !isGiven ? DASH : (!string.IsNullOrWhiteSpace(schedule.Manufacturer) ? schedule.Manufacturer : (string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer));
+                    // Lot/Expiry come from the dose's own stored snapshot, never from a brand-wide newest-bill lookup.
+                    string batchLot = !isGiven ? DASH : (string.IsNullOrWhiteSpace(schedule.Lot) ? DASH : schedule.Lot);
                     // Route/Site: "Route / Site", each part omitted if empty; en-dash if both empty.
                     string routeSite;
                     {
@@ -5355,7 +5337,7 @@ namespace VaccineAPI.Controllers
                     // Not-yet-given doses show the real due date, prefixed so it can never be
                     // mistaken for a given date; all other empty cells use the en-dash.
                     string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due: " + schedule.Date.ToString("dd/MM/yyyy");
-                    string expiry = !isGiven ? DASH : (latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH);
+                    string expiry = !isGiven ? DASH : (schedule.Expiry?.ToString("dd/MM/yyyy") ?? DASH);
                     // Validity only applies once a dose is given; otherwise en-dash like the other cells.
                     string validity = (isGiven && schedule.Validity != null) ? GetYearOrMonthFromDays((int)schedule.Validity) : DASH;
 
@@ -5567,23 +5549,6 @@ namespace VaccineAPI.Controllers
                 if (!includeFuture)
                     dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
                 dbSchedules = OrderForCertificate(dbSchedules);
-                var brandIds = dbSchedules
-                    .Where(s => s.BrandId.HasValue)
-                    .Select(s => s.BrandId.Value)
-                    .Distinct()
-                    .ToList();
-
-                var latestStockByBrand = _db.Stocks
-                    .Include(s => s.Bill)
-                    .Where(s => brandIds.Contains(s.BrandId)
-                        && (s.ClinicId == dbChild.ClinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == dbChild.ClinicId)))
-                    .OrderByDescending(s => !string.IsNullOrWhiteSpace(s.BatchLot) || s.Expiry != null)
-                    .ThenByDescending(s => s.Bill != null ? s.Bill.BillDate : DateTime.MinValue)
-                    .ThenByDescending(s => s.Id)
-                    .AsEnumerable()
-                    .GroupBy(s => s.BrandId)
-                    .ToDictionary(g => g.Key, g => g.First());
-
                 var vaccineTable = new PdfPTable(8) { WidthPercentage = 100 };
                 vaccineTable.SetWidths(new float[] { 1.2f, 1f, 1.4f, 0.9f, 1.1f, 1f, 0.9f, 0.9f });
                 vaccineTable.DefaultCell.Border = PdfPCell.NO_BORDER;
@@ -5634,9 +5599,9 @@ namespace VaccineAPI.Controllers
                     // occurrence) must never look administered — no brand/batch, and the date
                     // column shows the real due date, not a given date.
                     string brand = !isGiven ? "Pending" : (string.IsNullOrWhiteSpace(schedule.Brand?.Name) ? DASH : schedule.Brand.Name);
-                    string manufacturer = !isGiven ? DASH : (string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer);
-                    latestStockByBrand.TryGetValue(schedule.BrandId ?? 0, out var latestStock);
-                    string batchLot = !isGiven ? DASH : (string.IsNullOrWhiteSpace(latestStock?.BatchLot) ? DASH : latestStock.BatchLot);
+                    string manufacturer = !isGiven ? DASH : (!string.IsNullOrWhiteSpace(schedule.Manufacturer) ? schedule.Manufacturer : (string.IsNullOrWhiteSpace(schedule.Brand?.Manufacturer) ? DASH : schedule.Brand.Manufacturer));
+                    // Lot/Expiry come from the dose's own stored snapshot, never from a brand-wide newest-bill lookup.
+                    string batchLot = !isGiven ? DASH : (string.IsNullOrWhiteSpace(schedule.Lot) ? DASH : schedule.Lot);
                     string routeSite;
                     {
                         var parts = new List<string>();
@@ -5645,7 +5610,7 @@ namespace VaccineAPI.Controllers
                         routeSite = !isGiven ? DASH : (parts.Count > 0 ? string.Join(" / ", parts) : DASH);
                     }
                     string dateGiven = isGiven ? schedule.GivenDate.Value.ToString("dd/MM/yyyy") : "Due: " + schedule.Date.ToString("dd/MM/yyyy");
-                    string expiry = !isGiven ? DASH : (latestStock?.Expiry?.ToString("dd/MM/yyyy") ?? DASH);
+                    string expiry = !isGiven ? DASH : (schedule.Expiry?.ToString("dd/MM/yyyy") ?? DASH);
                     int? validityDays = schedule.Validity ?? (schedule.Dose?.Vaccine != null ? schedule.Dose.Vaccine.Validity : (int?)null);
                     string validity = (isGiven && validityDays.HasValue && validityDays.Value > 0) ? GetYearOrMonthFromDays(validityDays.Value) : DASH;
 

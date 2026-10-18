@@ -1978,7 +1978,10 @@ namespace VaccineAPI.Controllers
         // batch that are not saved yet (dose id -> date).
         private DateTime CalculateAddedDoseDate(Child dbChild, Dose dbDose, Dictionary<long, DateTime> pending = null)
         {
-            var date = calculateDate(dbChild.DOB, dbDose.MinAge);
+            // Customize / Travel patients (adults, blank schedules) have no age-based timeline:
+            // DOB + MinAge lands decades in the past as a phantom "overdue" row, so start from today (PKT).
+            var isAgeBased = string.IsNullOrEmpty(dbChild.Type) || string.Equals(dbChild.Type, "regular", StringComparison.OrdinalIgnoreCase);
+            var date = isAgeBased ? calculateDate(dbChild.DOB, dbDose.MinAge) : DateTime.UtcNow.AddHours(5).Date;
             if (!dbDose.MinGap.HasValue || !dbDose.DoseOrder.HasValue) return date;
 
             var prevDose = _db.Doses
@@ -2329,6 +2332,7 @@ namespace VaccineAPI.Controllers
             var blocked = new List<string>();
             string? firstMessage = null;
             var moved = 0;
+            var movedIds = new List<long>();
 
             foreach (var schedule in dbSchedules)
             {
@@ -2344,6 +2348,7 @@ namespace VaccineAPI.Controllers
                 if (message == "ok")
                 {
                     moved++;
+                    movedIds.Add(schedule.Id);
                     continue;
                 }
                 firstMessage ??= message;
@@ -2354,6 +2359,8 @@ namespace VaccineAPI.Controllers
             if (moved == 0)
                 return new Response<ScheduleDTO>(false, firstMessage ?? "Nothing to reschedule.", null)
                 { RuleCode = firstMessage == null ? null : RuleCodeForRescheduleMessage(firstMessage) };
+
+            SyncAssignmentTargetDate(movedIds, scheduleDTO.Date);
 
             if (blocked.Count == 0)
                 return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
@@ -3654,6 +3661,28 @@ namespace VaccineAPI.Controllers
         }
 
         //Reschedule Function
+        // An open PA assignment follows its doses: when doses pinned to it are rescheduled,
+        // its TargetDate moves to the new date. Without this the assignment kept its old date,
+        // sat in the PA's "Others" tab as overdue, and never reached Today on the new day.
+        private void SyncAssignmentTargetDate(IEnumerable<long> scheduleIds, DateTime newDate)
+        {
+            var ids = scheduleIds.ToList();
+            if (ids.Count == 0) return;
+            var assignmentIds = _db.PAAssignmentSchedules
+                .Where(l => ids.Contains(l.ScheduleId))
+                .Select(l => l.AssignmentId)
+                .Distinct()
+                .ToList();
+            if (assignmentIds.Count == 0) return;
+            var open = _db.PAAssignments
+                .Where(a => assignmentIds.Contains(a.Id) && !a.IsCompleted && !a.IsCancelled)
+                .ToList();
+            foreach (var a in open)
+                a.TargetDate = newDate.Date;
+            if (open.Count > 0)
+                _db.SaveChanges();
+        }
+
         private string ChangeDueDatesOfSchedule(
             ScheduleDTO scheduleDTO,
             Context db,
@@ -3972,7 +4001,10 @@ namespace VaccineAPI.Controllers
                     ignoreMinGapFromPreviousDose
                 );
                 if (message == "ok")
+                {
+                    SyncAssignmentTargetDate(new[] { scheduleDTO.Id }, scheduleDTO.Date);
                     return new Response<ScheduleDTO>(true, "schedule updated successfully.", null);
+                }
                 else
                     return new Response<ScheduleDTO>(false, message, null)
                     { RuleCode = RuleCodeForRescheduleMessage(message) };

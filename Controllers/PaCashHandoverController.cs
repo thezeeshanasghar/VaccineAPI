@@ -737,9 +737,34 @@ namespace VaccineAPI.Controllers
                     .Where(i => !(i.TotalAmount > 0 || i.HasPendingAmendment))
                     .Select(i => (i.ChildId, i.PaId.Value)));
 
+            // Every assignment is its own entity: whether one is "invoiced" is decided by the
+            // invoices on ITS OWN pinned doses, not by any invoice for the same (child, PA) pair
+            // (which hid the Awaiting Invoice row of a second assignment once the first was
+            // invoiced). Assignments with no pins (legacy rows) keep the (child, PA) pair rule.
+            var allAsgIds = assignments.Select(a => a.Id).ToList();
+            var pinnedAsgIds = new HashSet<long>(
+                _db.PAAssignmentSchedules.Where(l => allAsgIds.Contains(l.AssignmentId))
+                    .Select(l => l.AssignmentId).Distinct().ToList());
+            var pinInvoiceRows = (from l in _db.PAAssignmentSchedules
+                                  where allAsgIds.Contains(l.AssignmentId)
+                                  join sc in _db.Schedules on l.ScheduleId equals sc.Id
+                                  where sc.InvoiceSubmissionId != null
+                                  join inv in _db.InvoiceSubmissions on sc.InvoiceSubmissionId equals inv.Id
+                                  where inv.InvoiceStatus != "Cancelled"
+                                  select new { l.AssignmentId, inv.TotalAmount, inv.HasPendingAmendment }).ToList();
+            var invoicedAsgIds = new HashSet<long>(
+                pinInvoiceRows.Where(r => r.TotalAmount > 0 || r.HasPendingAmendment).Select(r => r.AssignmentId));
+            var zeroInvoiceAsgIds = new HashSet<long>(
+                pinInvoiceRows.Where(r => !(r.TotalAmount > 0 || r.HasPendingAmendment)).Select(r => r.AssignmentId));
+            Func<PAAssignment, bool> isInvoiced = a => pinnedAsgIds.Contains(a.Id)
+                ? invoicedAsgIds.Contains(a.Id)
+                : invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId));
+            Func<PAAssignment, bool> hasZeroInvoice = a => pinnedAsgIds.Contains(a.Id)
+                ? zeroInvoiceAsgIds.Contains(a.Id)
+                : zeroInvoicePairs.Contains((a.ChildId, a.PersonalAssistantId));
+
             var zeroPairAssignmentIds = assignments
-                .Where(a => !invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId))
-                         && zeroInvoicePairs.Contains((a.ChildId, a.PersonalAssistantId)))
+                .Where(a => !isInvoiced(a) && hasZeroInvoice(a))
                 .Select(a => a.Id)
                 .ToList();
             var zeroPairUnbilledAssignmentIds = new HashSet<long>(
@@ -752,8 +777,8 @@ namespace VaccineAPI.Controllers
                     .ToList());
 
             var pendingAssignments = assignments
-                .Where(a => !invoicedPairs.Contains((a.ChildId, a.PersonalAssistantId)))
-                .Where(a => !zeroInvoicePairs.Contains((a.ChildId, a.PersonalAssistantId))
+                .Where(a => !isInvoiced(a))
+                .Where(a => !hasZeroInvoice(a)
                          || zeroPairUnbilledAssignmentIds.Contains(a.Id))
                 .ToList();
 

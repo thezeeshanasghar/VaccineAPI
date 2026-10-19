@@ -207,28 +207,29 @@ namespace VaccineAPI.Controllers
                     var paId = assignment.PersonalAssistantId;
                     var childId = assignment.ChildId;
 
-                    // FullReset is scoped to THIS assignment's visit only. The old filter
-                    // (ChildId + PA) matched every dose that PA ever collected for the child, so
-                    // reversing a later visit silently un-gave earlier, unrelated visits and
-                    // deleted their invoices. The visit is identified by the invoice stamped on
-                    // the assignment / its doses (Schedule.InvoiceSubmissionId).
+                    // FullReset is scoped to THIS assignment's own doses: the ones it pins (each
+                    // assignment is a separate entity — one vaccine group). Resolving by the
+                    // invoice link alone wiped a sibling assignment's doses whenever an invoice
+                    // was shared. An assignment with no pins (legacy) falls back to the invoice
+                    // stamped on it, then to the PA's not-yet-invoiced doses since it was created.
                     var visitInvoiceId = assignment.InvoiceSubmissionId;
-
-                    if (visitInvoiceId.HasValue)
-                    {
-                        var amendments = _db.InvoiceAmendments.Where(am => am.InvoiceSubmissionId == visitInvoiceId.Value);
-                        _db.InvoiceAmendments.RemoveRange(amendments);
-
-                        var invoices = _db.InvoiceSubmissions.Where(i => i.Id == visitInvoiceId.Value && i.ChildId == childId);
-                        _db.InvoiceSubmissions.RemoveRange(invoices);
-                    }
+                    var pinnedDoseIds = await _db.PAAssignmentSchedules
+                        .Where(l => l.AssignmentId == assignment.Id)
+                        .Select(l => l.ScheduleId)
+                        .ToListAsync();
 
                     var schedulesQuery = _db.Schedules
                         .Include(s => s.Dose)
                         .Where(s => s.ChildId == childId);
 
                     List<Schedule> schedules;
-                    if (visitInvoiceId.HasValue)
+                    if (pinnedDoseIds.Count > 0)
+                    {
+                        schedules = await schedulesQuery
+                            .Where(s => pinnedDoseIds.Contains(s.Id) && (s.IsDone == true || s.InvoiceSubmissionId != null))
+                            .ToListAsync();
+                    }
+                    else if (visitInvoiceId.HasValue)
                     {
                         schedules = await schedulesQuery
                             .Where(s => s.InvoiceSubmissionId == visitInvoiceId.Value)
@@ -246,6 +247,21 @@ namespace VaccineAPI.Controllers
                                         && s.DoneAt != null
                                         && s.DoneAt >= assignedAt)
                             .ToListAsync();
+                    }
+
+                    // Delete an invoice only when nothing outside this reset still references it.
+                    var resetDoseIds = schedules.Select(x => x.Id).ToList();
+                    var invoiceIdsToDelete = schedules
+                        .Where(x => x.InvoiceSubmissionId.HasValue)
+                        .Select(x => x.InvoiceSubmissionId.Value)
+                        .ToList();
+                    if (visitInvoiceId.HasValue) invoiceIdsToDelete.Add(visitInvoiceId.Value);
+                    foreach (var invId in invoiceIdsToDelete.Distinct().ToList())
+                    {
+                        var stillUsed = await _db.Schedules.AnyAsync(x => x.InvoiceSubmissionId == invId && !resetDoseIds.Contains(x.Id));
+                        if (stillUsed) continue;
+                        _db.InvoiceAmendments.RemoveRange(_db.InvoiceAmendments.Where(am => am.InvoiceSubmissionId == invId));
+                        _db.InvoiceSubmissions.RemoveRange(_db.InvoiceSubmissions.Where(i => i.Id == invId && i.ChildId == childId));
                     }
 
                     var inventoryEnabled = IsInventoryEnabledForDoctor(doctorId);
@@ -369,6 +385,8 @@ namespace VaccineAPI.Controllers
                     }
                 }
 
+                // The assignment's pin rows go with it (they used to be left dangling).
+                _db.PAAssignmentSchedules.RemoveRange(_db.PAAssignmentSchedules.Where(l => l.AssignmentId == assignment.Id));
                 _db.PAAssignments.Remove(assignment);
 
                 await _db.SaveChangesAsync();
@@ -1001,6 +1019,11 @@ namespace VaccineAPI.Controllers
 
                 foreach (var s in schedulesToReset)
                 {
+                    // The doses still owed to the old PA move to the new PA: otherwise cash-in-hand
+                    // and the collection task list keep crediting the old PA for this visit.
+                    if (s.PaymentCollectorPaId == old.PersonalAssistantId && !s.IsPaymentCollected)
+                        s.PaymentCollectorPaId = dto.NewPaId;
+
                     if (s.GiveCount == 0 && s.UngiveCount == 0 && s.SkipCount == 0 && s.UnskipCount == 0)
                         continue;
 
@@ -1034,7 +1057,13 @@ namespace VaccineAPI.Controllers
             if (old.InvoiceSubmissionId.HasValue)
             {
                 var invoiceToMove = await _db.InvoiceSubmissions.FindAsync(old.InvoiceSubmissionId.Value);
-                if (invoiceToMove != null)
+                // Only re-label an invoice that belongs wholly to the reassigned assignment (every
+                // dose on it is among the pins just moved); a legacy invoice shared with another
+                // assignment keeps its PA.
+                var movedDoseIds = linksToMove.Select(l => l.ScheduleId).ToList();
+                var invoiceSharedElsewhere = movedDoseIds.Count > 0
+                    && await _db.Schedules.AnyAsync(x => x.InvoiceSubmissionId == old.InvoiceSubmissionId.Value && !movedDoseIds.Contains(x.Id));
+                if (invoiceToMove != null && !invoiceSharedElsewhere)
                 {
                     invoiceToMove.PaId = dto.NewPaId;
                     if (invoiceToMove.ClinicId == null && old.ClinicId.HasValue)
@@ -1270,95 +1299,44 @@ namespace VaccineAPI.Controllers
                         return Ok(new { IsSuccess = false, Message = "Not authorised to create this assignment." });
                 }
 
-                // Any still-open assignment for this child blocks a new one — not just one
-                // created "today". The old same-calendar-day window let a second assignment
-                // through whenever the first was created the day before (confirmed live:
-                // LI DING JIANG assignment 774 created Aug 25, assignment 783 created Aug 26
-                // for the same child — both sat open simultaneously, same patient name shown
-                // twice on the PA's list with no way to tell which one actually had the given
-                // dose). The orphan-invoice linking below assumes exactly one open assignment
-                // per child exists at a time; this check is what's supposed to guarantee that.
-                // !IsCompleted alone isn't enough: the PA marking a dose given flips
-                // IsCompleted=1 well before the doctor cash-confirms it, so a second assignment
-                // could still slip through in that window — orphaning the first one forever with
-                // no invoice and no way to ever reach IsCashConfirmedByDoctor (confirmed live:
-                // 33 such orphans across 31 children, e.g. Minahil Tahir assignment 753 orphaned
-                // the moment assignment 805 was created for the same dose). A row only stops
-                // blocking once the doctor has actually confirmed the cash on it.
-                var existingRow = await _db.PAAssignments
-                    .Where(a => a.ChildId == dto.ChildId && !a.IsCancelled && !a.IsCashConfirmedByDoctor)
-                    .OrderByDescending(a => a.AssignedAt)
-                    .FirstOrDefaultAsync();
-
-                if (existingRow != null)
+                // Each press of the person icon creates its OWN assignment for ONE vaccine group.
+                // A child may have many open assignments, even to the same PA; they are never
+                // merged (PA_MULTI_ASSIGNMENT_SPEC.md). The only thing that blocks a new one is a
+                // dose that an OPEN assignment already pins — a dose has exactly one owner.
+                var requestedIds = (dto.ScheduleIds ?? new List<long>())
+                    .Concat(dto.GroupScheduleIds ?? new List<long>()).Distinct().ToList();
+                if (requestedIds.Count > 0)
                 {
-                    var existingPa = await _db.PersonalAssistant.FindAsync(existingRow.PersonalAssistantId);
-                    var paName = existingPa?.Name ?? "another PA";
-                    var assignedDate = existingRow.AssignedAt.AddHours(5).ToString("dd MMM yyyy");
-
-                    // Tells the frontend whether there's actually a Confirm button waiting on
-                    // reconciliation (a real Invoice row exists) or the PA never submitted an
-                    // invoice at all (still an "Awaiting Invoice" row, nothing to confirm yet) —
-                    // the deep-link/CTA text needs to differ between these two cases.
-                    var hasInvoice = existingRow.InvoiceSubmissionId.HasValue;
-
-                    // Distinguishes "genuinely still needs the doctor's confirmation" from the
-                    // sync-gap case (2026-09-18 incident): invoice already shows Confirmed on
-                    // reconciliation, but this assignment's own flag never flipped, so telling the
-                    // doctor to "go tap Confirm" would be a dead end — there's nothing left to tap.
-                    bool alreadyConfirmedButUnsynced = false;
-                    DateTime? blockingConfirmedAt = null;
-                    long? blockingInvoiceId = existingRow.InvoiceSubmissionId;
-                    if (hasInvoice)
+                    var holder = await (from l in _db.PAAssignmentSchedules
+                                        join a in _db.PAAssignments on l.AssignmentId equals a.Id
+                                        where requestedIds.Contains(l.ScheduleId) && a.ChildId == dto.ChildId
+                                              && !a.IsCancelled && !a.IsCashConfirmedByDoctor
+                                        orderby a.AssignedAt descending
+                                        select a).FirstOrDefaultAsync();
+                    if (holder != null)
                     {
-                        var blockingInvoice = await _db.InvoiceSubmissions.FindAsync(existingRow.InvoiceSubmissionId!.Value);
-                        if (blockingInvoice != null && blockingInvoice.IsConfirmedByDoctor)
+                        var holderPa = await _db.PersonalAssistant.FindAsync(holder.PersonalAssistantId);
+                        var holderName = holderPa?.Name ?? "another PA";
+                        return Ok(new
                         {
-                            alreadyConfirmedButUnsynced = true;
-                            blockingConfirmedAt = blockingInvoice.ConfirmedAt;
-                        }
+                            IsSuccess = false,
+                            Message = $"This vaccine group is already assigned to {holderName}. Cancel or reassign that assignment instead.",
+                            BlockedByAssignment = true,
+                            BlockingAssignmentId = holder.Id,
+                            BlockingPaId = holder.PersonalAssistantId,
+                            BlockingPaName = holderName,
+                            BlockingAssignedDate = holder.AssignedAt.AddHours(5).ToString("dd MMM yyyy"),
+                            BlockingClinicId = holder.ClinicId,
+                            BlockingHasInvoice = holder.InvoiceSubmissionId.HasValue,
+                            BlockingInvoiceSubmissionId = holder.InvoiceSubmissionId,
+                            AlreadyConfirmedButUnsynced = false,
+                            BlockingConfirmedAt = (DateTime?)null
+                        });
                     }
-                    else
-                    {
-                        // Never-linked variant (2026-09-30, Salahuddin Sadi / assignment 136): the
-                        // invoice was submitted under a Doctor/(PA) label and confirmed, but the
-                        // assignment's InvoiceSubmissionId was never written, so it looked like "PA
-                        // hasn't submitted yet". If this PA's confirmed active invoice for the child
-                        // exists on/after the assignment date, it's the same sync gap — point at it so
-                        // the Fix & Continue path (ConfirmInvoice's self-heal re-links + closes) runs.
-                        var assignedDay = existingRow.AssignedAt.AddHours(5).Date;
-                        var unlinkedInvoice = await _db.InvoiceSubmissions
-                            .Where(i => i.ChildId == dto.ChildId
-                                     && i.PaId == existingRow.PersonalAssistantId
-                                     && i.IsConfirmedByDoctor
-                                     && i.InvoiceStatus == "Active"
-                                     && i.InvoiceDate >= assignedDay)
-                            .OrderBy(i => i.InvoiceDate)
-                            .FirstOrDefaultAsync();
-                        if (unlinkedInvoice != null)
-                        {
-                            alreadyConfirmedButUnsynced = true;
-                            blockingConfirmedAt = unlinkedInvoice.ConfirmedAt;
-                            blockingInvoiceId = unlinkedInvoice.Id;
-                        }
-                    }
-
-                    return Ok(new
-                    {
-                        IsSuccess = false,
-                        Message = $"This patient already has an open assignment with {paName}. Cancel that assignment first or use Reassign.",
-                        BlockedByAssignment = true,
-                        BlockingAssignmentId = existingRow.Id,
-                        BlockingPaId = existingRow.PersonalAssistantId,
-                        BlockingPaName = paName,
-                        BlockingAssignedDate = assignedDate,
-                        BlockingClinicId = existingRow.ClinicId,
-                        BlockingHasInvoice = hasInvoice,
-                        BlockingInvoiceSubmissionId = blockingInvoiceId,
-                        AlreadyConfirmedButUnsynced = alreadyConfirmedButUnsynced,
-                        BlockingConfirmedAt = blockingConfirmedAt
-                    });
                 }
+                if (dto.BookingId.HasValue
+                    && await _db.PAAssignments.AnyAsync(a => a.BookingId == dto.BookingId && !a.IsCancelled))
+                    return Ok(new { IsSuccess = false, Message = "This booking already has a PA assignment." });
 
                 var assignment = new PAAssignment
                 {
@@ -1404,77 +1382,119 @@ namespace VaccineAPI.Controllers
                         await _db.SaveChangesAsync();
                 }
 
-                // Link this child's orphaned invoice (downloaded before any PA was assigned —
-                // PaId == null) to the new assignment directly via the InvoiceSubmissionId FK.
-                // No date guessing needed: a child can have at most one active assignment at a
-                // time (enforced by the `exists` check above), so "the orphaned invoice for this
-                // child" is already an unambiguous fact, not an inference. An invoice already
-                // owned by a different PA (a separate, already-settled visit) is never touched.
-                // Only an UNCONFIRMED invoice with at least one dose that belongs to THIS visit
-                // is adopted (PaVisitGuard). Before, the newest PaId==null invoice of any age was
-                // adopted and every dose on it pinned+stamped — sweeping months-old, already-
-                // confirmed "Historical Backfill" doses into the assignment as the PA's cash.
-                var assignedAtUtc = assignment.AssignedAt;
-                var groupIds = (dto.GroupScheduleIds ?? new List<long>())
-                    .Concat(dto.ScheduleIds ?? new List<long>()).ToList();
-                var orphanInvoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == dto.ChildId && i.PaId == null && !i.IsConfirmedByDoctor)
-                    .OrderByDescending(i => i.SubmittedAt)
-                    .FirstOrDefault();
-                List<Schedule> visitSchedulesOnInvoice = new List<Schedule>();
+                // The clicked group's GIVEN doses (e.g. the doctor gave them and downloaded the invoice
+                // before assigning a PA to collect): the doctor's click is the explicit scope, so
+                // they are pinned here and the PA becomes their collector. Doses already on a
+                // doctor-confirmed invoice belong to a closed visit and are left out. An unclaimed
+                // (no PA) unconfirmed invoice is adopted only when ALL its doses are in this group;
+                // an invoice that also covers another group is never adopted.
                 int excludedStaleDoses = 0;
-                if (orphanInvoice != null)
+                long? bookingConfirmedId = null;
+                bool spanningInvoiceNotAdopted = false;
+                var clickedGroupIds = dto.GroupScheduleIds ?? new List<long>();
+                if (clickedGroupIds.Count > 0)
                 {
-                    var onInvoice = await _db.Schedules
-                        .Where(s => s.ChildId == dto.ChildId && s.InvoiceSubmissionId == orphanInvoice.Id)
+                    var givenInGroup = await _db.Schedules
+                        .Where(s => clickedGroupIds.Contains(s.Id) && s.ChildId == dto.ChildId && s.IsDone)
                         .ToListAsync();
-                    visitSchedulesOnInvoice = onInvoice
-                        .Where(s => VaccineAPI.Services.PaVisitGuard.DoseBelongsToVisit(
-                            s, orphanInvoice, assignedAtUtc, dto.PersonalAssistantId, groupIds))
-                        .ToList();
-                    excludedStaleDoses = onInvoice.Count - visitSchedulesOnInvoice.Count;
-                    // Nothing on it belongs to this visit -> leave the invoice completely alone.
-                    if (visitSchedulesOnInvoice.Count == 0)
-                        orphanInvoice = null;
-                }
-                if (orphanInvoice != null)
-                {
+                    var groupInvoiceIds = givenInGroup.Where(s => s.InvoiceSubmissionId.HasValue)
+                        .Select(s => s.InvoiceSubmissionId!.Value).Distinct().ToList();
+                    var groupInvoices = await _db.InvoiceSubmissions
+                        .Where(i => groupInvoiceIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id);
+                    var pinnedInvoiceIds = new HashSet<long>();
                     var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
                     var paName = pa?.Name ?? "PA";
-                    orphanInvoice.PaId = dto.PersonalAssistantId;
-                    orphanInvoice.SubmittedByLabel = dto.RequestingManagerId.HasValue
-                        ? "Manager/(" + paName + ")"
-                        : "Doctor/(" + paName + ")";
-                    if (orphanInvoice.ClinicId == null && dto.ClinicId.HasValue)
-                        orphanInvoice.ClinicId = dto.ClinicId;
-                    assignment.InvoiceSubmissionId = orphanInvoice.Id;
-                    _db.Entry(orphanInvoice).State = EntityState.Modified;
-                    _db.Entry(assignment).State = EntityState.Modified;
-                    await _db.SaveChangesAsync();
 
-                    // Pin this invoice's own schedules too — covers the doctor-gave-it-then-
-                    // assigned-a-PA ordering, where the dose was already done before the
-                    // assignment existed and so was excluded from the undone-doses pinning
-                    // above. Matched via Schedule.InvoiceSubmissionId, the FK stamped on exactly
-                    // the doses submitted on this invoice — not by GivenDate falling on the
-                    // invoice's InvoiceDate, which would also sweep in an unrelated same-day
-                    // dose (e.g. one the parent declined and was never actually billed).
-                    var schedulesOnInvoice = visitSchedulesOnInvoice;
-                    foreach (var s in schedulesOnInvoice)
+                    foreach (var s in givenInGroup)
                     {
+                        InvoiceSubmission? inv = null;
+                        if (s.InvoiceSubmissionId.HasValue) groupInvoices.TryGetValue(s.InvoiceSubmissionId.Value, out inv);
+                        if (inv != null && inv.IsConfirmedByDoctor) { excludedStaleDoses++; continue; }
                         if (!_db.PAAssignmentSchedules.Any(l => l.AssignmentId == assignment.Id && l.ScheduleId == s.Id))
                             _db.PAAssignmentSchedules.Add(new PAAssignmentSchedule { AssignmentId = assignment.Id, ScheduleId = s.Id });
-                        // Same backfill as SyncInvoicePaToActiveAssignment (ScheduleController.cs)
-                        // — the money-icon check reads Schedule.PaymentCollectorPaId directly,
-                        // which stays NULL forever from give-time unless backfilled here.
-                        if (s.PaymentCollectorPaId != dto.PersonalAssistantId)
+                        if (!s.IsPaymentCollected && s.PaymentCollectorPaId != dto.PersonalAssistantId)
                         {
                             s.PaymentCollectorPaId = dto.PersonalAssistantId;
                             _db.Entry(s).State = EntityState.Modified;
                         }
+                        if (inv != null) pinnedInvoiceIds.Add(inv.Id);
                     }
-                    if (schedulesOnInvoice.Count > 0)
+
+                    foreach (var invId in pinnedInvoiceIds)
+                    {
+                        var inv = groupInvoices[invId];
+                        if (inv.PaId != null) continue;                       // already belongs to a PA
+                        var coversOtherGroup = await _db.Schedules.AnyAsync(x => x.InvoiceSubmissionId == invId && !clickedGroupIds.Contains(x.Id));
+                        if (coversOtherGroup) { spanningInvoiceNotAdopted = true; continue; }
+                        inv.PaId = dto.PersonalAssistantId;
+                        inv.SubmittedByLabel = dto.RequestingManagerId.HasValue
+                            ? "Manager/(" + paName + ")"
+                            : "Doctor/(" + paName + ")";
+                        if (inv.ClinicId == null && dto.ClinicId.HasValue)
+                            inv.ClinicId = dto.ClinicId;
+                        _db.Entry(inv).State = EntityState.Modified;
+                    }
+                    if (pinnedInvoiceIds.Count == 1 && !assignment.InvoiceSubmissionId.HasValue)
+                    {
+                        assignment.InvoiceSubmissionId = pinnedInvoiceIds.First();
+                        _db.Entry(assignment).State = EntityState.Modified;
+                    }
+                    await _db.SaveChangesAsync();
+                }
+
+                // Assigning a PA to a child with a pending home-visit booking confirms that booking
+                // and tells the parent (same "Booking Confirmed" notification BookingController
+                // writes). The booking the doctor linked (BookingId) wins; otherwise the child's
+                // pending home-visit booking whose preferred date is closest to the assigned
+                // group's date. Never lets a booking problem fail the assignment.
+                try
+                {
+                    Booking? bookingToConfirm = null;
+                    if (dto.BookingId.HasValue)
+                        bookingToConfirm = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == dto.BookingId.Value && b.Status == "Pending");
+                    if (bookingToConfirm == null && !dto.BookingId.HasValue)
+                    {
+                        var pendingBookings = await _db.Bookings
+                            .Where(b => b.ChildId == dto.ChildId && b.Type == "HomeBooked" && b.Status == "Pending")
+                            .ToListAsync();
+                        if (pendingBookings.Count > 0)
+                        {
+                            var groupDate = (await _db.Schedules.Where(x => requestedIds.Contains(x.Id))
+                                                .Select(x => (DateTime?)x.Date).OrderBy(x => x).FirstOrDefaultAsync())
+                                            ?? DateTime.UtcNow.AddHours(5);
+                            bookingToConfirm = pendingBookings
+                                .OrderBy(b => Math.Abs(((b.PreferredDate ?? b.CreatedAt).Date - groupDate.Date).TotalDays))
+                                .First();
+                        }
+                    }
+                    if (bookingToConfirm != null)
+                    {
+                        bookingToConfirm.Status = "Confirmed";
+                        bookingToConfirm.UpdatedAt = DateTime.Now;
+                        if (!string.IsNullOrWhiteSpace(dto.BookingDoctorComment))
+                            bookingToConfirm.DoctorComment = dto.BookingDoctorComment;
+                        _db.Notifications.Add(new Notification
+                        {
+                            Type = "BookingConfirmed",
+                            RecipientType = "PARENT",
+                            RecipientId = bookingToConfirm.ParentUserId,
+                            BookingId = bookingToConfirm.Id,
+                            ChildId = bookingToConfirm.ChildId,
+                            ClinicId = bookingToConfirm.ClinicId,
+                            Title = "Booking Confirmed",
+                            Message = "Your " + (bookingToConfirm.Type == "HomeBooked" ? "home visit" : "clinic visit") +
+                                " booking for " + bookingToConfirm.ChildName + " has been confirmed." +
+                                (string.IsNullOrEmpty(bookingToConfirm.DoctorComment) ? "" : " Note: " + bookingToConfirm.DoctorComment),
+                            IsRead = false,
+                            CreatedAt = DateTime.UtcNow
+                        });
                         await _db.SaveChangesAsync();
+                        bookingConfirmedId = bookingToConfirm.Id;
+                    }
+                }
+                catch (Exception)
+                {
+                    // booking confirmation is a courtesy step; the assignment itself already succeeded
                 }
 
                 // Fire-and-forget email
@@ -1504,7 +1524,7 @@ namespace VaccineAPI.Controllers
                     $"{createKid?.Name ?? "A patient"} has been assigned to you: {await DoseListFor(assignment.Id)}. Open Assignments to see the visit.", dto.ChildId, dto.ClinicId);
                 await _db.SaveChangesAsync();
 
-                return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id, ExcludedStaleDoses = excludedStaleDoses } });
+                return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id, ExcludedStaleDoses = excludedStaleDoses, SpanningInvoiceNotAdopted = spanningInvoiceNotAdopted, BookingConfirmedId = bookingConfirmedId } });
             }
             catch (Exception ex)
             {
@@ -1834,6 +1854,8 @@ namespace VaccineAPI.Controllers
         public List<long> GroupScheduleIds { get; set; } = new List<long>();
         public DateTime? TargetDate { get; set; }
         public long? BookingId { get; set; }
+        // Doctor's note saved on the booking when this assignment confirms it.
+        public string? BookingDoctorComment { get; set; }
         public long? RequestingManagerId { get; set; }
         // Required on the doctor-initiated path (RequestingManagerId absent) — ignored when a
         // manager is calling, since that path is fenced by ManagerPermission/ManagerAccess instead.

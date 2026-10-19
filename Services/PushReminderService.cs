@@ -171,7 +171,7 @@ namespace VaccineAPI.Services
             var next = today.AddDays(1);
             var rows = await db.PAAssignments
                 .Where(a => !a.IsCompleted && !a.IsCancelled && a.AssignmentStatus == "Active" && a.TargetDate >= today && a.TargetDate < next)
-                .GroupBy(a => a.PersonalAssistantId).Select(g => new { PaId = g.Key, N = g.Count() }).ToListAsync();
+                .GroupBy(a => a.PersonalAssistantId).Select(g => new { PaId = g.Key, N = g.Select(a => a.ChildId).Distinct().Count() }).ToListAsync();
             foreach (var r in rows)
                 await PushService.SendOnceAsync(db, $"padigest:{r.PaId}:{today:yyyyMMdd}", "PA", r.PaId, "Today's visits",
                     $"You have {r.N} vaccination visit{(r.N == 1 ? "" : "s")} assigned for today.", Data("PaDigest"));
@@ -182,7 +182,7 @@ namespace VaccineAPI.Services
             var next = today.AddDays(1);
             var rows = await db.PAAssignments
                 .Where(a => !a.IsCompleted && !a.IsCancelled && a.AssignmentStatus == "Active" && a.TargetDate >= today && a.TargetDate < next)
-                .GroupBy(a => a.PersonalAssistantId).Select(g => new { PaId = g.Key, N = g.Count() }).ToListAsync();
+                .GroupBy(a => a.PersonalAssistantId).Select(g => new { PaId = g.Key, N = g.Select(a => a.ChildId).Distinct().Count() }).ToListAsync();
             foreach (var r in rows)
                 await PushService.SendOnceAsync(db, $"paopen:{r.PaId}:{today:yyyyMMdd}", "PA", r.PaId, "Visits still open",
                     $"{r.N} assignment{(r.N == 1 ? " is" : "s are")} still open for today.", Data("PaOpen"));

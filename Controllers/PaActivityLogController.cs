@@ -190,8 +190,8 @@ namespace VaccineAPI.Controllers
                                     var amendments = _db.InvoiceAmendments.Where(am => am.InvoiceSubmissionId == inv.Id);
                                     _db.InvoiceAmendments.RemoveRange(amendments);
 
-                                    var linkedAssignment = _db.PAAssignments.FirstOrDefault(a => a.InvoiceSubmissionId == inv.Id);
-                                    if (linkedAssignment != null) linkedAssignment.InvoiceSubmissionId = null;
+                                    foreach (var linkedAssignment in _db.PAAssignments.Where(a => a.InvoiceSubmissionId == inv.Id).ToList())
+                                        linkedAssignment.InvoiceSubmissionId = null;
 
                                     _db.InvoiceSubmissions.Remove(inv);
                                 }

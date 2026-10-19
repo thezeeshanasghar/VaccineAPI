@@ -104,11 +104,10 @@ namespace VaccineAPI.Controllers
                     inv.TotalAmount = 0;
                     inv.InvoiceStatus = "Cancelled";
 
-                    var linkedAssignment = _db.PAAssignments
-                        .Where(a => a.InvoiceSubmissionId == inv.Id && !a.IsCancelled)
-                        .OrderByDescending(a => a.AssignedAt)
-                        .FirstOrDefault();
-                    if (linkedAssignment != null && !linkedAssignment.IsCashConfirmedByDoctor)
+                    // Every assignment that owns this invoice (FK hint + pins), not just one: an
+                    // invoice belongs to one group/assignment now, but legacy shared invoices exist.
+                    foreach (var linkedAssignment in VaccineAPI.Services.AssignmentResolver.OwnersOfInvoice(_db, inv.Id)
+                        .Where(a => !a.IsCashConfirmedByDoctor).ToList())
                     {
                         linkedAssignment.IsCashConfirmedByDoctor = true;
                         linkedAssignment.CashConfirmedAt = DateTime.UtcNow;

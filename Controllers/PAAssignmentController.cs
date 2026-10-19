@@ -1410,10 +1410,33 @@ namespace VaccineAPI.Controllers
                 // time (enforced by the `exists` check above), so "the orphaned invoice for this
                 // child" is already an unambiguous fact, not an inference. An invoice already
                 // owned by a different PA (a separate, already-settled visit) is never touched.
+                // Only an UNCONFIRMED invoice with at least one dose that belongs to THIS visit
+                // is adopted (PaVisitGuard). Before, the newest PaId==null invoice of any age was
+                // adopted and every dose on it pinned+stamped — sweeping months-old, already-
+                // confirmed "Historical Backfill" doses into the assignment as the PA's cash.
+                var assignedAtUtc = assignment.AssignedAt;
+                var groupIds = (dto.GroupScheduleIds ?? new List<long>())
+                    .Concat(dto.ScheduleIds ?? new List<long>()).ToList();
                 var orphanInvoice = _db.InvoiceSubmissions
-                    .Where(i => i.ChildId == dto.ChildId && i.PaId == null)
+                    .Where(i => i.ChildId == dto.ChildId && i.PaId == null && !i.IsConfirmedByDoctor)
                     .OrderByDescending(i => i.SubmittedAt)
                     .FirstOrDefault();
+                List<Schedule> visitSchedulesOnInvoice = new List<Schedule>();
+                int excludedStaleDoses = 0;
+                if (orphanInvoice != null)
+                {
+                    var onInvoice = await _db.Schedules
+                        .Where(s => s.ChildId == dto.ChildId && s.InvoiceSubmissionId == orphanInvoice.Id)
+                        .ToListAsync();
+                    visitSchedulesOnInvoice = onInvoice
+                        .Where(s => VaccineAPI.Services.PaVisitGuard.DoseBelongsToVisit(
+                            s, orphanInvoice, assignedAtUtc, dto.PersonalAssistantId, groupIds))
+                        .ToList();
+                    excludedStaleDoses = onInvoice.Count - visitSchedulesOnInvoice.Count;
+                    // Nothing on it belongs to this visit -> leave the invoice completely alone.
+                    if (visitSchedulesOnInvoice.Count == 0)
+                        orphanInvoice = null;
+                }
                 if (orphanInvoice != null)
                 {
                     var pa = await _db.PersonalAssistant.FindAsync(dto.PersonalAssistantId);
@@ -1436,10 +1459,7 @@ namespace VaccineAPI.Controllers
                     // the doses submitted on this invoice — not by GivenDate falling on the
                     // invoice's InvoiceDate, which would also sweep in an unrelated same-day
                     // dose (e.g. one the parent declined and was never actually billed).
-                    var schedulesOnInvoice = await _db.Schedules
-                        .Where(s => s.ChildId == dto.ChildId
-                                 && s.InvoiceSubmissionId == orphanInvoice.Id)
-                        .ToListAsync();
+                    var schedulesOnInvoice = visitSchedulesOnInvoice;
                     foreach (var s in schedulesOnInvoice)
                     {
                         if (!_db.PAAssignmentSchedules.Any(l => l.AssignmentId == assignment.Id && l.ScheduleId == s.Id))
@@ -1484,7 +1504,7 @@ namespace VaccineAPI.Controllers
                     $"{createKid?.Name ?? "A patient"} has been assigned to you: {await DoseListFor(assignment.Id)}. Open Assignments to see the visit.", dto.ChildId, dto.ClinicId);
                 await _db.SaveChangesAsync();
 
-                return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id } });
+                return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id, ExcludedStaleDoses = excludedStaleDoses } });
             }
             catch (Exception ex)
             {
@@ -1808,6 +1828,10 @@ namespace VaccineAPI.Controllers
         public long ChildId { get; set; }
         public string? Notes { get; set; }
         public List<long> ScheduleIds { get; set; } = new List<long>();
+        // Given + undone ids of the clicked date-group. Lets the orphan-invoice test recognise a
+        // dose from the clicked group even when the group is already fully given (ScheduleIds is
+        // undone-only, so it is empty then). Optional: older clients omit it.
+        public List<long> GroupScheduleIds { get; set; } = new List<long>();
         public DateTime? TargetDate { get; set; }
         public long? BookingId { get; set; }
         public long? RequestingManagerId { get; set; }

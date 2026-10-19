@@ -3352,7 +3352,7 @@ namespace VaccineAPI.Controllers
                 // Link this invoice to the child's active assignment's InvoiceSubmissionId FK —
                 // whether the doctor downloaded it (PaId stamped here too) or the PA submitted
                 // it themselves (PaId already set via dto.PaId — never overwritten, just linked).
-                SyncInvoicePaToActiveAssignment(newInvoice, dto.ChildId, allowPaIdOverwrite: !dto.PaId.HasValue);
+                SyncInvoicePaToActiveAssignment(newInvoice, dto.ChildId, allowPaIdOverwrite: !dto.PaId.HasValue, invoiceCreatedThisRequest: true);
             }
 
             // The invoice this submission is (existing, being edited) or just became (newInvoice).
@@ -3381,7 +3381,16 @@ namespace VaccineAPI.Controllers
                     // Backfill the collector to whoever is actively assigned, scoped to exactly
                     // the schedules on THIS invoice (dto.Schedules) — never a date match against
                     // other doses that merely share this invoice's date but were never billed on it.
-                    if (activeAssignmentForPin != null
+                    // A re-download/edit of a PRE-EXISTING invoice only links doses that belong to
+                    // the visit (PaVisitGuard) and never touches a doctor-confirmed invoice; a
+                    // brand-new invoice's doses are the visit by definition.
+                    var pinAllowed = activeAssignmentForPin != null
+                        && (existing == null
+                            || (!existing.IsConfirmedByDoctor
+                                && VaccineAPI.Services.PaVisitGuard.DoseBelongsToVisit(
+                                    schedulec, existing, activeAssignmentForPin.AssignedAt,
+                                    activeAssignmentForPin.PersonalAssistantId)));
+                    if (pinAllowed
                         && schedulec.PaymentCollectorPaId != activeAssignmentForPin.PersonalAssistantId)
                     {
                         schedulec.PaymentCollectorPaId = activeAssignmentForPin.PersonalAssistantId;
@@ -3414,7 +3423,12 @@ namespace VaccineAPI.Controllers
                 .FirstOrDefault();
         }
 
-        private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId, bool allowPaIdOverwrite = true)
+        // invoiceCreatedThisRequest: the invoice was just created by this very download, so its
+        // doses are the visit by definition and are always linked. For a pre-existing invoice
+        // (re-download/edit) the PaVisitGuard test applies, so re-opening an OLD invoice while an
+        // assignment is open can no longer drag its long-ago doses into the assignment, and a
+        // doctor-confirmed invoice is never re-attributed.
+        private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId, bool allowPaIdOverwrite = true, bool invoiceCreatedThisRequest = false)
         {
             var activeAssignment = _db.PAAssignments
                 .Where(a => a.ChildId == childId && !a.IsCancelled && !a.IsCashConfirmedByDoctor)
@@ -3423,6 +3437,26 @@ namespace VaccineAPI.Controllers
 
             if (activeAssignment == null)
                 return;
+
+            var schedulesOnInvoice = invoice.Id > 0
+                ? _db.Schedules
+                    .Where(s => s.ChildId == childId && s.InvoiceSubmissionId == invoice.Id)
+                    .ToList()
+                : new List<Schedule>();
+
+            if (!invoiceCreatedThisRequest)
+            {
+                if (invoice.IsConfirmedByDoctor)
+                    return;
+                schedulesOnInvoice = schedulesOnInvoice
+                    .Where(s => VaccineAPI.Services.PaVisitGuard.DoseBelongsToVisit(
+                        s, invoice, activeAssignment.AssignedAt, activeAssignment.PersonalAssistantId))
+                    .ToList();
+                // Invoice has doses but none belong to this visit -> leave it unattributed.
+                if (schedulesOnInvoice.Count == 0 && invoice.Id > 0
+                    && _db.Schedules.Any(s => s.ChildId == childId && s.InvoiceSubmissionId == invoice.Id))
+                    return;
+            }
 
             if (allowPaIdOverwrite && invoice.PaId != activeAssignment.PersonalAssistantId)
             {
@@ -3444,11 +3478,6 @@ namespace VaccineAPI.Controllers
             // FK stamped on exactly the doses submitted on this invoice (update-bulk-invoice's
             // per-item loop) — never a date match, which would also catch an unrelated dose
             // that merely shares this invoice's calendar date but was never billed on it.
-            var schedulesOnInvoice = invoice.Id > 0
-                ? _db.Schedules
-                    .Where(s => s.ChildId == childId && s.InvoiceSubmissionId == invoice.Id)
-                    .ToList()
-                : new List<Schedule>();
             foreach (var s in schedulesOnInvoice)
             {
                 LinkScheduleToAssignment(activeAssignment.Id, s.Id);
@@ -5666,6 +5695,20 @@ namespace VaccineAPI.Controllers
                 .Where(a => a.ChildId == inv.ChildId && !a.IsCancelled && !a.IsCashConfirmedByDoctor)
                 .OrderByDescending(a => a.AssignedAt)
                 .FirstOrDefault();
+            // Only re-link when the invoice plausibly belongs to this assignment: one of its
+            // doses is already pinned to it, or it was submitted within a week of the assignment.
+            // Otherwise confirming an old unrelated invoice would re-pin it and close the PA's
+            // assignment while the real cash is still unconfirmed.
+            if (openForChild != null)
+            {
+                var plausible =
+                    _db.PAAssignmentSchedules.Any(l => l.AssignmentId == openForChild.Id
+                        && _db.Schedules.Any(s => s.Id == l.ScheduleId && s.InvoiceSubmissionId == inv.Id))
+                    || (inv.SubmittedAt >= openForChild.AssignedAt.AddDays(-7)
+                        && inv.SubmittedAt <= openForChild.AssignedAt.AddDays(7));
+                if (!plausible)
+                    return null;
+            }
             if (openForChild != null)
             {
                 openForChild.InvoiceSubmissionId = inv.Id;

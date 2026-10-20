@@ -191,7 +191,7 @@ namespace VaccineAPI.Controllers
         //     schedules this PA gave/collected payment for on this child back to
         //     "not given", crediting any consumed stock back via the inventory ledger.
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId, [FromQuery] string mode = "UnassignOnly")
+        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId, [FromQuery] string mode = "UnassignOnly", [FromQuery] string? reason = null)
         {
             var assignment = await _db.PAAssignments.FindAsync(id);
             if (assignment == null)
@@ -387,6 +387,11 @@ namespace VaccineAPI.Controllers
 
                 // The assignment's pin rows go with it (they used to be left dangling).
                 _db.PAAssignmentSchedules.RemoveRange(_db.PAAssignmentSchedules.Where(l => l.AssignmentId == assignment.Id));
+                // The assignment row is deleted, so this log row is the only lasting record of who
+                // removed it, when, and in which mode. It commits in the same transaction.
+                VaccineAPI.Services.AssignmentAudit.Add(_db, mode == "FullReset" ? "Reversed" : "Removed", assignment, "DOCTOR", doctorId,
+                    mode == "FullReset" ? "Visit reversed: doses ungiven, stock returned, invoice deleted" : "Assignment removed (doses and invoice untouched)",
+                    reason, new { mode, paId = assignment.PersonalAssistantId });
                 _db.PAAssignments.Remove(assignment);
 
                 await _db.SaveChangesAsync();
@@ -470,21 +475,26 @@ namespace VaccineAPI.Controllers
             if (dto.CallerType == "DOCTOR" && assignment.DoctorId != dto.CallerId)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to cancel this assignment" });
 
-            // PA cannot self-cancel once vaccines were given or payment was recorded — must ask the doctor
-            if (dto.CallerType == "PA")
-            {
-                var hasGivenOrPaid = await _db.PAAssignmentSchedules
-                    .Where(l => l.AssignmentId == assignment.Id)
-                    .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
-                    .AnyAsync(s => s.IsDone == true || s.IsPaymentCollected == true);
+            // Cancel only calls off the PA's task. Once a dose is given or payment is recorded it would
+            // leave given doses and collected cash with no owner, so neither PA nor doctor may use it:
+            // the PA must ask the doctor, the doctor must Reassign / Take back / Reverse instead
+            // (PA_TRACKING_MERGE_SPEC.md section 2).
+            var hasGivenOrPaid = await _db.PAAssignmentSchedules
+                .Where(l => l.AssignmentId == assignment.Id)
+                .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
+                .AnyAsync(s => s.IsDone == true || s.IsPaymentCollected == true);
 
-                if (hasGivenOrPaid)
-                    return BadRequest(new { IsSuccess = false, Message = "This assignment has vaccines given or payment recorded and can no longer be self-cancelled. Please contact the doctor." });
-            }
+            if (hasGivenOrPaid && dto.CallerType == "PA")
+                return BadRequest(new { IsSuccess = false, Message = "This assignment has vaccines given or payment recorded and can no longer be self-cancelled. Please contact the doctor." });
+
+            if (hasGivenOrPaid && dto.CallerType == "DOCTOR")
+                return Ok(new { IsSuccess = false, Message = "Vaccines are already given or payment is recorded, so this assignment cannot be cancelled. Reassign it to another PA, or reverse the visit." });
 
             assignment.IsCancelled  = true;
             assignment.CancelledAt  = DateTime.UtcNow;
             assignment.CancelReason = dto.Reason;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "Cancelled", assignment, dto.CallerType == "PA" ? "PA" : "DOCTOR", dto.CallerId,
+                "Assignment cancelled (task only)", dto.Reason);
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -756,6 +766,8 @@ namespace VaccineAPI.Controllers
                 IsRead        = false,
                 CreatedAt     = DateTime.UtcNow
             });
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "RefusalRequested", assignment, "PA", dto.CallerId,
+                "PA reported the client refused at home", dto.Reason);
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -836,7 +848,8 @@ namespace VaccineAPI.Controllers
             if (request.DoctorId != doctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised" });
 
-            var approveResult = await DeleteAssignment(id, doctorId, "FullReset");
+            var approveResult = await DeleteAssignment(id, doctorId, "FullReset",
+                "Client refused at home" + (string.IsNullOrWhiteSpace(request.Reason) ? "" : ": " + request.Reason));
             if (await _db.VaccineRefusals.AnyAsync(r => r.Id == request.Id && r.Status == "Approved"))
             {
                 var apRefKid = await _db.Childs.FindAsync(request.ChildId);
@@ -861,6 +874,10 @@ namespace VaccineAPI.Controllers
             request.Status = "Rejected";
             request.ResolvedAt = DateTime.UtcNow;
             request.RejectionNote = dto.Notes;
+            var rjAsg = await _db.PAAssignments.FindAsync(request.AssignmentId);
+            if (rjAsg != null)
+                VaccineAPI.Services.AssignmentAudit.Add(_db, "RefusalRejected", rjAsg, "DOCTOR", dto.DoctorId,
+                    "Doctor rejected the refusal report; the visit continues", dto.Notes);
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -1099,9 +1116,160 @@ namespace VaccineAPI.Controllers
             if (old.PersonalAssistantId != dto.NewPaId)
                 VaccineAPI.Services.NotifyHelper.Add(_db, "PaAssignmentRemoved", "PA", old.PersonalAssistantId, "Assignment reassigned",
                     $"{reKid?.Name ?? "A patient"} has been reassigned to another assistant.", old.ChildId, old.ClinicId);
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "Reassigned", newAssignment,
+                dto.RequestingManagerId.HasValue ? "MANAGER" : "DOCTOR", dto.RequestingManagerId ?? old.DoctorId,
+                $"Reassigned from PA {old.PersonalAssistantId} to PA {dto.NewPaId}", dto.Reason,
+                new { fromAssignmentId = old.Id, fromPaId = old.PersonalAssistantId, toPaId = dto.NewPaId });
             await _db.SaveChangesAsync();
 
             return Ok(new { IsSuccess = true, ResponseData = new { NewAssignmentId = newAssignment.Id } });
+        }
+
+        // PATCH /api/PAAssignment/{id}/take-back
+        // Doctor-only. The PA has given the vaccine but not collected money, and the doctor takes
+        // the visit back to handle the payment personally (PA_TRACKING_MERGE_SPEC.md Q4):
+        //   - the doses stay given (nothing is ungiven, no stock moves),
+        //   - the PA stops being credited as collector for the unpaid doses (cash-in-hand and the
+        //     collection task list stop counting them),
+        //   - an invoice that belongs wholly to this assignment and is not yet confirmed loses its PA,
+        //   - the assignment is closed (cancelled) and the PA is told.
+        // Refused once any pinned dose has payment recorded (use Reassign or reverse), and when
+        // nothing is given yet (a plain Cancel does that). One SaveChanges, so it is all-or-nothing.
+        [HttpPatch("{id}/take-back")]
+        public async Task<IActionResult> TakeBack(long id, [FromBody] TakeBackDto dto)
+        {
+            var asg = await _db.PAAssignments.FindAsync(id);
+            if (asg == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+
+            var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == asg.DoctorId);
+            if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised to take back this assignment." });
+
+            if (asg.IsCompleted)
+                return Ok(new { IsSuccess = false, Message = "Cannot take back a completed assignment" });
+            if (asg.IsCancelled)
+                return Ok(new { IsSuccess = false, Message = "Assignment is already cancelled" });
+            if (asg.IsCashConfirmedByDoctor)
+                return Ok(new { IsSuccess = false, Message = "Cash is already confirmed for this assignment. Changes go through an Amendment." });
+            if (asg.AssignmentStatus == "PendingCancellation")
+                return Ok(new { IsSuccess = false, Message = "This assignment has a pending cancellation request — resolve it first." });
+
+            var doses = await _db.PAAssignmentSchedules
+                .Where(l => l.AssignmentId == asg.Id)
+                .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
+                .ToListAsync();
+
+            if (!doses.Any(s => s.IsDone))
+                return Ok(new { IsSuccess = false, Message = "Nothing is given yet, so use Cancel instead of Take it back." });
+            if (doses.Any(s => s.IsPaymentCollected))
+                return Ok(new { IsSuccess = false, Message = "Payment is already recorded, so this visit cannot be taken back. Reassign it to another PA, or reverse the visit." });
+
+            var paId = asg.PersonalAssistantId;
+            var uncredited = 0;
+            foreach (var s in doses)
+            {
+                if (s.PaymentCollectorPaId == paId)
+                {
+                    s.PaymentCollectorPaId = null;
+                    uncredited++;
+                }
+            }
+
+            // An invoice is re-labelled only when every dose on it belongs to this assignment and the
+            // doctor has not confirmed it; a legacy invoice shared with another assignment keeps its PA.
+            var doseIds = doses.Select(s => s.Id).ToList();
+            var invoiceIds = doses.Where(s => s.InvoiceSubmissionId.HasValue).Select(s => s.InvoiceSubmissionId!.Value).Distinct().ToList();
+            var invoicesRelabelled = 0;
+            foreach (var invId in invoiceIds)
+            {
+                var shared = await _db.Schedules.AnyAsync(x => x.InvoiceSubmissionId == invId && !doseIds.Contains(x.Id));
+                var inv = await _db.InvoiceSubmissions.FindAsync(invId);
+                if (inv != null && !shared && !inv.IsConfirmedByDoctor && inv.PaId == paId)
+                {
+                    inv.PaId = null;
+                    invoicesRelabelled++;
+                }
+            }
+
+            asg.IsCancelled = true;
+            asg.CancelledAt = DateTime.UtcNow;
+            asg.CancelReason = "Taken back by the doctor" + (string.IsNullOrWhiteSpace(dto.Reason) ? "" : ": " + dto.Reason);
+
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "TakenBack", asg, "DOCTOR", asg.DoctorId,
+                $"Taken back from PA {paId}: doses stay given, doctor collects", dto.Reason,
+                new { paId, dosesUncredited = uncredited, invoicesRelabelled });
+
+            var kid = await _db.Childs.FindAsync(asg.ChildId);
+            VaccineAPI.Services.NotifyHelper.Add(_db, "PaAssignmentRemoved", "PA", paId, "Visit taken back",
+                $"The doctor has taken back {kid?.Name ?? "a patient"}'s visit and will handle the payment.", asg.ChildId, asg.ClinicId);
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+            return Ok(new { IsSuccess = true, ResponseData = new { DosesUncredited = uncredited, InvoicesRelabelled = invoicesRelabelled } });
+        }
+
+        // GET /api/PAAssignment/{id}/history?requestingManagerId=
+        // The assignment's audit trail: log rows written at each action (reassign, cancel, take back,
+        // reverse, create) merged with events rebuilt from record timestamps (given, invoiced,
+        // confirmed). "derived" rows are not audit entries: they carry no reason and no actor name
+        // beyond what the record holds. Follows the reassigned-from chain so a reassigned
+        // assignment shows its whole history. A manager never receives invoice/payment/cash events.
+        [HttpGet("{id}/history")]
+        public async Task<IActionResult> GetHistory(long id, [FromQuery] long? requestingManagerId = null)
+        {
+            var asg = await _db.PAAssignments.FindAsync(id);
+            if (asg == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+
+            if (requestingManagerId.HasValue)
+            {
+                var perm = await _db.ManagerPermissions.FirstOrDefaultAsync(p => p.ManagerId == requestingManagerId.Value);
+                if (perm == null || !perm.ViewPaAssignmentStatus)
+                    return Ok(new { IsSuccess = false, Message = "You do not have permission to view PA assignments." });
+                if (asg.ClinicId.HasValue && !await _db.ManagerAccess.AnyAsync(a => a.ManagerId == requestingManagerId.Value && a.ClinicId == asg.ClinicId.Value))
+                    return Ok(new { IsSuccess = false, Message = "This assignment's clinic is outside your access." });
+            }
+
+            var chain = new List<long> { asg.Id };
+            var cursor = asg;
+            while (cursor.ReassignedFromAssignmentId.HasValue && chain.Count < 20)
+            {
+                chain.Add(cursor.ReassignedFromAssignmentId.Value);
+                cursor = await _db.PAAssignments.FindAsync(cursor.ReassignedFromAssignmentId.Value);
+                if (cursor == null) break;
+            }
+
+            var entries = VaccineAPI.Services.AssignmentAudit.Read(_db, asg.ChildId, chain);
+
+            var dosesQ = await _db.PAAssignmentSchedules.Where(l => l.AssignmentId == asg.Id)
+                .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
+                .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => new { s.Id, d.Name, s.IsDone, s.DoneAt, s.GivenByPaId, s.InvoiceSubmissionId })
+                .ToListAsync();
+
+            var pas = await _db.PersonalAssistant.Where(p => p.Id == asg.PersonalAssistantId).ToListAsync();
+            var paName = pas.FirstOrDefault()?.Name ?? "PA";
+
+            foreach (var d in dosesQ.Where(x => x.IsDone && x.DoneAt.HasValue))
+                entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = d.DoneAt!.Value, Actor = d.GivenByPaId.HasValue ? "PA" : "DOCTOR", ActorId = d.GivenByPaId ?? 0,
+                    Action = "Given", Text = d.Name + " given" + (d.GivenByPaId.HasValue ? " by " + paName : " by the doctor"), Source = "derived" });
+
+            if (!requestingManagerId.HasValue)
+            {
+                var invIds = dosesQ.Where(x => x.InvoiceSubmissionId.HasValue).Select(x => x.InvoiceSubmissionId!.Value).Distinct().ToList();
+                foreach (var inv in await _db.InvoiceSubmissions.Where(i => invIds.Contains(i.Id)).ToListAsync())
+                {
+                    entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = inv.SubmittedAt, Action = "Invoiced", Text = "Invoice " + inv.Id + " created, " + inv.TotalAmount.ToString("0"), Source = "derived" });
+                    if (inv.IsConfirmedByDoctor && inv.ConfirmedAt.HasValue)
+                        entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = inv.ConfirmedAt.Value, Actor = "DOCTOR", ActorId = asg.DoctorId, Action = "Confirmed", Text = "Invoice " + inv.Id + " confirmed", Source = "derived" });
+                }
+            }
+
+            var ordered = entries.OrderBy(e => e.At).ToList();
+            return Ok(new { IsSuccess = true, ResponseData = ordered });
         }
 
         // Inserts an in-app PARENT notification announcing who is coordinating the child's
@@ -1522,6 +1690,10 @@ namespace VaccineAPI.Controllers
                 var createKid = await _db.Childs.FindAsync(dto.ChildId);
                 VaccineAPI.Services.NotifyHelper.Add(_db, "PaNewAssignment", "PA", dto.PersonalAssistantId, "New patient assigned",
                     $"{createKid?.Name ?? "A patient"} has been assigned to you: {await DoseListFor(assignment.Id)}. Open Assignments to see the visit.", dto.ChildId, dto.ClinicId);
+                VaccineAPI.Services.AssignmentAudit.Add(_db, "Created", assignment,
+                    dto.RequestingManagerId.HasValue ? "MANAGER" : "DOCTOR", dto.RequestingManagerId ?? dto.DoctorId,
+                    $"Assigned to PA {dto.PersonalAssistantId}", null,
+                    new { paId = dto.PersonalAssistantId, bookingId = dto.BookingId, targetDate = dto.TargetDate });
                 await _db.SaveChangesAsync();
 
                 return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id, ExcludedStaleDoses = excludedStaleDoses, SpanningInvoiceNotAdopted = spanningInvoiceNotAdopted, BookingConfirmedId = bookingConfirmedId } });
@@ -1764,6 +1936,30 @@ namespace VaccineAPI.Controllers
                 ? await _db.InvoiceSubmissions.Where(i => invoiceIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.TotalAmount)
                 : new Dictionary<long, decimal>();
 
+            // Stage inputs (PA_TRACKING_MERGE_SPEC.md). Read separately and never serialised, because
+            // amounts and payment flags must not reach a manager. The stage and its age are computed
+            // here, in one place, so every screen shows the same answer.
+            var factRows = scheduleIds.Any()
+                ? await _db.Schedules.Where(s => scheduleIds.Contains(s.Id))
+                    .Select(s => new { s.Id, s.IsDone, s.Amount, s.IsPaymentCollected, s.InvoiceSubmissionId, s.DoneAt })
+                    .ToListAsync()
+                : null;
+            var factsById = factRows == null ? new Dictionary<long, VaccineAPI.Services.AssignmentStage.DoseFacts>()
+                : factRows.ToDictionary(s => s.Id, s => new VaccineAPI.Services.AssignmentStage.DoseFacts
+                {
+                    IsDone = s.IsDone, Amount = s.Amount ?? 0m, IsPaymentCollected = s.IsPaymentCollected,
+                    InvoiceSubmissionId = s.InvoiceSubmissionId, DoneAt = s.DoneAt
+                });
+            var factInvIds = factsById.Values.Where(f => f.InvoiceSubmissionId.HasValue).Select(f => f.InvoiceSubmissionId!.Value).Distinct().ToList();
+            var invSubmittedAt = factInvIds.Any()
+                ? await _db.InvoiceSubmissions.Where(i => factInvIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.SubmittedAt)
+                : new Dictionary<long, DateTime>();
+            foreach (var f in factsById.Values)
+                if (f.InvoiceSubmissionId.HasValue && invSubmittedAt.ContainsKey(f.InvoiceSubmissionId.Value))
+                    f.InvoiceSubmittedAt = invSubmittedAt[f.InvoiceSubmissionId.Value];
+            var nowUtc = DateTime.UtcNow;
+            var forManager = requestingManagerId.HasValue;
+
             var result = raw.Select(a =>
             {
                 var child = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
@@ -1775,8 +1971,18 @@ namespace VaccineAPI.Controllers
                     .Select(l => schedulesById[l.ScheduleId])
                     .ToList();
 
+                var stage = VaccineAPI.Services.AssignmentStage.Compute(a.AssignedAt, a.IsCashConfirmedByDoctor, a.CashConfirmedAt,
+                    scheduleLinks.Where(l => l.AssignmentId == a.Id && factsById.ContainsKey(l.ScheduleId)).Select(l => factsById[l.ScheduleId]).ToList());
+                // A manager only ever sees Assigned / Given: invoice, payment and cash steps are
+                // collapsed server-side so the data never leaves the API.
+                var stageNo = forManager && stage.Stage > 2 ? 2 : stage.Stage;
+                var stageLabel = forManager && stage.Stage > 2 ? "Given" : stage.Label;
+
                 return new
                 {
+                    Stage         = stageNo,
+                    StageLabel    = stageLabel,
+                    StageAgeDays  = VaccineAPI.Services.AssignmentStage.AgeDays(stage.Since, nowUtc),
                     AssignmentId  = a.Id,
                     a.AssignedAt,
                     a.TargetDate,
@@ -1800,7 +2006,8 @@ namespace VaccineAPI.Controllers
                     DosesTotal = doses.Count,
                     DosesGiven = doses.Count(d => d.IsDone),
                     Doses      = doses,
-                    CashAmount = a.InvoiceSubmissionId.HasValue && invoiceAmounts.ContainsKey(a.InvoiceSubmissionId.Value)
+                    // Never sent to a manager: managers get no cash or financial figure at all.
+                    CashAmount = !forManager && a.InvoiceSubmissionId.HasValue && invoiceAmounts.ContainsKey(a.InvoiceSubmissionId.Value)
                         ? invoiceAmounts[a.InvoiceSubmissionId.Value] : (decimal?)null
                 };
             }).ToList();
@@ -1820,10 +2027,19 @@ namespace VaccineAPI.Controllers
     {
         public long NewPaId { get; set; }
         public string? Notes { get; set; }
+        // Why the doctor reassigned (written to the assignment history). Optional, additive.
+        public string? Reason { get; set; }
         public DateTime? TargetDate { get; set; }
         public long? RequestingManagerId { get; set; }
         // Required on the doctor-initiated path (RequestingManagerId absent) — ignored when a
         // manager is calling, since that path is fenced by ManagerPermission/ManagerAccess instead.
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
+    }
+
+    public class TakeBackDto
+    {
+        public string? Reason { get; set; }
         public long? CallerUserId { get; set; }
         public string? SecurityStamp { get; set; }
     }

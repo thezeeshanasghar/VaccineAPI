@@ -148,6 +148,7 @@ namespace VaccineAPI.Models
         public DbSet<PersonalAssistant> PersonalAssistant { get; set; }
         public DbSet<PaAccess> PaAccess { get; set; }
         public DbSet<PaPermission> PaPermissions { get; set; }
+        public DbSet<DoctorTravelQuick> DoctorTravelQuick { get; set; }
         public DbSet<PaActivityLog> PaActivityLogs { get; set; }
         public DbSet<Manager> Manager { get; set; }
         public DbSet<ManagerAccess> ManagerAccess { get; set; }

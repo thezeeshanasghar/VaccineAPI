@@ -1278,11 +1278,15 @@ namespace VaccineAPI.Controllers
                 // Auto-create assignment when PA gives a vaccine with no prior open assignment,
                 // and pin this dose to it — covers both "first dose under a brand new
                 // assignment" and "extra dose given mid-visit, not in the original pinned set."
+                long giveAssignmentId = 0;
                 if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
                 {
                     var assignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null, dbSchedule);
                     LinkScheduleToAssignment(assignmentId, dbSchedule.Id);
+                    giveAssignmentId = assignmentId;
                 }
+                if (wasGiven != dbSchedule.IsDone)
+                    AuditGiveOrUngive(new[] { dbSchedule }, dbSchedule.IsDone, giveAssignmentId, scheduleDTO);
                 _inventory.SaveAndAssert();
                 return new Response<ScheduleDTO>(true, "congratulations", newData)
                 { GraceApplied = graceApplied, GraceMessage = graceMessage };
@@ -1444,6 +1448,8 @@ namespace VaccineAPI.Controllers
             };
             _db.PAAssignments.Add(newAssignment);
             _db.SaveChanges();
+            AssignmentAudit.Add(_db, "Created", newAssignment, "PA", paId,
+                "Auto-created when the PA gave a vaccine with no open assignment");
 
             // Fire-and-forget email — same pattern as PAAssignmentController.Create/Reassign.
             // This path auto-creates the assignment silently from the give-vaccine flow, so
@@ -1473,6 +1479,26 @@ namespace VaccineAPI.Controllers
                 .Any(l => l.AssignmentId == assignmentId && l.ScheduleId == scheduleId);
             if (!alreadyLinked)
                 _db.PAAssignmentSchedules.Add(new PAAssignmentSchedule { AssignmentId = assignmentId, ScheduleId = scheduleId });
+        }
+
+        // Audit "given"/"ungiven" for the assignment that owns these doses. knownAssignmentId is
+        // the assignment this request just pinned them to (not saved yet, so not visible to a
+        // query); otherwise the owner is looked up through the saved pins. Caller saves.
+        private void AuditGiveOrUngive(ICollection<Schedule> doses, bool given, long knownAssignmentId, ScheduleDTO dto)
+        {
+            if (doses.Count == 0) return;
+            var actor = AssignmentAudit.Actor(dto.PaId, dto.ManagerId, dto.DoctorId);
+            var action = given ? "Given" : "Ungiven";
+            var verb = given ? "given" : "ungiven";
+            var known = knownAssignmentId > 0 ? _db.PAAssignments.Find(knownAssignmentId) : null;
+            if (known != null)
+            {
+                var names = doses.Select(s => s.Dose != null ? s.Dose.Name : _db.Doses.Where(d => d.Id == s.DoseId).Select(d => d.Name).FirstOrDefault() ?? "Dose");
+                AssignmentAudit.Add(_db, action, known, actor.Type, actor.Type == "DOCTOR" ? known.DoctorId : actor.Id,
+                    string.Join(", ", names) + " " + verb, null, new { scheduleIds = doses.Select(s => s.Id).ToList() });
+                return;
+            }
+            AssignmentAudit.AddForDoses(_db, action, doses, verb, actor.Type, actor.Id);
         }
 
         // v2 §6.5a: a dose is "pre-reset" if it was given before its clinic's StockPeriodStart —
@@ -2496,6 +2522,7 @@ namespace VaccineAPI.Controllers
                 }
             }
             var bulkUngiven = new List<(Schedule Schedule, DateTime OldGiven)>();
+            var bulkChanged = new List<Schedule>();   // doses given/ungiven by THIS batch (audit)
 
             // Disease rows (Chicken Pox / Hepatitis A "had the disease, not the vaccine") in this
             // batch — resolved once, by ScheduleId, and reused everywhere below. A batch can mix a
@@ -2749,6 +2776,8 @@ namespace VaccineAPI.Controllers
                 var wasIsDone = schedule.IsDone;
                 if (wasIsDone && scheduleDTO.IsDone == false && schedule.GivenDate.HasValue)
                     bulkUngiven.Add((schedule, schedule.GivenDate.Value));
+                if (wasIsDone != scheduleDTO.IsDone)
+                    bulkChanged.Add(schedule);
                 var scheduleIsDisease = scheduleDTO.IsDone && IsDiseaseSchedule(schedule.Id);
                 schedule.Weight =(scheduleDTO.Weight > 0) ? scheduleDTO.Weight : schedule.Weight;
                 schedule.Height =(scheduleDTO.Height > 0) ? scheduleDTO.Height : schedule.Height;
@@ -3107,15 +3136,17 @@ namespace VaccineAPI.Controllers
             foreach (var u in bulkUngiven.OrderBy(x => x.Schedule.Dose?.DoseOrder ?? int.MaxValue))
                 UndoDownstreamPushAfterUngive(u.Schedule, u.OldGiven);
 
+            long bulkAuditAssignmentId = 0;
             // Auto-create assignment when PA bulk-gives vaccines with no prior open assignment,
             // and pin every dose actually given in this batch to it.
             if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
             {
-                var bulkAssignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null, dbSchedule);
+                bulkAuditAssignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null, dbSchedule);
                 foreach (var schedule in dbChildSchedules)
                     if (schedule.IsDone)
-                        LinkScheduleToAssignment(bulkAssignmentId, schedule.Id);
+                        LinkScheduleToAssignment(bulkAuditAssignmentId, schedule.Id);
             }
+            AuditGiveOrUngive(bulkChanged, scheduleDTO.IsDone, bulkAuditAssignmentId, scheduleDTO);
 
             // Single transaction for the whole bulk batch (matches the existing single
             // SaveChanges()-for-everything semantics above) — a concurrent give/ungive on any
@@ -3416,7 +3447,8 @@ namespace VaccineAPI.Controllers
             // invoice's group (resolved through its pins) take the invoice, pins and collector.
             _db.SaveChanges();
             if (invoiceForOwnerLink != null)
-                SyncInvoicePaToActiveAssignment(invoiceForOwnerLink, dto.ChildId, ownerLinkOverwritePa, ownerLinkCreatedNow);
+                SyncInvoicePaToActiveAssignment(invoiceForOwnerLink, dto.ChildId, ownerLinkOverwritePa, ownerLinkCreatedNow,
+                    AssignmentAudit.Actor(dto.PaId, dto.ManagerId, dto.DoctorId));
 
             _db.SaveChanges();
             return new Response<object>(true, "Invoice updated successfully.", null);
@@ -3452,7 +3484,7 @@ namespace VaccineAPI.Controllers
         // by this download, so all its doses are the visit by definition. For a pre-existing
         // invoice (re-download/edit) a doctor-confirmed invoice is never re-attributed and
         // PaVisitGuard filters which doses may be pinned/stamped.
-        private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId, bool allowPaIdOverwrite = true, bool invoiceCreatedThisRequest = false)
+        private void SyncInvoicePaToActiveAssignment(InvoiceSubmission invoice, long childId, bool allowPaIdOverwrite = true, bool invoiceCreatedThisRequest = false, (string Type, long Id)? auditActor = null)
         {
             if (invoice.Id <= 0)
                 return;
@@ -3515,6 +3547,11 @@ namespace VaccineAPI.Controllers
                     _db.Entry(s).State = EntityState.Modified;
                 }
             }
+            if (invoiceCreatedThisRequest && auditActor.HasValue)
+                AssignmentAudit.Add(_db, "Invoiced", owner, auditActor.Value.Type,
+                    auditActor.Value.Type == "DOCTOR" ? owner.DoctorId : auditActor.Value.Id,
+                    "Invoice " + invoice.Id + " created, " + invoice.TotalAmount.ToString("0"),
+                    null, new { invoiceId = invoice.Id, amount = invoice.TotalAmount });
             _db.SaveChanges();
         }
 
@@ -5576,6 +5613,7 @@ namespace VaccineAPI.Controllers
             if (dto.Height > 0) schedule.Height = dto.Height;
             if (dto.Circle > 0) schedule.Circle = dto.Circle;
             SyncInvoicePaymentMode(schedule);
+            AuditPayment(schedule, dto);
             _db.SaveChanges();
             return Ok(new Response<ScheduleDTO>(true, "Payment marked as collected.", null));
         }
@@ -5601,6 +5639,7 @@ namespace VaccineAPI.Controllers
             schedule.OnlineService = dto.OnlineService ?? schedule.OnlineService;
             schedule.IsPaymentCollected = true;
             SyncInvoicePaymentMode(schedule);
+            AuditPayment(schedule, dto);
             _db.SaveChanges();
             return Ok(new Response<ScheduleDTO>(true, "Payment recorded.", null));
         }
@@ -5646,6 +5685,18 @@ namespace VaccineAPI.Controllers
             return Ok(new Response<ScheduleDTO>(true, "Batch details corrected.", null));
         }
 
+        // Audit "payment recorded" (mode, online service, this dose's amount) on the dose's assignment.
+        private void AuditPayment(Schedule schedule, ScheduleDTO dto)
+        {
+            var actor = AssignmentAudit.Actor(dto.PaId, dto.ManagerId, dto.DoctorId);
+            var mode = schedule.PaymentMode ?? "";
+            if (mode == "Online" && !string.IsNullOrEmpty(schedule.OnlineService)) mode += " (" + schedule.OnlineService + ")";
+            var amount = schedule.Amount ?? 0;
+            AssignmentAudit.AddForDoses(_db, "PaymentRecorded", new[] { schedule },
+                "payment recorded: " + mode + (amount > 0 ? ", " + amount.ToString("0") : ""),
+                actor.Type, actor.Id, new { mode = schedule.PaymentMode, amount });
+        }
+
         // Keeps InvoiceSubmission.PaymentMode in sync with the schedule's actual
         // recorded mode, so the Doctor's reconciliation page reflects what was
         // really collected (invoice creation leaves PaymentMode null until then).
@@ -5681,6 +5732,7 @@ namespace VaccineAPI.Controllers
             schedule.IsPAApprove = true;
             schedule.PaymentApprovedAt = DateTime.UtcNow;
             schedule.PaymentApprovedByDoctorId = doctorId;
+            AssignmentAudit.AddForDoses(_db, "PaymentVerified", new[] { schedule }, "payment verified", "DOCTOR", doctorId);
             _db.SaveChanges();
             return Ok(new { IsSuccess = true, Message = "Payment verified." });
         }
@@ -5775,7 +5827,15 @@ namespace VaccineAPI.Controllers
             inv.IsConfirmedByDoctor = true;
             inv.ConfirmedAt = DateTime.UtcNow;
 
-            CloseSettledOwnersOfInvoice(inv);
+            var confirmOwners = AssignmentResolver.OwnersOfInvoice(_db, inv.Id).Where(a => !a.IsCashConfirmedByDoctor).ToList();
+            var closedNow = CloseSettledOwnersOfInvoice(inv);
+            if (confirmOwners.Count == 0) confirmOwners = closedNow;
+            var confirmActor = AssignmentAudit.ActorFromUser(_db, callerUserId, doctorId);
+            foreach (var a in confirmOwners)
+                AssignmentAudit.Add(_db, "Confirmed", a, confirmActor.Type, confirmActor.Type == "DOCTOR" ? a.DoctorId : confirmActor.Id,
+                    "Invoice " + inv.Id + " confirmed, " + inv.TotalAmount.ToString("0")
+                    + (closedNow.Any(c => c.Id == a.Id) ? ". Assignment closed." : ""),
+                    null, new { invoiceId = inv.Id, amount = inv.TotalAmount });
 
             _db.SaveChanges();
             return Ok(new { IsSuccess = true, Message = "Invoice confirmed." });

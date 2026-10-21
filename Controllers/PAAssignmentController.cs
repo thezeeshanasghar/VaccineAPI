@@ -444,6 +444,8 @@ namespace VaccineAPI.Controllers
 
             assignment.IsCompleted  = true;
             assignment.CompletedAt  = DateTime.UtcNow;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "Completed", assignment, paId.HasValue ? "PA" : "DOCTOR", paId ?? assignment.DoctorId,
+                "Marked complete");
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -564,6 +566,8 @@ namespace VaccineAPI.Controllers
             assignment.AssignmentStatus   = "PendingCancellation";
             assignment.CancelRequestedAt  = DateTime.UtcNow;
             assignment.CancelRequestReason = dto.Reason;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "CancelRequested", assignment, "PA", dto.CallerId,
+                "Asked the doctor to cancel", dto.Reason);
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -649,6 +653,8 @@ namespace VaccineAPI.Controllers
             assignment.IsCancelled  = true;
             assignment.CancelledAt  = DateTime.UtcNow;
             assignment.CancelReason = assignment.CancelRequestReason;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "CancelApproved", assignment, "DOCTOR", assignment.DoctorId,
+                "Approved the PA's cancel request", assignment.CancelRequestReason);
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -680,6 +686,8 @@ namespace VaccineAPI.Controllers
 
             assignment.AssignmentStatus = "Active";
             assignment.RejectionNote    = dto.Notes;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "CancelRejected", assignment, "DOCTOR", assignment.DoctorId,
+                "Rejected the PA's cancel request. Assignment stays active", dto.Notes);
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -852,6 +860,10 @@ namespace VaccineAPI.Controllers
                 "Client refused at home" + (string.IsNullOrWhiteSpace(request.Reason) ? "" : ": " + request.Reason));
             if (await _db.VaccineRefusals.AnyAsync(r => r.Id == request.Id && r.Status == "Approved"))
             {
+                var apRefAsg = await _db.PAAssignments.FindAsync(id);
+                if (apRefAsg != null)
+                    VaccineAPI.Services.AssignmentAudit.Add(_db, "RefusalApproved", apRefAsg, "DOCTOR", doctorId,
+                        "Approved the PA's refusal-at-home report", request.Reason);
                 var apRefKid = await _db.Childs.FindAsync(request.ChildId);
                 VaccineAPI.Services.NotifyHelper.Add(_db, "PaRefusalApproved", "PA", request.PaId, "Refusal approved",
                     $"Your \"refused at home\" report for {apRefKid?.Name ?? "the patient"} was approved.", request.ChildId, null);
@@ -1250,25 +1262,57 @@ namespace VaccineAPI.Controllers
                 .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => new { s.Id, d.Name, s.IsDone, s.DoneAt, s.GivenByPaId, s.InvoiceSubmissionId })
                 .ToListAsync();
 
-            var pas = await _db.PersonalAssistant.Where(p => p.Id == asg.PersonalAssistantId).ToListAsync();
-            var paName = pas.FirstOrDefault()?.Name ?? "PA";
 
-            foreach (var d in dosesQ.Where(x => x.IsDone && x.DoneAt.HasValue))
-                entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = d.DoneAt!.Value, Actor = d.GivenByPaId.HasValue ? "PA" : "DOCTOR", ActorId = d.GivenByPaId ?? 0,
-                    Action = "Given", Text = d.Name + " given" + (d.GivenByPaId.HasValue ? " by " + paName : " by the doctor"), Source = "derived" });
+            // Events rebuilt from record timestamps only fill gaps the log does not cover (actions
+            // before the log existed). A logged entry always wins over its derived copy.
+            var loggedGiven = new HashSet<long>(entries.Where(e => e.Action == "Given").SelectMany(e => e.ScheduleIds));
+            var loggedInv = new HashSet<long>(entries.Where(e => e.Action == "Invoiced" && e.InvoiceId.HasValue).Select(e => e.InvoiceId!.Value));
+            var loggedConf = new HashSet<long>(entries.Where(e => e.Action == "Confirmed" && e.InvoiceId.HasValue).Select(e => e.InvoiceId!.Value));
+
+            foreach (var d in dosesQ.Where(x => x.IsDone && x.DoneAt.HasValue && !loggedGiven.Contains(x.Id)))
+                entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = d.DoneAt!.Value, Actor = d.GivenByPaId.HasValue ? "PA" : "DOCTOR", ActorId = d.GivenByPaId ?? asg.DoctorId,
+                    Action = "Given", Text = d.Name + " given", Source = "derived" });
 
             if (!requestingManagerId.HasValue)
             {
                 var invIds = dosesQ.Where(x => x.InvoiceSubmissionId.HasValue).Select(x => x.InvoiceSubmissionId!.Value).Distinct().ToList();
                 foreach (var inv in await _db.InvoiceSubmissions.Where(i => invIds.Contains(i.Id)).ToListAsync())
                 {
-                    entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = inv.SubmittedAt, Action = "Invoiced", Text = "Invoice " + inv.Id + " created, " + inv.TotalAmount.ToString("0"), Source = "derived" });
-                    if (inv.IsConfirmedByDoctor && inv.ConfirmedAt.HasValue)
+                    if (!loggedInv.Contains(inv.Id))
+                        entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = inv.SubmittedAt, Action = "Invoiced", Text = "Invoice " + inv.Id + " created, " + inv.TotalAmount.ToString("0"), Source = "derived" });
+                    if (inv.IsConfirmedByDoctor && inv.ConfirmedAt.HasValue && !loggedConf.Contains(inv.Id))
                         entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = inv.ConfirmedAt.Value, Actor = "DOCTOR", ActorId = asg.DoctorId, Action = "Confirmed", Text = "Invoice " + inv.Id + " confirmed", Source = "derived" });
                 }
             }
+            else
+            {
+                // Q7: managers never see invoice, payment or cash events.
+                var hidden = new[] { "Invoiced", "Confirmed", "PaymentRecorded", "PaymentVerified", "MarkedDone", "TakenBack" };
+                entries = entries.Where(e => !hidden.Contains(e.Action)).ToList();
+            }
 
-            var ordered = entries.OrderBy(e => e.At).ToList();
+            // Dose names for folded per-dose lines, and the actor's name on every line.
+            var allIds = entries.SelectMany(e => e.ScheduleIds).Distinct().ToList();
+            var doseNames = await _db.Schedules.Where(s => allIds.Contains(s.Id))
+                .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => new { s.Id, d.Name })
+                .ToDictionaryAsync(x => x.Id, x => x.Name);
+            var paIds = entries.Where(e => e.Actor == "PA").Select(e => e.ActorId).Distinct().ToList();
+            var mgrIds = entries.Where(e => e.Actor == "MANAGER").Select(e => e.ActorId).Distinct().ToList();
+            var docIds = entries.Where(e => e.Actor == "DOCTOR").Select(e => e.ActorId).Distinct().ToList();
+            var paNames = await _db.PersonalAssistant.Where(p => paIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Name);
+            var mgrNames = await _db.Manager.Where(m => mgrIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, m => m.Name);
+            var docNames = await _db.Doctors.Where(d => docIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, d => string.IsNullOrWhiteSpace(d.DisplayName) ? "Dr. " + d.FirstName : d.DisplayName);
+            foreach (var e in entries)
+            {
+                string? n = null;
+                if (e.Actor == "PA") paNames.TryGetValue(e.ActorId, out n);
+                else if (e.Actor == "MANAGER") mgrNames.TryGetValue(e.ActorId, out n);
+                else if (e.Actor == "DOCTOR") docNames.TryGetValue(e.ActorId, out n);
+                e.ActorName = n ?? "";
+            }
+
+            var ordered = VaccineAPI.Services.AssignmentAudit.FoldPerDose(entries.OrderBy(e => e.At).ToList(), doseNames);
             return Ok(new { IsSuccess = true, ResponseData = ordered });
         }
 
@@ -1423,7 +1467,11 @@ namespace VaccineAPI.Controllers
             if (assignment.DoctorId != dto.DoctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised" });
 
+            var oldTarget = assignment.TargetDate;
             assignment.TargetDate = dto.TargetDate;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "TargetDateSet", assignment, "DOCTOR", assignment.DoctorId,
+                "Target date " + (oldTarget.HasValue ? oldTarget.Value.ToString("dd MMM yyyy") + " to " : "set to ")
+                + (dto.TargetDate.HasValue ? dto.TargetDate.Value.ToString("dd MMM yyyy") : "none"));
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -1735,6 +1783,8 @@ namespace VaccineAPI.Controllers
 
             assignment.AssignmentStatus = "PendingHandover";
             assignment.HandoverDoneAt   = DateTime.UtcNow;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "MarkedDone", assignment, paId.HasValue ? "PA" : "DOCTOR", paId ?? assignment.DoctorId,
+                "Marked done, cash to hand over to the doctor");
 
             // Flag the linked InvoiceSubmission so it shows as PendingHandover on reconciliation
             var inv = assignment.InvoiceSubmissionId.HasValue

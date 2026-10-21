@@ -1259,7 +1259,7 @@ namespace VaccineAPI.Controllers
 
             var dosesQ = await _db.PAAssignmentSchedules.Where(l => l.AssignmentId == asg.Id)
                 .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
-                .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => new { s.Id, d.Name, s.IsDone, s.DoneAt, s.GivenByPaId, s.InvoiceSubmissionId })
+                .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => new { s.Id, DoseId = d.Id, d.Name, s.IsDone, s.DoneAt, s.GivenByPaId, s.InvoiceSubmissionId })
                 .ToListAsync();
 
 
@@ -1282,7 +1282,18 @@ namespace VaccineAPI.Controllers
                         entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = inv.SubmittedAt, Action = "Invoiced", Text = "Invoice " + inv.Id + " created, " + inv.TotalAmount.ToString("0"), Source = "derived" });
                     if (inv.IsConfirmedByDoctor && inv.ConfirmedAt.HasValue && !loggedConf.Contains(inv.Id))
                         entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = inv.ConfirmedAt.Value, Actor = "DOCTOR", ActorId = asg.DoctorId, Action = "Confirmed", Text = "Invoice " + inv.Id + " confirmed", Source = "derived" });
+                    // Cash handover is recorded on the invoice only as a timestamp (the handover row
+                    // is per PA, not per child), so it is always a derived line.
+                    if (inv.HandoverDoneAt.HasValue)
+                        entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = inv.HandoverDoneAt.Value, Actor = "PA", ActorId = asg.PersonalAssistantId, Action = "HandedOver", Text = "Invoice " + inv.Id + " cash handed over", Source = "derived", InvoiceId = inv.Id });
                 }
+
+                // The parent's own download of the invoice PDF (the only download the server stamps;
+                // the PA/doctor first download is the "Invoiced" line above).
+                var doseIds = dosesQ.Select(x => x.DoseId).Distinct().ToList();
+                foreach (var pd in await _db.Invoices.Where(i => i.ChildId == asg.ChildId && i.ParentDownloadedAt != null
+                                                                  && i.ParentDownloadedAt >= asg.AssignedAt && doseIds.Contains(i.DoseId)).ToListAsync())
+                    entries.Add(new VaccineAPI.Services.AssignmentAudit.Entry { At = pd.ParentDownloadedAt!.Value, Actor = "PARENT", Action = "InvoiceDownloaded", Text = "invoice " + pd.InvoiceId + " downloaded by parent", Source = "derived" });
             }
             else
             {

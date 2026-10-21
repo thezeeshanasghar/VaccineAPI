@@ -3884,11 +3884,29 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // What deleting this patient would leave behind: given doses (stock consumed), invoices (money)
+        // and open assignments. The Patients page shows this before asking the doctor what to do.
+        [Owns(OwnerKind.Child, "Id")]
+        [HttpGet("{id}/delete-preview")]
+        public Response<VaccineAPI.Services.PatientDeleteService.Footprint> DeletePreview(long id)
+        {
+            var child = _db.Childs.FirstOrDefault(c => c.Id == id);
+            if (child == null)
+                return new Response<VaccineAPI.Services.PatientDeleteService.Footprint>(false, "Child not found", null);
+            return new Response<VaccineAPI.Services.PatientDeleteService.Footprint>(
+                true, null, VaccineAPI.Services.PatientDeleteService.Preview(_db, child));
+        }
+
+        // mode: omitted = plain delete (refused when the patient has given doses or invoices),
+        //       "reverse" = put consumed stock back, then delete. Money is never voided here: invoices
+        //       stay in Payment Reconciliation tagged "Patient deleted" for the doctor to cancel.
         [Owns(OwnerKind.Child, "Id")]
         [HttpDelete("{id}")]
-        public Response<string> Delete(int Id, [FromQuery] string userType = null, [FromQuery] long? paId = null)
+        public Response<string> Delete(int Id, [FromQuery] string userType = null, [FromQuery] long? paId = null,
+                                       [FromQuery] string mode = null)
         {
-            if (!string.IsNullOrWhiteSpace(userType) && userType.Equals("PA", StringComparison.OrdinalIgnoreCase))
+            bool byPa = !string.IsNullOrWhiteSpace(userType) && userType.Equals("PA", StringComparison.OrdinalIgnoreCase);
+            if (byPa)
             {
                 var child = _db.Childs.Find((long)Id);
                 if (child == null)
@@ -3912,15 +3930,38 @@ namespace VaccineAPI.Controllers
                 return new Response<string>(false, "Child not found", null);
             }
 
+            var fp = VaccineAPI.Services.PatientDeleteService.Preview(_db, dbChild);
+            bool reverse = string.Equals(mode, "reverse", StringComparison.OrdinalIgnoreCase);
+            if (fp.HasFootprint)
+            {
+                if (byPa)
+                    return new Response<string>(false,
+                        "This patient already has given doses or invoices. Ask the doctor to delete or deactivate them.", null)
+                        { RuleCode = "PATIENT_HAS_ENTRIES" };
+                if (!reverse)
+                    return new Response<string>(false,
+                        "This patient has given doses or invoices. Choose to reverse stock and delete, or deactivate the patient.", null)
+                        { RuleCode = "PATIENT_HAS_ENTRIES" };
+                VaccineAPI.Services.PatientDeleteService.Reverse(_db, dbChild, fp);
+            }
+
+            // Audit first, in the same SaveChanges as the delete: who deleted which patient, and the
+            // name, so no row that outlives the patient is ever anonymous.
+            VaccineAPI.Services.PatientDeleteService.AddAudit(_db, dbChild, fp,
+                byPa ? "PA" : "DOCTOR", byPa ? (paId ?? 0) : VaccineAPI.Services.PatientDeleteService.DoctorIdOf(_db, dbChild),
+                fp.HasFootprint ? "reverse" : "none");
+
             // Doses waiting for batch details die with the patient record; consumed batches keep
-            // their ledger rows (the vial was really used).
+            // their ledger rows (the vial was really used) unless the doctor chose to reverse them above.
             new VaccineAPI.Services.InventoryTransactionService(_db).VoidPendingForSchedules(dbChild.Schedules.Select(x => x.Id));
             _db.Schedules.RemoveRange(dbChild.Schedules);
             _db.FollowUps.RemoveRange(dbChild.FollowUps);
             if (dbChild.User.Childs.Count == 1) _db.Users.Remove(dbChild.User);
             _db.Childs.Remove(dbChild);
             _db.SaveChanges();
-            return new Response<string>(true, "Child is deleted successfully", null);
+            return new Response<string>(true, fp.HasFootprint
+                ? "Stock restored and patient deleted. Payments stay in Payment Reconciliation until you cancel them."
+                : "Child is deleted successfully", null);
         }
 
         // EPI Plus: inserts the child's historical government-EPI doses as already-Done rows,

@@ -249,6 +249,129 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true, Message = "Handover confirmed." });
         }
 
+        // PATCH /api/PaCashHandover/invoice/{invoiceId}/cancel-deleted-patient?doctorId=
+        // Doctor-only. The patient behind this invoice no longer exists, so the visit it billed was
+        // reversed or never happened: the invoice is voided and the PA stops owing the money.
+        // No typed reason: "patient deleted" is the reason, written to the audit log automatically.
+        [HttpPatch("invoice/{invoiceId}/cancel-deleted-patient")]
+        public IActionResult CancelDeletedPatientInvoice(long invoiceId, [FromQuery] long doctorId)
+        {
+            var inv = _db.InvoiceSubmissions.FirstOrDefault(i => i.Id == invoiceId);
+            if (inv == null)
+                return Ok(new { IsSuccess = false, Message = "Invoice not found." });
+            if (inv.DoctorId != doctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised to cancel this payment." });
+            if (inv.InvoiceStatus == "Cancelled")
+                return Ok(new { IsSuccess = false, Message = "This payment is already cancelled." });
+            if (_db.Childs.Any(c => c.Id == inv.ChildId))
+                return Ok(new { IsSuccess = false, Message = "The patient still exists. Only payments of deleted patients can be cancelled here." });
+
+            var snap = VaccineAPI.Services.PatientDeleteService.Snapshots(_db, new List<long> { inv.ChildId });
+            var name = snap.ContainsKey(inv.ChildId) ? snap[inv.ChildId].Name : "";
+            var wasConfirmed = inv.IsConfirmedByDoctor;
+            var amount = inv.TotalAmount;
+
+            inv.InvoiceStatus = "Cancelled";
+            inv.HasPendingAmendment = false;
+            inv.PendingHandover = false;
+            foreach (var am in _db.InvoiceAmendments.Where(x => x.InvoiceSubmissionId == inv.Id
+                         && !x.IsApprovedByDoctor && !x.IsRejectedByDoctor).ToList())
+                am.IsRejectedByDoctor = true;
+
+            // The assignment that owns this invoice closes with it (moves to Closed in Tracking).
+            var asg = _db.PAAssignments.Where(a => a.InvoiceSubmissionId == inv.Id && !a.IsCancelled).ToList();
+            foreach (var a in asg)
+            {
+                a.IsCancelled = true;
+                a.CancelledAt = DateTime.UtcNow;
+                a.CancelReason = "Cancelled by doctor, patient deleted";
+                VaccineAPI.Services.AssignmentAudit.Add(_db, "Cancelled", a, "DOCTOR", doctorId,
+                    $"Payment Rs. {amount:N0} cancelled: patient deleted", "Patient deleted",
+                    new { invoiceId = inv.Id, amount, wasConfirmed, patientName = name });
+            }
+            _db.PaActivityLogs.Add(new PaActivityLog
+            {
+                PaId = inv.PaId,
+                DoctorId = doctorId,
+                ClinicId = inv.ClinicId,
+                PatientId = inv.ChildId,
+                ActionCode = "AsgPaymentCancelledDeletedPatient",
+                Description = $"Payment Rs. {amount:N0} cancelled by doctor: patient deleted",
+                Notes = Newtonsoft.Json.JsonConvert.SerializeObject(new
+                {
+                    invoiceId = inv.Id, amount, wasConfirmed, patientName = name, mode = inv.PaymentMode, doctorId
+                }),
+                ActionDate = DateTime.UtcNow
+            });
+            if (inv.PaId.HasValue)
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaymentCancelled", "PA", inv.PaId.Value, "Payment cancelled",
+                    $"Rs. {amount:N0} for a deleted patient was cancelled by the doctor. You no longer owe it.", null, inv.ClinicId);
+            _db.SaveChanges();
+            return Ok(new { IsSuccess = true, Message = "Payment cancelled. The PA no longer owes it." });
+        }
+
+        // GET /api/PaCashHandover/stock-used-by-deleted-patients/{doctorId}
+        // Safety net: stock the ledger still shows as consumed by a dose whose schedule row no longer
+        // exists (patients deleted before the reverse option existed). Each can be restored once.
+        [HttpGet("stock-used-by-deleted-patients/{doctorId}")]
+        public IActionResult StockUsedByDeletedPatients(long doctorId)
+        {
+            var gives = _db.InventoryTransactions
+                .Where(t => t.DoctorId == doctorId && t.SourceType == InventoryTransactionType.Administer
+                         && t.ConsumesStock && t.QuantityDelta < 0
+                         && !_db.Schedules.Any(s => s.Id == t.SourceId))
+                .OrderByDescending(t => t.Id).Take(500).ToList();
+            var ids = gives.Select(g => (long?)g.Id).ToList();
+            var reversed = new HashSet<long?>(_db.InventoryTransactions
+                .Where(t => t.ReversesTransactionId != null && ids.Contains(t.ReversesTransactionId))
+                .Select(t => t.ReversesTransactionId).ToList());
+            var live = gives.Where(g => !reversed.Contains(g.Id)).ToList();
+            var brandIds = live.Select(g => g.BrandId).Distinct().ToList();
+            var brandNames = _db.Brands.Where(b => brandIds.Contains(b.Id)).ToList().ToDictionary(b => b.Id, b => b.Name ?? "");
+            var clinicNames = _db.Clinics.Where(c => c.DoctorId == doctorId).ToDictionary(c => c.Id, c => c.Name ?? "");
+            var rows = live.Select(g => new
+            {
+                ScheduleId = g.SourceId,
+                BrandId = g.BrandId,
+                Brand = brandNames.ContainsKey(g.BrandId) ? brandNames[g.BrandId] : "",
+                Lot = g.BatchLot ?? "",
+                Date = g.EventDate.ToString("yyyy-MM-dd"),
+                ClinicId = g.ClinicId,
+                ClinicName = clinicNames.ContainsKey(g.ClinicId) ? clinicNames[g.ClinicId] : "",
+                Units = -g.QuantityDelta
+            }).ToList();
+            return Ok(new { IsSuccess = true, ResponseData = rows });
+        }
+
+        // PATCH /api/PaCashHandover/restore-orphan-stock?doctorId=&scheduleId=
+        [HttpPatch("restore-orphan-stock")]
+        public IActionResult RestoreOrphanStock([FromQuery] long doctorId, [FromQuery] long scheduleId)
+        {
+            if (_db.Schedules.Any(s => s.Id == scheduleId))
+                return Ok(new { IsSuccess = false, Message = "That dose still belongs to a patient. Ungive it from the patient instead." });
+            var give = _db.InventoryTransactions
+                .Where(t => t.DoctorId == doctorId && t.SourceType == InventoryTransactionType.Administer
+                         && t.SourceId == scheduleId && t.ConsumesStock)
+                .OrderByDescending(t => t.Id).FirstOrDefault();
+            if (give == null)
+                return Ok(new { IsSuccess = false, Message = "No stock movement found for that dose." });
+            var inv = new VaccineAPI.Services.InventoryTransactionService(_db);
+            if (!inv.HasLiveGive(scheduleId))
+                return Ok(new { IsSuccess = false, Message = "That stock was already restored." });
+            inv.UnadministerSync(doctorId, give.ClinicId, give.BrandId, scheduleId, DateTime.Today);
+            _db.PaActivityLogs.Add(new PaActivityLog
+            {
+                DoctorId = doctorId,
+                ClinicId = give.ClinicId,
+                ActionCode = "StockRestoredDeletedPatient",
+                Description = "Stock restored: dose of a deleted patient",
+                Notes = Newtonsoft.Json.JsonConvert.SerializeObject(new { scheduleId, give.BrandId, give.BatchLot, give.EventDate }),
+                ActionDate = DateTime.UtcNow
+            });
+            _db.SaveChanges();
+            return Ok(new { IsSuccess = true, Message = "Stock restored." });
+        }
+
         // PATCH /api/PaCashHandover/{id}/reject
         [HttpPatch("{id}/reject")]
         public IActionResult Reject(long id, [FromBody] PaCashHandoverDTO dto)
@@ -550,6 +673,10 @@ namespace VaccineAPI.Controllers
             var childNames = _db.Childs
                 .Where(c => invChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
+            // Patients that no longer exist: name them from the delete audit snapshot and flag the row
+            // so the doctor sees "Patient deleted" (and Cancel) instead of a blank, anonymous row.
+            var deletedSnapshots = VaccineAPI.Services.PatientDeleteService.Snapshots(
+                _db, invChildIds.Where(id => !childNames.ContainsKey(id)).ToList());
 
             // Pending (unresolved) PA/Manager amendments, keyed by their invoice — folded onto
             // that invoice's row below instead of listed as a separate row. Before this, a PA or
@@ -662,7 +789,11 @@ namespace VaccineAPI.Controllers
                     SortKey             = pending != null ? pending.CreatedAt : i.SubmittedAt,
                     Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
                     AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? assignmentByInvoiceId[i.Id].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
-                    PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
+                    PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId]
+                                          : (deletedSnapshots.ContainsKey(i.ChildId) ? deletedSnapshots[i.ChildId].Name : ""),
+                    PatientDeleted      = !childNames.ContainsKey(i.ChildId),
+                    PatientDeletedAt    = (!childNames.ContainsKey(i.ChildId) && deletedSnapshots.ContainsKey(i.ChildId))
+                                          ? deletedSnapshots[i.ChildId].At.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
                     // i.TotalAmount can be 0/stale on an invoice that only landed here via the
                     // orphan-rescue above (its own TotalAmount>0 check is what excluded it) — the
                     // pending amendment's OldAmount is the real pre-edit total to show in that case.
@@ -791,6 +922,9 @@ namespace VaccineAPI.Controllers
                 .Where(c => pendingChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
 
+            var pendingDeletedSnapshots = VaccineAPI.Services.PatientDeleteService.Snapshots(
+                _db, pendingChildIds.Where(id => !pendingChildNames.ContainsKey(id)).ToList());
+
             // Surfaces a PA-initiated visit where cash was already collected with no invoice
             // downloaded yet — closes the embezzlement-risk window where a PA could give a
             // vaccine, take payment, and simply never invoice it. Reuses PAAssignmentSchedule
@@ -818,7 +952,9 @@ namespace VaccineAPI.Controllers
                 SortKey             = a.AssignedAt,
                 Date                = a.AssignedAt.AddHours(5).ToString("yyyy-MM-dd"),
                 AssignedAt          = a.AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
-                PatientName         = pendingChildNames.ContainsKey(a.ChildId) ? pendingChildNames[a.ChildId] : "",
+                PatientName         = pendingChildNames.ContainsKey(a.ChildId) ? pendingChildNames[a.ChildId]
+                                      : (pendingDeletedSnapshots.ContainsKey(a.ChildId) ? pendingDeletedSnapshots[a.ChildId].Name : ""),
+                PatientDeleted      = !pendingChildNames.ContainsKey(a.ChildId),
                 Amount              = 0m,
                 PaymentMode         = "",
                 IsConfirmed         = false,

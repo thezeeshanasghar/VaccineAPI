@@ -223,11 +223,34 @@ public class HardeningTests
         using (var db = w.NewContext()) Assert.Equal(1, db.UnbatchedUses.Count(u => u.Status == UnbatchedUseStatus.Pending));
         using (var db = w.NewContext())
         {
-            var r = new ChildController(db, null!, null!, new ConfigurationBuilder().Build()).Delete((int)c);
+            var r = new ChildController(db, null!, null!, new ConfigurationBuilder().Build()).Delete((int)c, null, null, "reverse");
             Assert.True(r.IsSuccess, r.Message);
         }
         using var chk = w.NewContext();
         Assert.Equal(0, chk.UnbatchedUses.Count(u => u.Status == UnbatchedUseStatus.Pending));
         Assert.Equal(1, chk.UnbatchedUses.Count(u => u.Status == UnbatchedUseStatus.Voided));
+    }
+
+    [Fact]
+    public void ChildDelete_WithGivenDose_IsRefusedWithoutAChoice_AndAuditedWhenReversed()
+    {
+        using var w = new StockWorld();
+        var (c, s) = w.AddChild();
+        Assert.True(w.Give(s, c, (int)w.Dose1Id).IsSuccess);
+        using (var db = w.NewContext())
+        {
+            var r = new ChildController(db, null!, null!, new ConfigurationBuilder().Build()).Delete((int)c);
+            Assert.False(r.IsSuccess);
+            Assert.Equal("PATIENT_HAS_ENTRIES", r.RuleCode);
+            Assert.True(db.Childs.Any(x => x.Id == c));
+        }
+        using (var db = w.NewContext())
+        {
+            var r = new ChildController(db, null!, null!, new ConfigurationBuilder().Build()).Delete((int)c, null, null, "reverse");
+            Assert.True(r.IsSuccess, r.Message);
+        }
+        using var chk = w.NewContext();
+        Assert.False(chk.Childs.Any(x => x.Id == c));
+        Assert.Single(chk.PaActivityLogs.Where(l => l.ActionCode == "PatientDeleted" && l.PatientId == c).ToList());
     }
 }

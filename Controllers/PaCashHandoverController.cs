@@ -227,7 +227,7 @@ namespace VaccineAPI.Controllers
 
         // PATCH /api/PaCashHandover/{id}/confirm
         [HttpPatch("{id}/confirm")]
-        public IActionResult Confirm(long id, [FromQuery] long doctorId)
+        public IActionResult Confirm(long id, [FromQuery] long doctorId, [FromQuery] decimal? counted = null)
         {
             var handover = _db.PaCashHandovers.FirstOrDefault(h => h.Id == id);
             if (handover == null)
@@ -236,6 +236,10 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Not authorised to confirm this handover." });
             if (handover.Status != "Pending")
                 return Ok(new { IsSuccess = false, Message = "Handover is not pending." });
+            // Counted-amount rule: a handover is confirmed only when the cash the doctor counted
+            // equals the amount the PA declared. A mismatch is sent back, never partly confirmed.
+            if (counted.HasValue && counted.Value != handover.Amount)
+                return Ok(new { IsSuccess = false, Message = $"Counted Rs. {counted.Value:N0} does not match the handover of Rs. {handover.Amount:N0}. Send it back to the PA instead." });
 
             handover.Status = "Confirmed";
             handover.ConfirmedAt = DateTime.UtcNow;

@@ -724,7 +724,7 @@ namespace VaccineAPI.Controllers
 
                 doc.Add(mainTbl);
 
-                doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", subFont));
+                doc.Add(new Paragraph($"\nPrinted on: {Pkt.NowWall():yyyy-MM-dd hh:mm tt}", subFont));
 
                 doc.Close();
                 writer.Close();
@@ -952,7 +952,7 @@ namespace VaccineAPI.Controllers
                     tbl.AddCell(CellR(running.ToString(), boldCell, totalsBg, borderClr));
 
                     doc.Add(tbl);
-                    doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8 });
+                    doc.Add(new Paragraph($"\nPrinted on: {Pkt.NowWall():yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8 });
 
                     if (bid != brandIds.Last()) doc.NewPage();
                 }
@@ -1307,7 +1307,7 @@ namespace VaccineAPI.Controllers
                 tbl.AddCell(CellR(sClose.ToString(), boldCell, totalsBg, borderClr));
 
                 doc.Add(tbl);
-                doc.Add(new Paragraph($"\nPrinted on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8 });
+                doc.Add(new Paragraph($"\nPrinted on: {Pkt.NowWall():yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8 });
 
                 doc.Close();
                 writer.Close();
@@ -1438,7 +1438,7 @@ namespace VaccineAPI.Controllers
                 });
                 doc.Add(footerTbl);
 
-                doc.Add(new Paragraph($"Printed on: {DateTime.Now:yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
+                doc.Add(new Paragraph($"Printed on: {Pkt.NowWall():yyyy-MM-dd hh:mm tt}", footerFont) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
 
                 doc.Close();
                 writer.Close();

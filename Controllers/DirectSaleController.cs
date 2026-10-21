@@ -309,7 +309,7 @@ namespace VaccineAPI.Controllers
                         ClinicId = first.ClinicId,
                         PaymentMode = first.PaymentMode,
                         IsConfirmedByDoctor = first.IsConfirmedByDoctor,
-                        ConfirmedAt = first.ConfirmedAt.HasValue ? first.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null
+                        ConfirmedAt = first.ConfirmedAt.HasValue ? Pkt.Iso(first.ConfirmedAt.Value) : (string)null
                     };
                 });
 
@@ -503,8 +503,8 @@ namespace VaccineAPI.Controllers
                     BaseColor rowBg = alt ? new BaseColor(250, 250, 255) : new BaseColor(255, 255, 255);
                     alt = !alt;
 
-                    bool expired = s.ExpiryDate.HasValue && s.ExpiryDate.Value < DateTime.Today;
-                    bool soon = !expired && s.ExpiryDate.HasValue && (s.ExpiryDate.Value - DateTime.Today).TotalDays <= 90;
+                    bool expired = s.ExpiryDate.HasValue && s.ExpiryDate.Value < Pkt.Today();
+                    bool soon = !expired && s.ExpiryDate.HasValue && (s.ExpiryDate.Value - Pkt.Today()).TotalDays <= 90;
 
                     var vb = vaccineBrands.FirstOrDefault(x => x.BrandId == s.BrandId);
                     string vaccineName = vb != null && vb.Vaccine != null ? vb.Vaccine.Name : "";

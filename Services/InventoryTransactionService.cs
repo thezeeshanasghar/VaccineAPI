@@ -121,7 +121,7 @@ namespace VaccineAPI.Services
                     _db.MarkInventoryWrite(ba);
                     if (sum - before != kv.Value)
                         Log(doctorId, clinicId, brandId, null, null, null, 0, null,
-                            InventoryTransactionType.MigrationCorrection, 0, ClinicClock.TodayPkt(),
+                            InventoryTransactionType.MigrationCorrection, 0, Pkt.Today(),
                             consumesStock: false,
                             decisionReason: $"BA_REPROJECTED {before}->{sum} (movement {kv.Value})");
                 }
@@ -582,7 +582,7 @@ namespace VaccineAPI.Services
             {
                 // Legacy adjustment with no batch attached or no ledger row: nothing physical to undo.
                 Log(doctorId, clinicId, brandId, null, batchLot, null, 0, null, reverseType, adjustStockId,
-                    ClinicClock.TodayPkt(), consumesStock: false, decisionReason: "NO_ORIGINAL_MOVEMENT");
+                    Pkt.Today(), consumesStock: false, decisionReason: "NO_ORIGINAL_MOVEMENT");
                 await Task.CompletedTask;
                 return InventoryOperationResult.Ok();
             }
@@ -601,13 +601,13 @@ namespace VaccineAPI.Services
                 if (st == null)
                 {
                     Log(doctorId, clinicId, brandId, null, o.BatchLot, o.Expiry, 0, o.UnitCost, reverseType,
-                        adjustStockId, ClinicClock.TodayPkt(), consumesStock: false, decisionReason: "BATCH_MISSING",
+                        adjustStockId, Pkt.Today(), consumesStock: false, decisionReason: "BATCH_MISSING",
                         reversesTransactionId: o.Id);
                     continue;
                 }
                 ApplyDelta(st, -o.QuantityDelta, receipt: o.QuantityDelta > 0, doctorId, clinicId);
                 Log(doctorId, clinicId, brandId, st.Id, st.BatchLot, st.Expiry, -o.QuantityDelta, st.StockAmount,
-                    reverseType, adjustStockId, ClinicClock.TodayPkt(), reversesTransactionId: o.Id);
+                    reverseType, adjustStockId, Pkt.Today(), reversesTransactionId: o.Id);
             }
             ProjectTouched();
             await Task.CompletedTask;
@@ -703,11 +703,11 @@ namespace VaccineAPI.Services
 
             ApplyDelta(dest, -inRow.QuantityDelta, receipt: true, doctorId, toClinicId);
             Log(doctorId, toClinicId, brandId, dest.Id, dest.BatchLot, dest.Expiry, -inRow.QuantityDelta, dest.StockAmount,
-                InventoryTransactionType.TransferReverse, stockTransferId, ClinicClock.TodayPkt(), reversesTransactionId: inRow.Id);
+                InventoryTransactionType.TransferReverse, stockTransferId, Pkt.Today(), reversesTransactionId: inRow.Id);
 
             ApplyDelta(source, -outRow.QuantityDelta, receipt: false, doctorId, fromClinicId);   // outRow delta is negative => restores
             Log(doctorId, fromClinicId, brandId, source.Id, source.BatchLot, source.Expiry, -outRow.QuantityDelta, source.StockAmount,
-                InventoryTransactionType.TransferReverse, stockTransferId, ClinicClock.TodayPkt(), reversesTransactionId: outRow.Id);
+                InventoryTransactionType.TransferReverse, stockTransferId, Pkt.Today(), reversesTransactionId: outRow.Id);
 
             ProjectTouched();
             await Task.CompletedTask;
@@ -749,7 +749,7 @@ namespace VaccineAPI.Services
             {
                 ApplyDelta(st, -o.QuantityDelta, receipt: false, doctorId, clinicId);   // original delta is negative
                 Log(doctorId, clinicId, brandId, st.Id, st.BatchLot, st.Expiry, -o.QuantityDelta, st.StockAmount,
-                    InventoryTransactionType.DirectSaleReverse, directSaleId, ClinicClock.TodayPkt(), reversesTransactionId: o.Id);
+                    InventoryTransactionType.DirectSaleReverse, directSaleId, Pkt.Today(), reversesTransactionId: o.Id);
             }
             ProjectTouched();
             await Task.CompletedTask;
@@ -788,7 +788,7 @@ namespace VaccineAPI.Services
             if (stockPeriodStart.HasValue && giveDay < stockPeriodStart.Value.Date)
                 return new GiveDecision { ConsumesStock = false, Reason = InventoryDecisionReason.PrePeriod };
 
-            if (giveDay == ClinicClock.TodayPkt())
+            if (giveDay == Pkt.Today())
                 return new GiveDecision { ConsumesStock = true, Reason = InventoryDecisionReason.Normal };
 
             // Backdated, in-period, brand tagged — the one ambiguous case.
@@ -1015,7 +1015,7 @@ namespace VaccineAPI.Services
                     ba.Quantity = sum;
                     _db.MarkInventoryWrite(ba);
                     Log(ba.DoctorId, clinicId, ba.BrandId, null, null, null, 0, null,
-                        InventoryTransactionType.MigrationCorrection, 0, ClinicClock.TodayPkt(), consumesStock: false,
+                        InventoryTransactionType.MigrationCorrection, 0, Pkt.Today(), consumesStock: false,
                         decisionReason: $"BA_REPROJECTED {was}->{sum} (rebuild)");
                     result.Add((ba.BrandId, ba.DoctorId, clinicId, was, sum));
                 }

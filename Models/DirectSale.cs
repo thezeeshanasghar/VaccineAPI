@@ -55,7 +55,7 @@ namespace VaccineAPI.Models
 
         public string? SaleBillNo { get; set; }
 
-        public DateTime SaleDate { get; set; } = DateTime.UtcNow;
+        public DateTime SaleDate { get; set; } = Pkt.NowWall();
 
         // PA assigned to collect/record payment for this sale (mirrors Schedule.PaymentCollectorPaId).
         // When set, PaymentMode starts as "Pending" until the PA records the actual mode;

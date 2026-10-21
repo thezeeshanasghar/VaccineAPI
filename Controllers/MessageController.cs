@@ -28,7 +28,7 @@ namespace VaccineAPI.Controllers
         public Response<List<MessageDTO>> Get([FromQuery] string mobileNumber = "", [FromQuery] string fromDate = "", [FromQuery] string toDate = "")
         {
             List<Message> dbMessages = new List<Message>();
-            var prevDays = DateTime.Now.AddDays(-10);
+            var prevDays = DateTime.UtcNow.AddDays(-10);
             if (!string.IsNullOrEmpty(mobileNumber) || !string.IsNullOrEmpty(fromDate) || !string.IsNullOrEmpty(toDate))
             {
                 var dbUser = _db.Users.Where(x => x.MobileNumber == mobileNumber && x.UserType == "DOCTOR").FirstOrDefault();

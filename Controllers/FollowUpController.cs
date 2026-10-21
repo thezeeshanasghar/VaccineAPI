@@ -94,8 +94,8 @@ namespace VaccineAPI.Controllers
                 return new Response<IEnumerable<FollowUpDTO>>(false, "Not authorized for this clinic.", null);
             }
 
-            DateTime AddedDateTime = DateTime.UtcNow.AddHours(5).AddDays(GapDays);
-            DateTime pakistanTime = DateTime.UtcNow.AddHours(5);
+            DateTime AddedDateTime = Pkt.NowWall().AddDays(GapDays);
+            DateTime pakistanTime = Pkt.NowWall();
             IEnumerable<FollowUp> followups = new List<FollowUp>();
 
             if (GapDays == 0)
@@ -137,8 +137,8 @@ namespace VaccineAPI.Controllers
                 //  int[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<int>();
 
                 IEnumerable<FollowUp> followups = new List<FollowUp>();
-                DateTime AddedDateTime = DateTime.UtcNow.AddHours(5).AddDays(GapDays);
-                DateTime pakistanTime = DateTime.UtcNow.AddHours(5);
+                DateTime AddedDateTime = Pkt.NowWall().AddDays(GapDays);
+                DateTime pakistanTime = Pkt.NowWall();
                 if (GapDays == 0)
                     followups = _db.FollowUps.Include(x => x.Child).ThenInclude(x => x.User)
                         .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
@@ -203,7 +203,7 @@ namespace VaccineAPI.Controllers
                     return new Response<object>(false, "Child not found or email is missing.", null);
                 }
 
-                var specificDate = DateTime.Today;
+                var specificDate = Pkt.Today();
                 var nextSchedule = _db.FollowUps
                     .Where(s => s.ChildId == ChildId && s.NextVisitDate >= specificDate)
                     .OrderBy(s => s.NextVisitDate)
@@ -404,7 +404,7 @@ namespace VaccineAPI.Controllers
 
                 long[] ClinicIDs = clinics.Select(x => x.Id).ToArray();
 
-                DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+                DateTime CurrentPakDateTime = Pkt.NowWall();
                 DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
 
                 List<FollowUp> followUps = new List<FollowUp>();

@@ -314,7 +314,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 booking.DoctorComment = actionDTO.DoctorComment;
-                booking.UpdatedAt = DateTime.Now;
+                booking.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
 
                 var dto = MapBookingToDTO(booking);
@@ -347,7 +347,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 booking.Status = "Cancelled";
-                booking.UpdatedAt = DateTime.Now;
+                booking.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
 
                 var doctor = booking.Child != null && booking.Child.Clinic != null ? booking.Child.Clinic.Doctor : null;
@@ -421,7 +421,7 @@ namespace VaccineAPI.Controllers
 
                 booking.Status = status;
                 booking.DoctorComment = actionDTO.DoctorComment;
-                booking.UpdatedAt = DateTime.Now;
+                booking.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
 
                 _db.Notifications.Add(new Notification

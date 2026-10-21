@@ -358,7 +358,7 @@ namespace VaccineAPI.Controllers
             var inv = new VaccineAPI.Services.InventoryTransactionService(_db);
             if (!inv.HasLiveGive(scheduleId))
                 return Ok(new { IsSuccess = false, Message = "That stock was already restored." });
-            inv.UnadministerSync(doctorId, give.ClinicId, give.BrandId, scheduleId, DateTime.Today);
+            inv.UnadministerSync(doctorId, give.ClinicId, give.BrandId, scheduleId, Pkt.Today());
             _db.PaActivityLogs.Add(new PaActivityLog
             {
                 DoctorId = doctorId,
@@ -415,8 +415,8 @@ namespace VaccineAPI.Controllers
         public IActionResult GetDailySummary(long doctorId, [FromQuery] string date = null)
         {
             DateTime targetDate;
-            try { targetDate = date != null ? DateTime.Parse(date).Date : DateTime.UtcNow.AddHours(5).Date; }
-            catch { targetDate = DateTime.UtcNow.AddHours(5).Date; }
+            try { targetDate = date != null ? DateTime.Parse(date).Date : Pkt.NowWall().Date; }
+            catch { targetDate = Pkt.NowWall().Date; }
 
             var clinicIds = _db.Clinics
                 .Where(c => c.DoctorId == doctorId)
@@ -432,7 +432,7 @@ namespace VaccineAPI.Controllers
                     && s.DoneAt.HasValue
                     && clinicIds.Contains(s.Child.ClinicId))
                 .ToList()
-                .Where(s => s.DoneAt.Value.AddHours(5).Date == targetDate)
+                .Where(s => s.DoneAt.Value.AddHours(Pkt.OffsetHours).Date == targetDate)
                 .ToList();
 
             var paRows = rows.Where(s => s.PaymentCollectorPaId.HasValue).ToList();
@@ -788,24 +788,24 @@ namespace VaccineAPI.Controllers
                     AssignmentId        = assignmentByInvoiceId.ContainsKey(i.Id) ? (long?)assignmentByInvoiceId[i.Id].Id : (long?)null,
                     SortKey             = pending != null ? pending.CreatedAt : i.SubmittedAt,
                     Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
-                    AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? assignmentByInvoiceId[i.Id].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                    AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? Pkt.Iso(assignmentByInvoiceId[i.Id].AssignedAt) : (string)null,
                     PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId]
                                           : (deletedSnapshots.ContainsKey(i.ChildId) ? deletedSnapshots[i.ChildId].Name : ""),
                     PatientDeleted      = !childNames.ContainsKey(i.ChildId),
                     PatientDeletedAt    = (!childNames.ContainsKey(i.ChildId) && deletedSnapshots.ContainsKey(i.ChildId))
-                                          ? deletedSnapshots[i.ChildId].At.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                                          ? Pkt.Iso(deletedSnapshots[i.ChildId].At) : (string)null,
                     // i.TotalAmount can be 0/stale on an invoice that only landed here via the
                     // orphan-rescue above (its own TotalAmount>0 check is what excluded it) — the
                     // pending amendment's OldAmount is the real pre-edit total to show in that case.
                     Amount              = (i.TotalAmount <= 0 && pending != null) ? pending.OldAmount : i.TotalAmount,
                     PaymentMode         = i.PaymentMode ?? "",
                     IsConfirmed         = i.IsConfirmedByDoctor,
-                    ConfirmedAt         = i.ConfirmedAt.HasValue ? i.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                    ConfirmedAt         = i.ConfirmedAt.HasValue ? Pkt.Iso(i.ConfirmedAt.Value) : (string)null,
                     InvoiceStatus       = i.InvoiceStatus,
                     HasPendingAmendment = i.HasPendingAmendment,
                     PendingAmendmentType = pending != null ? (pending.AmendmentType == "Ungive" ? "UngiveReversal" : "EditReversal") : (string)null,
                     PendingHandover     = i.PendingHandover,
-                    HandoverDoneAt      = i.HandoverDoneAt.HasValue ? i.HandoverDoneAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                    HandoverDoneAt      = i.HandoverDoneAt.HasValue ? Pkt.Iso(i.HandoverDoneAt.Value) : (string)null,
                     PaId                = i.PaId.Value,
                     PaName              = livePaName,
                     ClinicId            = i.ClinicId ?? 0,
@@ -825,8 +825,8 @@ namespace VaccineAPI.Controllers
 
             if (clinicId.HasValue) assignQuery = assignQuery.Where(a => a.ClinicId == clinicId.Value);
             if (paId.HasValue)     assignQuery = assignQuery.Where(a => a.PersonalAssistantId == paId.Value);
-            if (from.HasValue)     assignQuery = assignQuery.Where(a => a.AssignedAt.AddHours(5).Date >= from.Value);
-            if (to.HasValue)       assignQuery = assignQuery.Where(a => a.AssignedAt.AddHours(5).Date < to.Value);
+            if (from.HasValue)     assignQuery = assignQuery.Where(a => a.AssignedAt.AddHours(Pkt.OffsetHours).Date >= from.Value);
+            if (to.HasValue)       assignQuery = assignQuery.Where(a => a.AssignedAt.AddHours(Pkt.OffsetHours).Date < to.Value);
 
             var assignments = assignQuery.OrderByDescending(a => a.AssignedAt).ToList();
 
@@ -950,8 +950,8 @@ namespace VaccineAPI.Controllers
                 AmendmentId         = (long?)null,
                 AssignmentId        = (long?)a.Id,
                 SortKey             = a.AssignedAt,
-                Date                = a.AssignedAt.AddHours(5).ToString("yyyy-MM-dd"),
-                AssignedAt          = a.AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+                Date                = a.AssignedAt.AddHours(Pkt.OffsetHours).ToString("yyyy-MM-dd"),
+                AssignedAt          = Pkt.Iso(a.AssignedAt),
                 PatientName         = pendingChildNames.ContainsKey(a.ChildId) ? pendingChildNames[a.ChildId]
                                       : (pendingDeletedSnapshots.ContainsKey(a.ChildId) ? pendingDeletedSnapshots[a.ChildId].Name : ""),
                 PatientDeleted      = !pendingChildNames.ContainsKey(a.ChildId),
@@ -1023,7 +1023,7 @@ namespace VaccineAPI.Controllers
                 SortKey             = a.CreatedAt,
                 Date                = a.CreatedAt.ToString("yyyy-MM-dd"),
                 AssignedAt          = assignmentByInvoiceId.ContainsKey(a.InvoiceSubmissionId)
-                                        ? assignmentByInvoiceId[a.InvoiceSubmissionId].AssignedAt.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                                        ? Pkt.Iso(assignmentByInvoiceId[a.InvoiceSubmissionId].AssignedAt) : (string)null,
                 PatientName         = (a.InvoiceSubmission != null && amendChildNames.ContainsKey(a.InvoiceSubmission.ChildId))
                                         ? amendChildNames[a.InvoiceSubmission.ChildId] : "",
                 Amount              = a.OldAmount,
@@ -1081,7 +1081,7 @@ namespace VaccineAPI.Controllers
                         Amount              = g.Sum(x => x.TotalSaleValue),
                         PaymentMode         = first.IsPaymentCollected ? (first.PaymentMode ?? "") : "",
                         IsConfirmed         = first.IsConfirmedByDoctor,
-                        ConfirmedAt         = first.ConfirmedAt.HasValue ? first.ConfirmedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss") : (string)null,
+                        ConfirmedAt         = first.ConfirmedAt.HasValue ? Pkt.Iso(first.ConfirmedAt.Value) : (string)null,
                         InvoiceStatus       = (string)null,
                         HasPendingAmendment = false,
                         PendingHandover     = first.IsMarkedDoneByPA,

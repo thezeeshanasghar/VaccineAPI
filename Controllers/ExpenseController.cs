@@ -90,7 +90,7 @@ namespace VaccineAPI.Controllers
                 DoctorId    = dto.DoctorId,
                 ClinicId    = dto.ClinicId,
                 IsShared    = dto.IsShared,
-                ExpenseDate = dto.ExpenseDate == default ? DateTime.Today : dto.ExpenseDate,
+                ExpenseDate = dto.ExpenseDate == default ? Pkt.Today() : dto.ExpenseDate,
                 Amount      = dto.Amount,
                 Description = dto.Description.Trim(),
                 Category    = (dto.ExpenseType == "Capital") ? "Capital" : (dto.Category ?? ""),

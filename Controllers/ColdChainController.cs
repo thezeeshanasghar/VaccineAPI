@@ -159,8 +159,8 @@ namespace VaccineAPI.Controllers
                 DoctorId        = dto.DoctorId,
                 ClinicId        = fridge.ClinicId,
                 Temperature     = dto.Temperature,
-                RecordedDate    = dto.RecordedDate == default ? DateTime.Today : dto.RecordedDate.Date,
-                RecordedTime    = string.IsNullOrWhiteSpace(dto.RecordedTime) ? DateTime.Now.ToString("HH:mm") : dto.RecordedTime,
+                RecordedDate    = dto.RecordedDate == default ? Pkt.Today() : dto.RecordedDate.Date,
+                RecordedTime    = string.IsNullOrWhiteSpace(dto.RecordedTime) ? Pkt.NowWall().ToString("HH:mm") : dto.RecordedTime,
                 RecordedByPaId  = dto.RecordedByPaId,
                 RecordedByName  = dto.RecordedByName ?? "",
                 Notes           = dto.Notes?.Trim(),
@@ -213,7 +213,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("requirement-status")]
         public async Task<IActionResult> GetRequirementStatus([FromQuery] long clinicId, [FromQuery] DateTime date)
         {
-            var day = date == default ? DateTime.Today : date.Date;
+            var day = date == default ? Pkt.Today() : date.Date;
 
             var fridges = await _db.Refrigerators
                 .Where(f => f.ClinicId == clinicId && f.IsActive)
@@ -519,7 +519,7 @@ namespace VaccineAPI.Controllers
                 var titleCell = new PdfPCell { Border = PdfPCell.NO_BORDER, PaddingBottom = 12f, HorizontalAlignment = Element.ALIGN_RIGHT };
                 var titlePara = new Paragraph("Temperature Log", PlexSans(15, bold: true)) { Alignment = Element.ALIGN_RIGHT, SpacingAfter = 2f };
                 titleCell.AddElement(titlePara);
-                titleCell.AddElement(new Paragraph($"Generated {DateTime.UtcNow.AddHours(5):dd MMM yyyy, HH:mm}", PlexSans(8)) { Alignment = Element.ALIGN_RIGHT });
+                titleCell.AddElement(new Paragraph($"Generated {Pkt.NowWall():dd MMM yyyy, HH:mm}", PlexSans(8)) { Alignment = Element.ALIGN_RIGHT });
                 headerTable.AddCell(titleCell);
                 document.Add(headerTable);
 
@@ -701,7 +701,7 @@ namespace VaccineAPI.Controllers
 
         private static (DateTime start, DateTime end) WeekBounds(DateTime weekStart)
         {
-            var start = (weekStart == default ? DateTime.Today : weekStart).Date;
+            var start = (weekStart == default ? Pkt.Today() : weekStart).Date;
             var end = start.AddDays(6);
             return (start, end);
         }

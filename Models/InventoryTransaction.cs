@@ -82,7 +82,7 @@ namespace VaccineAPI.Models
         // The business/logical date of the event (bill date, adjustment date, give date, etc.)
         // in local clinic time — always set from the source record's own date field, never from
         // UtcNow. Reports filter on EventDate so timezone offsets in CreatedAt don't skew numbers.
-        public DateTime EventDate { get; set; } = DateTime.UtcNow.Date;
+        public DateTime EventDate { get; set; } = Pkt.Today();
 
         public long? CreatedByPaId { get; set; }
 

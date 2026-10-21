@@ -112,7 +112,7 @@ namespace VaccineAPI.Services
                 var s = db.Schedules.First(x => x.Id == d.ScheduleId);
                 var clinicId = inv.LiveGiveClinicId(s.Id) ?? child.ClinicId;
                 inv.UnadministerSync(DoctorIdOf(db, child), clinicId, s.BrandId!.Value, s.Id,
-                    s.GivenDate ?? DateTime.Today);
+                    s.GivenDate ?? Pkt.Today());
             }
 
             var invoicedIds = db.InvoiceSubmissions

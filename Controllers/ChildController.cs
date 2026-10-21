@@ -453,7 +453,7 @@ namespace VaccineAPI.Controllers
 
         private DateTime getDueDate(List<Schedule> schedul)
         {
-            DateTime Now = DateTime.Now;
+            DateTime Now = Pkt.NowWall();
             foreach (var sch in schedul)
                 if (sch.Date.Equals(Now)) return sch.Date;
             return Now;
@@ -461,7 +461,7 @@ namespace VaccineAPI.Controllers
 
         private DateTime getNextDate(List<Schedule> schedul)
         {
-            DateTime Now = DateTime.Now;
+            DateTime Now = Pkt.NowWall();
             foreach (var sch in schedul)
                 if (sch.Date > Now) return sch.Date;
             return Now;
@@ -534,7 +534,7 @@ namespace VaccineAPI.Controllers
             }
             var stream = CreateSchedulePdf(id);
             var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
-                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+                           Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
 
@@ -549,7 +549,7 @@ namespace VaccineAPI.Controllers
             }
             var stream = CreateSchedulePdf(id);
             var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
-                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+                           Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             Response.Headers.Add("X-Frame-Options", "ALLOWALL");
             Response.Headers.Add("Content-Disposition", $"inline; filename={FileName}");
             return File(stream, "application/pdf");
@@ -1346,7 +1346,7 @@ namespace VaccineAPI.Controllers
                             }
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
-                                DateTime currentDate = DateTime.UtcNow.AddHours(5);
+                                DateTime currentDate = Pkt.NowWall();
                                 var ageInMonths = Convert.ToInt32((dbSchedule.GivenDate?.Date.Year - dbChild.DOB.Date.Year) * 12 +
                                                                     dbSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month +
                                                                     (dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0
@@ -1824,7 +1824,7 @@ namespace VaccineAPI.Controllers
             var stream = CreateCustomPdf(id, includeFuture);
             var suffix = includeFuture ? "" : "_Given";
             var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule" + suffix + "_" +
-                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+                           Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
 
@@ -1835,7 +1835,7 @@ namespace VaccineAPI.Controllers
             { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
             var stream = CreateCustomPdf(id);
             var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
-                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+                           Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             Response.Headers.Add("X-Frame-Options", "ALLOWALL");
             Response.Headers.Add("Content-Disposition", $"inline; filename={FileName}");
             return File(stream, "application/pdf");
@@ -1852,7 +1852,7 @@ namespace VaccineAPI.Controllers
             }
             var suffix = includeFuture ? "" : "_Given";
             var fileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule" + suffix + "_" +
-                           DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+                           Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
@@ -1884,7 +1884,7 @@ namespace VaccineAPI.Controllers
             if (dbChild.Gender == "Girl") Gender = 2;
             foreach (var sch in dbSchedules)
             {
-                if (sch.IsDone == true) sch.Date = sch.GivenDate ?? DateTime.Now;
+                if (sch.IsDone == true) sch.Date = sch.GivenDate ?? Pkt.NowWall();
             }
             dbSchedules = dbSchedules.OrderBy(x => x.Date).ToList();
             int count = 0;
@@ -2161,7 +2161,7 @@ namespace VaccineAPI.Controllers
                             table.AddCell(brandCell);
                             if (dbSchedule.IsDone == true && dbSchedule.IsDisease != true && dbSchedule.Due2EPI != true)
                             {
-                                DateTime currentDate = DateTime.UtcNow.AddHours(5);
+                                DateTime currentDate = Pkt.NowWall();
                                 var ageInMonths = Convert.ToInt32((dbSchedule.GivenDate?.Date.Year - dbChild.DOB.Date.Year) * 12 +
                                                                     dbSchedule.GivenDate?.Date.Month - dbChild.DOB.Date.Month +
                                                                     (dbSchedule.GivenDate?.Day >= dbChild.DOB.Date.Day ? 0
@@ -2265,7 +2265,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)
         {
-            DateTime todayDate = DateTime.Now;
+            DateTime todayDate = Pkt.NowWall();
             if (todayDate > DueDate)
                 return true;
             else
@@ -2873,7 +2873,7 @@ namespace VaccineAPI.Controllers
             upperTable.AddCell(CreateCell("Invoice # " + dbDoctor.InvoiceNumber, "", 1, "right", "description"));
             upperTable.AddCell(CreateCell(dbDoctor.Qualification, "", 1, "left", "description"));
 
-            // upperTable.AddCell(CreateCell("Date: " + DateTime.UtcNow.AddHours(5), "", 1, "right", "description"));
+            // upperTable.AddCell(CreateCell("Date: " + Pkt.NowWall(), "", 1, "right", "description"));
             upperTable.AddCell(CreateCell("Date: " + InvoiceDate.ToString("dd-MM-yyyy"), "", 1, "right", "description"));
             upperTable.AddCell(CreateCell(dbDoctor.AdditionalInfo, "", 1, "left", "description"));
             upperTable.AddCell(CreateCell("Bill To: " + dbChild.Name, "bold", 1, "right", "description"));
@@ -2943,7 +2943,7 @@ namespace VaccineAPI.Controllers
                 foreach (var schedule in dbSchedules)
                 {
                     // date is static due to date conversion issue
-                    //  && schedule.Date.Date == DateTime.Now.Date
+                    //  && schedule.Date.Date == Pkt.NowWall().Date
                     // when we add bulk injection we don't add brandId in schedule
                     if (schedule.IsDone && schedule.BrandId > 0)
                     {
@@ -3003,7 +3003,7 @@ namespace VaccineAPI.Controllers
 
             //}
             var FileName = childName.Replace(" ", "") + "_Invoice" + "_" +
-                           DateTime.UtcNow.AddHours(5).Date.ToString("yy") + ".pdf";
+                           Pkt.NowWall().Date.ToString("yy") + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
 
@@ -3122,7 +3122,7 @@ namespace VaccineAPI.Controllers
                 return NotFound(new { message = "Child not found." });
             }
 
-            var fileName = $"{dbChild.Name.Replace(" ", "")}_Invoice_{DateTime.UtcNow.AddHours(5).Date:MMMM-dd-yyyy}.pdf";
+            var fileName = $"{dbChild.Name.Replace(" ", "")}_Invoice_{Pkt.NowWall().Date:MMMM-dd-yyyy}.pdf";
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
@@ -3147,7 +3147,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 // Create sanitized filename
-                var fileName = $"{dbChild.Name?.Replace(" ", "")}_Invoice_{DateTime.UtcNow.AddHours(5).Date:MMMM-dd-yyyy}.pdf";
+                var fileName = $"{dbChild.Name?.Replace(" ", "")}_Invoice_{Pkt.NowWall().Date:MMMM-dd-yyyy}.pdf";
 
                 // Add required headers for inline PDF viewing
                 Response.Headers.Add("X-Frame-Options", "ALLOWALL");
@@ -3202,7 +3202,7 @@ namespace VaccineAPI.Controllers
                                               x.IsDone == true && x.IsDisease != true)
                                   .ToList();
             var latestSchedule = dbSchedules.OrderByDescending(s => s.GivenDate).FirstOrDefault();
-            DateTime givendate = latestSchedule?.GivenDate ?? DateTime.Now;
+            DateTime givendate = latestSchedule?.GivenDate ?? Pkt.NowWall();
 
             childName = dbChild.Name;
             var doseId = latestSchedule?.Dose?.Id ?? 0;
@@ -3466,7 +3466,7 @@ namespace VaccineAPI.Controllers
 
             // Ensure `currentDate` and `footerFont` are properly initialized
             var footerFont = new Font(Font.HELVETICA, 8, Font.NORMAL);
-            var currentDate = DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd");
+            var currentDate = Pkt.NowWall().ToString("yyyy-MM-dd");
 
             // Adding cells to the bottom table
             PdfPCell CreateCellWithMargin(string text, string style, int colspan, string alignment, string description, float topMargin = 0)
@@ -3915,7 +3915,7 @@ namespace VaccineAPI.Controllers
                 if (child.AddedByPaId == null || child.AddedByPaId != paId)
                     return new Response<string>(false, "You can only delete patients you added yourself.", null);
 
-                if (child.CreatedAt == null || child.CreatedAt.Value.Date != DateTime.UtcNow.Date)
+                if (child.CreatedAt == null || child.CreatedAt.Value.Date != Pkt.Today())
                     return new Response<string>(false, "You can only delete a patient on the same day they were added.", null);
             }
 
@@ -4108,7 +4108,7 @@ namespace VaccineAPI.Controllers
         private void InsertEpiClinicTopUps(ChildDTO childDTO)
         {
             var dob = childDTO.DOB.Date;
-            var today = DateTime.UtcNow.Date;
+            var today = Pkt.Today();
             var ageDays = (today - dob).Days;
 
             bool AlreadyExists(long doseId) =>
@@ -4368,7 +4368,7 @@ namespace VaccineAPI.Controllers
                  " Disclaimer: This schedule provides recommended dates for immunization based on the individual date of birth, past immunization, and disease history." +
                  "Your consultant may update the due dates or add/remove vaccines." + clinicName + ", its management, or staff hold no responsibility for any loss or" +
                  "damage due to any vaccines given or change/s in schedule. *OHF = vaccine given at other health facility (not by " + clinicName + ")." +
-                 "\nPrinted on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd") + ".";
+                 "\nPrinted on: " + Pkt.NowWall().ToString("yyyy-MM-dd") + ".";
            
              footer = footer.Replace(Environment.NewLine, string.Empty).Replace("  ", string.Empty);
 
@@ -4397,7 +4397,7 @@ namespace VaccineAPI.Controllers
                  // phrase.Add(new Chunk($"", footerFontBold));
                  // if (!string.IsNullOrEmpty(regNo))
                  //     phrase.Add(new Chunk($"({regNo})", footerFont));
-                 // phrase.Add(new Chunk($" Printed on: " + DateTime.UtcNow.AddHours(5).ToString("yyyy-MM-dd"), footerFont));
+                 // phrase.Add(new Chunk($" Printed on: " + Pkt.NowWall().ToString("yyyy-MM-dd"), footerFont));
                  // ColumnText.ShowTextAligned(cb, Element.ALIGN_LEFT, phrase, document.LeftMargin + 5, footerHeight, 0);
 
                         // 3-column table for address, phone, email
@@ -4470,7 +4470,7 @@ namespace VaccineAPI.Controllers
                 candidates.Add(long.Parse(compact));
                 // PID card MR is the 2-digit year followed by the child id.
                 if (compact.Length > 3 && int.TryParse(compact.Substring(0, 2), out var yy)
-                    && yy >= 20 && yy <= DateTime.Now.Year % 100)
+                    && yy >= 20 && yy <= Pkt.NowWall().Year % 100)
                 {
                     candidates.Add(long.Parse(compact.Substring(2)));
                 }
@@ -4622,7 +4622,7 @@ namespace VaccineAPI.Controllers
             }
 
 
-            var currentDate = DateTime.Now.ToString("dd-MMM-yyyy");
+            var currentDate = Pkt.NowWall().ToString("dd-MMM-yyyy");
             var fileName = $"{dbChild.Name}_PID_{currentDate}.pdf";
             return File(output.ToArray(), "application/pdf", fileName);
         }
@@ -4770,7 +4770,7 @@ namespace VaccineAPI.Controllers
                 Border = PdfPCell.NO_BORDER,
                 PaddingLeft = 23f
             });
-            int currentYear = DateTime.Now.Year;
+            int currentYear = Pkt.NowWall().Year;
             string mrNumber = currentYear.ToString()[2..];
             detailsTable.AddCell(new PdfPCell(new Paragraph($"MR # {mrNumber}{dbChild.Id}", detailsFonts))
             {
@@ -4835,7 +4835,7 @@ namespace VaccineAPI.Controllers
             var childDetails = _db.Childs.Where(x => x.Id == childId).FirstOrDefault();
             var suffix = includeFuture ? "" : "Given_";
             var fileName = childDetails.Name.Replace(" ", "_") + "_Travel_Immunization_" + suffix +
-                          DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+                          Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileName}\"");
             return File(output.ToArray(), "application/pdf");
         }
@@ -5135,7 +5135,7 @@ namespace VaccineAPI.Controllers
             string Nationality = childDetails.Nationality;
             // MR number is unchanged from the existing pipeline: {year}-{childId}, kept in
             // lockstep with the footer and the QR payload so all three always agree.
-            string mrNumber = $"{DateTime.Now.Year}-{childId}";
+            string mrNumber = $"{Pkt.NowWall().Year}-{childId}";
             string clinicName = childDetails.Clinic.Name;
             string clinicRegNo = childDetails.Clinic.RegNo;
             string doctorDetails = childDetails.Clinic.Doctor.DisplayName;
@@ -5438,7 +5438,7 @@ namespace VaccineAPI.Controllers
             string passport = dbChild.CNIC;
             string city = dbChild.City;
             string Nationality = dbChild.Nationality;
-            string mrNumber = $"{DateTime.Now.Year}-{childId}";
+            string mrNumber = $"{Pkt.NowWall().Year}-{childId}";
             string clinicName = dbChild.Clinic.Name;
             string clinicRegNo = dbChild.Clinic.RegNo;
             string doctorDetails = dbChild.Clinic.Doctor.DisplayName;
@@ -5830,7 +5830,7 @@ namespace VaccineAPI.Controllers
 {
     PdfContentByte cb = writer.DirectContent;
     EnsurePlexFonts();
-    int currentYear = DateTime.Now.Year;
+    int currentYear = Pkt.NowWall().Year;
     Font regularFont = PlexSans(8);
     Font footerFont = PlexSans(10);
     Font footerFont1 = PlexSans(10, bold: true);
@@ -6000,7 +6000,7 @@ namespace VaccineAPI.Controllers
                 return GetYearOrMonthFromDays(value.Value);
             }
 
-            var currentYear = DateTime.UtcNow.AddHours(5).Year;
+            var currentYear = Pkt.NowWall().Year;
             var mrNo = $"{currentYear}-{id}";
             var guardian = child?.FatherName ?? "-";
             var childName = child?.Name ?? "-";
@@ -6451,7 +6451,7 @@ namespace VaccineAPI.Controllers
 
             doc.Close();
             var pdfBytes = ms.ToArray();
-            var fileName = $"{child.Name.Replace(" ", "")}_ImmunizationCard_{DateTime.Now:yyyyMMdd}.pdf";
+            var fileName = $"{child.Name.Replace(" ", "")}_ImmunizationCard_{Pkt.NowWall():yyyyMMdd}.pdf";
             return File(pdfBytes, "application/pdf", fileName);
         }
 
@@ -6569,7 +6569,7 @@ namespace VaccineAPI.Controllers
 
             var pdfBytes = ms.ToArray();
             return File(pdfBytes, "application/pdf",
-                $"{dbChild.Name.Replace(" ", "")}_VaccineWise_{DateTime.Now:yyyyMMdd}.pdf");
+                $"{dbChild.Name.Replace(" ", "")}_VaccineWise_{Pkt.NowWall():yyyyMMdd}.pdf");
         }
 
         // ── IMMUNIZATION CARD: AGE WISE (Page 3) ──────────────────────────
@@ -6685,7 +6685,7 @@ namespace VaccineAPI.Controllers
 
             var pdfBytes = ms.ToArray();
             return File(pdfBytes, "application/pdf",
-                $"{dbChild.Name.Replace(" ", "")}_AgeWise_{DateTime.Now:yyyyMMdd}.pdf");
+                $"{dbChild.Name.Replace(" ", "")}_AgeWise_{Pkt.NowWall():yyyyMMdd}.pdf");
         }
 
         private void AddRecurringVaccinesFooter(Document doc, iTextSharpFont normFont, iTextSharpFont boldFont)
@@ -6746,7 +6746,7 @@ namespace VaccineAPI.Controllers
             if (child == null)
                 return NotFound(new { IsSuccess = false, Message = "No travel patient found with the given MR number or CNIC/Passport." });
 
-            var year = DateTime.UtcNow.AddHours(5).Year;
+            var year = Pkt.NowWall().Year;
             return Ok(new
             {
                 IsSuccess = true,
@@ -6812,7 +6812,7 @@ namespace VaccineAPI.Controllers
                 stamper.Close();
 
                 var fileName = child.Name.Replace(" ", "_") + "_Verification_Copy_" +
-                               DateTime.UtcNow.AddHours(5).ToString("MMMM-dd-yyyy") + ".pdf";
+                               Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
                 return File(outputMs.ToArray(), "application/pdf", fileName);
             }
         }
@@ -6841,7 +6841,7 @@ namespace VaccineAPI.Controllers
             if (child == null || child.AgentId != agentId)
                 return NotFound(new { IsSuccess = false, Message = "Patient not found." });
 
-            var today = DateTime.UtcNow.AddHours(5).Date;
+            var today = Pkt.NowWall().Date;
             var doses = child.Schedules
                 .OrderBy(s => s.Date)
                 .Select(s => new

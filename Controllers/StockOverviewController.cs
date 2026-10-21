@@ -151,7 +151,7 @@ namespace VaccineAPI.Controllers
                 string clinicName = clinic != null ? clinic.Name : "";
                 doc.Add(new Paragraph("Stock Overview", titleFont) { Alignment = Element.ALIGN_CENTER });
                 doc.Add(new Paragraph(doctorName + (clinicName != "" ? " — " + clinicName : ""), subFont) { Alignment = Element.ALIGN_CENTER });
-                doc.Add(new Paragraph("Generated: " + System.DateTime.Now.ToString("dd MMM yyyy, HH:mm"), smallFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
+                doc.Add(new Paragraph("Generated: " + Pkt.NowWall().ToString("dd MMM yyyy, HH:mm"), smallFont) { Alignment = Element.ALIGN_CENTER, SpacingAfter = 10 });
 
                 var brands = brandAmounts
                     .OrderBy(ba => ba.Brand != null ? ba.Brand.Name : "")
@@ -232,8 +232,8 @@ namespace VaccineAPI.Controllers
                     for (int i = 0; i < brand.Batches.Count; i++)
                     {
                         var s = brand.Batches[i];
-                        bool expired = s.Expiry.HasValue && s.Expiry.Value < System.DateTime.Today;
-                        bool soon    = !expired && s.Expiry.HasValue && s.Expiry.Value <= System.DateTime.Today.AddMonths(6);
+                        bool expired = s.Expiry.HasValue && s.Expiry.Value < Pkt.Today();
+                        bool soon    = !expired && s.Expiry.HasValue && s.Expiry.Value <= Pkt.Today().AddMonths(6);
 
                         BaseColor rowBg = expired ? expiredBg : soon ? soonBg : (alt ? oddBg : evenBg);
 

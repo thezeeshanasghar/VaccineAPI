@@ -55,7 +55,7 @@ namespace VaccineAPI.Controllers
                 }
 
                 notification.IsRead = true;
-                notification.ReadAt = DateTime.Now;
+                notification.ReadAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
 
                 return new Response<object>(true, "Marked as read.", null);
@@ -79,7 +79,7 @@ namespace VaccineAPI.Controllers
                 foreach (var n in unread)
                 {
                     n.IsRead = true;
-                    n.ReadAt = DateTime.Now;
+                    n.ReadAt = DateTime.UtcNow;
                 }
 
                 await _db.SaveChangesAsync();
@@ -144,7 +144,7 @@ namespace VaccineAPI.Controllers
                 foreach (var n in unread)
                 {
                     n.IsRead = true;
-                    n.ReadAt = DateTime.Now;
+                    n.ReadAt = DateTime.UtcNow;
                 }
 
                 await _db.SaveChangesAsync();

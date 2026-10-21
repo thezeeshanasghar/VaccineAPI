@@ -176,7 +176,7 @@ namespace VaccineAPI.Controllers
                 _db.SaveChanges();
                 // 2- save Doctor 
                 Doctor doctorDB = _mapper.Map<Doctor>(doctorDTO);
-                doctorDB.ValidUpto = DateTime.Now.AddDays(30);
+                doctorDB.ValidUpto = DateTime.UtcNow.AddDays(30);
                 doctorDB.ProfileImage = "";
                 // doctorDB.SignatureImage = "";
                 doctorDB.UserId = userDB.Id;

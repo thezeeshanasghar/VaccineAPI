@@ -108,7 +108,7 @@ namespace VaccineAPI
         {
             if (dueDoses.Count == 0) return;
 
-            DateTime today = DateTime.UtcNow.AddHours(5).Date;
+            DateTime today = Pkt.NowWall().Date;
             string logoTag = BuildLogoImgTag(child.Clinic?.MonogramImage, contentRootPath);
             bool isVaccinePkBranded = child.Clinic?.Doctor?.Id == 1;
             string poweredByLine = isVaccinePkBranded

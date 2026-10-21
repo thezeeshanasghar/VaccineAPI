@@ -185,7 +185,7 @@ namespace VaccineAPI.Controllers
                 SupplierId = dto.SupplierId ?? 0,
                 ClinicId = dto.ClinicId,
                 Amount = dto.Amount,
-                PaymentDate = dto.PaymentDate == default ? DateTime.Today : dto.PaymentDate,
+                PaymentDate = dto.PaymentDate == default ? Pkt.Today() : dto.PaymentDate,
                 PaymentMethod = dto.PaymentMethod ?? "Cash",
                 Notes = dto.Notes
             };

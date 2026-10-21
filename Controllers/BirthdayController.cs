@@ -86,7 +86,7 @@ namespace VaccineAPI.Controllers
                     return new Response<object>(false, "No email address found for the child.", null);
                 }
 
-                var today = DateTime.Today;
+                var today = Pkt.Today();
                 var age = today.Year - child.DOB.Year;
                 string milestoneNote = BuildMilestoneNote(child, age, today, _db);
 
@@ -129,7 +129,7 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var today = DateTime.Today;
+                var today = Pkt.Today();
                 var children = _db
                     .Childs.Include(c => c.User)
                     .Include(c => c.Clinic)
@@ -237,7 +237,7 @@ namespace VaccineAPI.Controllers
                         DOB = c.DOB.ToString("yyyy-MM-dd") ?? "N/A",
                         ClinicName = c.Clinic?.Name ?? "N/A",
                         DoctorName = c.Clinic?.Doctor?.DisplayName ?? "N/A",
-                        Age = DateTime.Today.Year - c.DOB.Year,
+                        Age = Pkt.Today().Year - c.DOB.Year,
                         Phone = c.User?.MobileNumber ?? "N/A",
                         Email = c.Email ?? "N/A",
                     });
@@ -322,7 +322,7 @@ namespace VaccineAPI.Controllers
         {
             return db
                 .Childs.Where(x =>
-                    x.DOB.Date == DateTime.Today && x.IsInactive.HasValue.Equals(false)
+                    x.DOB.Date == Pkt.Today() && x.IsInactive.HasValue.Equals(false)
                 )
                 .ToList<Child>();
         }

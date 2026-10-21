@@ -297,12 +297,12 @@ namespace VaccineAPI.Controllers
                                 });
                             }
 
-                            _inventory.UnadministerSync(doctorId, childClinicId, s.BrandId.Value, s.Id, s.GivenDate ?? DateTime.Today, paId);
+                            _inventory.UnadministerSync(doctorId, childClinicId, s.BrandId.Value, s.Id, s.GivenDate ?? Pkt.Today(), paId);
                         }
                         else if (!inventoryEnabled && s.IsDone == true && s.BrandId.HasValue && _inventory.HasLiveGive(s.Id))
                         {
                             // Inventory was switched off after this dose consumed stock: still reverse it.
-                            _inventory.UnadministerSync(doctorId, childClinicId, s.BrandId.Value, s.Id, s.GivenDate ?? DateTime.Today, paId);
+                            _inventory.UnadministerSync(doctorId, childClinicId, s.BrandId.Value, s.Id, s.GivenDate ?? Pkt.Today(), paId);
                         }
 
                         // This dose was given, which (for an infinite/repeating vaccine like Flu)
@@ -1493,7 +1493,7 @@ namespace VaccineAPI.Controllers
                             BlockingAssignmentId = holder.Id,
                             BlockingPaId = holder.PersonalAssistantId,
                             BlockingPaName = holderName,
-                            BlockingAssignedDate = holder.AssignedAt.AddHours(5).ToString("dd MMM yyyy"),
+                            BlockingAssignedDate = holder.AssignedAt.AddHours(Pkt.OffsetHours).ToString("dd MMM yyyy"),
                             BlockingClinicId = holder.ClinicId,
                             BlockingHasInvoice = holder.InvoiceSubmissionId.HasValue,
                             BlockingInvoiceSubmissionId = holder.InvoiceSubmissionId,
@@ -1629,7 +1629,7 @@ namespace VaccineAPI.Controllers
                         {
                             var groupDate = (await _db.Schedules.Where(x => requestedIds.Contains(x.Id))
                                                 .Select(x => (DateTime?)x.Date).OrderBy(x => x).FirstOrDefaultAsync())
-                                            ?? DateTime.UtcNow.AddHours(5);
+                                            ?? Pkt.NowWall();
                             bookingToConfirm = pendingBookings
                                 .OrderBy(b => Math.Abs(((b.PreferredDate ?? b.CreatedAt).Date - groupDate.Date).TotalDays))
                                 .First();
@@ -1638,7 +1638,7 @@ namespace VaccineAPI.Controllers
                     if (bookingToConfirm != null)
                     {
                         bookingToConfirm.Status = "Confirmed";
-                        bookingToConfirm.UpdatedAt = DateTime.Now;
+                        bookingToConfirm.UpdatedAt = DateTime.UtcNow;
                         if (!string.IsNullOrWhiteSpace(dto.BookingDoctorComment))
                             bookingToConfirm.DoctorComment = dto.BookingDoctorComment;
                         _db.Notifications.Add(new Notification

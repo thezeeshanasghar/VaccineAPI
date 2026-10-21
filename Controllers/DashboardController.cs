@@ -30,9 +30,9 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var currentMonth = DateTime.Now.Month;
-                var currentYear = DateTime.Now.Year;
-                var currentDate = DateTime.Now.Date;
+                var currentMonth = Pkt.NowWall().Month;
+                var currentYear = Pkt.NowWall().Year;
+                var currentDate = Pkt.NowWall().Date;
                 DateTime startOfMonth = new DateTime(currentYear, currentMonth, 1);
                 DateTime endOfMonth = startOfMonth.AddMonths(1).AddDays(-1);
 
@@ -115,7 +115,7 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var now = DateTime.Now;
+                var now = Pkt.NowWall();
                 var months = Enumerable.Range(0, 6)
                     .Select(i => new DateTime(now.Year, now.Month, 1).AddMonths(-5 + i))
                     .ToList();
@@ -224,7 +224,7 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var now   = DateTime.Now;
+                var now   = Pkt.NowWall();
                 var curFrom = from        ?? new DateTime(now.Year, now.Month, 1);
                 var curTo   = to          ?? now;
                 var preFrom = compareFrom ?? curFrom.AddYears(-1);

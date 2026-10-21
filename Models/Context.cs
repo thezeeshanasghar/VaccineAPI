@@ -191,6 +191,25 @@ namespace VaccineAPI.Models
                 }
             }
             modelBuilder.Entity<HomeServiceCity>().ToTable("home_service_cities");
+            // Instants are stored UTC and must leave the API with an explicit Z. Convention: DateTime properties
+            // named *At plus the four legacy instant names below. Date-only columns are never touched.
+            var instantNames = new System.Collections.Generic.HashSet<string> { "ActionDate", "ApprovalDate", "PaidDate", "ValidUpto" };
+            var toUtc = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
+                v => v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v,
+                v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+            var toUtcNullable = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime?, DateTime?>(
+                v => v.HasValue && v.Value.Kind == DateTimeKind.Local ? v.Value.ToUniversalTime() : v,
+                v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+            foreach (var et in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var prop in et.GetProperties())
+                {
+                    if (!(prop.Name.EndsWith("At") || instantNames.Contains(prop.Name))) continue;
+                    if (prop.ClrType == typeof(DateTime)) prop.SetValueConverter(toUtc);
+                    else if (prop.ClrType == typeof(DateTime?)) prop.SetValueConverter(toUtcNullable);
+                }
+            }
+
             // One movement can be reversed at most once (NULLs are allowed to repeat).
             modelBuilder.Entity<InventoryTransaction>().HasIndex(t => t.ReversesTransactionId).IsUnique();
             // A ClientRequestId can be accepted at most once per doctor and endpoint.

@@ -53,7 +53,7 @@ namespace VaccineAPI.Controllers
 
         //     // long[] ClinicIDs = doctor.Clinics.Select(x => x.Id).ToArray<long>();
         //     long[] ClinicIDs = clinics.Select(x => x.Id).ToArray<long>();
-        //     DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+        //     DateTime CurrentPakDateTime = Pkt.NowWall();
         //     DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
         //     DateTime NextDayTime = (CurrentPakDateTime.AddDays(1)).Date;
 
@@ -210,8 +210,8 @@ namespace VaccineAPI.Controllers
         //     {
         //         IEnumerable<Schedule> Schedules = new List<Schedule>();
         //         DateTime AddedDateTime =
-        //             DateTime.UtcNow.AddHours(5).AddDays(GapDays);
-        //         DateTime pakistanDate = DateTime.UtcNow.AddHours(5).Date;
+        //             Pkt.NowWall().AddDays(GapDays);
+        //         DateTime pakistanDate = Pkt.NowWall().Date;
         //         if (GapDays == 0)
         //         {
         //             Schedules =
@@ -307,7 +307,7 @@ namespace VaccineAPI.Controllers
         //     var clinics = _db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
 
         //     long[] ClinicIDs = clinics.Select(x => x.Id).ToArray<long>();
-        //     DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+        //     DateTime CurrentPakDateTime = Pkt.NowWall();
         //     DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
         //     DateTime NextDayTime = (CurrentPakDateTime.AddDays(1)).Date;
 

@@ -228,7 +228,7 @@ namespace VaccineAPI.Controllers
 
                 if (child != null)
                 {
-                    var childAgeInDays = (DateTime.UtcNow.AddHours(5).Date - child.DOB.Date).TotalDays;
+                    var childAgeInDays = (Pkt.NowWall().Date - child.DOB.Date).TotalDays;
                     var childAgeInYears = childAgeInDays / 365.25;
 
                     if (childAgeInYears >= 5)
@@ -590,7 +590,7 @@ namespace VaccineAPI.Controllers
                     // PA/Manager: own actions today only
                     if (isNonDoctorActor)
                     {
-                        var today = DateTime.UtcNow.AddHours(5).Date;
+                        var today = Pkt.NowWall().Date;
 
                         if (dbSchedule.IsDone == true)
                         {
@@ -599,7 +599,7 @@ namespace VaccineAPI.Controllers
                                 : dbSchedule.GivenByManagerId == scheduleDTO.ManagerId;
                             if (!ownsGive)
                                 return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
-                            if (!dbSchedule.DoneAt.HasValue || dbSchedule.DoneAt.Value.AddHours(5).Date != today)
+                            if (!dbSchedule.DoneAt.HasValue || dbSchedule.DoneAt.Value.AddHours(Pkt.OffsetHours).Date != today)
                                 return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
                         }
 
@@ -607,7 +607,7 @@ namespace VaccineAPI.Controllers
                         {
                             if (dbSchedule.SkippedByPaId != scheduleDTO.PaId)
                                 return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
-                            if (!dbSchedule.SkippedAt.HasValue || dbSchedule.SkippedAt.Value.AddHours(5).Date != today)
+                            if (!dbSchedule.SkippedAt.HasValue || dbSchedule.SkippedAt.Value.AddHours(Pkt.OffsetHours).Date != today)
                                 return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
                         }
                     }
@@ -902,7 +902,7 @@ namespace VaccineAPI.Controllers
                 {
                     // v2 date policy (§8): a dose can never be marked given with a FUTURE date,
                     // on any path. Reject before any inventory/IsDone work.
-                    if (scheduleDTO.GivenDate!.Value.Date > ClinicClock.TodayPkt())
+                    if (scheduleDTO.GivenDate!.Value.Date > Pkt.Today())
                     {
                         return new Response<ScheduleDTO>(false,
                             "The given date cannot be in the future.", null);
@@ -1190,8 +1190,8 @@ namespace VaccineAPI.Controllers
                 // doctor acts. Doctor APPROVE → payable drops to 0. Doctor REJECT → still owed.
                 if (scheduleDTO.IsDone == false && dbSchedule.IsDone == true && (scheduleDTO.PaId.HasValue || scheduleDTO.ManagerId.HasValue))
                 {
-                    var invoiceDateMin2 = DateTime.UtcNow.Date.AddDays(-1);
-                    var invoiceDateMax2 = DateTime.UtcNow.Date.AddDays(1);
+                    var invoiceDateMin2 = Pkt.Today().AddDays(-1);
+                    var invoiceDateMax2 = Pkt.Today().AddDays(1);
                     var invSub = _db.InvoiceSubmissions.FirstOrDefault(x =>
                         x.ChildId == dbSchedule.ChildId &&
                         x.DoctorId == scheduleDTO.DoctorId &&
@@ -1308,9 +1308,9 @@ namespace VaccineAPI.Controllers
             // Same-day-only restriction (PKT = UTC+5): vitals can only be edited via after-fill
             // on the same calendar day the dose was given. DoneAt is the authoritative UTC
             // timestamp set when IsDone was marked; fall back to GivenDate if DoneAt is missing.
-            var today = DateTime.UtcNow.AddHours(5).Date;
+            var today = Pkt.NowWall().Date;
             DateTime? visitDate = dbSchedule.DoneAt.HasValue
-                ? dbSchedule.DoneAt.Value.AddHours(5).Date
+                ? dbSchedule.DoneAt.Value.AddHours(Pkt.OffsetHours).Date
                 : dbSchedule.GivenDate?.Date;
 
             if (!dbSchedule.IsDone || !visitDate.HasValue || visitDate.Value != today)
@@ -1372,7 +1372,7 @@ namespace VaccineAPI.Controllers
                 .Where(s => s.BrandId == brandId.Value
                     && (s.ClinicId == clinicId || (s.ClinicId == null && s.Bill != null && s.Bill.ClinicId == clinicId)));
 
-            var today = DateTime.UtcNow.Date;
+            var today = Pkt.Today();
 
             var stockSelection = stock
                 .Where(s => s.Expiry.HasValue && s.Expiry.Value.Date >= today)
@@ -1979,7 +1979,7 @@ namespace VaccineAPI.Controllers
             // Customize / Travel patients (adults, blank schedules) have no age-based timeline:
             // DOB + MinAge lands decades in the past as a phantom "overdue" row, so start from today (PKT).
             var isAgeBased = string.IsNullOrEmpty(dbChild.Type) || string.Equals(dbChild.Type, "regular", StringComparison.OrdinalIgnoreCase);
-            var date = isAgeBased ? calculateDate(dbChild.DOB, dbDose.MinAge) : DateTime.UtcNow.AddHours(5).Date;
+            var date = isAgeBased ? calculateDate(dbChild.DOB, dbDose.MinAge) : Pkt.NowWall().Date;
             if (!dbDose.MinGap.HasValue || !dbDose.DoseOrder.HasValue) return date;
 
             var prevDose = _db.Doses
@@ -2073,7 +2073,7 @@ namespace VaccineAPI.Controllers
                     // Repeating doses (Flu/Typhoid/Vitamin A) have no age position: anchoring on DOB leaves
                     // a decades-old "overdue" phantom row, so they start from today (PKT) instead.
                     scheduleDTO.Date = IsInfiniteDose(dbDose)
-                        ? DateTime.UtcNow.AddHours(5).Date
+                        ? Pkt.NowWall().Date
                         : CalculateAddedDoseDate(dbChild, dbDose);
                     if (string.IsNullOrEmpty(scheduleDTO.Expiry?.ToString()))
                     {
@@ -2463,7 +2463,7 @@ namespace VaccineAPI.Controllers
                 if (bulkPermError != null)
                     return bulkPermError;
 
-                var today = DateTime.UtcNow.AddHours(5).Date;
+                var today = Pkt.NowWall().Date;
                 foreach (var checkSchedule in dbChildSchedules)
                 {
                     if (scheduleDTO.IsDone == false && checkSchedule.IsDone == true)
@@ -2475,7 +2475,7 @@ namespace VaccineAPI.Controllers
                             : checkSchedule.GivenByManagerId == scheduleDTO.ManagerId;
                         if (!ownsGive)
                             return new Response<ScheduleDTO>(false, "You can only undo your own actions.", null);
-                        if (!checkSchedule.DoneAt.HasValue || checkSchedule.DoneAt.Value.AddHours(5).Date != today)
+                        if (!checkSchedule.DoneAt.HasValue || checkSchedule.DoneAt.Value.AddHours(Pkt.OffsetHours).Date != today)
                             return new Response<ScheduleDTO>(false, "You can only undo actions performed today.", null);
                     }
                     if (scheduleDTO.IsDone == true && checkSchedule.IsDone == false && checkSchedule.GiveCount >= 2)
@@ -2727,7 +2727,7 @@ namespace VaccineAPI.Controllers
             // bulk request before any dose is marked done. Only applies when actually giving, and
             // only when there's a real date to check — skipped for an all-disease batch, which
             // never sends one.
-            if (scheduleDTO.IsDone && !allSelectedAreDisease && scheduleDTO.GivenDate!.Value.Date > ClinicClock.TodayPkt())
+            if (scheduleDTO.IsDone && !allSelectedAreDisease && scheduleDTO.GivenDate!.Value.Date > Pkt.Today())
             {
                 return new Response<ScheduleDTO>(false, "The given date cannot be in the future.", null);
             }
@@ -3227,8 +3227,8 @@ namespace VaccineAPI.Controllers
                     if (existing.EditCount >= 1)
                         return new Response<object>(false, "Invoice has already been edited once. Further changes are not allowed.", null);
 
-                    var pktToday = DateTime.UtcNow.AddHours(5).Date;
-                    if (existing.SubmittedAt.AddHours(5).Date != pktToday)
+                    var pktToday = Pkt.NowWall().Date;
+                    if (existing.SubmittedAt.AddHours(Pkt.OffsetHours).Date != pktToday)
                         return new Response<object>(false, "Invoice can only be edited on the same day it was first submitted.", null);
 
                     if (existing.PaId != dto.PaId)
@@ -3277,8 +3277,8 @@ namespace VaccineAPI.Controllers
                     if (existing.EditCount >= 1)
                         return new Response<object>(false, "Invoice has already been edited once. Further changes are not allowed.", null);
 
-                    var pktTodayMgr = DateTime.UtcNow.AddHours(5).Date;
-                    if (existing.SubmittedAt.AddHours(5).Date != pktTodayMgr)
+                    var pktTodayMgr = Pkt.NowWall().Date;
+                    if (existing.SubmittedAt.AddHours(Pkt.OffsetHours).Date != pktTodayMgr)
                         return new Response<object>(false, "Invoice can only be edited on the same day it was first submitted.", null);
 
                     var oldAmountMgr = existing.TotalAmount;
@@ -3557,8 +3557,8 @@ namespace VaccineAPI.Controllers
             if (submission == null)
                 return Ok(new { isSubmitted = false, editCount = 0, canEdit = true, submittedByPaId = (long?)null, isPrePaymentSystem = false });
 
-            var pktNow = DateTime.UtcNow.AddHours(5);
-            bool canEdit = submission.EditCount < 1 && submission.SubmittedAt.AddHours(5).Date == pktNow.Date;
+            var pktNow = Pkt.NowWall();
+            bool canEdit = submission.EditCount < 1 && submission.SubmittedAt.AddHours(Pkt.OffsetHours).Date == pktNow.Date;
             bool isPrePaymentSystem = submission.SubmittedAt < PaPaymentSystemLaunch;
             return Ok(new { isSubmitted = true, editCount = submission.EditCount, canEdit, submittedByPaId = submission.PaId, isPrePaymentSystem });
         }
@@ -3836,7 +3836,7 @@ namespace VaccineAPI.Controllers
                     AllDoses = AllDoses
                         .Where(x => x.DoseOrder >= dbSchedule.Dose.DoseOrder)
                         .ToList();
-                    DateTime previousDate = DateTime.UtcNow.AddHours(5);
+                    DateTime previousDate = Pkt.NowWall();
 
                     //foreach (var d in AllDoses)
                     for (int i = 0; i < AllDoses.Count; i++)
@@ -4195,7 +4195,7 @@ namespace VaccineAPI.Controllers
                .Doctor;
             var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
             long[] ClinicIDs = clinics.Select(x => x.Id).ToArray<long>();
-            // DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+            // DateTime CurrentPakDateTime = Pkt.NowWall();
             DateTime AddedDateTime = inputDate.AddDays(GapDays);
             // DateTime NextDayTime = inputDate.AddDays(1).Date;
 
@@ -4314,7 +4314,7 @@ namespace VaccineAPI.Controllers
                     continue;
 
                 var dbSchedules = _db.Schedules
-                    .Where(x => x.ChildId == child.Id && x.Date == DateTime.Today)
+                    .Where(x => x.ChildId == child.Id && x.Date == Pkt.Today())
                     .Include(x => x.Dose)
                     .ToList();
 
@@ -4368,7 +4368,7 @@ namespace VaccineAPI.Controllers
                 return new Response<object>(false, "Not authorized for this clinic.", null);
             }
 
-            var specificDate = DateTime.Today;
+            var specificDate = Pkt.Today();
             var todaySchedules = _db.Schedules
                 .Where(s => s.ChildId == ChildId && s.Date == specificDate)
                 .Include(s => s.Dose)
@@ -4408,7 +4408,7 @@ namespace VaccineAPI.Controllers
                 .Doctor;
             var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
             long[] ClinicIDs = clinics.Select(x => x.Id).ToArray();
-            DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+            DateTime CurrentPakDateTime = Pkt.NowWall();
             DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
             DateTime NextDayTime = CurrentPakDateTime.AddDays(1).Date;
             List<Schedule> schedules = new List<Schedule>();
@@ -4535,8 +4535,8 @@ namespace VaccineAPI.Controllers
                 }
 
                 IEnumerable<Schedule> Schedules = new List<Schedule>();
-                DateTime AddedDateTime = DateTime.UtcNow.AddHours(5).AddDays(GapDays);
-                DateTime pakistanDate = DateTime.UtcNow.AddHours(5).Date;
+                DateTime AddedDateTime = Pkt.NowWall().AddDays(GapDays);
+                DateTime pakistanDate = Pkt.NowWall().Date;
                 if (GapDays == 0)
                 {
                     Schedules = _db.Schedules
@@ -4614,7 +4614,7 @@ namespace VaccineAPI.Controllers
 
             List<Schedule> schedules = new List<Schedule>();
             long[] ClinicIDs = new long[] { OnlineClinicId };
-            DateTime CurrentPakDateTime = DateTime.UtcNow.AddHours(5);
+            DateTime CurrentPakDateTime = Pkt.NowWall();
             DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
             DateTime NextDayTime = (CurrentPakDateTime.AddDays(1)).Date;
 
@@ -4746,7 +4746,7 @@ namespace VaccineAPI.Controllers
         [HttpGet("doses-for-child/{childId}/{onlineClinicId}")]
         public Response<List<DoseDTO>> GetAllDosesDueForChild(int childId, long onlineClinicId, DateTime? date = null, long? paId = null, long? doctorId = null)
         {
-            DateTime selectedDate = date?.Date ?? DateTime.Today;
+            DateTime selectedDate = date?.Date ?? Pkt.Today();
 
             // Fetch the child with their associated clinic and doctor
             var child = _db.Childs
@@ -4846,7 +4846,7 @@ namespace VaccineAPI.Controllers
         {
             try
             {
-                var today = DateTime.Today;
+                var today = Pkt.Today();
                 var schedules = _db.Schedules
                     .Include(s => s.Child)
                     .Include(s => s.Dose)
@@ -5053,8 +5053,7 @@ namespace VaccineAPI.Controllers
         {
             public override void OnEndPage(PdfWriter writer, Document document)
             {
-                TimeZoneInfo pakistanTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pakistan Standard Time");
-                DateTime pakistanTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pakistanTimeZone);
+                DateTime pakistanTime = Pkt.NowWall();
                 string dateTimeStamp = pakistanTime.ToString("yyyy-MM-dd hh:mm tt");
                 Font footerFont = FontFactory.GetFont(FontFactory.HELVETICA, 8);
                 PdfPTable footerTable = new PdfPTable(1);
@@ -5639,7 +5638,7 @@ namespace VaccineAPI.Controllers
             // Audit row (no stock movement). Best-effort clinic resolution; a give always has a child.
             var childClinicId = schedule.Child != null ? schedule.Child.ClinicId : 0;
             var clinicId = ResolveClinicIdForStock(dto.DoctorId, childClinicId, dto.PaId);
-            var eventDate = schedule.GivenDate ?? ClinicClock.TodayPkt();
+            var eventDate = schedule.GivenDate ?? Pkt.Today();
             _inventory.LogBatchCorrection(dto.DoctorId, clinicId, schedule.BrandId.Value,
                 schedule.StockId, newLot, newExpiry, schedule.Id, eventDate, dto.CorrectByPaId);
 

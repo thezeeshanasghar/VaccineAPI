@@ -9,7 +9,7 @@ namespace VaccineAPI.helper
         {
             var safeClinicName = string.Join("_", (clinicName ?? "Unknown_Clinic").Split(Path.GetInvalidFileNameChars()))
                 .Replace(' ', '_');
-            return $"{reportType}_{safeClinicName}_{DateTime.Today:dd-MM-yyyy}.pdf";
+            return $"{reportType}_{safeClinicName}_{Pkt.Today():dd-MM-yyyy}.pdf";
         }
     }
 }

@@ -71,7 +71,7 @@ namespace VaccineAPI.Controllers
             agent.Email = agent.Email ?? "";
             _context.Agents.Add(agent);
             await _context.SaveChangesAsync();
-            agent.AgentCode = $"{DateTime.UtcNow.AddHours(5).Year}-{agent.Id}";
+            agent.AgentCode = $"{Pkt.NowWall().Year}-{agent.Id}";
             await _context.SaveChangesAsync();
             return CreatedAtAction("GetAgent", new { id = agent.Id }, agent);
         }

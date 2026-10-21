@@ -67,7 +67,7 @@ namespace VaccineAPI
                 sms1 += "your daughter " + textInfo.ToTitleCase(child.Name);
 
             sms1 += " is due ";
-            if (scheduleDate.Date == DateTime.UtcNow.AddHours(5).Date)
+            if (scheduleDate.Date == Pkt.NowWall().Date)
                 sms1 += "Today ";
             else
                 sms1 += scheduleDate.Date.ToString("dd-MM-yyyy");
@@ -110,7 +110,7 @@ namespace VaccineAPI
                 sms1 += "daughter " + textInfo.ToTitleCase(followUp.Child.Name);
 
             sms1 += " is due ";
-            if (followUp.NextVisitDate == DateTime.UtcNow.AddHours(5).Date)
+            if (followUp.NextVisitDate == Pkt.NowWall().Date)
                 sms1 += "Today";
             else
                 sms1 += followUp.NextVisitDate;

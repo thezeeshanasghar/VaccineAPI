@@ -120,7 +120,7 @@ namespace VaccineAPI.Controllers
                     AmountPaid = totalPayable,
                     PaymentMethod = "Transfer",
                     IsPaid = totalPayable >= 0,
-                    PaidDate = DateTime.Now,
+                    PaidDate = DateTime.UtcNow,
                     IsPAApprove = false
                 };
                 _db.Bills.Add(bill);
@@ -372,8 +372,8 @@ namespace VaccineAPI.Controllers
                     BaseColor rowBg = alt ? new BaseColor(250, 250, 255) : new BaseColor(255, 255, 255);
                     alt = !alt;
 
-                    bool expired = t.ExpiryDate.HasValue && t.ExpiryDate.Value < DateTime.Today;
-                    bool soon = !expired && t.ExpiryDate.HasValue && (t.ExpiryDate.Value - DateTime.Today).TotalDays <= 90;
+                    bool expired = t.ExpiryDate.HasValue && t.ExpiryDate.Value < Pkt.Today();
+                    bool soon = !expired && t.ExpiryDate.HasValue && (t.ExpiryDate.Value - Pkt.Today()).TotalDays <= 90;
 
                     string brandName = t.Brand != null ? t.Brand.Name : "";
                     string batchStr = string.IsNullOrEmpty(t.BatchLot) ? "—" : t.BatchLot;

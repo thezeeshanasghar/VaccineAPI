@@ -209,7 +209,7 @@ namespace VaccineAPI.Controllers
                     AmountPaid = amountPaid,
                     PaymentMethod = amountPaid > 0 ? dto.PaymentMethod : null,
                     IsPaid = isPaid,
-                    PaidDate = isPaid ? (DateTime?)DateTime.Now : null,
+                    PaidDate = isPaid ? (DateTime?)DateTime.UtcNow : null,
                     IsPAApprove = false
                 };
                 _db.Bills.Add(bill);
@@ -308,7 +308,7 @@ namespace VaccineAPI.Controllers
                     paid = totalPayable;
                 bill.AmountPaid = paid;
                 bill.IsPaid = paid >= totalPayable && totalPayable > 0;
-                bill.PaidDate = bill.IsPaid && bill.PaidDate == null ? (DateTime?)DateTime.Now : bill.PaidDate;
+                bill.PaidDate = bill.IsPaid && bill.PaidDate == null ? (DateTime?)DateTime.UtcNow : bill.PaidDate;
 
                 // Edit the existing batches in place (price-only edit = cost only, quantity change =
                 // one signed movement on the same batch, never a close-and-re-add). Fails before any
@@ -384,7 +384,7 @@ namespace VaccineAPI.Controllers
                 bill.PaymentMethod = dto.PaymentMethod;
                 bill.IsPaid = newPaid >= totalPayable && totalPayable > 0;
                 if (bill.IsPaid && bill.PaidDate == null)
-                    bill.PaidDate = DateTime.Now;
+                    bill.PaidDate = DateTime.UtcNow;
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -496,7 +496,7 @@ namespace VaccineAPI.Controllers
                     AmountPaid = consumedAmount,
                     PaymentMethod = bill.PaymentMethod,
                     IsPaid = true,
-                    PaidDate = DateTime.Now,
+                    PaidDate = DateTime.UtcNow,
                     IsPAApprove = false
                 };
                 _db.Bills.Add(newBill);

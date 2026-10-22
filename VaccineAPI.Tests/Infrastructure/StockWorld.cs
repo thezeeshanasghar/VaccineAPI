@@ -19,7 +19,7 @@ public sealed class StockWorld : IDisposable
     public readonly TestDb Db = new TestDb();
     public long DoctorId, ClinicA, ClinicB, BrandId;
     public long ChildId, Dose1Id, Dose2Id, Schedule1Id, Schedule2Id;
-    public static readonly DateTime Today = VaccineAPI.ClinicClock.TodayPkt();
+    public static readonly DateTime Today = VaccineAPI.Pkt.Today();
     public static readonly DateTime Expiry = new DateTime(2035, 1, 1);
 
     public StockWorld()

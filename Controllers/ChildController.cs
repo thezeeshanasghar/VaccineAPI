@@ -3915,7 +3915,7 @@ namespace VaccineAPI.Controllers
                 if (child.AddedByPaId == null || child.AddedByPaId != paId)
                     return new Response<string>(false, "You can only delete patients you added yourself.", null);
 
-                if (child.CreatedAt == null || child.CreatedAt.Value.Date != Pkt.Today())
+                if (child.CreatedAt == null || Pkt.ToPkt(child.CreatedAt.Value).Date != Pkt.Today())
                     return new Response<string>(false, "You can only delete a patient on the same day they were added.", null);
             }
 

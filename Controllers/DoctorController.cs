@@ -137,6 +137,9 @@ namespace VaccineAPI.Controllers
             {
                 return new Response<DoctorDTO>(false, "Name, email, mobile number and password are required.", null);
             }
+            var phoneErr = PhoneRules.Check(doctorDTO.CountryCode, doctorDTO.MobileNumber, out var phoneNorm);
+            if (phoneErr != null) return new Response<DoctorDTO>(false, phoneErr, null);
+            doctorDTO.MobileNumber = phoneNorm;
 
             // Check if the phone number exists in either Users or Doctors table
             var existingUserWithPhone = _db.Users.FirstOrDefault(x => x.MobileNumber == doctorDTO.MobileNumber);

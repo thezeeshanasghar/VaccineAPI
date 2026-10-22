@@ -62,6 +62,11 @@ namespace VaccineAPI.Controllers
             if (string.IsNullOrWhiteSpace(agent.Name) || string.IsNullOrWhiteSpace(agent.PhoneNumber))
                 return BadRequest(new { IsSuccess = false, Message = "Agent name and phone number are required." });
 
+            var phoneErr = PhoneRules.Check("92", agent.PhoneNumber, out var phoneNorm);
+            if (phoneErr != null)
+                return BadRequest(new { IsSuccess = false, Message = phoneErr });
+            agent.PhoneNumber = phoneNorm;
+
             var existing = await _context.Agents.FirstOrDefaultAsync(a => a.PhoneNumber == agent.PhoneNumber);
             if (existing != null)
                 return BadRequest(new { IsSuccess = false, Message = "An agent with this phone number already exists." });
@@ -95,6 +100,15 @@ namespace VaccineAPI.Controllers
             var feeChanged = dbAgent.ReferralFeePerClient != agent.ReferralFeePerClient;
             var rightsChanged = dbAgent.CanRegisterRegular != agent.CanRegisterRegular || dbAgent.CanRegisterEPI != agent.CanRegisterEPI
                 || dbAgent.CanRegisterCustomize != agent.CanRegisterCustomize || dbAgent.CanRegisterTravel != agent.CanRegisterTravel;
+
+            // Existing numbers are grandfathered: validate only when the phone is changed.
+            if (agent.PhoneNumber != dbAgent.PhoneNumber)
+            {
+                var phoneErr = PhoneRules.Check("92", agent.PhoneNumber, out var phoneNorm);
+                if (phoneErr != null)
+                    return BadRequest(new { IsSuccess = false, Message = phoneErr });
+                agent.PhoneNumber = phoneNorm;
+            }
 
             dbAgent.Name = agent.Name;
             dbAgent.PhoneNumber = agent.PhoneNumber;
@@ -295,8 +309,10 @@ namespace VaccineAPI.Controllers
             if (LoginThrottle.IsBlocked(throttleKey))
                 return Unauthorized(new { IsSuccess = false, Message = "Too many failed attempts. Please try again in 15 minutes." });
 
+            // Stored numbers may be in either form (03001234567 legacy / 3001234567 normalized).
+            var loginPhoneNorm = PhoneRules.Normalize("92", dto.PhoneNumber);
             var agent = await _context.Agents
-                .FirstOrDefaultAsync(a => a.PhoneNumber == dto.PhoneNumber && a.Password == dto.Password);
+                .FirstOrDefaultAsync(a => (a.PhoneNumber == dto.PhoneNumber || a.PhoneNumber == loginPhoneNorm) && a.Password == dto.Password);
 
             if (agent == null)
             {

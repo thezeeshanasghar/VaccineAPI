@@ -2374,6 +2374,9 @@ namespace VaccineAPI.Controllers
         [HttpPost]
         public Response<ChildDTO> Post(ChildDTO childDTO)
         {
+            var phoneErr = PhoneRules.Check(childDTO.CountryCode, childDTO.MobileNumber, out var phoneNorm);
+            if (phoneErr != null) return new Response<ChildDTO>(false, phoneErr, null);
+            childDTO.MobileNumber = phoneNorm;
             TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
             childDTO.Name = textInfo.ToTitleCase(childDTO.Name);
             childDTO.FatherName = textInfo.ToTitleCase(childDTO.FatherName);
@@ -2557,6 +2560,9 @@ namespace VaccineAPI.Controllers
         [HttpPost("agent-register")]
         public Response<ChildDTO> PostAgentChild(ChildDTO childDTO)
         {
+            var phoneErr = PhoneRules.Check(childDTO.CountryCode, childDTO.MobileNumber, out var phoneNorm);
+            if (phoneErr != null) return new Response<ChildDTO>(false, phoneErr, null);
+            childDTO.MobileNumber = phoneNorm;
             if (!childDTO.AgentId.HasValue)
                 return new Response<ChildDTO>(false, "AgentId is required.", null);
 
@@ -3816,6 +3822,14 @@ namespace VaccineAPI.Controllers
             {
                 var dbChild = _db.Childs.Include(x => x.User).FirstOrDefault(c => c.Id == childDTO.Id);
                 if (dbChild == null) return new Response<ChildDTO>(false, "Child not found", null);
+                // Existing stored numbers are grandfathered: validate only when number/code changes.
+                if (dbChild.User != null &&
+                    (childDTO.MobileNumber != dbChild.User.MobileNumber || childDTO.CountryCode != dbChild.User.CountryCode))
+                {
+                    var phoneErr = PhoneRules.Check(childDTO.CountryCode, childDTO.MobileNumber, out var phoneNorm);
+                    if (phoneErr != null) return new Response<ChildDTO>(false, phoneErr, null);
+                    childDTO.MobileNumber = phoneNorm;
+                }
                 dbChild.Name = childDTO.Name;
                 dbChild.Email = childDTO.Email;
                 dbChild.Guardian = childDTO.Guardian;

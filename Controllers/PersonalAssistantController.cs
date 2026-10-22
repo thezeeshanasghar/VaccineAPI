@@ -239,6 +239,9 @@ namespace VaccineAPI.Controllers
             {
                 return BadRequest(new { message = "Invalid data." });
             }
+            var phoneErr = PhoneRules.Check(personalAssistantDTO.CountryCode, personalAssistantDTO.MobileNumber, out var phoneNorm);
+            if (phoneErr != null) return new Response<PersonalAssistantDTO>(false, phoneErr, null);
+            personalAssistantDTO.MobileNumber = phoneNorm;
             var existingUser = _db.Users.FirstOrDefault(x => x.MobileNumber == personalAssistantDTO.MobileNumber && x.UserType == "PA");
             if (existingUser != null)
             {

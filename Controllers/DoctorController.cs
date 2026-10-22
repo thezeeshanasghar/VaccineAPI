@@ -413,8 +413,10 @@ namespace VaccineAPI.Controllers
                             );
                         }
                     }
+                    var clinicNames = doctorClinics.ToDictionary(c => c.Id, c => c.Name);
                     foreach (var item in childDTOs)
                     {
+                        item.ClinicName = clinicNames.TryGetValue(item.ClinicId, out var cn) ? cn : "";
                         var dbChild = _db.Childs.Where(x => x.Id == item.Id).Include(x => x.User).FirstOrDefault();
                         if (dbChild?.User != null)
                         {

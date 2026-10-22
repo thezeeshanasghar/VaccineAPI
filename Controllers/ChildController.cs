@@ -300,12 +300,14 @@ namespace VaccineAPI.Controllers
                                .Skip(10 * page)
                                .Take(10)
                                .ToList();
+            var clinicName = _db.Clinics.Where(c => c.Id == id).Select(c => c.Name).FirstOrDefault() ?? "";
             List<ChildDTO> childDTOs = new List<ChildDTO>();
             foreach (var child in dbChilds)
             {
                 ChildDTO childDTO = _mapper.Map<ChildDTO>(child);
                 childDTO.CountryCode = child.User.CountryCode;
                 childDTO.MobileNumber = child.User.MobileNumber;
+                childDTO.ClinicName = clinicName;
                 childDTOs.Add(childDTO);
             }
 

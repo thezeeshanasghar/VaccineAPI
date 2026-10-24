@@ -45,6 +45,7 @@ namespace VaccineAPI.Models
         public bool TrackLocation { get; set; }
         // Lets the PA tap the doctor's Travel quick-select vaccines when registering a Travel child.
         public bool UseTravelQuickSelect { get; set; }
+        public bool UseCustomQuickSelect { get; set; }
 
         // Follow-Up
         public bool ViewFollowUps { get; set; }

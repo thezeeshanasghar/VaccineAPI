@@ -22,8 +22,9 @@ namespace VaccineAPI.Controllers
     {
         private readonly Context _db;
         private readonly IConfiguration _config;
-        public PaCashHandoverController(Context db) : this(db, null) { }
-        public PaCashHandoverController(Context db, IConfiguration config) { _db = db; _config = config; }
+        // One constructor only: a second overload makes ASP.NET controller activation ambiguous and
+        // takes every endpoint on this controller down. `config` is optional so unit tests can omit it.
+        public PaCashHandoverController(Context db, IConfiguration config = null) { _db = db; _config = config; }
 
         // Batch version: returns a dictionary keyed by (PaId, ClinicId)
         // One query for collections, one for handovers — no N+1.

@@ -5522,8 +5522,9 @@ namespace VaccineAPI.Controllers
         }
 
         // Growth gate at payment-mode time. When a PA records payment on a given dose of a regular-
-        // schedule child, weight AND height must already be saved (or arrive in this request), or the
-        // PA must tick "Not measured". Doctors/Managers, non-regular children and disease rows are
+        // schedule child, at least one of weight / height / OFC (OFC only under 2 years) must already be
+        // saved (or arrive in this request), or the PA must tick "Not measured". No range checks (the
+        // owner supplies age-based ranges later). Doctors/Managers, non-regular children and disease rows are
         // exempt. Returns an error message to hand back, or null when payment may proceed.
         // Mutates `schedule` (growth values / GrowthNotMeasured) but does not save — caller saves.
         private string? ApplyGrowthGate(Schedule schedule, ScheduleDTO dto)
@@ -5558,7 +5559,7 @@ namespace VaccineAPI.Controllers
                         PaId = paId.Value,
                         DoctorId = pa?.DoctorId ?? 0,
                         PatientId = schedule.ChildId,
-                        ActionCode = "GROWTH_NOT_MEASURED",
+                        ActionCode = GrowthRules.NotMeasuredActionCode,
                         Description = $"Growth marked Not measured for patient {schedule.ChildId} (schedule {schedule.Id})",
                         Notes = "",
                         IsReversal = false,
@@ -5569,18 +5570,20 @@ namespace VaccineAPI.Controllers
                 return null;
             }
 
+            var givenOn = schedule.GivenDate ?? Pkt.Today();
+            var childDob = _db.Childs.Where(c => c.Id == schedule.ChildId).Select(c => c.DOB).FirstOrDefault();
+            // OFC is unfillable from the child's 2nd birthday: drop it so it is neither required nor saved.
+            if (dto.Circle > 0 && !GrowthRules.OfcAllowed(childDob, givenOn)) dto.Circle = null;
+
             var weight = dto.Weight > 0 ? dto.Weight : schedule.Weight;
             var height = dto.Height > 0 ? dto.Height : schedule.Height;
-            if (!(weight > 0) || !(height > 0))
-                return "Record weight & height or mark Not measured before recording payment.";
-            if (weight < 2 || weight > 40 || height < 40 || height > 150)
-                return "Weight or height looks wrong. Please check and re-enter.";
-            if (dto.Circle > 0 && (dto.Circle < 30 || dto.Circle > 60))
-                return "OFC looks wrong. Please check and re-enter.";
+            var circle = dto.Circle > 0 ? dto.Circle : schedule.Circle;
+            if (!GrowthRules.HasGrowth(weight, height, circle, childDob, givenOn))
+                return "Record at least one of weight, height or OFC, or mark Not measured before recording payment.";
 
             var entered = dto.Weight > 0 || dto.Height > 0 || dto.Circle > 0;
-            schedule.Weight = weight;
-            schedule.Height = height;
+            if (dto.Weight > 0) schedule.Weight = dto.Weight;
+            if (dto.Height > 0) schedule.Height = dto.Height;
             if (dto.Circle > 0) schedule.Circle = dto.Circle;
             schedule.GrowthNotMeasured = false;
             if (entered)

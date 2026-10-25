@@ -4,8 +4,10 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
+using VaccineAPI.Services;
 
 namespace VaccineAPI.Controllers
 {
@@ -19,7 +21,9 @@ namespace VaccineAPI.Controllers
     public class PaCashHandoverController : ControllerBase
     {
         private readonly Context _db;
-        public PaCashHandoverController(Context db) { _db = db; }
+        private readonly IConfiguration _config;
+        public PaCashHandoverController(Context db) : this(db, null) { }
+        public PaCashHandoverController(Context db, IConfiguration config) { _db = db; _config = config; }
 
         // Batch version: returns a dictionary keyed by (PaId, ClinicId)
         // One query for collections, one for handovers — no N+1.
@@ -749,6 +753,66 @@ namespace VaccineAPI.Controllers
                 .ToList();
             var givenByPaSet = new HashSet<long>(invoicesGivenByPa);
 
+            // Growth flag (GROWTH_FLAG_SPEC.md) — display only, never touches money. PA-given, given,
+            // non-disease, regular-child doses on or after Growth:FlagFromDate. One batched query.
+            // Deleted patients have no Child row, so they drop out of the join and never flag.
+            var growthFrom = GrowthRules.FlagFromDate(_config);
+            var growthByInvoice = new Dictionary<long, (int Total, int Missing, int NotMeasured, string MissingNames, string TickBy, string TickAt)>();
+            if (growthFrom.HasValue && invoiceIdsForLabel.Count > 0)
+            {
+                var growthDoses = _db.Schedules
+                    .Where(s => s.InvoiceSubmissionId.HasValue
+                             && invoiceIdsForLabel.Contains(s.InvoiceSubmissionId.Value)
+                             && s.GivenByPaId.HasValue
+                             && s.IsDone
+                             && s.IsDisease != true
+                             && s.IsSkip != true
+                             && !s.Due2EPI
+                             && s.GivenDate.HasValue && s.GivenDate.Value >= growthFrom.Value
+                             && s.Child.Type.ToLower() == "regular")
+                    .Select(s => new
+                    {
+                        InvoiceId = s.InvoiceSubmissionId.Value,
+                        s.ChildId, s.Weight, s.Height, s.Circle, s.GrowthNotMeasured, s.GivenDate,
+                        DoseName = s.Dose.Name,
+                        Dob = s.Child.DOB
+                    })
+                    .ToList();
+
+                var nmChildIds = growthDoses.Where(d => d.GrowthNotMeasured).Select(d => d.ChildId).Distinct().ToList();
+                var tickByChild = nmChildIds.Count == 0
+                    ? new Dictionary<long, (string By, string At)>()
+                    : _db.PaActivityLogs
+                        .Where(l => l.ActionCode == GrowthRules.NotMeasuredActionCode
+                                 && !l.IsReversal
+                                 && l.PatientId.HasValue && nmChildIds.Contains(l.PatientId.Value))
+                        .Select(l => new { l.PatientId, l.PaId, l.ActionDate })
+                        .ToList()
+                        .GroupBy(l => l.PatientId.Value)
+                        .ToDictionary(
+                            g => g.Key,
+                            g =>
+                            {
+                                var latest = g.OrderByDescending(x => x.ActionDate).First();
+                                return (latest.PaId.HasValue && paNames.ContainsKey(latest.PaId.Value) ? paNames[latest.PaId.Value] : "",
+                                        Pkt.Iso(latest.ActionDate));
+                            });
+
+                foreach (var g in growthDoses.GroupBy(d => d.InvoiceId))
+                {
+                    var hasGrowth = g.Select(d => new
+                    {
+                        d,
+                        Has = GrowthRules.HasGrowth(d.Weight, d.Height, d.Circle, d.Dob, d.GivenDate.Value)
+                    }).ToList();
+                    var missing = hasGrowth.Where(x => !x.Has && !x.d.GrowthNotMeasured).Select(x => x.d.DoseName).ToList();
+                    var notMeasured = hasGrowth.Where(x => !x.Has && x.d.GrowthNotMeasured).ToList();
+                    var tick = notMeasured.Select(x => x.d.ChildId).FirstOrDefault();
+                    var tickInfo = notMeasured.Count > 0 && tickByChild.ContainsKey(tick) ? tickByChild[tick] : ("", (string)null);
+                    growthByInvoice[g.Key] = (g.Count(), missing.Count, notMeasured.Count, string.Join(", ", missing), tickInfo.Item1, tickInfo.Item2);
+                }
+            }
+
             var invoiceRows = invoices.Select(i =>
             {
                 pendingAmendmentByInvoiceId.TryGetValue(i.Id, out var pending);
@@ -811,7 +875,13 @@ namespace VaccineAPI.Controllers
                     ClinicId            = i.ClinicId ?? 0,
                     ClinicName          = (i.ClinicId.HasValue && clinicNames.ContainsKey(i.ClinicId.Value)) ? clinicNames[i.ClinicId.Value] : "",
                     OldAmount           = pending != null ? (decimal?)pending.OldAmount : null,
-                    NewAmount           = pending != null ? (decimal?)pending.NewAmount : null
+                    NewAmount           = pending != null ? (decimal?)pending.NewAmount : null,
+                    GrowthTotal             = growthByInvoice.ContainsKey(i.Id) ? growthByInvoice[i.Id].Total : 0,
+                    GrowthMissing           = growthByInvoice.ContainsKey(i.Id) ? growthByInvoice[i.Id].Missing : 0,
+                    GrowthNotMeasured       = growthByInvoice.ContainsKey(i.Id) ? growthByInvoice[i.Id].NotMeasured : 0,
+                    GrowthMissingVaccines   = growthByInvoice.ContainsKey(i.Id) ? growthByInvoice[i.Id].MissingNames : "",
+                    GrowthNotMeasuredBy     = growthByInvoice.ContainsKey(i.Id) ? growthByInvoice[i.Id].TickBy : "",
+                    GrowthNotMeasuredAt     = growthByInvoice.ContainsKey(i.Id) ? growthByInvoice[i.Id].TickAt : (string)null
                 };
             });
 

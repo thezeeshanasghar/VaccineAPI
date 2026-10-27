@@ -37,6 +37,18 @@ namespace VaccineAPI.Models
         // "BookingId:{id}" string convention that used to live inside Notes.
         public long? BookingId { get; set; }
 
+        // PA Daily Route (spec v3). All inert until the route endpoints use them.
+        // Explicit flag; nothing is inferred from window, area or date.
+        public bool IsScheduledVisit { get; set; } = false;
+        // Tie-break only; stop number is ranked at read time by (WindowStart, VisitOrder, Id).
+        public int? VisitOrder { get; set; }
+        public string? Area { get; set; }
+        // Local PKT wall time, no timezone conversion. DTOs expose it as "HH:mm".
+        public TimeSpan? WindowStart { get; set; }
+        public short WindowMinutes { get; set; } = 60;
+        // UTC; set only by an explicit completion (no-charge visits / doctor on behalf).
+        public DateTime? VisitCompletedAt { get; set; }
+
         // "Active" | "PendingHandover" | "PendingCancellation" — the only values ever written
         // (PAAssignmentController). Completion is NOT tracked here: it uses the separate
         // IsCompleted/CompletedAt fields below instead, so don't add a "Completed" string value

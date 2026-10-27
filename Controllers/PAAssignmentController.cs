@@ -103,6 +103,14 @@ namespace VaccineAPI.Controllers
                     .Select(r => r.AssignmentId)
                     .ToListAsync());
 
+            // PA Daily Route: stop numbers for this PA's scheduled visits, ranked per date at read time.
+            var stopNumbers = VaccineAPI.Services.VisitStatus.Compute(
+                rawAssignments.Where(x => x.IsScheduledVisit).Select(x => new VaccineAPI.Services.VisitStatus.Stop
+                {
+                    Id = x.Id, PersonalAssistantId = x.PersonalAssistantId, TargetDate = x.TargetDate, WindowStart = x.WindowStart,
+                    WindowMinutes = x.WindowMinutes, VisitOrder = x.VisitOrder, AssignedAt = x.AssignedAt
+                }), Pkt.Today(), 0).ToDictionary(r => r.Id, r => r.StopNumber);
+
             // Enrich each assignment with child info, schedules, and invoice
             var result = rawAssignments.Select(a =>
             {
@@ -153,6 +161,12 @@ namespace VaccineAPI.Controllers
                     a.AssignedAt,
                     a.Notes,
                     a.TargetDate,
+                    a.IsScheduledVisit,
+                    WindowStart   = VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart),
+                    a.WindowMinutes,
+                    a.Area,
+                    a.VisitCompletedAt,
+                    StopNumber    = stopNumbers.ContainsKey(a.Id) ? stopNumbers[a.Id] : (int?)null,
                     ChildId       = a.ChildId,
                     Name          = child != null ? child.Name      : "",
                     Gender        = child != null ? child.Gender    : "",
@@ -1011,7 +1025,14 @@ namespace VaccineAPI.Controllers
                 ReassignedFromAssignmentId  = old.Id,
                 InvoiceSubmissionId         = old.InvoiceSubmissionId,
                 TargetDate                  = dto.TargetDate ?? old.TargetDate,
-                BookingId                   = old.BookingId
+                BookingId                   = old.BookingId,
+                // R6: a scheduled visit keeps its window/area/order on reassign. An explicit
+                // completion does not carry (the new PA completes it themselves).
+                IsScheduledVisit            = old.IsScheduledVisit,
+                WindowStart                 = old.IsScheduledVisit && (dto.TargetDate == null || dto.TargetDate.Value.Date == old.TargetDate?.Date) ? old.WindowStart : null,
+                WindowMinutes               = old.WindowMinutes,
+                Area                        = old.Area,
+                VisitOrder                  = old.VisitOrder
             };
 
             _db.PAAssignments.Add(newAssignment);
@@ -1565,6 +1586,16 @@ namespace VaccineAPI.Controllers
                     && await _db.PAAssignments.AnyAsync(a => a.BookingId == dto.BookingId && !a.IsCancelled))
                     return Ok(new { IsSuccess = false, Message = "This booking already has a PA assignment." });
 
+                // PA Daily Route: a home booking makes the assignment a scheduled visit automatically;
+                // otherwise only the explicit flag does. Nothing is inferred from date/window/area.
+                var scheduled = dto.IsScheduledVisit == true;
+                if (!scheduled && dto.BookingId.HasValue)
+                    scheduled = await _db.Bookings.AnyAsync(b => b.Id == dto.BookingId.Value && b.Type == "HomeBooked");
+                var visitErr = VaccineAPI.Services.VisitStatus.Validate(scheduled, dto.TargetDate, dto.WindowStart, dto.WindowMinutes,
+                    dto.Area, true, Pkt.Today(), out var visitWs, out var visitWm, out var visitArea);
+                if (visitErr != null)
+                    return Ok(new { IsSuccess = false, Message = visitErr });
+
                 var assignment = new PAAssignment
                 {
                     DoctorId            = dto.DoctorId,
@@ -1578,7 +1609,11 @@ namespace VaccineAPI.Controllers
                     IsAutoCreated       = false,
                     CreatedByManagerId  = dto.RequestingManagerId,
                     TargetDate          = dto.TargetDate,
-                    BookingId           = dto.BookingId
+                    BookingId           = dto.BookingId,
+                    IsScheduledVisit    = scheduled,
+                    WindowStart         = scheduled ? visitWs : null,
+                    WindowMinutes       = (short)visitWm,
+                    Area                = scheduled ? visitArea : null
                 };
 
                 _db.PAAssignments.Add(assignment);
@@ -2047,6 +2082,11 @@ namespace VaccineAPI.Controllers
                     AssignmentId  = a.Id,
                     a.AssignedAt,
                     a.TargetDate,
+                    a.IsScheduledVisit,
+                    WindowStart = VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart),
+                    a.WindowMinutes,
+                    a.Area,
+                    a.VisitCompletedAt,
                     a.Notes,
                     a.AssignmentStatus,
                     a.IsCompleted,
@@ -2074,6 +2114,312 @@ namespace VaccineAPI.Controllers
             }).ToList();
 
             return Ok(new { IsSuccess = true, ResponseData = result });
+        }
+
+        // ───────────── PA Daily Route (spec v3.1) ─────────────
+
+        // Doctor-side caller check shared by the route writes: verified session, owns the doctor.
+        private async Task<(bool Ok, Doctor? Doctor)> VerifyDoctorCaller(long doctorId, long? userId, string? stamp)
+        {
+            var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == doctorId);
+            if (doctor == null || !await VerifyCaller(userId, stamp) || userId!.Value != doctor.UserId) return (false, null);
+            return (true, doctor);
+        }
+
+        // GET /api/PAAssignment/route/{doctorId}?date=yyyy-MM-dd — the day's scheduled visits, ranked and
+        // with derived state. Batched like GetForDoctor (no per-row queries). Managers: read-only, fenced
+        // to their clinics, completion is a boolean (no payment detail).
+        [HttpGet("route/{doctorId}")]
+        public async Task<IActionResult> GetRoute(long doctorId, [FromQuery] DateTime? date = null,
+            [FromQuery] long? requestingManagerId = null, [FromQuery] long? callerUserId = null, [FromQuery] string? securityStamp = null)
+        {
+            var forManager = requestingManagerId.HasValue;
+            List<long>? managerClinics = null;
+            if (forManager)
+            {
+                var perm = await _db.ManagerPermissions.FirstOrDefaultAsync(p => p.ManagerId == requestingManagerId!.Value);
+                if (perm == null || !perm.ViewPaAssignmentStatus)
+                    return Ok(new { IsSuccess = false, Message = "You do not have permission to view PA assignments." });
+                managerClinics = await _db.ManagerAccess.Where(a => a.ManagerId == requestingManagerId!.Value).Select(a => a.ClinicId).ToListAsync();
+            }
+            else if (!(await VerifyDoctorCaller(doctorId, callerUserId, securityStamp)).Ok)
+                return Ok(new { IsSuccess = false, Message = "Not authorised." });
+
+            var now = Pkt.NowWall();
+            var day = (date ?? now).Date;
+            var dayEnd = day.AddDays(1);
+
+            var raw = await _db.PAAssignments
+                .Where(a => a.DoctorId == doctorId && !a.IsCancelled && !a.IsAutoCreated
+                            && a.TargetDate >= day && a.TargetDate < dayEnd)
+                .ToListAsync();
+            if (forManager) raw = raw.Where(a => a.ClinicId.HasValue && managerClinics!.Contains(a.ClinicId.Value)).ToList();
+
+            var atClinic = raw.Count(a => !a.IsScheduledVisit);
+            var visits = raw.Where(a => a.IsScheduledVisit).ToList();
+            var ids = visits.Select(a => a.Id).ToList();
+            var childIds = visits.Select(a => a.ChildId).Distinct().ToList();
+            var paIds = visits.Select(a => a.PersonalAssistantId).Distinct().ToList();
+
+            var children = childIds.Any() ? await _db.Childs.Where(c => childIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id) : new Dictionary<long, Child>();
+            var pas = paIds.Any() ? await _db.PersonalAssistant.Where(p => paIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id) : new Dictionary<long, PersonalAssistant>();
+            var links = ids.Any() ? await _db.PAAssignmentSchedules.Where(l => ids.Contains(l.AssignmentId)).ToListAsync() : new List<PAAssignmentSchedule>();
+            var schedIds = links.Select(l => l.ScheduleId).Distinct().ToList();
+            var facts = schedIds.Any()
+                ? (await _db.Schedules.Where(s => schedIds.Contains(s.Id))
+                    .Select(s => new { s.Id, s.IsDone, s.Amount, s.IsPaymentCollected, s.GivenDate }).ToListAsync()).ToDictionary(s => s.Id)
+                : null;
+            var pending = new HashSet<long>(ids.Any()
+                ? await _db.VaccineRefusals.Where(r => r.Status == "Pending" && ids.Contains(r.AssignmentId)).Select(r => r.AssignmentId).ToListAsync()
+                : new List<long>());
+
+            // PA-recorded payment events (AuditPayment). Filter by child + date in SQL, parse the envelope in memory.
+            var events = new Dictionary<long, List<DateTime>>();
+            if (visits.Any())
+            {
+                var since = visits.Min(a => a.AssignedAt);
+                var logs = await _db.PaActivityLogs
+                    .Where(l => l.ActionCode == "AsgPaymentRecorded" && l.PatientId.HasValue && childIds.Contains(l.PatientId.Value) && l.ActionDate >= since)
+                    .Select(l => new { l.ActionDate, l.Notes }).ToListAsync();
+                var paByAssignment = visits.ToDictionary(a => a.Id, a => a.PersonalAssistantId);
+                foreach (var l in logs)
+                {
+                    try
+                    {
+                        var env = Newtonsoft.Json.Linq.JObject.Parse(l.Notes ?? "{}");
+                        var aid = env.Value<long?>("assignmentId");
+                        if (!aid.HasValue || !paByAssignment.TryGetValue(aid.Value, out var assignedPa)) continue;
+                        if (env.Value<string>("actor") != "PA" || env.Value<long?>("actorId") != assignedPa) continue;
+                        if (!events.ContainsKey(aid.Value)) events[aid.Value] = new List<DateTime>();
+                        events[aid.Value].Add(l.ActionDate);
+                    }
+                    catch { }
+                }
+            }
+
+            VaccineAPI.Services.VisitStatus.Stop ToStop(PAAssignment a, bool hidePayment)
+            {
+                var doseFacts = links.Where(l => l.AssignmentId == a.Id && facts != null && facts.ContainsKey(l.ScheduleId))
+                    .Select(l => facts![l.ScheduleId]).ToList();
+                return new VaccineAPI.Services.VisitStatus.Stop
+                {
+                    Id = a.Id, PersonalAssistantId = a.PersonalAssistantId, TargetDate = a.TargetDate, WindowStart = a.WindowStart,
+                    WindowMinutes = a.WindowMinutes, VisitOrder = a.VisitOrder, AssignedAt = a.AssignedAt,
+                    VisitCompletedAt = hidePayment ? null : a.VisitCompletedAt, RefusalPending = pending.Contains(a.Id),
+                    Doses = hidePayment ? new List<(decimal, bool)>() : doseFacts.Select(f => ((f.Amount ?? 0m), f.IsPaymentCollected)).ToList(),
+                    PaPaymentEvents = hidePayment || !events.ContainsKey(a.Id) ? new List<DateTime>() : events[a.Id]
+                };
+            }
+
+            var minute = (int)now.TimeOfDay.TotalMinutes;
+            var computed = VaccineAPI.Services.VisitStatus.Compute(visits.Select(a => ToStop(a, false)), day.Date == now.Date ? now.Date : now.Date, minute)
+                .ToDictionary(r => r.Id);
+            if (forManager)
+            {
+                // Managers get a boolean: paid-pending (payment detail) falls back to the time-based state.
+                var fallback = VaccineAPI.Services.VisitStatus.Compute(visits.Select(a => ToStop(a, true)), now.Date, minute).ToDictionary(r => r.Id);
+                foreach (var a in visits)
+                    if (computed[a.Id].State == VaccineAPI.Services.VisitStatus.PaidPending) computed[a.Id] = fallback[a.Id];
+            }
+
+            var stops = visits.Select(a =>
+            {
+                var r = computed[a.Id];
+                var child = children.ContainsKey(a.ChildId) ? children[a.ChildId] : null;
+                var given = links.Where(l => l.AssignmentId == a.Id && facts != null && facts.ContainsKey(l.ScheduleId))
+                    .Select(l => facts![l.ScheduleId]).Where(f => f.IsDone && f.GivenDate.HasValue).Select(f => f.GivenDate!.Value).ToList();
+                return new
+                {
+                    AssignmentId = a.Id,
+                    PaId = a.PersonalAssistantId,
+                    PaName = pas.ContainsKey(a.PersonalAssistantId) ? pas[a.PersonalAssistantId].Name : "",
+                    ChildId = a.ChildId,
+                    ChildName = child?.Name ?? "",
+                    Area = a.Area,
+                    WindowStart = VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart),
+                    WindowMinutes = (int)a.WindowMinutes,
+                    WindowEnd = a.WindowStart.HasValue ? VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart.Value.Add(TimeSpan.FromMinutes(a.WindowMinutes))) : null,
+                    r.StopNumber,
+                    r.State,
+                    r.NeedsTime,
+                    CompletedAt = r.CompletedAt.HasValue ? Pkt.Iso(r.CompletedAt.Value) : null,
+                    RefusalPending = pending.Contains(a.Id),
+                    ExplicitCompletion = !forManager && a.VisitCompletedAt.HasValue,
+                    DoseCount = links.Count(l => l.AssignmentId == a.Id),
+                    PapersDate = given.Any() ? given.Max() : (DateTime?)null,
+                    NoCharge = !forManager && links.Any(l => l.AssignmentId == a.Id)
+                               && !links.Where(l => l.AssignmentId == a.Id && facts != null && facts.ContainsKey(l.ScheduleId)).Any(l => (facts![l.ScheduleId].Amount ?? 0m) > 0),
+                    CashConfirmed = a.IsCashConfirmedByDoctor
+                };
+            }).OrderBy(s => s.PaName).ThenBy(s => s.StopNumber).ToList();
+
+            return Ok(new
+            {
+                IsSuccess = true,
+                ResponseData = new
+                {
+                    Date = day.ToString("yyyy-MM-dd"),
+                    PktNow = now.ToString("HH:mm"),
+                    PktToday = now.ToString("yyyy-MM-dd"),
+                    AtClinicCount = atClinic,
+                    Stops = stops
+                }
+            });
+        }
+
+        public class VisitEditDto
+        {
+            public long DoctorId { get; set; }
+            public DateTime? TargetDate { get; set; }
+            public string? WindowStart { get; set; }
+            public int? WindowMinutes { get; set; }
+            public string? Area { get; set; }
+            public long? CallerUserId { get; set; }
+            public string? SecurityStamp { get; set; }
+        }
+
+        public class VisitActionDto
+        {
+            public long DoctorId { get; set; }
+            public string? Direction { get; set; }
+            public bool Confirm { get; set; }
+            public long? CallerUserId { get; set; }
+            public string? SecurityStamp { get; set; }
+        }
+
+        private static bool VisitOpen(PAAssignment a) => a.IsScheduledVisit && !a.IsCancelled && !a.IsCashConfirmedByDoctor;
+
+        // PATCH {id}/visit — doctor edits date / window / area as entered (R2, R3).
+        [HttpPatch("{id}/visit")]
+        public async Task<IActionResult> EditVisit(long id, [FromBody] VisitEditDto dto)
+        {
+            var a = await _db.PAAssignments.FindAsync(id);
+            if (a == null || a.DoctorId != dto.DoctorId) return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+            if (!(await VerifyDoctorCaller(dto.DoctorId, dto.CallerUserId, dto.SecurityStamp)).Ok)
+                return Ok(new { IsSuccess = false, Message = "Not authorised." });
+            if (!VisitOpen(a)) return Ok(new { IsSuccess = false, Message = "This is not an open scheduled visit." });
+
+            var dateMoved = dto.TargetDate?.Date != a.TargetDate?.Date;
+            var err = VaccineAPI.Services.VisitStatus.Validate(true, dto.TargetDate, dto.WindowStart, dto.WindowMinutes, dto.Area,
+                dateMoved && dto.TargetDate.HasValue && dto.TargetDate.Value.Date < Pkt.Today().Date, Pkt.Today(), out var ws, out var wm, out var area);
+            if (err != null) return Ok(new { IsSuccess = false, Message = err });
+
+            var before = $"{a.TargetDate:dd MMM} {VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart) ?? "TBD"} {a.Area}";
+            a.TargetDate = dto.TargetDate?.Date;
+            a.WindowStart = ws;
+            a.WindowMinutes = (short)wm;
+            a.Area = area;
+            if (dateMoved || ws == null) a.VisitOrder = null;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitEdited", a, "DOCTOR", a.DoctorId,
+                $"Visit changed from {before.Trim()} to {a.TargetDate:dd MMM} {VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart) ?? "TBD"} {a.Area}".Trim());
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex) { return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message }); }
+            return Ok(new { IsSuccess = true });
+        }
+
+        // PATCH {id}/visit-order — doctor moves a stop up or down within its PA's day (R1, R2).
+        [HttpPatch("{id}/visit-order")]
+        public async Task<IActionResult> MoveVisit(long id, [FromBody] VisitActionDto dto)
+        {
+            var a = await _db.PAAssignments.FindAsync(id);
+            if (a == null || a.DoctorId != dto.DoctorId) return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+            if (!(await VerifyDoctorCaller(dto.DoctorId, dto.CallerUserId, dto.SecurityStamp)).Ok)
+                return Ok(new { IsSuccess = false, Message = "Not authorised." });
+            if (!VisitOpen(a) || !a.TargetDate.HasValue) return Ok(new { IsSuccess = false, Message = "This is not an open scheduled visit with a date." });
+            var up = dto.Direction == "up";
+            if (!up && dto.Direction != "down") return Ok(new { IsSuccess = false, Message = "Direction must be up or down." });
+
+            var day = a.TargetDate.Value.Date;
+            var peers = (await _db.PAAssignments
+                .Where(x => x.DoctorId == a.DoctorId && x.PersonalAssistantId == a.PersonalAssistantId && x.IsScheduledVisit
+                            && !x.IsCancelled && !x.IsCashConfirmedByDoctor && x.TargetDate >= day && x.TargetDate < day.AddDays(1))
+                .ToListAsync())
+                .Select(x => new { A = x, S = new VaccineAPI.Services.VisitStatus.Stop { Id = x.Id, WindowStart = x.WindowStart, VisitOrder = x.VisitOrder } })
+                .OrderBy(x => x.S, VaccineAPI.Services.VisitStatus.Order).ToList();
+            var idx = peers.FindIndex(x => x.A.Id == a.Id);
+            var ni = up ? idx - 1 : idx + 1;
+            if (idx < 0 || ni < 0 || ni >= peers.Count) return Ok(new { IsSuccess = true, NoChange = true });
+            var nb = peers[ni].A;
+
+            if (a.WindowStart != nb.WindowStart)
+            {
+                if (!a.WindowStart.HasValue)
+                    return Ok(new { IsSuccess = false, NeedsTime = true, Message = "Set a time for this stop first. Stops without a time always come last." });
+                if (!nb.WindowStart.HasValue)
+                    return Ok(new { IsSuccess = false, Message = "Stops without a time always come last. Remove the time on this stop to place it there." });
+                if (!dto.Confirm)
+                    return Ok(new { IsSuccess = false, NeedsConfirm = true, AdoptWindowStart = VaccineAPI.Services.VisitStatus.FormatHm(nb.WindowStart),
+                                    Message = "Moving past this stop changes the time to " + VaccineAPI.Services.VisitStatus.FormatHm(nb.WindowStart) + "." });
+                a.WindowStart = nb.WindowStart;
+            }
+
+            // Renumber the same-time group so the moved stop sits just before (up) or after (down) the neighbour.
+            var group = peers.Select(x => x.A).Where(x => x.WindowStart == nb.WindowStart && x.Id != a.Id).ToList();
+            var at = group.FindIndex(x => x.Id == nb.Id);
+            group.Insert(up ? at : at + 1, a);
+            for (var i = 0; i < group.Count; i++) group[i].VisitOrder = i + 1;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitReordered", a, "DOCTOR", a.DoctorId, "Stop moved " + (up ? "earlier" : "later"));
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex) { return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message }); }
+            return Ok(new { IsSuccess = true });
+        }
+
+        // PATCH {id}/visit-complete — explicit completion for no-charge visits only (spec 4). The assigned PA
+        // (today or earlier) or the doctor on the PA's behalf.
+        [HttpPatch("{id}/visit-complete")]
+        public async Task<IActionResult> CompleteVisit(long id, [FromBody] VisitActionDto dto)
+        {
+            var a = await _db.PAAssignments.FindAsync(id);
+            if (a == null) return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+            if (!await VerifyCaller(dto.CallerUserId, dto.SecurityStamp)) return Ok(new { IsSuccess = false, Message = "Not authorised." });
+
+            string actorType; long actorId;
+            var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == a.DoctorId);
+            var pa = await _db.PersonalAssistant.FirstOrDefaultAsync(p => p.Id == a.PersonalAssistantId);
+            if (doctor != null && dto.CallerUserId == doctor.UserId) { actorType = "DOCTOR"; actorId = a.DoctorId; }
+            else if (pa != null && dto.CallerUserId == pa.UserId)
+            {
+                actorType = "PA"; actorId = pa.Id;
+                if (a.TargetDate.HasValue && a.TargetDate.Value.Date > Pkt.Today().Date)
+                    return Ok(new { IsSuccess = false, Message = "A visit cannot be completed before its date." });
+            }
+            else return Ok(new { IsSuccess = false, Message = "Not authorised." });
+
+            if (!VisitOpen(a) || a.IsCompleted) return Ok(new { IsSuccess = false, Message = "This is not an open scheduled visit." });
+            if (a.VisitCompletedAt.HasValue) return Ok(new { IsSuccess = true, AlreadyCompleted = true });
+
+            var pinned = await (from l in _db.PAAssignmentSchedules join s in _db.Schedules on l.ScheduleId equals s.Id
+                                where l.AssignmentId == a.Id
+                                select new { s.Amount, s.IsDone, s.Weight, s.Height, s.Circle, s.GrowthNotMeasured }).ToListAsync();
+            if (pinned.Any(p => (p.Amount ?? 0m) > 0))
+                return Ok(new { IsSuccess = false, Message = "This visit has a charge. It completes when the PA records payment." });
+            if (!pinned.Any(p => p.IsDone))
+                return Ok(new { IsSuccess = false, Message = "Give at least one dose before completing the visit." });
+            if (!pinned.Any(p => p.IsDone && (p.Weight.HasValue || p.Height.HasValue || p.Circle.HasValue || p.GrowthNotMeasured)))
+                return Ok(new { IsSuccess = false, Message = "Record growth or tick Not measured before completing the visit." });
+
+            a.VisitCompletedAt = DateTime.UtcNow;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitCompleted", a, actorType, actorId,
+                actorType == "DOCTOR" ? "Visit marked completed by the doctor" : "Visit marked completed by the PA");
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex) { return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message }); }
+            return Ok(new { IsSuccess = true });
+        }
+
+        // PATCH {id}/visit-reopen — doctor reopens an EXPLICIT completion (a derived one follows the payment).
+        [HttpPatch("{id}/visit-reopen")]
+        public async Task<IActionResult> ReopenVisit(long id, [FromBody] VisitActionDto dto)
+        {
+            var a = await _db.PAAssignments.FindAsync(id);
+            if (a == null || a.DoctorId != dto.DoctorId) return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+            if (!(await VerifyDoctorCaller(dto.DoctorId, dto.CallerUserId, dto.SecurityStamp)).Ok)
+                return Ok(new { IsSuccess = false, Message = "Not authorised." });
+            if (!a.VisitCompletedAt.HasValue) return Ok(new { IsSuccess = false, Message = "Only an explicit completion can be reopened here. A payment-based completion follows the payment." });
+            a.VisitCompletedAt = null;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitReopened", a, "DOCTOR", a.DoctorId, "Explicit visit completion reopened");
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex) { return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message }); }
+            return Ok(new { IsSuccess = true });
         }
     }
 
@@ -2130,6 +2476,11 @@ namespace VaccineAPI.Controllers
         // undone-only, so it is empty then). Optional: older clients omit it.
         public List<long> GroupScheduleIds { get; set; } = new List<long>();
         public DateTime? TargetDate { get; set; }
+        // PA Daily Route (spec v3.1). All optional; older clients omit them.
+        public bool? IsScheduledVisit { get; set; }
+        public string? WindowStart { get; set; }   // "HH:mm" PKT wall time
+        public int? WindowMinutes { get; set; }
+        public string? Area { get; set; }
         public long? BookingId { get; set; }
         // Doctor's note saved on the booking when this assignment confirms it.
         public string? BookingDoctorComment { get; set; }

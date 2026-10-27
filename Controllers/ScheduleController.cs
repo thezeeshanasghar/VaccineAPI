@@ -3767,7 +3767,18 @@ namespace VaccineAPI.Controllers
                 .Where(a => assignmentIds.Contains(a.Id) && !a.IsCompleted && !a.IsCancelled)
                 .ToList();
             foreach (var a in open)
+            {
+                var moved = a.TargetDate?.Date != newDate.Date;
                 a.TargetDate = newDate.Date;
+                // PA Daily Route R7: an automatic date move clears the window (time TBD on the new
+                // date, area kept) so a stale time never rides along to a different day.
+                if (moved && a.IsScheduledVisit && a.WindowStart.HasValue)
+                {
+                    a.WindowStart = null;
+                    VaccineAPI.Services.AssignmentAudit.Add(_db, "WindowCleared", a, "DOCTOR", a.DoctorId,
+                        "Date moved to " + newDate.ToString("dd MMM yyyy") + "; visit time cleared, needs a new time");
+                }
+            }
             if (open.Count > 0)
                 _db.SaveChanges();
         }

@@ -2167,8 +2167,19 @@ namespace VaccineAPI.Controllers
             var schedIds = links.Select(l => l.ScheduleId).Distinct().ToList();
             var facts = schedIds.Any()
                 ? (await _db.Schedules.Where(s => schedIds.Contains(s.Id))
-                    .Select(s => new { s.Id, s.IsDone, s.Amount, s.IsPaymentCollected, s.GivenDate }).ToListAsync()).ToDictionary(s => s.Id)
+                    .Select(s => new { s.Id, s.DoseId, s.IsDone, s.Amount, s.IsPaymentCollected, s.GivenDate }).ToListAsync()).ToDictionary(s => s.Id)
                 : null;
+            var doseIds = facts == null ? new List<long>() : facts.Values.Select(f => f.DoseId).Distinct().ToList();
+            var doseNames = doseIds.Any() ? await _db.Doses.Where(d => doseIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name) : new Dictionary<long, string>();
+
+            // Visit counts for the day strip: scheduled visits per day, today for 22 days (same doctor/clinic fence).
+            var stripFrom = now.Date;
+            var stripRaw = await _db.PAAssignments
+                .Where(a => a.DoctorId == doctorId && !a.IsCancelled && !a.IsAutoCreated && a.IsScheduledVisit
+                            && a.TargetDate >= stripFrom && a.TargetDate < stripFrom.AddDays(22))
+                .Select(a => new { a.TargetDate, a.ClinicId }).ToListAsync();
+            if (forManager) stripRaw = stripRaw.Where(a => a.ClinicId.HasValue && managerClinics!.Contains(a.ClinicId.Value)).ToList();
+            var dayCounts = stripRaw.GroupBy(a => a.TargetDate!.Value.Date).ToDictionary(g => g.Key.ToString("yyyy-MM-dd"), g => g.Count());
             var pending = new HashSet<long>(ids.Any()
                 ? await _db.VaccineRefusals.Where(r => r.Status == "Pending" && ids.Contains(r.AssignmentId)).Select(r => r.AssignmentId).ToListAsync()
                 : new List<long>());
@@ -2246,6 +2257,8 @@ namespace VaccineAPI.Controllers
                     RefusalPending = pending.Contains(a.Id),
                     ExplicitCompletion = !forManager && a.VisitCompletedAt.HasValue,
                     DoseCount = links.Count(l => l.AssignmentId == a.Id),
+                    Doses = links.Where(l => l.AssignmentId == a.Id && facts != null && facts.ContainsKey(l.ScheduleId))
+                        .Select(l => facts![l.ScheduleId]).Select(f => new { Name = doseNames.ContainsKey(f.DoseId) ? doseNames[f.DoseId] : "", Given = f.IsDone }).ToList(),
                     PapersDate = given.Any() ? given.Max() : (DateTime?)null,
                     NoCharge = !forManager && links.Any(l => l.AssignmentId == a.Id)
                                && !links.Where(l => l.AssignmentId == a.Id && facts != null && facts.ContainsKey(l.ScheduleId)).Any(l => (facts![l.ScheduleId].Amount ?? 0m) > 0),
@@ -2262,6 +2275,7 @@ namespace VaccineAPI.Controllers
                     PktNow = now.ToString("HH:mm"),
                     PktToday = now.ToString("yyyy-MM-dd"),
                     AtClinicCount = atClinic,
+                    DayCounts = dayCounts,
                     Stops = stops
                 }
             });

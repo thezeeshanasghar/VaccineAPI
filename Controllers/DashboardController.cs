@@ -240,12 +240,13 @@ namespace VaccineAPI.Controllers
                 {
                     var ids = clinicId == 0 ? clinicIds : clinicIds.Where(x => x == clinicId).ToList();
 
-                    // Patients registered (use CreatedAt if available, else DOB)
+                    // Patients registered: CreatedAt only (UTC instant, PKT day bounds). Children with no
+                    // CreatedAt are not counted; DOB is never a registration date.
+                    var fUtc = Pkt.DayStartUtc(f);
+                    var tUtc = Pkt.DayStartUtc(t.Date.AddDays(1));
                     int patients = await _db.Childs
                         .CountAsync(c => ids.Contains(c.ClinicId)
-                            && (c.CreatedAt.HasValue
-                                ? c.CreatedAt.Value.Date >= f.Date && c.CreatedAt.Value.Date <= t.Date
-                                : c.DOB.Date >= f.Date && c.DOB.Date <= t.Date));
+                            && c.CreatedAt >= fUtc && c.CreatedAt < tUtc);
 
                     // Doses given
                     int doses = await _db.Schedules
@@ -350,11 +351,11 @@ namespace VaccineAPI.Controllers
                             && s.GivenDate.HasValue
                             && s.GivenDate.Value.Date >= curFrom.Date && s.GivenDate.Value.Date <= curTo.Date);
 
+                    var cFromUtc = Pkt.DayStartUtc(curFrom);
+                    var cToUtc = Pkt.DayStartUtc(curTo.Date.AddDays(1));
                     int cPatients = await _db.Childs
                         .CountAsync(ch => ch.ClinicId == c.Id
-                            && (ch.CreatedAt.HasValue
-                                ? ch.CreatedAt.Value.Date >= curFrom.Date && ch.CreatedAt.Value.Date <= curTo.Date
-                                : ch.DOB.Date >= curFrom.Date && ch.DOB.Date <= curTo.Date));
+                            && ch.CreatedAt >= cFromUtc && ch.CreatedAt < cToUtc);
 
                     byClinic.Add(new ClinicSummaryDTO
                     {
@@ -435,11 +436,11 @@ namespace VaccineAPI.Controllers
                             && s.GivenDate.HasValue
                             && s.GivenDate.Value.Date >= mFrom.Date && s.GivenDate.Value.Date <= mTo.Date);
 
+                    var mFromUtc = Pkt.DayStartUtc(mFrom);
+                    var mToUtc = Pkt.DayStartUtc(mTo.Date.AddDays(1));
                     int mPatients = await _db.Childs
                         .CountAsync(c => clinicIds.Contains(c.ClinicId)
-                            && (c.CreatedAt.HasValue
-                                ? c.CreatedAt.Value.Date >= mFrom.Date && c.CreatedAt.Value.Date <= mTo.Date
-                                : c.DOB.Date >= mFrom.Date && c.DOB.Date <= mTo.Date));
+                            && c.CreatedAt >= mFromUtc && c.CreatedAt < mToUtc);
 
                     monthlyTrend.Add(new MonthlyTrendDTO
                     {
@@ -498,11 +499,11 @@ namespace VaccineAPI.Controllers
                             && s.GivenDate.HasValue
                             && s.GivenDate.Value.Date >= mFrom.Date && s.GivenDate.Value.Date <= mTo.Date);
 
+                    var mFromUtc = Pkt.DayStartUtc(mFrom);
+                    var mToUtc = Pkt.DayStartUtc(mTo.Date.AddDays(1));
                     int mPatients = await _db.Childs
                         .CountAsync(c => clinicIds.Contains(c.ClinicId)
-                            && (c.CreatedAt.HasValue
-                                ? c.CreatedAt.Value.Date >= mFrom.Date && c.CreatedAt.Value.Date <= mTo.Date
-                                : c.DOB.Date >= mFrom.Date && c.DOB.Date <= mTo.Date));
+                            && c.CreatedAt >= mFromUtc && c.CreatedAt < mToUtc);
 
                     monthlyPrev.Add(new MonthlyTrendDTO
                     {

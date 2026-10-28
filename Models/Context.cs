@@ -141,6 +141,7 @@ namespace VaccineAPI.Models
         public DbSet<City> Cities { get; set; }
         public DbSet<Agent> Agents { get; set; }
         public DbSet<AgentVaccineFeeOverride> AgentVaccineFeeOverrides { get; set; }
+        public DbSet<AgentReferral> AgentReferrals { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<Bill> Bills { get; set; }
         public DbSet<Stock> Stocks { get; set; }

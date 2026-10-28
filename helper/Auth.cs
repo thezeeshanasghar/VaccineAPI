@@ -272,7 +272,7 @@ namespace VaccineAPI
         private static readonly string[] ParentReadable =
             { "child", "booking", "doctor", "doctorschedule", "clinic", "vaccineinfo", "notification", "homecity", "vaccine", "brand" };
         private static readonly string[] AgentReadable =
-            { "child", "agent", "booking", "doctor", "doctorschedule", "clinic", "vaccineinfo" };
+            { "child", "agent", "booking", "doctor", "doctorschedule", "clinic", "vaccineinfo", "referral" };
 
         public static bool Allows(string role, string method, string rawPath)
         {
@@ -306,6 +306,9 @@ namespace VaccineAPI
             else
             {
                 if (method == "POST" && p == "/api/child/agent-register") return true;
+                // Two-step registration: the agent files a referral. Staff-side referral endpoints
+                // stay closed to agents by their own [RolesOnly].
+                if (method == "POST" && p == "/api/referral") return true;
             }
             return false;
         }

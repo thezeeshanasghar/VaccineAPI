@@ -183,6 +183,33 @@ namespace VaccineAPI.Controllers
                 doctorDB.ProfileImage = "";
                 // doctorDB.SignatureImage = "";
                 doctorDB.UserId = userDB.Id;
+                // POST /api/doctor is anonymous: never trust privilege/billing fields from the body.
+                // Everything the owner grants (modules, own website/email, SMS quota, SMTP) starts off.
+                doctorDB.Id = 0;
+                doctorDB.AllowSupplier = false;
+                doctorDB.AllowFinancial = false;
+                doctorDB.AllowSalesReport = false;
+                doctorDB.AllowAgent = false;
+                doctorDB.AllowTravel = false;
+                doctorDB.AllowAdult = false;
+                doctorDB.AllowDevelopmentalAssessment = false;
+                doctorDB.AllowHomeBooking = false;
+                doctorDB.AllowClinicBooking = false;
+                doctorDB.AllowAnalytics = false;
+                doctorDB.AllowAssistant = false;
+                doctorDB.AllowColdChain = false;
+                doctorDB.AllowOwnWebsite = false;
+                doctorDB.WebsiteUrl = null;
+                doctorDB.AllowOwnEmail = false;
+                doctorDB.SmtpHost = null;
+                doctorDB.SmtpPort = null;
+                doctorDB.SmtpUseSsl = false;
+                doctorDB.SmtpUsername = null;
+                doctorDB.SmtpPassword = null;
+                doctorDB.SmtpFromEmail = null;
+                doctorDB.SmtpFromName = null;
+                doctorDB.SMSLimit = 0;
+                doctorDB.InvoiceNumber = null;
                 doctorDB.AllowInvoice = true;
                 doctorDB.AllowFollowUp = true;
                 doctorDB.AllowChart = true;

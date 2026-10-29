@@ -3708,7 +3708,7 @@ namespace VaccineAPI.Controllers
         // (MinGap) still counts as valid. Applies to MinGap only (not MinAge/MaxAge), and
         // never to vaccines flagged ExactIntervalRequired (cholera/rabies). Same day-count
         // convention as calculateDate (day-of-dose = day 0), so we just subtract days.
-        private const int CdcGraceDays = 4;
+        internal const int CdcGraceDays = 4;
         private const string CdcGraceUrl = "https://www.cdc.gov/vaccines/hcp/imz-best-practices/timing-spacing-immunobiologics.html";
 
         // Maps a reschedule rejection message (from ChangeDueDatesOfSchedule, which returns a

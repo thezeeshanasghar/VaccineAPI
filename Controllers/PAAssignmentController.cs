@@ -1582,6 +1582,34 @@ namespace VaccineAPI.Controllers
                         });
                     }
                 }
+                // A dose may be handed to a PA only if it can legally be given on the visit's target date
+                // (DoseEligibility = the give-time age/gap rules; a PA has no override there). Due date is
+                // not the test: due 10 Jan assigned for 3 Jan is fine when 3 Jan is inside the window.
+                // Doses that fail are left unpinned; the assignment is refused only when nothing is
+                // givable and the clicked group has no already-given dose to collect on.
+                var skippedDoseMessages = new List<string>();
+                if (dto.ScheduleIds != null && dto.ScheduleIds.Count > 0)
+                {
+                    var visitDay = (dto.TargetDate ?? Pkt.Today()).Date;
+                    var undoneForGate = await _db.Schedules
+                        .Where(x => dto.ScheduleIds.Contains(x.Id) && x.ChildId == dto.ChildId && x.IsDone == false)
+                        .ToListAsync();
+                    var okIds = new List<long>();
+                    foreach (var sch in undoneForGate)
+                    {
+                        var gate = VaccineAPI.Services.DoseEligibility.CanGiveOn(_db, sch, visitDay);
+                        if (gate.Ok) okIds.Add(sch.Id); else skippedDoseMessages.Add(gate.Message!);
+                    }
+                    if (skippedDoseMessages.Count > 0)
+                    {
+                        var groupHasGiven = (dto.GroupScheduleIds ?? new List<long>()).Count > 0
+                            && await _db.Schedules.AnyAsync(x => dto.GroupScheduleIds!.Contains(x.Id) && x.ChildId == dto.ChildId && x.IsDone);
+                        if (okIds.Count == 0 && !groupHasGiven)
+                            return Ok(new { IsSuccess = false, DoseNotGivable = true,
+                                Message = "Can't assign for " + visitDay.ToString("dd-MM-yyyy") + ": " + string.Join(" ", skippedDoseMessages) });
+                        dto.ScheduleIds = okIds;
+                    }
+                }
                 if (dto.BookingId.HasValue
                     && await _db.PAAssignments.AnyAsync(a => a.BookingId == dto.BookingId && !a.IsCancelled))
                     return Ok(new { IsSuccess = false, Message = "This booking already has a PA assignment." });
@@ -1790,7 +1818,7 @@ namespace VaccineAPI.Controllers
                     new { paId = dto.PersonalAssistantId, bookingId = dto.BookingId, targetDate = dto.TargetDate });
                 await _db.SaveChangesAsync();
 
-                return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id, ExcludedStaleDoses = excludedStaleDoses, SpanningInvoiceNotAdopted = spanningInvoiceNotAdopted, BookingConfirmedId = bookingConfirmedId } });
+                return Ok(new { IsSuccess = true, ResponseData = new { assignment.Id, ExcludedStaleDoses = excludedStaleDoses, SpanningInvoiceNotAdopted = spanningInvoiceNotAdopted, BookingConfirmedId = bookingConfirmedId, SkippedDoses = skippedDoseMessages } });
             }
             catch (Exception ex)
             {

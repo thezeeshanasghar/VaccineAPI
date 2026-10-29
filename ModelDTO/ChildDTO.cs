@@ -6,6 +6,12 @@ using System;
 namespace VaccineAPI.ModelDTO
 {
 
+    public class SiblingDTO
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+
     public class ChildDTO
     {
         public long Id { get; set; }
@@ -23,6 +29,10 @@ namespace VaccineAPI.ModelDTO
         public string CountryCode { get; set; } = "";
         public string Gender { get; set; } = "";
         public bool IsSkip { get; set; }
+        // Number change: null = doctor not asked yet; list (maybe empty) = siblings ticked to move with this patient.
+        public List<long> MoveSiblingIds { get; set; }
+        // Filled only on the SiblingsOnNumber warning.
+        public List<SiblingDTO> Siblings { get; set; }
         public string City { get; set; } = "Rawalpindi";
         // Legacy free-text referral field, no longer written by the registration form.
         public string Agent { get; set; } = "";

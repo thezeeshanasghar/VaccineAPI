@@ -3846,57 +3846,109 @@ namespace VaccineAPI.Controllers
                 dbChild.CNIC = childDTO.CNIC;
                 var dbUser = dbChild.User;
 
-                // A patient's mobile number lives on its PARENT User account, not on the
-                // child. If the doctor changes the number to one that ALREADY belongs to a
-                // different PARENT account, we do not overwrite the number in place (that
-                // would leave two accounts sharing the same number and split the family).
-                // Instead we MERGE: move this patient onto the existing account and delete
-                // the now-empty old account. The existing account survives (its password &
-                // login/number are kept).
+                // A patient's mobile number lives on its PARENT User account, and that account is
+                // shared by every sibling registered on the same number. Login ID = the account's
+                // MobileNumber + CountryCode, so a patient "gets the new login" by ending up on an
+                // account that holds the new number. See NUMBER_CHANGE_SIBLINGS_SPEC.md.
+                bool numberChanged = dbUser.MobileNumber != childDTO.MobileNumber
+                                  || dbUser.CountryCode != childDTO.CountryCode;
+                if (!numberChanged)
+                {
+                    _db.SaveChanges();
+                    return new Response<ChildDTO>(true, null, childDTO);
+                }
+
+                // Other patients on the old account. If there are any, the doctor must choose who
+                // moves with this patient (nothing pre-ticked). MoveSiblingIds == null means the
+                // client has not been asked yet; an empty list means "only this patient".
+                var siblings = _db.Childs
+                    .Where(c => c.UserId == dbUser.Id && c.Id != dbChild.Id)
+                    .ToList();
+                if (siblings.Count > 0 && childDTO.MoveSiblingIds == null)
+                {
+                    childDTO.Siblings = siblings
+                        .Select(c => new SiblingDTO { Id = c.Id, Name = c.Name })
+                        .ToList();
+                    return new Response<ChildDTO>(false,
+                        "Other patients use this number. Choose who moves with this patient.",
+                        childDTO)
+                    { IsWarning = true, RuleCode = "SiblingsOnNumber" };
+                }
+
+                var tickedIds = childDTO.MoveSiblingIds ?? new List<long>();
+                if (tickedIds.Any(id => siblings.All(c => c.Id != id)))
+                    return new Response<ChildDTO>(false, "A selected patient is not on this number.", null);
+
+                var moving = new List<Child> { dbChild };
+                moving.AddRange(siblings.Where(c => tickedIds.Contains(c.Id)));
+                bool anyStaying = siblings.Any(c => !tickedIds.Contains(c.Id));
+
+                // Existing PARENT account already holding the new number AND country code (login
+                // matches both, so a different country code is not the same login).
                 var targetUser = _db.Users
                     .Include(x => x.Childs)
                     .FirstOrDefault(x => x.MobileNumber == childDTO.MobileNumber
+                                      && x.CountryCode == childDTO.CountryCode
                                       && x.UserType == "PARENT"
                                       && x.Id != dbUser.Id);
 
+                string loginId = "+" + childDTO.CountryCode + "-" + childDTO.MobileNumber;
+
                 if (targetUser != null)
                 {
-                    // Same-name guard: if the target account already has a patient with this
-                    // patient's name, warn once so the doctor can catch an accidental
-                    // double-register. Client re-sends with IsPAApprove-style confirm flag
-                    // (IsSkip) set true to proceed.
-                    bool nameClash = targetUser.Childs.Any(c =>
-                        c.Name.Equals(dbChild.Name, StringComparison.OrdinalIgnoreCase));
+                    // Same-name guard over every patient being moved. Client re-sends with IsSkip
+                    // set true to proceed.
+                    bool nameClash = moving.Any(m => targetUser.Childs.Any(c =>
+                        c.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase)));
                     if (nameClash && !childDTO.IsSkip)
                     {
                         return new Response<ChildDTO>(false,
-                            $"This number already belongs to an account that also has a patient named \"{dbChild.Name}\". Merging will show two patients with this name under the same login. Merge anyway?",
+                            "This number already belongs to an account that also has a patient with the same name as one being moved. Merging will show two patients with this name under the same login. Merge anyway?",
                             childDTO)
                         { IsWarning = true, RuleCode = "MergeNameClash" };
                     }
 
-                    // Merge: re-point this patient to the existing account.
-                    var oldUser = dbUser;
-                    dbChild.UserId = targetUser.Id;
-                    dbChild.User = targetUser;
-                    // Remove the old account only if this child was its last patient.
-                    // Must query the DB: oldUser.Childs only holds the siblings EF happens to have
-                    // loaded (just this child here), so its Count==1 wrongly deleted the whole family.
-                    if (_db.Childs.Count(c => c.UserId == oldUser.Id && c.Id != dbChild.Id) == 0)
+                    // Merge: existing account wins (its password/login are kept; its stamp is
+                    // not rotated so the family already on it stays signed in).
+                    foreach (var m in moving)
                     {
-                        _db.Users.Remove(oldUser);
+                        m.UserId = targetUser.Id;
+                        m.User = targetUser;
                     }
+                    if (!anyStaying) _db.Users.Remove(dbUser);
                     _db.SaveChanges();
                     int total = _db.Childs.Count(c => c.UserId == targetUser.Id);
                     return new Response<ChildDTO>(true,
-                        $"Patient attached to the existing account. This number now shows {total} patient(s).",
+                        $"Patient attached to the existing account. Login ID is now {loginId}. This number now shows {total} patient(s).",
                         childDTO);
                 }
 
-                dbUser.CountryCode = childDTO.CountryCode;
-                dbUser.MobileNumber = childDTO.MobileNumber;
+                if (!anyStaying)
+                {
+                    // Everyone on the account moves: rename in place, password kept. Rotate the
+                    // stamp so devices still logged in under the old number are signed out.
+                    dbUser.CountryCode = childDTO.CountryCode;
+                    dbUser.MobileNumber = childDTO.MobileNumber;
+                    dbUser.SecurityStamp = Guid.NewGuid().ToString();
+                    _db.SaveChanges();
+                    return new Response<ChildDTO>(true, $"Number changed. Login ID is now {loginId}.", childDTO);
+                }
+
+                // Some patients stay on the old number: the movers get a new account (new login)
+                // with the same password, so the family keeps one password.
+                var newUser = new User
+                {
+                    MobileNumber = childDTO.MobileNumber,
+                    CountryCode = childDTO.CountryCode,
+                    Password = dbUser.Password,
+                    UserType = "PARENT"
+                };
+                foreach (var m in moving) newUser.Childs.Add(m);
+                _db.Users.Add(newUser);
                 _db.SaveChanges();
-                return new Response<ChildDTO>(true, null, childDTO);
+                return new Response<ChildDTO>(true,
+                    $"{moving.Count} patient(s) moved. Login ID is now {loginId} (same password). {siblings.Count - (moving.Count - 1)} patient(s) stay on the old number.",
+                    childDTO);
             }
         }
 

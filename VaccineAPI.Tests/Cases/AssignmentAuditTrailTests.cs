@@ -87,8 +87,13 @@ public class AssignmentAuditTrailTests
         Assert.True(w.BulkGive(w.Schedule1Id, w.BrandId, w.Schedule1Id, w.Schedule2Id).IsSuccess);
         var u = w.BulkUngive(w.Schedule1Id, w.BrandId, true, w.Schedule1Id, w.Schedule2Id); Assert.True(u.IsSuccess, u.Message);
 
-        var actions = History(w, f.AsgId).Select(x => x.Value<string>("Action")).ToList();
-        Assert.Equal(new[] { "Given", "Ungiven" }, actions);
+        // The doctor ungave the whole visit, so the assignment is closed (spec §11): its history can no
+        // longer be read through the endpoint, but the log keeps Given, Ungiven and Reversed.
+        using var db = w.NewContext();
+        Assert.False(db.PAAssignments.Any(a => a.Id == f.AsgId));
+        var actions = db.PaActivityLogs.Where(l => l.PatientId == w.ChildId && l.ActionCode.StartsWith("Asg"))
+            .OrderBy(l => l.Id).Select(l => l.ActionCode).Distinct().ToList();
+        Assert.Equal(new[] { "AsgGiven", "AsgUngiven", "AsgReversed" }, actions);
     }
 
     [Fact]

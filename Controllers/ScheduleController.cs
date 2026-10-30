@@ -809,6 +809,12 @@ namespace VaccineAPI.Controllers
                     // Step 6: take back the due-date push this give caused on the later doses.
                     if (ungivenFromDate.HasValue)
                         UndoDownstreamPushAfterUngive(dbSchedule, ungivenFromDate.Value);
+                    // This branch returns before the audit at the bottom of Update(), so log the ungive here.
+                    if (wasGiven)
+                        AuditGiveOrUngive(new[] { dbSchedule }, false, 0, scheduleDTO);
+                    // A doctor ungive that empties the PA's visit ends it like an approved refusal (spec §11).
+                    if (wasGiven && AssignmentAudit.Actor(scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId).Type == "DOCTOR")
+                        VisitReversal.CloseEmptied(_db, new[] { dbSchedule }, "Ungiven by the doctor");
                     // Runs inside the request-wide transaction opened by Update() — committed or rolled back as one.
                     try
                     {
@@ -3147,6 +3153,9 @@ namespace VaccineAPI.Controllers
                         LinkScheduleToAssignment(bulkAuditAssignmentId, schedule.Id);
             }
             AuditGiveOrUngive(bulkChanged, scheduleDTO.IsDone, bulkAuditAssignmentId, scheduleDTO);
+            // A doctor ungive that empties the PA's visit ends it like an approved refusal (spec §11).
+            if (bulkUngiven.Count > 0 && AssignmentAudit.Actor(scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId).Type == "DOCTOR")
+                VisitReversal.CloseEmptied(_db, bulkUngiven.Select(u => u.Schedule).ToList(), "Ungiven by the doctor");
 
             // Single transaction for the whole bulk batch (matches the existing single
             // SaveChanges()-for-everything semantics above) — a concurrent give/ungive on any

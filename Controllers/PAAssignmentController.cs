@@ -751,12 +751,11 @@ namespace VaccineAPI.Controllers
             if (await _db.VaccineRefusals.AnyAsync(r => r.AssignmentId == id && r.Status == "Pending"))
                 return Ok(new { IsSuccess = false, Message = "A refusal request is already awaiting the doctor" });
 
-            var paymentRecorded = await _db.PAAssignmentSchedules
-                .Where(l => l.AssignmentId == id)
-                .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
-                .AnyAsync(s => s.IsPaymentCollected);
-            if (paymentRecorded)
-                return Ok(new { IsSuccess = false, Message = "Payment mode is already recorded, so this can no longer be reversed from here. Please contact the doctor." });
+            // Payment mode already recorded no longer blocks the REQUEST (spec §11 R2): the PA still cannot
+            // cancel alone, the doctor decides and approval reverses everything. Once the doctor has
+            // confirmed the cash it is counted, so changes go through an Amendment instead.
+            if (assignment.IsCashConfirmedByDoctor)
+                return Ok(new { IsSuccess = false, Message = "Cash is already confirmed for this assignment. Changes go through an Amendment." });
 
             _db.VaccineRefusals.Add(new VaccineRefusal
             {
@@ -869,6 +868,9 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "This request has already been resolved" });
             if (request.DoctorId != doctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised" });
+            var approveAsg = await _db.PAAssignments.FindAsync(id);
+            if (approveAsg != null && approveAsg.IsCashConfirmedByDoctor)
+                return Ok(new { IsSuccess = false, Message = "Cash is already confirmed for this assignment. Changes go through an Amendment." });
 
             var approveResult = await DeleteAssignment(id, doctorId, "FullReset",
                 "Client refused at home" + (string.IsNullOrWhiteSpace(request.Reason) ? "" : ": " + request.Reason));
@@ -1555,12 +1557,22 @@ namespace VaccineAPI.Controllers
                     .Concat(dto.GroupScheduleIds ?? new List<long>()).Distinct().ToList();
                 if (requestedIds.Count > 0)
                 {
-                    var holder = await (from l in _db.PAAssignmentSchedules
+                    var holdersQuery = (from l in _db.PAAssignmentSchedules
                                         join a in _db.PAAssignments on l.AssignmentId equals a.Id
                                         where requestedIds.Contains(l.ScheduleId) && a.ChildId == dto.ChildId
                                               && !a.IsCancelled && !a.IsCashConfirmedByDoctor
                                         orderby a.AssignedAt descending
-                                        select a).FirstOrDefaultAsync();
+                                        select a);
+                    // A holder with nothing given, no invoice and no payment is a dead visit (left behind by a
+                    // doctor ungive before VisitReversal existed). Nothing could ever close it from the UI, so
+                    // close it here and let this assignment through instead of blocking on it.
+                    var healed = false;
+                    foreach (var dead in await holdersQuery.Distinct().ToListAsync())
+                        healed |= VaccineAPI.Services.VisitReversal.CloseIfEmpty(_db, dead,
+                            "Cleared automatically when a new assignment was made",
+                            "Dead visit cleared: nothing given, no invoice, no payment", "AutoHeal");
+                    if (healed) await _db.SaveChangesAsync();
+                    var holder = await holdersQuery.FirstOrDefaultAsync();
                     if (holder != null)
                     {
                         var holderPa = await _db.PersonalAssistant.FindAsync(holder.PersonalAssistantId);

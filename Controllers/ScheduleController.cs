@@ -5086,26 +5086,6 @@ namespace VaccineAPI.Controllers
 
         [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [Owns(OwnerKind.Schedule, "id")]
-        [HttpPatch("{id}/ispaapprove")]
-        public async Task<IActionResult> PatchIsPAApprove(long id)
-        {
-            try
-            {
-                var schedule = await _db.Schedules.FirstOrDefaultAsync(s => s.Id == id);
-                if (schedule == null)
-                {
-                    return NotFound(new { message = "Schedule not found." });
-                }
-                schedule.IsPAApprove = true;
-                await _db.SaveChangesAsync();
-                return Ok(new { message = "IsPAApprove updated successfully.", schedule });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = $"An error occurred: {ex.Message}" });
-            }
-        }
-
          public class PdfFooter : PdfPageEventHelper
         {
             public override void OnEndPage(PdfWriter writer, Document document)

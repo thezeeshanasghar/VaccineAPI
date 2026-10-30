@@ -4,22 +4,21 @@ using static VaccineAPI.Services.VisitStatus;
 
 namespace VaccineAPI.Tests.Cases;
 
-/// <summary>Route ordering and derived visit state (PA_DAILY_ROUTE_SPEC.md v3.1 sections 3 and 4).</summary>
+/// <summary>Route ordering and derived visit state (PA_DAILY_ROUTE_SPEC.md v3.2 sections 3 and 4).</summary>
 public class VisitStatusTests
 {
     private static readonly DateTime Today = new DateTime(2026, 11, 11);
     private static readonly DateTime Assigned = new DateTime(2026, 11, 8, 5, 0, 0);
 
     private static Stop S(long id, string? start = "10:00", int mins = 60, int? order = null, long pa = 1,
-                          DateTime? date = null, bool paid = false, decimal amount = 500, bool paEvent = false,
+                          DateTime? date = null, bool paid = false, decimal amount = 500,
                           bool refusal = false, DateTime? explicitAt = null)
         => new Stop
         {
             Id = id, PersonalAssistantId = pa, TargetDate = date ?? Today,
             WindowStart = start == null ? (TimeSpan?)null : TimeSpan.Parse(start), WindowMinutes = mins, VisitOrder = order,
             AssignedAt = Assigned, RefusalPending = refusal, VisitCompletedAt = explicitAt,
-            Doses = new List<(decimal, bool)> { (amount, paid) },
-            PaPaymentEvents = paEvent ? new List<DateTime> { Assigned.AddDays(3) } : new List<DateTime>()
+            Doses = new List<(decimal, bool)> { (amount, paid) }
         };
 
     private static Result R(IEnumerable<Stop> stops, int minute, long id) => Compute(stops, Today, minute).Single(x => x.Id == id);
@@ -65,30 +64,28 @@ public class VisitStatusTests
         Assert.NotEqual(Late, r.State);
     }
 
+    private static readonly DateTime Tapped = Assigned.AddDays(3);
+
     [Fact]
-    public void Paid_by_PA_completes_with_that_time()
+    public void Paid_and_tapped_completes_with_the_tap_time()
     {
-        var r = R(new[] { S(1, paid: true, paEvent: true) }, 0, 1);
+        var r = R(new[] { S(1, paid: true, explicitAt: Tapped) }, 0, 1);
         Assert.Equal(Completed, r.State);
-        Assert.Equal(Assigned.AddDays(3), r.CompletedAt);
+        Assert.Equal(Tapped, r.CompletedAt);
     }
 
     [Fact]
-    public void Paid_without_a_PA_event_is_PaidPending_not_Completed()
-        => Assert.Equal(PaidPending, R(new[] { S(1, paid: true, paEvent: false) }, 0, 1).State);
+    public void Paid_without_the_tap_is_PaidPending_not_Completed()
+        => Assert.Equal(PaidPending, R(new[] { S(1, paid: true) }, 0, 1).State);
 
     [Fact]
-    public void PA_event_before_assignment_does_not_count()
-    {
-        var s = S(1, paid: true);
-        s.PaPaymentEvents = new List<DateTime> { Assigned.AddHours(-1) };
-        Assert.Equal(PaidPending, R(new[] { s }, 0, 1).State);
-    }
+    public void Tap_without_payment_does_not_complete()
+        => Assert.NotEqual(Completed, R(new[] { S(1, paid: false, explicitAt: Tapped) }, 0, 1).State);
 
     [Fact]
     public void Partial_payment_is_not_completed()
     {
-        var s = S(1, paid: true, paEvent: true);
+        var s = S(1, paid: true, explicitAt: Tapped);
         s.Doses = new List<(decimal, bool)> { (500, true), (300, false) };
         Assert.NotEqual(Completed, R(new[] { s }, 0, 1).State);
     }
@@ -96,7 +93,7 @@ public class VisitStatusTests
     [Fact]
     public void Free_doses_are_ignored_when_billable_ones_are_paid()
     {
-        var s = S(1, paid: true, paEvent: true);
+        var s = S(1, paid: true, explicitAt: Tapped);
         s.Doses = new List<(decimal, bool)> { (500, true), (0, false) };
         Assert.Equal(Completed, R(new[] { s }, 0, 1).State);
     }
@@ -104,22 +101,22 @@ public class VisitStatusTests
     [Fact]
     public void Clearing_payment_reverts_completion()
     {
-        var s = S(1, paid: false, paEvent: true);
+        var s = S(1, paid: true, explicitAt: Tapped);
+        Assert.Equal(Completed, R(new[] { s }, 0, 1).State);
+        s.Doses = new List<(decimal, bool)> { (500, false) };
         Assert.NotEqual(Completed, R(new[] { s }, 0, 1).State);
     }
 
     [Fact]
-    public void No_charge_visit_completes_only_explicitly()
+    public void Manager_view_sees_only_the_tap()
     {
-        Assert.NotEqual(Completed, R(new[] { S(1, amount: 0) }, 0, 1).State);
-        var done = R(new[] { S(1, amount: 0, explicitAt: Assigned.AddDays(3)) }, 0, 1);
-        Assert.Equal(Completed, done.State);
-        Assert.Equal(Assigned.AddDays(3), done.CompletedAt);
+        var s = S(1, paid: false, explicitAt: Tapped);
+        s.PaymentHidden = true;
+        s.Doses = new List<(decimal, bool)>();
+        Assert.Equal(Completed, R(new[] { s }, 0, 1).State);
+        s.VisitCompletedAt = null;
+        Assert.NotEqual(Completed, R(new[] { s }, 0, 1).State);
     }
-
-    [Fact]
-    public void Explicit_completion_is_ignored_for_billable_visits()
-        => Assert.NotEqual(Completed, R(new[] { S(1, explicitAt: Assigned.AddDays(3)) }, 0, 1).State);
 
     [Fact]
     public void Pending_refusal_shows_badge_and_is_skipped_as_Next()

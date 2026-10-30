@@ -6,9 +6,9 @@ namespace VaccineAPI.Services
 {
     // PA Daily Route (spec v3.1 sections 3 and 4). Pure and database-free: ranks a PA's stops for a
     // date and derives each stop's state. Vaccine status / AssignmentStage never feed this.
-    //   completed       explicit (no billable dose) or derived: all billable pinned doses paid AND a PA-recorded
-    //                   payment event at/after AssignedAt
-    //   paidPending     all billable paid but no PA-recorded event (doctor/manager entry or pre-visit): not completed
+    //   completed       v3.2: the PA (or doctor for the PA) tapped "Visit completed" (VisitCompletedAt) AND all
+    //                   billable pinned doses are still paid. Payment alone never completes a visit.
+    //   paidPending     all billable paid but the visit was not tapped completed yet
     //   refusalRequested a refusal is pending; skipped as Next
     //   late            window ended (or past day) and not completed. UI wording: "no payment recorded yet"
     //   in / next / queued  time based, against the server PKT clock
@@ -30,8 +30,8 @@ namespace VaccineAPI.Services
             public bool RefusalPending { get; set; }
             // Amount and IsPaymentCollected of each pinned dose.
             public IList<(decimal Amount, bool Paid)> Doses { get; set; } = new List<(decimal, bool)>();
-            // UTC times of AsgPaymentRecorded audit rows written by a PA actor for this assignment.
-            public IList<DateTime> PaPaymentEvents { get; set; } = new List<DateTime>();
+            // Manager view: payment detail is hidden, so completion is just whether the visit was tapped completed.
+            public bool PaymentHidden { get; set; }
         }
 
         public class Result
@@ -105,12 +105,11 @@ namespace VaccineAPI.Services
         // Returns (completed?, completedAt) for one stop.
         public static (bool Done, DateTime? At, bool PaidPending) Completion(Stop s)
         {
+            if (s.PaymentHidden) return (s.VisitCompletedAt.HasValue, s.VisitCompletedAt, false);
             var billable = s.Doses.Where(d => d.Amount > 0).ToList();
-            if (billable.Count == 0)
-                return (s.VisitCompletedAt.HasValue, s.VisitCompletedAt, false);
-            if (!billable.All(d => d.Paid)) return (false, null, false);
-            var ev = s.PaPaymentEvents.Where(t => t >= s.AssignedAt).OrderBy(t => t).ToList();
-            return ev.Count > 0 ? (true, ev.Last(), false) : (false, null, true);
+            var allPaid = billable.Count > 0 && billable.All(d => d.Paid);
+            if (!allPaid) return (false, null, false);
+            return s.VisitCompletedAt.HasValue ? (true, s.VisitCompletedAt, false) : (false, null, true);
         }
 
         // pktToday = server PKT date, pktMinute = minutes since PKT midnight.

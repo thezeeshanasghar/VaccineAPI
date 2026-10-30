@@ -1839,6 +1839,27 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // Shared by MarkDone and CompleteVisit: PendingHandover state, audit row, and the invoice flag the
+        // doctor's reconciliation reads. Caller saves.
+        private async Task ApplyPendingHandover(PAAssignment assignment, string actorType, long actorId)
+        {
+            assignment.AssignmentStatus = "PendingHandover";
+            assignment.HandoverDoneAt   = DateTime.UtcNow;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "MarkedDone", assignment, actorType, actorId,
+                "Marked done, cash to hand over to the doctor");
+
+            // Flag the linked InvoiceSubmission so it shows as PendingHandover on reconciliation
+            var inv = assignment.InvoiceSubmissionId.HasValue
+                ? await _db.InvoiceSubmissions.FindAsync(assignment.InvoiceSubmissionId.Value)
+                : null;
+            if (inv != null)
+            {
+                inv.PendingHandover = true;
+                inv.HandoverDoneAt  = DateTime.UtcNow;
+                _db.Entry(inv).State = EntityState.Modified;
+            }
+        }
+
         // PATCH /api/PAAssignment/{id}/mark-done
         // PA marks assignment as done (payment collected) — transitions to PendingHandover state.
         // Doctor sees this row on Payment Reconciliation with "Pending Handover" flag.
@@ -1867,21 +1888,7 @@ namespace VaccineAPI.Controllers
             if (!hasPayment)
                 return Ok(new { IsSuccess = false, Message = "Please record payment mode before marking done." });
 
-            assignment.AssignmentStatus = "PendingHandover";
-            assignment.HandoverDoneAt   = DateTime.UtcNow;
-            VaccineAPI.Services.AssignmentAudit.Add(_db, "MarkedDone", assignment, paId.HasValue ? "PA" : "DOCTOR", paId ?? assignment.DoctorId,
-                "Marked done, cash to hand over to the doctor");
-
-            // Flag the linked InvoiceSubmission so it shows as PendingHandover on reconciliation
-            var inv = assignment.InvoiceSubmissionId.HasValue
-                ? await _db.InvoiceSubmissions.FindAsync(assignment.InvoiceSubmissionId.Value)
-                : null;
-            if (inv != null)
-            {
-                inv.PendingHandover = true;
-                inv.HandoverDoneAt  = DateTime.UtcNow;
-                _db.Entry(inv).State = EntityState.Modified;
-            }
+            await ApplyPendingHandover(assignment, paId.HasValue ? "PA" : "DOCTOR", paId ?? assignment.DoctorId);
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -2224,30 +2231,6 @@ namespace VaccineAPI.Controllers
                 ? await _db.VaccineRefusals.Where(r => r.Status == "Pending" && ids.Contains(r.AssignmentId)).Select(r => r.AssignmentId).ToListAsync()
                 : new List<long>());
 
-            // PA-recorded payment events (AuditPayment). Filter by child + date in SQL, parse the envelope in memory.
-            var events = new Dictionary<long, List<DateTime>>();
-            if (visits.Any())
-            {
-                var since = visits.Min(a => a.AssignedAt);
-                var logs = await _db.PaActivityLogs
-                    .Where(l => l.ActionCode == "AsgPaymentRecorded" && l.PatientId.HasValue && childIds.Contains(l.PatientId.Value) && l.ActionDate >= since)
-                    .Select(l => new { l.ActionDate, l.Notes }).ToListAsync();
-                var paByAssignment = visits.ToDictionary(a => a.Id, a => a.PersonalAssistantId);
-                foreach (var l in logs)
-                {
-                    try
-                    {
-                        var env = Newtonsoft.Json.Linq.JObject.Parse(l.Notes ?? "{}");
-                        var aid = env.Value<long?>("assignmentId");
-                        if (!aid.HasValue || !paByAssignment.TryGetValue(aid.Value, out var assignedPa)) continue;
-                        if (env.Value<string>("actor") != "PA" || env.Value<long?>("actorId") != assignedPa) continue;
-                        if (!events.ContainsKey(aid.Value)) events[aid.Value] = new List<DateTime>();
-                        events[aid.Value].Add(l.ActionDate);
-                    }
-                    catch { }
-                }
-            }
-
             VaccineAPI.Services.VisitStatus.Stop ToStop(PAAssignment a, bool hidePayment)
             {
                 var doseFacts = links.Where(l => l.AssignmentId == a.Id && facts != null && facts.ContainsKey(l.ScheduleId))
@@ -2256,22 +2239,16 @@ namespace VaccineAPI.Controllers
                 {
                     Id = a.Id, PersonalAssistantId = a.PersonalAssistantId, TargetDate = a.TargetDate, WindowStart = a.WindowStart,
                     WindowMinutes = a.WindowMinutes, VisitOrder = a.VisitOrder, AssignedAt = a.AssignedAt,
-                    VisitCompletedAt = hidePayment ? null : a.VisitCompletedAt, RefusalPending = pending.Contains(a.Id),
+                    VisitCompletedAt = a.VisitCompletedAt, RefusalPending = pending.Contains(a.Id),
                     Doses = hidePayment ? new List<(decimal, bool)>() : doseFacts.Select(f => ((f.Amount ?? 0m), f.IsPaymentCollected)).ToList(),
-                    PaPaymentEvents = hidePayment || !events.ContainsKey(a.Id) ? new List<DateTime>() : events[a.Id]
+                    PaymentHidden = hidePayment
                 };
             }
 
             var minute = (int)now.TimeOfDay.TotalMinutes;
-            var computed = VaccineAPI.Services.VisitStatus.Compute(visits.Select(a => ToStop(a, false)), day.Date == now.Date ? now.Date : now.Date, minute)
+            // Managers get a boolean: no payment detail, so completion is just the PA's tap.
+            var computed = VaccineAPI.Services.VisitStatus.Compute(visits.Select(a => ToStop(a, forManager)), now.Date, minute)
                 .ToDictionary(r => r.Id);
-            if (forManager)
-            {
-                // Managers get a boolean: paid-pending (payment detail) falls back to the time-based state.
-                var fallback = VaccineAPI.Services.VisitStatus.Compute(visits.Select(a => ToStop(a, true)), now.Date, minute).ToDictionary(r => r.Id);
-                foreach (var a in visits)
-                    if (computed[a.Id].State == VaccineAPI.Services.VisitStatus.PaidPending) computed[a.Id] = fallback[a.Id];
-            }
 
             var stops = visits.Select(a =>
             {
@@ -2300,8 +2277,6 @@ namespace VaccineAPI.Controllers
                     Doses = links.Where(l => l.AssignmentId == a.Id && facts != null && facts.ContainsKey(l.ScheduleId))
                         .Select(l => facts![l.ScheduleId]).Select(f => new { Name = doseNames.ContainsKey(f.DoseId) ? doseNames[f.DoseId] : "", Given = f.IsDone }).ToList(),
                     PapersDate = given.Any() ? given.Max() : (DateTime?)null,
-                    NoCharge = !forManager && links.Any(l => l.AssignmentId == a.Id)
-                               && !links.Where(l => l.AssignmentId == a.Id && facts != null && facts.ContainsKey(l.ScheduleId)).Any(l => (facts![l.ScheduleId].Amount ?? 0m) > 0),
                     CashConfirmed = a.IsCashConfirmedByDoctor
                 };
             }).OrderBy(s => s.PaName).ThenBy(s => s.StopNumber).ToList();
@@ -2418,8 +2393,8 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true });
         }
 
-        // PATCH {id}/visit-complete — explicit completion for no-charge visits only (spec 4). The assigned PA
-        // (today or earlier) or the doctor on the PA's behalf.
+        // PATCH {id}/visit-complete — "Visit completed" (spec 4, v3.2). Needs every billable pinned dose paid. The
+        // assigned PA (today or earlier) or the doctor on the PA's behalf.
         [HttpPatch("{id}/visit-complete")]
         public async Task<IActionResult> CompleteVisit(long id, [FromBody] VisitActionDto dto)
         {
@@ -2439,20 +2414,20 @@ namespace VaccineAPI.Controllers
             }
             else return Ok(new { IsSuccess = false, Message = "Not authorised." });
 
-            if (!VisitOpen(a) || a.IsCompleted) return Ok(new { IsSuccess = false, Message = "This is not an open scheduled visit." });
+            if (!VisitOpen(a)) return Ok(new { IsSuccess = false, Message = "This is not an open scheduled visit." });
             if (a.VisitCompletedAt.HasValue) return Ok(new { IsSuccess = true, AlreadyCompleted = true });
 
             var pinned = await (from l in _db.PAAssignmentSchedules join s in _db.Schedules on l.ScheduleId equals s.Id
                                 where l.AssignmentId == a.Id
-                                select new { s.Amount, s.IsDone, s.Weight, s.Height, s.Circle, s.GrowthNotMeasured }).ToListAsync();
-            if (pinned.Any(p => (p.Amount ?? 0m) > 0))
-                return Ok(new { IsSuccess = false, Message = "This visit has a charge. It completes when the PA records payment." });
-            if (!pinned.Any(p => p.IsDone))
-                return Ok(new { IsSuccess = false, Message = "Give at least one dose before completing the visit." });
-            if (!pinned.Any(p => p.IsDone && (p.Weight.HasValue || p.Height.HasValue || p.Circle.HasValue || p.GrowthNotMeasured)))
-                return Ok(new { IsSuccess = false, Message = "Record growth or tick Not measured before completing the visit." });
+                                select new { s.Amount, s.IsPaymentCollected }).ToListAsync();
+            var billable = pinned.Where(p => (p.Amount ?? 0m) > 0).ToList();
+            if (billable.Count == 0 || billable.Any(p => !p.IsPaymentCollected))
+                return Ok(new { IsSuccess = false, Message = "Record the payment mode before completing the visit." });
 
             a.VisitCompletedAt = DateTime.UtcNow;
+            // Payment is Mark Done (v3.2): completing the visit also hands the cash over to the doctor.
+            if (a.AssignmentStatus != "PendingHandover" && !a.IsCompleted)
+                await ApplyPendingHandover(a, actorType, actorId);
             VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitCompleted", a, actorType, actorId,
                 actorType == "DOCTOR" ? "Visit marked completed by the doctor" : "Visit marked completed by the PA");
             try { await _db.SaveChangesAsync(); }
@@ -2460,7 +2435,7 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true });
         }
 
-        // PATCH {id}/visit-reopen — doctor reopens an EXPLICIT completion (a derived one follows the payment).
+        // PATCH {id}/visit-reopen — doctor reopens a completed visit.
         [HttpPatch("{id}/visit-reopen")]
         public async Task<IActionResult> ReopenVisit(long id, [FromBody] VisitActionDto dto)
         {
@@ -2468,9 +2443,9 @@ namespace VaccineAPI.Controllers
             if (a == null || a.DoctorId != dto.DoctorId) return Ok(new { IsSuccess = false, Message = "Assignment not found" });
             if (!(await VerifyDoctorCaller(dto.DoctorId, dto.CallerUserId, dto.SecurityStamp)).Ok)
                 return Ok(new { IsSuccess = false, Message = "Not authorised." });
-            if (!a.VisitCompletedAt.HasValue) return Ok(new { IsSuccess = false, Message = "Only an explicit completion can be reopened here. A payment-based completion follows the payment." });
+            if (!a.VisitCompletedAt.HasValue) return Ok(new { IsSuccess = false, Message = "This visit is not completed." });
             a.VisitCompletedAt = null;
-            VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitReopened", a, "DOCTOR", a.DoctorId, "Explicit visit completion reopened");
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitReopened", a, "DOCTOR", a.DoctorId, "Visit completion reopened");
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex) { return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message }); }
             return Ok(new { IsSuccess = true });

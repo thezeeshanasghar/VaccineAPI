@@ -1186,7 +1186,7 @@ namespace VaccineAPI.Controllers
         public IActionResult GetMyReconciliation(long paId, [FromQuery] long? clinicId = null)
         {
             var query = _db.InvoiceSubmissions
-                .Where(i => i.PaId == paId && i.TotalAmount > 0);
+                .Where(i => i.PaId == paId && i.TotalAmount > 0 && i.InvoiceStatus != "Cancelled");
 
             if (clinicId.HasValue)
                 query = query.Where(i => i.ClinicId == clinicId.Value);
@@ -1210,6 +1210,9 @@ namespace VaccineAPI.Controllers
                 PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId] : "",
                 Amount              = i.TotalAmount,
                 IsConfirmed         = i.IsConfirmedByDoctor,
+                PendingHandover     = i.PendingHandover,
+                HandoverDoneAt      = i.HandoverDoneAt.HasValue ? Pkt.Iso(i.HandoverDoneAt.Value) : (string)null,
+                PaymentMode         = i.PaymentMode ?? "",
                 DirectSaleBillNo    = (string)null
             }).ToList();
 

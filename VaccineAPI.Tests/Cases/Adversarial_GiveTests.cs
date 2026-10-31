@@ -509,6 +509,39 @@ public class Adversarial_GiveTests
     }
 
     [Fact]
+    public void BulkGive_BeforeDob_RejectedWithDobMessage_ZeroChange()
+    {
+        using var w = new StockWorld();
+        w.PostBill(w.ClinicA, 5, 10);
+        var (c, ss) = BulkChild(w, 2);
+        var snap = w.Snapshot();
+        using var db = w.NewContext();
+        var dob = db.Childs.First(x => x.Id == c).DOB.Date;
+        var dto = new ScheduleDTO { Id = ss[0], DoctorId = w.DoctorId, IsDone = true, GivenDate = dob.AddDays(-17), Date = StockWorld.Today, ConfirmUnbatchedGive = true };
+        foreach (var s in ss) dto.ScheduleBrands.Add(new ScheduleBrandDTO { ScheduleId = (int)s, BrandId = w.BrandId });
+        var r = w.Schedules(db).UpdateBulkInjection(dto);
+        Assert.False(r.IsSuccess);
+        Assert.Contains("before the child's date of birth", r.Message);
+        db.ChangeTracker.Clear();
+        Assert.Equal(snap, w.Snapshot());
+    }
+
+    [Fact]
+    public void BulkGive_OnDobDay_NotRejectedByDobGuard()
+    {
+        // Birth doses are given on the DOB itself; only a date strictly before DOB is invalid.
+        using var w = new StockWorld();
+        w.PostBill(w.ClinicA, 5, 10);
+        var (c, ss) = BulkChild(w, 2);
+        using var db = w.NewContext();
+        var dob = db.Childs.First(x => x.Id == c).DOB.Date;
+        var dto = new ScheduleDTO { Id = ss[0], DoctorId = w.DoctorId, IsDone = true, GivenDate = dob, Date = StockWorld.Today, ConfirmUnbatchedGive = true };
+        foreach (var s in ss) dto.ScheduleBrands.Add(new ScheduleBrandDTO { ScheduleId = (int)s, BrandId = w.BrandId });
+        var r = w.Schedules(db).UpdateBulkInjection(dto);
+        Assert.DoesNotContain("before the child's date of birth", r.Message ?? "");
+    }
+
+    [Fact]
     public void BulkGive_BackdatedWithoutAnswer_ZeroChange()
     {
         using var w = new StockWorld();

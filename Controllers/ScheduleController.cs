@@ -2552,6 +2552,14 @@ namespace VaccineAPI.Controllers
                     "The given date is invalid — it must be after the child's date of birth.", null);
             }
 
+            // A bulk give may not predate the child's birth. Same-day (birth doses) is allowed.
+            if (scheduleDTO.IsDone == true && !allSelectedAreDisease
+                && scheduleDTO.GivenDate!.Value.Date < dbSchedule.Child.DOB.Date)
+            {
+                return new Response<ScheduleDTO>(false,
+                    "The given date cannot be before the child's date of birth (" + dbSchedule.Child.DOB.ToString("dd-MM-yyyy") + ").", null);
+            }
+
             // Step 4 — MinAge, MaxAge, Brand.MinAge and MinGap checks for bulk give (accumulate all errors)
             bool bulkGraceApplied = false;
             var bulkGraceMessages = new System.Collections.Generic.List<string>();

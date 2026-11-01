@@ -44,15 +44,24 @@ namespace VaccineAPI.Controllers
         public async Task<ActionResult> Register([FromBody] DeviceDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.Token) || dto.Token.Length > 500)
+            {
+                await Trace("NONE", 0, "rejected", "Token missing or too long", dto?.AppFlavor);
                 return Ok(new { IsSuccess = false, Message = "Token missing." });
+            }
             var owner = Owner(AuthContext.Current);
             // 400, not 401: the app signs the user out on any 401, and a push registration must never do that.
             // The client reads IsSuccess/Code and retries.
             if (owner == null)
-                return BadRequest(new { IsSuccess = false, Code = AuthContext.Current == null ? "no_session" : "role_not_supported",
-                                        Message = "No push recipient for this login." });
+            {
+                var code = AuthContext.Current == null ? "no_session" : "role_not_supported";
+                await Trace("NONE", AuthContext.Current?.UserId ?? 0, "rejected",
+                    $"{code}; role={AuthContext.Current?.Role ?? "none"}", dto.AppFlavor);
+                return BadRequest(new { IsSuccess = false, Code = code, Message = "No push recipient for this login." });
+            }
 
             var row = await _db.DeviceTokens.FirstOrDefaultAsync(t => t.Token == dto.Token);
+            bool isNew = row == null;
+            bool ownerChanged = row != null && (row.RecipientType != owner.Value.type || row.RecipientId != owner.Value.id);
             if (row == null)
             {
                 row = new DeviceToken { Token = dto.Token, CreatedAt = DateTime.UtcNow };
@@ -65,7 +74,26 @@ namespace VaccineAPI.Controllers
             row.LastSeenAt = DateTime.UtcNow;
             try { await _db.SaveChangesAsync(); }
             catch (DbUpdateException) { /* same token registered twice at once; the other call won */ }
+            // Only first-time and re-owned registrations are recorded; a plain refresh on app open is not.
+            if (isNew || ownerChanged)
+                await Trace(owner.Value.type, owner.Value.id, "registered", isNew ? "new device" : "device re-assigned to this user", dto.AppFlavor);
             return Ok(new { IsSuccess = true, Message = "Registered." });
+        }
+
+        // Registration outcomes go to pushattempt (Type DeviceRegister) so "the app never registered" is visible.
+        private async Task Trace(string type, long id, string result, string detail, string? flavor)
+        {
+            try
+            {
+                var text = detail + (string.IsNullOrEmpty(flavor) ? "" : "; flavor=" + flavor);
+                _db.PushAttempts.Add(new PushAttempt
+                {
+                    RecipientType = type, RecipientId = id, Type = "DeviceRegister", Title = "Device register",
+                    Result = result, Detail = text.Length > 1000 ? text.Substring(0, 1000) : text, CreatedAt = DateTime.UtcNow
+                });
+                await _db.SaveChangesAsync();
+            }
+            catch (Exception e) { Console.Error.WriteLine("[PUSH] could not trace device register: " + e.Message); }
         }
 
         // Called on logout so the next person on a shared phone does not receive the previous user's pushes.

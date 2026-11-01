@@ -205,7 +205,7 @@ namespace VaccineAPI.Controllers
         //     schedules this PA gave/collected payment for on this child back to
         //     "not given", crediting any consumed stock back via the inventory ledger.
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId, [FromQuery] string mode = "UnassignOnly", [FromQuery] string? reason = null)
+        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId, [FromQuery] string mode = "UnassignOnly", [FromQuery] string? reason = null, [FromQuery] bool notifyPa = true)
         {
             var assignment = await _db.PAAssignments.FindAsync(id);
             if (assignment == null)
@@ -407,6 +407,13 @@ namespace VaccineAPI.Controllers
                     mode == "FullReset" ? "Visit reversed: doses ungiven, stock returned, invoice deleted" : "Assignment removed (doses and invoice untouched)",
                     reason, new { mode, paId = assignment.PersonalAssistantId });
                 _db.PAAssignments.Remove(assignment);
+
+                if (notifyPa && !assignment.IsCompleted)
+                {
+                    var removedKid = await _db.Childs.FindAsync(assignment.ChildId);
+                    VaccineAPI.Services.NotifyHelper.Add(_db, "PaAssignmentRemoved", "PA", assignment.PersonalAssistantId, "Assignment removed",
+                        $"{removedKid?.Name ?? "A patient"} was removed from your assignments by the doctor.", assignment.ChildId, assignment.ClinicId);
+                }
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -873,7 +880,8 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Cash is already confirmed for this assignment. Changes go through an Amendment." });
 
             var approveResult = await DeleteAssignment(id, doctorId, "FullReset",
-                "Client refused at home" + (string.IsNullOrWhiteSpace(request.Reason) ? "" : ": " + request.Reason));
+                "Client refused at home" + (string.IsNullOrWhiteSpace(request.Reason) ? "" : ": " + request.Reason),
+                notifyPa: false); // the PA gets "Refusal approved" below instead
             if (await _db.VaccineRefusals.AnyAsync(r => r.Id == request.Id && r.Status == "Approved"))
             {
                 var apRefAsg = await _db.PAAssignments.FindAsync(id);
@@ -1506,6 +1514,10 @@ namespace VaccineAPI.Controllers
             VaccineAPI.Services.AssignmentAudit.Add(_db, "TargetDateSet", assignment, "DOCTOR", assignment.DoctorId,
                 "Target date " + (oldTarget.HasValue ? oldTarget.Value.ToString("dd MMM yyyy") + " to " : "set to ")
                 + (dto.TargetDate.HasValue ? dto.TargetDate.Value.ToString("dd MMM yyyy") : "none"));
+            if (oldTarget?.Date != dto.TargetDate?.Date && !assignment.IsCompleted && !assignment.IsCancelled)
+                await NotifyVisitChanged(assignment,
+                    oldTarget.HasValue ? oldTarget.Value.ToString("dd MMM") : "no date",
+                    dto.TargetDate.HasValue ? dto.TargetDate.Value.ToString("dd MMM") : "no date");
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
@@ -2316,6 +2328,21 @@ namespace VaccineAPI.Controllers
             public string? SecurityStamp { get; set; }
         }
 
+        // Tells the PA (and, for a scheduled home visit, the parent) that the visit's date, time or area changed.
+        // The caller saves. Skipped when the visit is not open or nothing the PA would see actually changed.
+        private async Task NotifyVisitChanged(PAAssignment a, string before, string after, bool timeCleared = false)
+        {
+            if (before.Trim() == after.Trim()) return;
+            var kid = await _db.Childs.FindAsync(a.ChildId);
+            var name = kid?.Name ?? "A patient";
+            VaccineAPI.Services.NotifyHelper.Add(_db, "PaVisitChanged", "PA", a.PersonalAssistantId, "Visit changed",
+                $"{name}: visit changed from {before.Trim()} to {after.Trim()}." + (timeCleared ? " A new time is needed." : ""),
+                a.ChildId, a.ClinicId);
+            if (a.IsScheduledVisit && kid != null)
+                VaccineAPI.Services.NotifyHelper.Add(_db, "VisitChanged", "PARENT", kid.UserId, "Home visit updated",
+                    $"{name}'s home visit is now {after.Trim()}.", a.ChildId, a.ClinicId);
+        }
+
         private static bool VisitOpen(PAAssignment a) => a.IsScheduledVisit && !a.IsCancelled && !a.IsCashConfirmedByDoctor;
 
         // PATCH {id}/visit — doctor edits date / window / area as entered (R2, R3).
@@ -2334,6 +2361,7 @@ namespace VaccineAPI.Controllers
             if (err != null) return Ok(new { IsSuccess = false, Message = err });
 
             var before = $"{a.TargetDate:dd MMM} {VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart) ?? "TBD"} {a.Area}";
+            var oldWm = a.WindowMinutes;
             a.TargetDate = dto.TargetDate?.Date;
             a.WindowStart = ws;
             a.WindowMinutes = (short)wm;
@@ -2341,6 +2369,9 @@ namespace VaccineAPI.Controllers
             if (dateMoved || ws == null) a.VisitOrder = null;
             VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitEdited", a, "DOCTOR", a.DoctorId,
                 $"Visit changed from {before.Trim()} to {a.TargetDate:dd MMM} {VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart) ?? "TBD"} {a.Area}".Trim());
+            var afterText = $"{a.TargetDate:dd MMM} {VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart) ?? "TBD"} {a.Area}";
+            // A window-length-only edit changes nothing the PA reads in the text, so it is not announced.
+            await NotifyVisitChanged(a, before, afterText);
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex) { return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message }); }
             return Ok(new { IsSuccess = true });

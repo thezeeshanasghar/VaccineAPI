@@ -1473,6 +1473,15 @@ namespace VaccineAPI.Controllers
                 ));
             }
 
+            // Push, unless the PA is the one who just gave the dose (they know).
+            if (AuthContext.Current?.PaId != paId)
+            {
+                var autoKid = _db.Childs.Find(childId);
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaNewAssignment", "PA", paId, "New patient assigned",
+                    $"{autoKid?.Name ?? "A patient"} has been assigned to you. Open Assignments to see the visit.", childId, clinicId);
+                _db.SaveChanges();
+            }
+
             return newAssignment.Id;
         }
 
@@ -3795,9 +3804,25 @@ namespace VaccineAPI.Controllers
                     VaccineAPI.Services.AssignmentAudit.Add(_db, "WindowCleared", a, "DOCTOR", a.DoctorId,
                         "Date moved to " + newDate.ToString("dd MMM yyyy") + "; visit time cleared, needs a new time");
                 }
+                if (moved) NotifyAssignmentMoved(a, newDate);
             }
             if (open.Count > 0)
                 _db.SaveChanges();
+        }
+
+        // The assignment's date moved because its doses were rescheduled: tell the PA (unless the PA did it
+        // themselves) and, for a scheduled home visit, the parent. The caller saves.
+        private void NotifyAssignmentMoved(PAAssignment a, DateTime newDate)
+        {
+            var kid = _db.Childs.Find(a.ChildId);
+            var name = kid?.Name ?? "A patient";
+            var when = newDate.ToString("dd MMM");
+            if (AuthContext.Current?.PaId != a.PersonalAssistantId)
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaVisitChanged", "PA", a.PersonalAssistantId, "Visit date changed",
+                    $"{name}: visit moved to {when}." + (a.IsScheduledVisit ? " A new time is needed." : ""), a.ChildId, a.ClinicId);
+            if (a.IsScheduledVisit && kid != null)
+                VaccineAPI.Services.NotifyHelper.Add(_db, "VisitChanged", "PARENT", kid.UserId, "Home visit updated",
+                    $"{name}'s home visit has moved to {when}. The visit time will be confirmed.", a.ChildId, a.ClinicId);
         }
 
         private string ChangeDueDatesOfSchedule(

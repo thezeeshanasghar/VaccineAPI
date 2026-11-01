@@ -45,6 +45,8 @@ namespace VaccineAPI.Services
             await Job(db, "VaccineGiven", () => VaccineGiven(db, nowUtc));
             await Job(db, "AgentFirstDose", () => AgentFirstDose(db, nowUtc));
             await Job(db, "PruneAttempts", () => PruneAttempts(db, nowUtc));
+            // Before the quiet-hours gate on purpose: an 08:00 visit is reminded at 07:00.
+            await Job(db, "PaVisitReminder", () => PaVisitReminder(db, nowUtc));
 
             if (pkt.Hour < 9 || pkt.Hour > 20) return;
 
@@ -170,6 +172,54 @@ namespace VaccineAPI.Services
             foreach (var b in rows)
                 await PushService.SendOnceAsync(db, $"bk1:{b.Id}", "PARENT", b.ParentUserId, "Your visit is tomorrow",
                     $"{b.ChildName}'s {(b.Type == "HomeBooked" ? "home visit" : "clinic visit")} with {Brand(b.DoctorId)} is booked for tomorrow.", Data("BookingReminder", b.ChildId));
+        }
+
+        // True from 60 minutes before the visit window opens until it opens. Both are PKT wall-clock times of day.
+        public static bool InReminderWindow(TimeSpan nowOfDay, TimeSpan windowStart)
+            => nowOfDay >= windowStart - TimeSpan.FromMinutes(60) && nowOfDay < windowStart;
+
+        public class VisitReminderRow
+        {
+            public long AssignmentId { get; set; }
+            public long PaId { get; set; }
+            public long ChildId { get; set; }
+            public string ChildName { get; set; } = "";
+            public string? Area { get; set; }
+            public TimeSpan WindowStart { get; set; }
+        }
+
+        // Open scheduled visits for today whose window opens within the next hour. No WindowStart = no reminder.
+        public static async Task<List<VisitReminderRow>> VisitReminderCandidates(Context db, DateTime nowUtc)
+        {
+            var pkt = nowUtc + Pkt;
+            var today = pkt.Date;
+            var next = today.AddDays(1);
+            var rows = await (from a in db.PAAssignments
+                              join c in db.Childs on a.ChildId equals c.Id
+                              where a.IsScheduledVisit && !a.IsCompleted && !a.IsCancelled && !a.IsCashConfirmedByDoctor
+                                    && a.VisitCompletedAt == null && a.AssignmentStatus == "Active"
+                                    && a.WindowStart != null && a.TargetDate >= today && a.TargetDate < next
+                              select new VisitReminderRow
+                              {
+                                  AssignmentId = a.Id, PaId = a.PersonalAssistantId, ChildId = a.ChildId,
+                                  ChildName = c.Name, Area = a.Area, WindowStart = a.WindowStart!.Value
+                              }).ToListAsync();
+            return rows.Where(r => InReminderWindow(pkt.TimeOfDay, r.WindowStart)).ToList();
+        }
+
+        // One push per assignment about an hour before its visit window. The key carries the date and the time, so
+        // moving the visit re-arms it. It does not carry the PA id: a reassign keeps one reminder per visit.
+        private async Task PaVisitReminder(Context db, DateTime nowUtc)
+        {
+            var today = (nowUtc + Pkt).Date;
+            foreach (var r in await VisitReminderCandidates(db, nowUtc))
+            {
+                var hm = new DateTime(1, 1, 1).Add(r.WindowStart).ToString("hh:mm tt");
+                var where = string.IsNullOrWhiteSpace(r.Area) ? "" : $" in {r.Area}";
+                await PushService.SendOnceAsync(db, $"pa1h:{r.AssignmentId}:{today:yyyyMMdd}:{r.WindowStart:hhmm}", "PA", r.PaId,
+                    "Visit in about an hour", $"{r.ChildName}{where} at {hm}. Open Today's Route for the details.",
+                    Data("PaVisitReminder", r.ChildId));
+            }
         }
 
         private async Task PaMorningDigest(Context db, DateTime today)

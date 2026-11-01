@@ -18,25 +18,23 @@ namespace VaccineAPI.Controllers
             public string Token { get; set; } = "";
             public string? Platform { get; set; }
             public string? AppFlavor { get; set; }
-            // Only honoured when the request carries no session token (Log mode).
+            // Ignored: the owner always comes from the session token. Kept so old clients still deserialize.
             public string? RecipientType { get; set; }
             public long? RecipientId { get; set; }
         }
 
-        private static (string type, long id)? Owner(DeviceDto dto)
+        // Who this device belongs to, from the session identity only (a body-supplied owner would let anyone
+        // redirect another user's pushes). A manager's phone is keyed as its doctor, so the manager receives every
+        // push addressed to that doctor (cancel requests, cash handovers, ...).
+        public static (string type, long id)? Owner(AuthIdentity? id)
         {
-            var id = AuthContext.Current;
-            if (id == null)
-            {
-                if (AuthContext.Enforcing || dto.RecipientId == null || string.IsNullOrEmpty(dto.RecipientType)) return null;
-                var t = dto.RecipientType.ToUpperInvariant();
-                return t == "PARENT" || t == "DOCTOR" || t == "PA" || t == "AGENT" ? (t, dto.RecipientId.Value) : null;
-            }
+            if (id == null) return null;
             switch (id.Role)
             {
                 case "PARENT": return ("PARENT", id.UserId);
                 case "AGENT": return ("AGENT", id.UserId);
                 case "DOCTOR": return id.DoctorId.HasValue ? ("DOCTOR", id.DoctorId.Value) : null;
+                case "MANAGER": return id.DoctorId.HasValue ? ("DOCTOR", id.DoctorId.Value) : null;
                 case "PA": return id.PaId.HasValue ? ("PA", id.PaId.Value) : null;
                 default: return null;
             }
@@ -47,8 +45,12 @@ namespace VaccineAPI.Controllers
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.Token) || dto.Token.Length > 500)
                 return Ok(new { IsSuccess = false, Message = "Token missing." });
-            var owner = Owner(dto);
-            if (owner == null) return Ok(new { IsSuccess = false, Message = "No push recipient for this login." });
+            var owner = Owner(AuthContext.Current);
+            // 400, not 401: the app signs the user out on any 401, and a push registration must never do that.
+            // The client reads IsSuccess/Code and retries.
+            if (owner == null)
+                return BadRequest(new { IsSuccess = false, Code = AuthContext.Current == null ? "no_session" : "role_not_supported",
+                                        Message = "No push recipient for this login." });
 
             var row = await _db.DeviceTokens.FirstOrDefaultAsync(t => t.Token == dto.Token);
             if (row == null)
@@ -71,7 +73,7 @@ namespace VaccineAPI.Controllers
         public async Task<ActionResult> Unregister([FromBody] DeviceDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.Token)) return Ok(new { IsSuccess = true });
-            var owner = Owner(dto);
+            var owner = Owner(AuthContext.Current);
             var row = await _db.DeviceTokens.FirstOrDefaultAsync(t => t.Token == dto.Token);
             if (row != null && owner != null && row.RecipientType == owner.Value.type && row.RecipientId == owner.Value.id)
             {

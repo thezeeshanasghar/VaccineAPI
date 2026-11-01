@@ -41,30 +41,41 @@ namespace VaccineAPI.Services
             var today = pkt.Date;
 
             // Event-style jobs (not tied to quiet hours): they follow something that just happened.
-            await VaccineGiven(db, nowUtc);
-            await AgentFirstDose(db, nowUtc);
+            // Each job is isolated: one failing job must not stop the others on this or any later tick.
+            await Job(db, "VaccineGiven", () => VaccineGiven(db, nowUtc));
+            await Job(db, "AgentFirstDose", () => AgentFirstDose(db, nowUtc));
+            await Job(db, "PruneAttempts", () => PruneAttempts(db, nowUtc));
 
             if (pkt.Hour < 9 || pkt.Hour > 20) return;
 
-            await ParentDueReminders(db, today);
-            await ParentBirthdays(db, today);
-            await ParentFollowUps(db, today);
-            await ParentBookingTomorrow(db, today);
-            if (pkt.Hour >= 9 && pkt.Hour < 12) await PaMorningDigest(db, today);
-            if (pkt.Hour >= 15 && pkt.Hour < 18) await PaStillOpen(db, today);
-            if (pkt.Day == 1 && pkt.Hour >= 10) await AgentMonthlySummary(db, today);
+            await Job(db, "ParentDueReminders", () => ParentDueReminders(db, today));
+            await Job(db, "ParentBirthdays", () => ParentBirthdays(db, today));
+            await Job(db, "ParentFollowUps", () => ParentFollowUps(db, today));
+            await Job(db, "ParentBookingTomorrow", () => ParentBookingTomorrow(db, today));
+            if (pkt.Hour >= 9 && pkt.Hour < 12) await Job(db, "PaMorningDigest", () => PaMorningDigest(db, today));
+            if (pkt.Hour >= 15 && pkt.Hour < 18) await Job(db, "PaStillOpen", () => PaStillOpen(db, today));
+            if (pkt.Day == 1 && pkt.Hour >= 10) await Job(db, "AgentMonthlySummary", () => AgentMonthlySummary(db, today));
         }
 
-        // Claims every key at once; false when any was already used (another tick/instance got there first).
-        private static async Task<bool> Claim(Context db, IEnumerable<string> keys)
+        private static async Task Job(Context db, string name, Func<Task> job)
         {
-            var list = keys.ToList();
-            var existing = await db.PushLogs.Where(p => list.Contains(p.DedupKey)).Select(p => p.DedupKey).ToListAsync();
-            var fresh = list.Except(existing).ToList();
-            if (fresh.Count == 0) return false;
-            foreach (var k in fresh) db.PushLogs.Add(new PushLog { DedupKey = k, SentAt = DateTime.UtcNow });
-            try { await db.SaveChangesAsync(); return true; }
-            catch (DbUpdateException) { db.ChangeTracker.Clear(); return false; }
+            try { await job(); }
+            catch (Exception e)
+            {
+                db.ChangeTracker.Clear(); // drop half-finished tracked rows so later jobs start clean
+                Console.Error.WriteLine($"[PUSH] job {name} failed: {e.Message}");
+            }
+        }
+
+        private static DateTime _lastPrune = DateTime.MinValue;
+
+        // pushattempt keeps 30 days; checked at most once a day.
+        private static async Task PruneAttempts(Context db, DateTime nowUtc)
+        {
+            if (nowUtc - _lastPrune < TimeSpan.FromHours(24)) return;
+            _lastPrune = nowUtc;
+            var cutoff = nowUtc.AddDays(-30);
+            await db.PushAttempts.Where(a => a.CreatedAt < cutoff).ExecuteDeleteAsync();
         }
 
         private static string D(DateTime d) => d.ToString("dd MMM");
@@ -122,13 +133,8 @@ namespace VaccineAPI.Services
                     .OrderBy(s => s.Date).Select(s => (DateTime?)s.Date).FirstOrDefaultAsync();
                 var doses = string.Join(", ", g.Select(x => x.Dose).Distinct().Take(3));
                 var body = $"{first.ChildName} received {doses}." + (nextDue.HasValue ? $" Next vaccine due on {D(nextDue.Value)}." : " All scheduled vaccines are complete.");
-                await SendIfClaimed(db, g.Select(x => $"given:{x.Id}"), "PARENT", first.UserId, "Vaccine given", body, Data("VaccineGiven", g.Key));
+                await PushService.SendOnceAsync(db, g.Select(x => $"given:{x.Id}"), "PARENT", first.UserId, "Vaccine given", body, Data("VaccineGiven", g.Key));
             }
-        }
-
-        private static async Task SendIfClaimed(Context db, IEnumerable<string> keys, string type, long id, string title, string body, Dictionary<string, string> data)
-        {
-            if (await Claim(db, keys)) PushService.Send(type, id, title, body, data);
         }
 
         private async Task ParentBirthdays(Context db, DateTime today)

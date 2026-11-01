@@ -26,4 +26,23 @@ namespace VaccineAPI.Models
         public string DedupKey { get; set; } = "";
         public DateTime SentAt { get; set; } = DateTime.UtcNow;
     }
+
+    // One row per push attempt (sent, skipped, or failed) so "why didn't X get it" can be answered from the DB.
+    // Result: sent | partial | no_tokens | disabled | fcm_error
+    [Table("pushattempt")]
+    public class PushAttempt
+    {
+        public long Id { get; set; }
+        public string RecipientType { get; set; } = "";
+        public long RecipientId { get; set; }
+        public string Type { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Result { get; set; } = "";
+        public int TokenCount { get; set; }
+        public int SentCount { get; set; }
+        public int RemovedCount { get; set; }
+        public string Detail { get; set; } = "";
+        public string? DedupKey { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    }
 }

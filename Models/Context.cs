@@ -166,6 +166,7 @@ namespace VaccineAPI.Models
         public DbSet<PaShift> PaShifts { get; set; }
         public DbSet<DeviceToken> DeviceTokens { get; set; }
         public DbSet<PushLog> PushLogs { get; set; }
+        public DbSet<PushAttempt> PushAttempts { get; set; }
         public DbSet<PaLocation> PaLocations { get; set; }
         public DbSet<Expense> Expenses { get; set; }
         public DbSet<PAAssignment> PAAssignments { get; set; }

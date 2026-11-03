@@ -598,12 +598,36 @@ namespace VaccineAPI.Controllers
             [FromQuery] long? clinicId = null,
             [FromQuery] long? paId = null,
             [FromQuery] string fromDate = null,
-            [FromQuery] string toDate = null)
+            [FromQuery] string toDate = null,
+            [FromQuery] string dateBasis = "entered")
         {
             DateTime? from = null;
             DateTime? to   = null;
             if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd)) from = fd.Date;
             if (!string.IsNullOrEmpty(toDate)   && DateTime.TryParse(toDate,   out var td)) to   = td.Date.AddDays(1);
+
+            // The period filter applies to INVOICE rows by either the visit date ("visit" = InvoiceDate,
+            // the dose's GivenDate) or the date the PA entered it ("entered" = SubmittedAt, PKT). It must
+            // never hide money still owed: a PA back-entering an old visit gets an old InvoiceDate, which
+            // fell outside any recent period and made the unconfirmed cash invisible. Unconfirmed invoices
+            // therefore always pass the filter; the period only limits already-confirmed history.
+            bool byVisit = string.Equals(dateBasis, "visit", StringComparison.OrdinalIgnoreCase);
+            IQueryable<InvoiceSubmission> ApplyInvoicePeriod(IQueryable<InvoiceSubmission> q)
+            {
+                if (!from.HasValue && !to.HasValue) return q;
+                var f = from; var t = to;
+                if (byVisit)
+                    return q.Where(i => !i.IsConfirmedByDoctor
+                        || ((!f.HasValue || i.InvoiceDate.Date >= f.Value) && (!t.HasValue || i.InvoiceDate.Date < t.Value)));
+                return q.Where(i => !i.IsConfirmedByDoctor
+                    || ((!f.HasValue || i.SubmittedAt.AddHours(Pkt.OffsetHours).Date >= f.Value)
+                        && (!t.HasValue || i.SubmittedAt.AddHours(Pkt.OffsetHours).Date < t.Value)));
+            }
+            bool InPeriod(InvoiceSubmission i)
+            {
+                var d = byVisit ? i.InvoiceDate.Date : i.SubmittedAt.AddHours(Pkt.OffsetHours).Date;
+                return (!from.HasValue || d >= from.Value) && (!to.HasValue || d < to.Value);
+            }
 
             var clinicIds = _db.Clinics
                 .Where(c => c.DoctorId == doctorId)
@@ -641,8 +665,7 @@ namespace VaccineAPI.Controllers
 
             if (clinicId.HasValue) invQuery = invQuery.Where(i => i.ClinicId == clinicId.Value);
             if (paId.HasValue)     invQuery = invQuery.Where(i => i.PaId == paId.Value);
-            if (from.HasValue)     invQuery = invQuery.Where(i => i.InvoiceDate.Date >= from.Value);
-            if (to.HasValue)       invQuery = invQuery.Where(i => i.InvoiceDate.Date < to.Value);
+            invQuery = ApplyInvoicePeriod(invQuery);
 
             var invoices = invQuery.OrderByDescending(i => i.InvoiceDate).ToList();
 
@@ -665,8 +688,7 @@ namespace VaccineAPI.Controllers
                     (i.ClinicId == null || clinicIds.Contains(i.ClinicId.Value)));
             if (clinicId.HasValue) orphanedByZeroAmountQuery = orphanedByZeroAmountQuery.Where(i => i.ClinicId == clinicId.Value);
             if (paId.HasValue)     orphanedByZeroAmountQuery = orphanedByZeroAmountQuery.Where(i => i.PaId == paId.Value);
-            if (from.HasValue)     orphanedByZeroAmountQuery = orphanedByZeroAmountQuery.Where(i => i.InvoiceDate.Date >= from.Value);
-            if (to.HasValue)       orphanedByZeroAmountQuery = orphanedByZeroAmountQuery.Where(i => i.InvoiceDate.Date < to.Value);
+            orphanedByZeroAmountQuery = ApplyInvoicePeriod(orphanedByZeroAmountQuery);
 
             var orphanedByZeroAmount = orphanedByZeroAmountQuery
                 .Where(i => !invoiceIdsAlreadyIncluded.Contains(i.Id))
@@ -853,6 +875,11 @@ namespace VaccineAPI.Controllers
                     AssignmentId        = assignmentByInvoiceId.ContainsKey(i.Id) ? (long?)assignmentByInvoiceId[i.Id].Id : (long?)null,
                     SortKey             = pending != null ? pending.CreatedAt : i.SubmittedAt,
                     Date                = i.InvoiceDate.ToString("yyyy-MM-dd"),
+                    // When the PA entered the invoice (PKT-aware ISO). IsBackDated = the visit date is at
+                    // least a day before the entry date; OutsidePeriod = shown only because it is unconfirmed.
+                    EnteredAt           = Pkt.Iso(i.SubmittedAt),
+                    IsBackDated         = i.InvoiceDate.Date < i.SubmittedAt.AddHours(Pkt.OffsetHours).Date,
+                    OutsidePeriod       = !InPeriod(i),
                     AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? Pkt.Iso(assignmentByInvoiceId[i.Id].AssignedAt) : (string)null,
                     PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId]
                                           : (deletedSnapshots.ContainsKey(i.ChildId) ? deletedSnapshots[i.ChildId].Name : ""),

@@ -103,6 +103,23 @@ namespace VaccineAPI.Controllers
             return totalCollected + directSaleCollected - totalHandedOver;
         }
 
+        // Registration type per child for the reconciliation Type filter: regular | epiplus | travel | special.
+        // EPI Plus is stored as a regular child with IsEPIDone (same convention as registration).
+        private Dictionary<long, string> ChildTypes(List<long> childIds)
+        {
+            return _db.Childs
+                .Where(c => childIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.Type, c.IsEPIDone })
+                .ToList()
+                .ToDictionary(c => c.Id, c =>
+                {
+                    var t = (c.Type ?? "").Trim().ToLower();
+                    if (t == "travel") return "travel";
+                    if (t == "special" || t.StartsWith("custom")) return "special";
+                    return c.IsEPIDone == true ? "epiplus" : "regular";
+                });
+        }
+
         // GET /api/PaCashHandover/cash-in-hand/{paId}/{clinicId}
         [HttpGet("cash-in-hand/{paId}/{clinicId}")]
         public IActionResult GetCashInHand(long paId, long clinicId)
@@ -700,6 +717,7 @@ namespace VaccineAPI.Controllers
             var childNames = _db.Childs
                 .Where(c => invChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
+            var childTypes = ChildTypes(invChildIds);
             // Patients that no longer exist: name them from the delete audit snapshot and flag the row
             // so the doctor sees "Patient deleted" (and Cancel) instead of a blank, anonymous row.
             var deletedSnapshots = VaccineAPI.Services.PatientDeleteService.Snapshots(
@@ -881,6 +899,7 @@ namespace VaccineAPI.Controllers
                     IsBackDated         = i.InvoiceDate.Date < i.SubmittedAt.AddHours(Pkt.OffsetHours).Date,
                     OutsidePeriod       = !InPeriod(i),
                     AssignedAt          = assignmentByInvoiceId.ContainsKey(i.Id) ? Pkt.Iso(assignmentByInvoiceId[i.Id].AssignedAt) : (string)null,
+                    ChildType           = childTypes.ContainsKey(i.ChildId) ? childTypes[i.ChildId] : "",
                     PatientName         = childNames.ContainsKey(i.ChildId) ? childNames[i.ChildId]
                                           : (deletedSnapshots.ContainsKey(i.ChildId) ? deletedSnapshots[i.ChildId].Name : ""),
                     PatientDeleted      = !childNames.ContainsKey(i.ChildId),
@@ -1019,6 +1038,7 @@ namespace VaccineAPI.Controllers
             var pendingChildNames = _db.Childs
                 .Where(c => pendingChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
+            var pendingChildTypes = ChildTypes(pendingChildIds);
 
             var pendingDeletedSnapshots = VaccineAPI.Services.PatientDeleteService.Snapshots(
                 _db, pendingChildIds.Where(id => !pendingChildNames.ContainsKey(id)).ToList());
@@ -1050,6 +1070,7 @@ namespace VaccineAPI.Controllers
                 SortKey             = a.AssignedAt,
                 Date                = a.AssignedAt.AddHours(Pkt.OffsetHours).ToString("yyyy-MM-dd"),
                 AssignedAt          = Pkt.Iso(a.AssignedAt),
+                ChildType           = pendingChildTypes.ContainsKey(a.ChildId) ? pendingChildTypes[a.ChildId] : "",
                 PatientName         = pendingChildNames.ContainsKey(a.ChildId) ? pendingChildNames[a.ChildId]
                                       : (pendingDeletedSnapshots.ContainsKey(a.ChildId) ? pendingDeletedSnapshots[a.ChildId].Name : ""),
                 PatientDeleted      = !pendingChildNames.ContainsKey(a.ChildId),
@@ -1109,6 +1130,7 @@ namespace VaccineAPI.Controllers
             var amendChildNames = _db.Childs
                 .Where(c => amendChildIds.Contains(c.Id))
                 .ToDictionary(c => c.Id, c => c.Name ?? "");
+            var amendChildTypes = ChildTypes(amendChildIds);
 
             var amendmentRows = amendments.Select(a => new
             {
@@ -1122,6 +1144,8 @@ namespace VaccineAPI.Controllers
                 Date                = a.CreatedAt.ToString("yyyy-MM-dd"),
                 AssignedAt          = assignmentByInvoiceId.ContainsKey(a.InvoiceSubmissionId)
                                         ? Pkt.Iso(assignmentByInvoiceId[a.InvoiceSubmissionId].AssignedAt) : (string)null,
+                ChildType           = (a.InvoiceSubmission != null && amendChildTypes.ContainsKey(a.InvoiceSubmission.ChildId))
+                                        ? amendChildTypes[a.InvoiceSubmission.ChildId] : "",
                 PatientName         = (a.InvoiceSubmission != null && amendChildNames.ContainsKey(a.InvoiceSubmission.ChildId))
                                         ? amendChildNames[a.InvoiceSubmission.ChildId] : "",
                 Amount              = a.OldAmount,
@@ -1175,6 +1199,7 @@ namespace VaccineAPI.Controllers
                         DirectSaleBillNo    = first.SaleBillNo,
                         SortKey             = first.SaleDate,
                         Date                = first.SaleDate.ToString("yyyy-MM-dd"),
+                        ChildType           = "",
                         PatientName         = first.ClientName ?? "",
                         Amount              = g.Sum(x => x.TotalSaleValue),
                         PaymentMode         = first.IsPaymentCollected ? (first.PaymentMode ?? "") : "",

@@ -856,7 +856,7 @@ namespace VaccineAPI.Controllers
                 string cnic= child.CNIC;
                 document.Add(upperTable);
                 Font greenFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 11,new BaseColor(0, 100, 0));
-                Paragraph title = new Paragraph($"IMMUNIZATION RECORD (MR No: {childId})", greenFont);
+                Paragraph title = new Paragraph($"IMMUNIZATION RECORD (MR No: {MrNumber(childId)})", greenFont);
                 title.Alignment = Element.ALIGN_CENTER;
                 document.Add(title);
                 var patientTable = new PdfPTable(4) { WidthPercentage = 100 };
@@ -1661,6 +1661,28 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // The PDF a logged-in client downloads for their own / a family member's child. Same documents the clinic
+        // prints: the travel certificate (given only) for Travel children, the schedule card otherwise.
+        // Deliberately not a "*verif*" route: those are public by design (QR/officer flow), this one needs the owner's token.
+        [Owns(OwnerKind.Child, "id")]
+        [HttpGet("{id}/Download-PDF")]
+        public IActionResult DownloadClientPdf(int id)
+        {
+            var child = _db.Childs.Where(x => x.Id == id).FirstOrDefault();
+            if (child == null)
+            {
+                return NotFound("Child not found");
+            }
+            if (IsTravelChild(child))
+            {
+                return TravelCertificateForClient(child);
+            }
+            var stream = CreateSchedulePdf(id);
+            var fileName = child.Name.Replace(" ", "") + "_Schedule_" +
+                           Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
+            return File(stream, "application/pdf", fileName);
+        }
+
         [Owns(OwnerKind.Child, "id")]
         [HttpGet("{id}/Download-Schedule-PDF")]
         public IActionResult GenerateVerifySchedule(int id)
@@ -1677,6 +1699,12 @@ namespace VaccineAPI.Controllers
             if (child == null)
             {
                 return NotFound($"Child with ID {id} not found");
+            }
+
+            // Older parent apps still call this route to "download" - give Travel children the certificate, not this HTML summary.
+            if (IsTravelChild(child))
+            {
+                return TravelCertificateForClient(child);
             }
 
             var allSchedules = child.Schedules.OrderBy(s => s.Date).ToList();
@@ -1776,7 +1804,7 @@ namespace VaccineAPI.Controllers
 
                     <!-- Patient Info -->
                     <table>
-                        <tr><td><strong>MR No.</strong></td><td>{child.Id}</td></tr>
+                        <tr><td><strong>MR No.</strong></td><td>{MrNumber(child.Id)}</td></tr>
                         <tr><td><strong>Name</strong></td><td>{child.Name}</td></tr>
                         <tr><td><strong>S/D/W/o</strong></td><td>{child.FatherName}</td></tr>
                         <tr><td><strong>Passport/CNIC</strong></td><td>{child.CNIC}</td></tr>
@@ -4756,6 +4784,25 @@ namespace VaccineAPI.Controllers
         private static string VerifyQrUrl(Doctor doctor, string type, string fallbackUrl) =>
             doctor?.Id == 1 ? $"{VaccinePkVerifyBase}?type={type}" : fallbackUrl;
 
+        // One MR format on every record/certificate: {year}-{childId}. VerifyRecord also accepts the older plain-id and yy+id forms.
+        private static string MrNumber(long childId) => $"{Pkt.NowWall().Year}-{childId}";
+
+        private static bool IsTravelChild(Child child) =>
+            child != null && string.Equals(child.Type, "travel", StringComparison.OrdinalIgnoreCase);
+
+        // Same name for the doctor's download and the client's, so the two copies are indistinguishable on disk.
+        private static string TravelPdfFileName(Child child, bool includeFuture) =>
+            child.Name.Replace(" ", "_") + "_Travel_Immunization_" + (includeFuture ? "" : "Given_") +
+            Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
+
+        // The certificate a logged-in client gets for a Travel child: identical to the doctor's "given only" copy.
+        private IActionResult TravelCertificateForClient(Child child)
+        {
+            var output = CreateTravelPdf((int)child.Id, includeFuture: false);
+            if (output == null) return NotFound("Child not found");
+            return File(output.ToArray(), "application/pdf", TravelPdfFileName(child, false));
+        }
+
         private MemoryStream CreatePID(long childId)
         {
              var dbChild = _db.Childs
@@ -4901,9 +4948,7 @@ namespace VaccineAPI.Controllers
             }
 
             var childDetails = _db.Childs.Where(x => x.Id == childId).FirstOrDefault();
-            var suffix = includeFuture ? "" : "Given_";
-            var fileName = childDetails.Name.Replace(" ", "_") + "_Travel_Immunization_" + suffix +
-                          Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
+            var fileName = TravelPdfFileName(childDetails, includeFuture);
             Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileName}\"");
             return File(output.ToArray(), "application/pdf");
         }
@@ -5078,7 +5123,7 @@ namespace VaccineAPI.Controllers
             string Nationality = childDetails.Nationality;
             // MR number is unchanged from the existing pipeline: {year}-{childId}, kept in
             // lockstep with the footer and the QR payload so all three always agree.
-            string mrNumber = $"{Pkt.NowWall().Year}-{childId}";
+            string mrNumber = MrNumber(childId);
             string clinicName = childDetails.Clinic.Name;
             string clinicRegNo = childDetails.Clinic.RegNo;
             string doctorDetails = childDetails.Clinic.Doctor.DisplayName;
@@ -5245,9 +5290,10 @@ namespace VaccineAPI.Controllers
                     return null;
                 }
                 var dbSchedules = child.Schedules.ToList();
-                // Optionally hide not-yet-administered ("future"/due) doses.
+                // Optionally hide not-yet-administered ("future"/due) doses. "Given" means what the row
+                // itself prints as given (it has a GivenDate), so a done dose with no date can't show as "Pending".
                 if (!includeFuture)
-                    dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
+                    dbSchedules = dbSchedules.Where(s => s.IsDone == true && s.GivenDate.HasValue && s.GivenDate.Value != DateTime.MinValue).ToList();
                 dbSchedules = OrderForCertificate(dbSchedules);
                 // Font tier by row count:
                 //   <=3  -> 9pt   (few rows, larger & more legible)
@@ -5351,6 +5397,8 @@ namespace VaccineAPI.Controllers
                     vaccineTable.AddCell(Cell(validity, 7, PdfPCell.ALIGN_CENTER));
                 }
                 document.Add(vaccineTable);
+                if (rowCount == 0)
+                    document.Add(new Paragraph("No vaccines have been administered yet.", PlexSans(8)) { Alignment = Element.ALIGN_CENTER, SpacingBefore = 8f });
                 // QR is rendered in the header (beside the logo), so nothing further is drawn here.
                 document.Close();
             }
@@ -5381,7 +5429,7 @@ namespace VaccineAPI.Controllers
             string passport = dbChild.CNIC;
             string city = dbChild.City;
             string Nationality = dbChild.Nationality;
-            string mrNumber = $"{Pkt.NowWall().Year}-{childId}";
+            string mrNumber = MrNumber(childId);
             string clinicName = dbChild.Clinic.Name;
             string clinicRegNo = dbChild.Clinic.RegNo;
             string doctorDetails = dbChild.Clinic.Doctor.DisplayName;

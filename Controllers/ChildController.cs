@@ -1666,8 +1666,10 @@ namespace VaccineAPI.Controllers
         // Deliberately not a "*verif*" route: those are public by design (QR/officer flow), this one needs the owner's token.
         [Owns(OwnerKind.Child, "id")]
         [HttpGet("{id}/Download-PDF")]
-        public IActionResult DownloadClientPdf(int id)
+        public IActionResult DownloadClientPdf(int id, string? layout = null, bool includeFuture = true)
         {
+            var denied = DenyUnlessOwner(id);
+            if (denied != null) return denied;
             var child = _db.Childs.Where(x => x.Id == id).FirstOrDefault();
             if (child == null)
             {
@@ -1676,6 +1678,11 @@ namespace VaccineAPI.Controllers
             if (IsTravelChild(child))
             {
                 return TravelCertificateForClient(child);
+            }
+            // Custom children: only when the app asks for a layout; without one they keep the schedule card.
+            if (IsCustomChild(child) && !string.IsNullOrEmpty(layout))
+            {
+                return CustomPdfForClient(child, layout, includeFuture);
             }
             var stream = CreateSchedulePdf(id);
             var fileName = child.Name.Replace(" ", "") + "_Schedule_" +
@@ -1702,7 +1709,9 @@ namespace VaccineAPI.Controllers
             }
 
             // Older parent apps still call this route to "download" - give Travel children the certificate, not this HTML summary.
-            if (IsTravelChild(child))
+            // With nothing given yet there is no certificate, so they keep getting the old summary rather than an error file.
+            // The certificate itself is only for a signed-in owner; anyone else keeps the old summary page, exactly as before.
+            if (IsTravelChild(child) && CallerOwnsChild(child.Id) && HasGivenDose(child.Id))
             {
                 return TravelCertificateForClient(child);
             }
@@ -1852,10 +1861,7 @@ namespace VaccineAPI.Controllers
             Child dbScheduleChild;
             { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
             var stream = CreateCustomPdf(id, includeFuture);
-            var suffix = includeFuture ? "" : "_Given";
-            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule" + suffix + "_" +
-                           Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
-            return File(stream, "application/pdf", FileName);
+            return File(stream, "application/pdf", CustomPdfFileName(dbScheduleChild, includeFuture));
         }
 
         [HttpGet("{id}/verification-Custom-PDF")]
@@ -1880,10 +1886,7 @@ namespace VaccineAPI.Controllers
             {
                 return null;
             }
-            var suffix = includeFuture ? "" : "_Given";
-            var fileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule" + suffix + "_" +
-                           Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
-            return File(output.ToArray(), "application/pdf", fileName);
+            return File(output.ToArray(), "application/pdf", CustomPdfFileName(dbScheduleChild, includeFuture));
         }
 
         private Stream CreateCustomPdf(int childId, bool includeFuture = true)
@@ -1909,7 +1912,7 @@ namespace VaccineAPI.Controllers
             var dbSchedules = child.Schedules.ToList();
             // Optionally hide not-yet-administered ("future"/due) doses.
             if (!includeFuture)
-                dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
+                dbSchedules = dbSchedules.Where(s => s.IsDone == true && s.GivenDate.HasValue && s.GivenDate.Value != DateTime.MinValue).ToList();
             var Gender = 1;
             if (dbChild.Gender == "Girl") Gender = 2;
             foreach (var sch in dbSchedules)
@@ -2295,11 +2298,8 @@ namespace VaccineAPI.Controllers
         [HttpGet("check-for-missed")]
         public bool checkForMissed(DateTime DueDate)
         {
-            DateTime todayDate = Pkt.NowWall();
-            if (todayDate > DueDate)
-                return true;
-            else
-                return false;
+            // By calendar day: a dose due today is still Due, it only becomes Missed tomorrow.
+            return Pkt.NowWall().Date > DueDate.Date;
         }
 
         [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
@@ -4795,9 +4795,63 @@ namespace VaccineAPI.Controllers
             child.Name.Replace(" ", "_") + "_Travel_Immunization_" + (includeFuture ? "" : "Given_") +
             Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
 
+        // The dose order ("MenACWY 1") is internal; certificates print the vaccine name only. Only a trailing 1-2 digit
+        // number is dropped, so a name like "Flu 2025" is left alone.
+        public static string CertificateDoseName(string? name) =>
+            System.Text.RegularExpressions.Regex.Replace(name ?? "", @"\s+\d{1,2}$", "");
+
+        private static bool IsCustomChild(Child child) =>
+            child != null && string.Equals(child.Type, "special", StringComparison.OrdinalIgnoreCase);
+
+        // Same name the clinic's custom downloads use (portrait and landscape share it).
+        private static string CustomPdfFileName(Child child, bool includeFuture) =>
+            child.Name.Replace(" ", "") + "_Schedule" + (includeFuture ? "" : "_Given") + "_" +
+            Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
+
+        // Client routes must be provably the owner (a valid token) whatever Auth.Mode is: in Log mode the middleware
+        // still serves token-less requests, and [Owns] only logs. A stranger gets the same answer as for a missing child.
+        private IActionResult? DenyUnlessOwner(long childId)
+        {
+            if (AuthContext.Current == null)
+                return StatusCode(401, new { IsSuccess = false, Unauthorized = true, Message = "Session expired. Please sign in again." });
+            if (!CallerGuard.OwnsChild(_db, childId))
+                return NotFound("Child not found");
+            return null;
+        }
+
+        private bool CallerOwnsChild(long childId) => AuthContext.Current != null && CallerGuard.OwnsChild(_db, childId);
+
+        // Custom (special) schedules: the same portrait / landscape documents, all or given-only, as the clinic prints.
+        private IActionResult CustomPdfForClient(Child child, string layout, bool includeFuture)
+        {
+            bool landscape = string.Equals(layout, "landscape", StringComparison.OrdinalIgnoreCase);
+            if (!landscape && !string.Equals(layout, "portrait", StringComparison.OrdinalIgnoreCase))
+                return BadRequest("Unknown layout");
+            if (!includeFuture && !HasGivenDose(child.Id))
+                return StatusCode(409, new { IsSuccess = false, RuleCode = "NO_GIVEN_DOSE", Message = "The given-only copy is available once the first dose has been given." });
+            var fileName = CustomPdfFileName(child, includeFuture);
+            if (landscape)
+            {
+                var output = CreateCustomLandscapePdf((int)child.Id, includeFuture);
+                if (output == null) return NotFound("Child not found");
+                return File(output.ToArray(), "application/pdf", fileName);
+            }
+            var stream = CreateCustomPdf((int)child.Id, includeFuture);
+            if (stream == null) return NotFound("Child not found");
+            return File(stream, "application/pdf", fileName);
+        }
+
+        // Same test the given-only certificate applies to its rows (and CreateTravelPdf skips skipped doses).
+        private bool HasGivenDose(long childId) =>
+            _db.Schedules.Any(s => s.ChildId == childId && s.IsSkip != true && s.IsDone == true
+                                   && s.GivenDate.HasValue && s.GivenDate.Value != DateTime.MinValue);
+
         // The certificate a logged-in client gets for a Travel child: identical to the doctor's "given only" copy.
+        // With no dose given there is nothing to certify, so the client gets no certificate (the doctor's own download is unaffected).
         private IActionResult TravelCertificateForClient(Child child)
         {
+            if (!HasGivenDose(child.Id))
+                return StatusCode(409, new { IsSuccess = false, RuleCode = "NO_GIVEN_DOSE", Message = "The travel certificate is available once the first dose has been given." });
             var output = CreateTravelPdf((int)child.Id, includeFuture: false);
             if (output == null) return NotFound("Child not found");
             return File(output.ToArray(), "application/pdf", TravelPdfFileName(child, false));
@@ -5347,7 +5401,7 @@ namespace VaccineAPI.Controllers
                 const string DASH = "–";
                 foreach (var schedule in dbSchedules)
                 {
-                    string vaccineName = string.IsNullOrWhiteSpace(schedule.Dose?.Name) ? DASH : schedule.Dose.Name;
+                    string vaccineName = string.IsNullOrWhiteSpace(schedule.Dose?.Name) ? DASH : CertificateDoseName(schedule.Dose.Name);
                     bool isGiven = schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue;
                     // Not-yet-given doses (including an infinite dose's auto-created next
                     // occurrence) must never look administered — no brand/batch, and the date
@@ -5579,7 +5633,7 @@ namespace VaccineAPI.Controllers
                 }
                 var dbSchedules = child.Schedules.ToList();
                 if (!includeFuture)
-                    dbSchedules = dbSchedules.Where(s => s.IsDone == true).ToList();
+                    dbSchedules = dbSchedules.Where(s => s.IsDone == true && s.GivenDate.HasValue && s.GivenDate.Value != DateTime.MinValue).ToList();
                 dbSchedules = OrderForCertificate(dbSchedules);
                 var vaccineTable = new PdfPTable(8) { WidthPercentage = 100 };
                 vaccineTable.SetWidths(new float[] { 1.2f, 1f, 1.4f, 0.9f, 1.1f, 1f, 0.9f, 0.9f });
@@ -5625,7 +5679,7 @@ namespace VaccineAPI.Controllers
                 const string DASH = "–";
                 foreach (var schedule in dbSchedules)
                 {
-                    string vaccineName = string.IsNullOrWhiteSpace(schedule.Dose?.Name) ? DASH : schedule.Dose.Name;
+                    string vaccineName = string.IsNullOrWhiteSpace(schedule.Dose?.Name) ? DASH : CertificateDoseName(schedule.Dose.Name);
                     bool isGiven = schedule.GivenDate.HasValue && schedule.GivenDate.Value != DateTime.MinValue;
                     // Not-yet-given doses (including an infinite dose's auto-created next
                     // occurrence) must never look administered — no brand/batch, and the date

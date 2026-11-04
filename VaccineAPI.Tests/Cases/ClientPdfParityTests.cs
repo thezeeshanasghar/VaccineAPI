@@ -15,8 +15,33 @@ namespace VaccineAPI.Tests.Cases;
 /// Fonts are embedded, so printed text isn't readable here: "same document" is proven by comparing the decoded page
 /// content streams. Set PDF_DUMP_DIR to also write each PDF out for text/visual inspection.
 /// </summary>
-public class ClientPdfParityTests
+public class ClientPdfParityTests : IDisposable
 {
+    private readonly IHttpContextAccessor? _savedAccessor = AuthContext.Accessor;
+    public void Dispose() => AuthContext.Accessor = _savedAccessor;
+
+    // The client routes require a signed-in owner (a token), whatever Auth.Mode is, so every test acts as someone.
+    private static void Login(AuthIdentity? id)
+    {
+        var http = new DefaultHttpContext();
+        if (id != null) http.Items["auth.identity"] = id;
+        AuthContext.Accessor = new HttpContextAccessor { HttpContext = http };
+    }
+
+    private static byte[] Bytes(IActionResult r)
+    {
+        if (r is FileContentResult f) return f.FileContents;
+        var s = Assert.IsType<FileStreamResult>(r);
+        using var ms = new MemoryStream(); s.FileStream.CopyTo(ms); return ms.ToArray();
+    }
+
+    private static string NameOf(IActionResult r) => r switch
+    {
+        FileContentResult f => f.FileDownloadName,
+        FileStreamResult s => s.FileDownloadName,
+        _ => throw new Xunit.Sdk.XunitException("expected a file result, got " + r.GetType().Name)
+    };
+
     private sealed class StubHost : Microsoft.AspNetCore.Hosting.IWebHostEnvironment
     {
         public string ApplicationName { get; set; } = "VaccineAPI.Tests";
@@ -48,6 +73,7 @@ public class ClientPdfParityTests
         var s1 = db.Schedules.First(s => s.Id == w.Schedule1Id);
         s1.IsDone = true; s1.GivenDate = StockWorld.Today; s1.BrandId = w.BrandId;
         db.SaveChanges();
+        Login(new AuthIdentity { UserId = child.UserId, Role = "PARENT" });   // the child's own parent
         return w;
     }
 
@@ -145,16 +171,43 @@ public class ClientPdfParityTests
     }
 
     [Fact]
-    public void GivenOnly_WithNothingGiven_StillProducesACertificate_DifferentFromOneWithADose()
+    public void ClientWithNothingGiven_GetsNoCertificate_ButTheDoctorsOwnDownloadStillWorks()
     {
         using var none = TravelWorld();
         Set(none, none.Schedule1Id, done: false, given: null);
         using var one = TravelWorld();
 
-        using var d1 = none.NewContext(); using var d2 = one.NewContext();
-        var empty = Pdf(Ctl(d1).DownloadClientPdf((int)none.ChildId), "client_empty");
-        var full = Pdf(Ctl(d2).DownloadClientPdf((int)one.ChildId));
-        Assert.NotEqual(Content(empty.FileContents), Content(full.FileContents));
+        using var d1 = none.NewContext();
+        var r = Assert.IsType<ObjectResult>(Ctl(d1).DownloadClientPdf((int)none.ChildId));
+        Assert.Equal(409, r.StatusCode);
+        Assert.Contains("NO_GIVEN_DOSE", System.Text.Json.JsonSerializer.Serialize(r.Value));
+
+        // the doctor's given-only download is not gated and still prints the empty-state certificate
+        using var d2 = none.NewContext(); using var d3 = one.NewContext();
+        var doctorEmpty = Pdf(Ctl(d2).GenerateTravelPdf((int)none.ChildId, false), "doctor_empty");
+        var doctorOne = Pdf(Ctl(d3).GenerateTravelPdf((int)one.ChildId, false));
+        Assert.NotEqual(Content(doctorEmpty.FileContents), Content(doctorOne.FileContents));
+    }
+
+    [Fact]
+    public void DoneDoseWithNoGivenDate_DoesNotCountAsGiven()
+    {
+        using var w = TravelWorld();
+        Set(w, w.Schedule1Id, done: true, given: null);
+        using var db = w.NewContext();
+        Assert.Equal(409, Assert.IsType<ObjectResult>(Ctl(db).DownloadClientPdf((int)w.ChildId)).StatusCode);
+    }
+
+    [Fact]
+    public void Checkformissed_DueTodayIsNotMissed_YesterdayIs()
+    {
+        using var w = TravelWorld();
+        using var db = w.NewContext();
+        var c = Ctl(db);
+        var today = Pkt.NowWall().Date;
+        Assert.False(c.checkForMissed(today));
+        Assert.False(c.checkForMissed(today.AddDays(1)));
+        Assert.True(c.checkForMissed(today.AddDays(-1)));
     }
 
     [Fact]
@@ -204,6 +257,13 @@ public class ClientPdfParityTests
             Assert.Equal("text/html", c.ContentType);
             Assert.Contains($"{Pkt.NowWall().Year}-{w.ChildId}", c.Content);
         }
+        // Travel child with nothing given: old apps keep the HTML summary instead of an error file
+        using (var w = TravelWorld())
+        {
+            Set(w, w.Schedule1Id, done: false, given: null);
+            using var db = w.NewContext();
+            Assert.IsType<ContentResult>(Ctl(db).GenerateVerifySchedule((int)w.ChildId));
+        }
     }
 
     [Fact]
@@ -226,6 +286,84 @@ public class ClientPdfParityTests
             Assert.True(Ctl(db).VerifyRecord(mr) is OkObjectResult, "MR format not resolved: " + mr);
         }
     }
+
+    [Fact]
+    public void Anonymous_GetsNothing_AndAStrangerGetsTheSameAnswerAsAMissingChild()
+    {
+        using var w = TravelWorld();
+        Login(null);                                              // Log mode serves token-less requests; this route must not
+        using (var db = w.NewContext())
+            Assert.Equal(401, Assert.IsType<ObjectResult>(Ctl(db).DownloadClientPdf((int)w.ChildId)).StatusCode);
+
+        Login(new AuthIdentity { UserId = 999, Role = "PARENT" });   // someone else's parent account
+        using var db2 = w.NewContext();
+        var stranger = Assert.IsType<NotFoundObjectResult>(Ctl(db2).DownloadClientPdf((int)w.ChildId));
+        var missing = Assert.IsType<NotFoundObjectResult>(Ctl(db2).DownloadClientPdf(123456));
+        Assert.Equal(missing.Value, stranger.Value);              // no way to tell "not yours" from "does not exist"
+    }
+
+    [Fact]
+    public void ADoctorOfTheClinicIsAllowed_ADoctorOfAnotherPracticeIsNot()
+    {
+        using var w = TravelWorld();
+        Login(new AuthIdentity { UserId = 1, Role = "DOCTOR", DoctorId = w.DoctorId });
+        using (var db = w.NewContext()) Pdf(Ctl(db).DownloadClientPdf((int)w.ChildId));
+        Login(new AuthIdentity { UserId = 50, Role = "DOCTOR", DoctorId = w.DoctorId + 77 });
+        using var db2 = w.NewContext();
+        Assert.IsType<NotFoundObjectResult>(Ctl(db2).DownloadClientPdf((int)w.ChildId));
+    }
+
+    [Fact]
+    public void LegacyRoute_NeverHandsTheCertificateToAnAnonymousCaller()
+    {
+        using var w = TravelWorld();
+        Login(null);
+        using var db = w.NewContext();
+        Assert.IsType<ContentResult>(Ctl(db).GenerateVerifySchedule((int)w.ChildId));   // the old summary page, as before
+    }
+
+    [Fact]
+    public void CustomClient_GetsTheSameDocumentsAsTheDoctor_AllVaccinesAndGivenOnly_PortraitAndLandscape()
+    {
+        using var w = TravelWorld("special");
+        foreach (var includeFuture in new[] { true, false })
+        {
+            using var a = w.NewContext(); using var b = w.NewContext(); using var c = w.NewContext(); using var d = w.NewContext();
+            var clientP = Ctl(a).DownloadClientPdf((int)w.ChildId, "portrait", includeFuture);
+            var doctorP = Ctl(b).DownloadCustomPDF((int)w.ChildId, includeFuture);
+            Assert.Equal(NameOf(doctorP), NameOf(clientP));
+            Assert.Equal(Content(Bytes(doctorP)), Content(Bytes(clientP)));
+
+            var clientL = Ctl(c).DownloadClientPdf((int)w.ChildId, "landscape", includeFuture);
+            var doctorL = Ctl(d).DownloadCustomLandscapePDF((int)w.ChildId, includeFuture);
+            Assert.Equal(NameOf(doctorL), NameOf(clientL));
+            Assert.Equal(Content(Bytes(doctorL)), Content(Bytes(clientL)));
+        }
+    }
+
+    [Fact]
+    public void CustomClient_Rules_GivenOnlyNeedsAGivenDose_UnknownLayoutIs400_NoLayoutKeepsTheCard()
+    {
+        using var w = TravelWorld("special");
+        Set(w, w.Schedule1Id, done: false, given: null);
+        using var db = w.NewContext();
+        var c = Ctl(db);
+        Assert.Equal(409, Assert.IsType<ObjectResult>(c.DownloadClientPdf((int)w.ChildId, "portrait", false)).StatusCode);
+        Assert.Equal(409, Assert.IsType<ObjectResult>(c.DownloadClientPdf((int)w.ChildId, "landscape", false)).StatusCode);
+        Assert.Contains("_Schedule_", NameOf(c.DownloadClientPdf((int)w.ChildId, "landscape", true)));   // all vaccines needs no dose
+        Assert.IsType<BadRequestObjectResult>(c.DownloadClientPdf((int)w.ChildId, "sideways", true));
+        Assert.DoesNotContain("_Given_", NameOf(c.DownloadClientPdf((int)w.ChildId)));                  // no layout = unchanged schedule card
+    }
+
+    [Theory]
+    [InlineData("MenACWY 1", "MenACWY")]
+    [InlineData("Hep B 3", "Hep B")]
+    [InlineData("Typhoid 12", "Typhoid")]
+    [InlineData("Flu 2025", "Flu 2025")]       // a year is not a dose number
+    [InlineData("MenACWY", "MenACWY")]
+    [InlineData("", "")]
+    public void CertificateDoseName_DropsOnlyATrailingDoseNumber(string input, string expected) =>
+        Assert.Equal(expected, ChildController.CertificateDoseName(input));
 
     [Fact]
     public void ClientRoute_IsOwnerChecked_AndIsNotOneOfThePublicVerifyRoutes()

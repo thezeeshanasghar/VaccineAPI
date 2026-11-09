@@ -1323,9 +1323,16 @@ namespace VaccineAPI.Controllers
                 ? dbSchedule.DoneAt.Value.AddHours(Pkt.OffsetHours).Date
                 : dbSchedule.GivenDate?.Date;
 
-            if (!dbSchedule.IsDone || !visitDate.HasValue || visitDate.Value != today)
+            // Doctor / Manager may add or correct vitals for up to 7 days after the dose was given;
+            // a PA stays same-day. Growth reference ranges are always read at the given date, not today.
+            var isPaCaller = AuthContext.Current?.Role == "PA";
+            var windowDays = isPaCaller ? 0 : 7;
+
+            if (!dbSchedule.IsDone || !visitDate.HasValue || visitDate.Value > today || (today - visitDate.Value).TotalDays > windowDays)
             {
-                return new Response<ScheduleDTO>(false, "This visit was not completed today. Vitals can only be updated on the same day as the visit.", null);
+                return new Response<ScheduleDTO>(false, isPaCaller
+                    ? "This visit was not completed today. Vitals can only be updated on the same day as the visit."
+                    : "Vitals can only be added within 7 days of the vaccine being given.", null);
             }
 
             dbSchedule.Weight = scheduleDTO.Weight;
@@ -1334,14 +1341,14 @@ namespace VaccineAPI.Controllers
 
             _db.SaveChanges();
 
-            UpsertFollowUpVitalsForToday(dbSchedule, scheduleDTO, today);
+            UpsertFollowUpVitalsForToday(dbSchedule, scheduleDTO, visitDate.Value);
 
             return new Response<ScheduleDTO>(true, "Schedule updated successfully", _mapper.Map<ScheduleDTO>(dbSchedule));
         }
 
         // Propagates after-fill vitals into today's auto-vaccine FollowUp row (Disease == "Vaccination"),
-        // created by autoCreateFollowUp/autoCreateFollowUpForBulk in VacDoc. After-fill is same-day-only,
-        // so (ChildId, CurrentVisitDate.Date == today) reliably identifies the matching row. No-op if
+        // created by autoCreateFollowUp/autoCreateFollowUpForBulk in VacDoc. The row is matched on the
+        // dose's visit date (ChildId, CurrentVisitDate.Date == visit day), which is today for a same-day edit. No-op if
         // no such row exists.
         private void UpsertFollowUpVitalsForToday(Schedule dbSchedule, ScheduleDTO scheduleDTO, DateTime today)
         {

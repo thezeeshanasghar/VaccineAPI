@@ -1357,10 +1357,10 @@ namespace VaccineAPI.Controllers
                                     _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
 
                                 Paragraph pw = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Weight > 0 && normalrange != null)
+                                if (dbSchedule.Weight > 0)
                                 {
                                     pw.Add(new Chunk(dbSchedule.Weight.ToString(), rangevaluefont));
-                                    pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
+                                    if (normalrange != null) pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
                                 }
 
                                 PdfPCell weightCell = new PdfPCell(pw);
@@ -1369,10 +1369,10 @@ namespace VaccineAPI.Controllers
                                 table.AddCell(weightCell);
 
                                 Paragraph ph = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Height > 0 && normalrange != null)
+                                if (dbSchedule.Height > 0)
                                 {
                                     ph.Add(new Chunk(dbSchedule.Height.ToString(), rangevaluefont));
-                                    ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
+                                    if (normalrange != null) ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
                                 }
 
                                 PdfPCell heightCell = new PdfPCell(ph);
@@ -1385,18 +1385,18 @@ namespace VaccineAPI.Controllers
                                 Font ofcRangeFont = FontFactory.GetFont(FontFactory.HELVETICA, 5);
                                 
                                 Paragraph pc = new Paragraph("", ofcValueFont);
-                                if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
+                                if (dbSchedule.Circle > 0 && ageInMonths < 25)
                                 {
                                     pc.Add(new Chunk(dbSchedule.Circle.ToString(), ofcValueFont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", ofcRangeFont));
+                                    if (normalrange != null) pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", ofcRangeFont));
                                 }
 
-                                if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
+                                if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && ageInMonths > 24)
                                 {
                                     double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
                                     BMI = Math.Round(BMI, 1);
                                     pc.Add(new Chunk(BMI.ToString(), ofcValueFont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", ofcRangeFont));
+                                    if (normalrange != null) pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", ofcRangeFont));
                                 }
                                 PdfPCell circleCell = new PdfPCell(pc);
                                 circleCell.HorizontalAlignment = Element.ALIGN_CENTER;
@@ -2202,38 +2202,38 @@ namespace VaccineAPI.Controllers
                                 NormalRange normalrange =
                                     _db.NormalRanges.Where(x => x.Age == ageInMonths && x.Gender == Gender).FirstOrDefault();
                                 Paragraph pw = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Weight > 0 && normalrange != null)
+                                if (dbSchedule.Weight > 0)
                                 {
                                     pw.Add(new Chunk(dbSchedule.Weight.ToString(), rangevaluefont));
-                                    pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
+                                    if (normalrange != null) pw.Add(new Chunk(" (" + normalrange.WeightMin + "-" + normalrange.WeightMax + ")", rangefont));
                                 }
                                 PdfPCell weightCell = new PdfPCell(pw);
                                 weightCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 weightCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(weightCell);
                                 Paragraph ph = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Height > 0 && normalrange != null)
+                                if (dbSchedule.Height > 0)
                                 {
                                     ph.Add(new Chunk(dbSchedule.Height.ToString(), rangevaluefont));
-                                    ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
+                                    if (normalrange != null) ph.Add(new Chunk(" (" + normalrange.HeightMin + "-" + normalrange.HeightMax + ")", rangefont));
                                 }
                                 PdfPCell heightCell = new PdfPCell(ph);
                                 heightCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 heightCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(heightCell);
                                 Paragraph pc = new Paragraph("", rangevaluefont);
-                                if (dbSchedule.Circle > 0 && normalrange != null && ageInMonths < 25)
+                                if (dbSchedule.Circle > 0 && ageInMonths < 25)
                                 {
                                     pc.Add(new Chunk(dbSchedule.Circle.ToString(), rangevaluefont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                    if (normalrange != null) pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
                                 }
                                 // FOR BMI
-                                if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && normalrange != null && ageInMonths > 24)
+                                if (dbSchedule.Height > 0 && dbSchedule.Weight > 0 && ageInMonths > 24)
                                 {
                                     double BMI = (double)(dbSchedule.Weight / (dbSchedule.Height * dbSchedule.Height / 10000));
                                     BMI = Math.Round(BMI, 1);
                                     pc.Add(new Chunk(BMI.ToString(), rangevaluefont));
-                                    pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
+                                    if (normalrange != null) pc.Add(new Chunk(" (" + normalrange.OfcMin + "-" + normalrange.OfcMax + ")", rangefont));
                                 }
                                 PdfPCell circleCell = new PdfPCell(pc);
                                 circleCell.HorizontalAlignment = Element.ALIGN_CENTER;

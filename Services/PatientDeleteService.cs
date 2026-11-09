@@ -104,10 +104,10 @@ namespace VaccineAPI.Services
 
         // Puts every consumed unit back (ledger Unadminister on the give's own batch) and cancels the
         // child's assignments that carry no invoice. Caller saves. Invoices and payments are untouched.
-        public static void Reverse(Context db, Child child, Footprint fp)
+        public static void Reverse(Context db, Child child, Footprint fp, bool restoreStock = true)
         {
             var inv = new InventoryTransactionService(db);
-            foreach (var d in fp.GivenDoses.Where(d => d.ConsumedStock))
+            foreach (var d in fp.GivenDoses.Where(d => restoreStock && d.ConsumedStock))
             {
                 var s = db.Schedules.First(x => x.Id == d.ScheduleId);
                 var clinicId = inv.LiveGiveClinicId(s.Id) ?? child.ClinicId;
@@ -146,7 +146,7 @@ namespace VaccineAPI.Services
                 ["dob"] = child.DOB.ToString("yyyy-MM-dd"),
                 ["actor"] = actorType,
                 ["actorId"] = actorId,
-                ["mode"] = mode,                              // "none" | "reverse"
+                ["mode"] = mode,                              // "none" | "reverse" | "keep" (deleted, stock left consumed)
                 ["stockRestoredDoses"] = fp.GivenDoses.Count(d => d.ConsumedStock && mode == "reverse"),
                 ["invoices"] = JToken.FromObject(fp.Invoices)
             };

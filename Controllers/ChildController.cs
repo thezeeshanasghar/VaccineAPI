@@ -4028,24 +4028,25 @@ namespace VaccineAPI.Controllers
 
             var fp = VaccineAPI.Services.PatientDeleteService.Preview(_db, dbChild);
             bool reverse = string.Equals(mode, "reverse", StringComparison.OrdinalIgnoreCase);
+            bool keepStock = string.Equals(mode, "keep", StringComparison.OrdinalIgnoreCase);
             if (fp.HasFootprint)
             {
                 if (byPa)
                     return new Response<string>(false,
                         "This patient already has given doses or invoices. Ask the doctor to delete or deactivate them.", null)
                         { RuleCode = "PATIENT_HAS_ENTRIES" };
-                if (!reverse)
+                if (!reverse && !keepStock)
                     return new Response<string>(false,
-                        "This patient has given doses or invoices. Choose to reverse stock and delete, or deactivate the patient.", null)
+                        "This patient has given doses or invoices. Choose to reverse stock and delete, delete without reversing stock, or deactivate the patient.", null)
                         { RuleCode = "PATIENT_HAS_ENTRIES" };
-                VaccineAPI.Services.PatientDeleteService.Reverse(_db, dbChild, fp);
+                VaccineAPI.Services.PatientDeleteService.Reverse(_db, dbChild, fp, reverse);
             }
 
             // Audit first, in the same SaveChanges as the delete: who deleted which patient, and the
             // name, so no row that outlives the patient is ever anonymous.
             VaccineAPI.Services.PatientDeleteService.AddAudit(_db, dbChild, fp,
                 byPa ? "PA" : "DOCTOR", byPa ? (paId ?? 0) : VaccineAPI.Services.PatientDeleteService.DoctorIdOf(_db, dbChild),
-                fp.HasFootprint ? "reverse" : "none");
+                fp.HasFootprint ? (keepStock ? "keep" : "reverse") : "none");
 
             // Doses waiting for batch details die with the patient record; consumed batches keep
             // their ledger rows (the vial was really used) unless the doctor chose to reverse them above.
@@ -4056,7 +4057,8 @@ namespace VaccineAPI.Controllers
             _db.Childs.Remove(dbChild);
             _db.SaveChanges();
             return new Response<string>(true, fp.HasFootprint
-                ? "Stock restored and patient deleted. Payments stay in Payment Reconciliation until you cancel them."
+                ? (keepStock ? "Patient deleted. Stock was not changed. Payments stay in Payment Reconciliation until you cancel them."
+                : "Stock restored and patient deleted. Payments stay in Payment Reconciliation until you cancel them.")
                 : "Child is deleted successfully", null);
         }
 

@@ -10,7 +10,7 @@ namespace VaccineAPI.Controllers
     public class UploadController : ControllerBase
     {
 
-        [HttpPost, DisableRequestSizeLimit]
+        [HttpPost, RequestSizeLimit(10 * 1024 * 1024)]
         public IActionResult Upload()
         {
             try
@@ -26,7 +26,12 @@ namespace VaccineAPI.Controllers
 
                 if (file.Length > 0)
                 {
-                    var fileName = ContentDispositionHeaderValue.Parse(file.ContentDisposition).FileName?.Trim('"') ?? file.FileName;
+                    // The client-supplied name is untrusted: it used to be joined into the path as-is ("../" could write anywhere,
+                    // and any extension was accepted). Keep only a whitelisted extension and generate the name.
+                    var ext = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
+                    if (ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" && ext != ".pdf")
+                        return BadRequest("Unsupported file type.");
+                    var fileName = Guid.NewGuid().ToString("N") + ext;
                     var fullPath = Path.Combine(pathToSave, fileName);
                     var dbPath = Path.Combine(folderName, fileName);
 

@@ -250,6 +250,15 @@ namespace VaccineAPI
     // verification pages and the self-signup flow. Everything else needs a token.
     public static class PublicEndpoints
     {
+        private static readonly System.Text.RegularExpressions.Regex PublicVerifyRoute = new System.Text.RegularExpressions.Regex(
+            @"^/api/child/(" +
+            @"\d+/verification-schedule-pdf|\d+/verification-custom-pdf|" +
+            @"\d+/scheduleverify|\d+/customverify|\d+/customlandscapeverify|" +
+            @"[^/]+/[^/]+/[^/]+/[^/]+/verification-invoice-pdf|" +
+            @"verifyrecord|verifyinvoice|pidverify/[^/]+|" +
+            @"travel-pdf-download-verify/[^/]+|travel-pdf-download-verification/[^/]+)$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
         public static bool IsPublic(string method, string rawPath)
         {
             string p = rawPath.TrimEnd('/').ToLowerInvariant();
@@ -269,7 +278,9 @@ namespace VaccineAPI
                 return true;
 
             // QR verification pages opened from a printed certificate or invoice
-            if (get && p.Contains("verif")) return true;
+            // Explicit list (was: any GET whose path contained "verif", which also opened mutating and admin routes).
+            // Verify-Invoice-PDF is NOT here: it issues invoices, so it needs a signed-in caller.
+            if (get && p.StartsWith("/api/child/") && PublicVerifyRoute.IsMatch(p)) return true;
 
             // Self sign-up: doctor registration, its image upload, city list, parent/agent self registration
             if (post && (p == "/api/doctor" || p == "/api/upload" || p == "/api/child/agent-register")) return true;

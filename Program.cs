@@ -76,4 +76,15 @@ app.UseMiddleware<VaccineAPI.AuthMiddleware>();
 
 app.MapControllers();
 
+// Deploy check: not under /api/, so the auth middleware treats it as public. Says nothing about auth mode
+// (that would tell an anonymous caller whether requests are enforced); the mode is logged at startup instead.
+app.MapGet("/health", async (VaccineAPI.Models.Context db) =>
+{
+    bool dbOk;
+    try { dbOk = await db.Database.CanConnectAsync(); } catch { dbOk = false; }
+    var body = new { status = dbOk ? "ok" : "degraded", db = dbOk, utc = DateTime.UtcNow };
+    return dbOk ? Results.Ok(body) : Results.Json(body, statusCode: 503);
+});
+Console.WriteLine($"[AUTH] startup mode={VaccineAPI.AuthContext.Mode} enforcing={VaccineAPI.AuthContext.Enforcing}");
+
 app.Run();

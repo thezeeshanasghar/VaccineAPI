@@ -186,6 +186,22 @@ namespace VaccineAPI
                     Console.WriteLine($"[AUTH-LOG] role not allowed: {rk} (x{rn})");
             }
 
+            // Anonymous QR-verification lookups: throttle callers who keep asking for records that
+            // do not exist (someone walking MR numbers). Signed-in staff are not counted.
+            string? verifyIp = null;
+            if (identity == null && VerifyThrottle.Applies(ctx.Request.Method, path))
+            {
+                verifyIp = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                if (VerifyThrottle.TryGetBlock(verifyIp, out var retryAfter))
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    ctx.Response.Headers["Retry-After"] = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+                    ctx.Response.ContentType = "application/json";
+                    await ctx.Response.WriteAsync("{\"message\":\"Too many failed attempts. Try again later.\"}");
+                    return;
+                }
+            }
+
             if (identity == null && !PublicEndpoints.IsPublic(ctx.Request.Method, path))
             {
                 if (AuthContext.Enforcing)
@@ -205,6 +221,9 @@ namespace VaccineAPI
             }
 
             await _next(ctx);
+
+            if (verifyIp != null && ctx.Response.StatusCode == StatusCodes.Status404NotFound)
+                VerifyThrottle.Fail(verifyIp);
         }
 
         // "Authorization: Bearer x" for API calls; "?access_token=x" for plain GET links (window.open, <a>)
@@ -334,5 +353,92 @@ namespace VaccineAPI
                 (_, s) => DateTime.UtcNow - s.since > Window ? (1, DateTime.UtcNow) : (s.fails + 1, s.since));
 
         public static void Success(string key) => State.TryRemove(key, out _);
+    }
+
+    // Slows down record guessing on the anonymous verify routes (VerifyRecord, VerifyInvoice, the
+    // verification PDFs). Counted per client IP; a "failure" is a lookup that found nothing (404).
+    //   3 failures within 5 minutes -> suspended 15 min
+    //   first failure after that    -> 1 hour, then 6 hours, then 24 hours (24 hours from there on)
+    // The ladder is forgotten after 24 hours with no new suspension.
+    public static class VerifyThrottle
+    {
+        private const int FreeFails = 3;
+        private static readonly TimeSpan FailWindow = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan[] Steps =
+            { TimeSpan.FromMinutes(15), TimeSpan.FromHours(1), TimeSpan.FromHours(6), TimeSpan.FromHours(24) };
+        private static readonly TimeSpan Forget = TimeSpan.FromHours(24);
+
+        private sealed class Entry
+        {
+            public readonly List<DateTime> Fails = new();
+            public int Level;                 // suspensions served so far
+            public DateTime BlockedUntil;
+        }
+
+        private static readonly ConcurrentDictionary<string, Entry> State = new();
+        private static DateTime _lastSweep = DateTime.UtcNow;
+
+        public static bool Applies(string method, string rawPath)
+        {
+            if (!HttpMethods.IsGet(method)) return false;
+            string p = rawPath.ToLowerInvariant();
+            return p.StartsWith("/api/") && p.Contains("verif");
+        }
+
+        public static bool TryGetBlock(string ip, out TimeSpan remaining)
+        {
+            remaining = TimeSpan.Zero;
+            if (!State.TryGetValue(ip, out var e)) return false;
+            lock (e)
+            {
+                var left = e.BlockedUntil - DateTime.UtcNow;
+                if (left <= TimeSpan.Zero) return false;
+                remaining = left;
+                return true;
+            }
+        }
+
+        public static void Fail(string ip)
+        {
+            var now = DateTime.UtcNow;
+            Sweep(now);
+            var e = State.GetOrAdd(ip, _ => new Entry());
+            lock (e)
+            {
+                if (e.BlockedUntil > now) return;   // already suspended; a parallel request must not stack a step
+
+                // Strikes are forgotten after a clean day.
+                if (e.Level > 0 && now - e.BlockedUntil > Forget) { e.Level = 0; e.Fails.Clear(); }
+
+                e.Fails.RemoveAll(t => now - t > FailWindow);
+                e.Fails.Add(now);
+
+                // First suspension needs FreeFails misses; once on the ladder, one miss is enough.
+                if (e.Level == 0 && e.Fails.Count < FreeFails) return;
+
+                e.BlockedUntil = now + Steps[Math.Min(e.Level, Steps.Length - 1)];
+                e.Level++;
+                e.Fails.Clear();
+                Console.WriteLine($"[VERIFY-THROTTLE] {ip} suspended until {e.BlockedUntil:u} (step {e.Level})");
+            }
+        }
+
+        private static void Sweep(DateTime now)
+        {
+            if (now - _lastSweep < TimeSpan.FromMinutes(10)) return;
+            _lastSweep = now;
+            foreach (var kv in State)
+            {
+                lock (kv.Value)
+                {
+                    bool idle = kv.Value.BlockedUntil + Forget < now
+                                && kv.Value.Fails.All(t => now - t > FailWindow);
+                    if (idle) State.TryRemove(kv.Key, out _);
+                }
+            }
+        }
+
+        // For tests.
+        public static void Reset() => State.Clear();
     }
 }

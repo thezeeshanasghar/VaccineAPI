@@ -1509,6 +1509,10 @@ namespace VaccineAPI.Controllers
         private void AuditGiveOrUngive(ICollection<Schedule> doses, bool given, long knownAssignmentId, ScheduleDTO dto)
         {
             if (doses.Count == 0) return;
+            foreach (var d in doses)
+                FinancialAudit.Stamp(_db, given ? "Give" : "Ungive", doctorId: dto.DoctorId, childId: d.ChildId, scheduleId: d.Id,
+                    assignmentId: knownAssignmentId > 0 ? knownAssignmentId : (long?)null, claimedPaId: dto.PaId,
+                    detail: new { claimedManagerId = dto.ManagerId });
             var actor = AssignmentAudit.Actor(dto.PaId, dto.ManagerId, dto.DoctorId);
             var action = given ? "Given" : "Ungiven";
             var verb = given ? "given" : "ungiven";
@@ -3523,6 +3527,10 @@ namespace VaccineAPI.Controllers
                 return;
             if (!invoiceCreatedThisRequest && invoice.IsConfirmedByDoctor)
                 return;
+            if (invoiceCreatedThisRequest)
+                FinancialAudit.Stamp(_db, "InvoiceCreate", doctorId: invoice.DoctorId, clinicId: invoice.ClinicId, childId: childId,
+                    invoiceSubmissionId: invoice.Id, amount: invoice.TotalAmount, claimedPaId: auditActor?.Type == "PA" ? auditActor?.Id : null,
+                    detail: new { invoicePaIdAtCreate = invoice.PaId });
 
             var invoiceDoses = _db.Schedules
                 .Where(s => s.ChildId == childId && s.InvoiceSubmissionId == invoice.Id)
@@ -5735,6 +5743,9 @@ namespace VaccineAPI.Controllers
             var mode = schedule.PaymentMode ?? "";
             if (mode == "Online" && !string.IsNullOrEmpty(schedule.OnlineService)) mode += " (" + schedule.OnlineService + ")";
             var amount = schedule.Amount ?? 0;
+            FinancialAudit.Stamp(_db, "PaymentRecord", doctorId: dto.DoctorId, childId: schedule.ChildId, scheduleId: schedule.Id,
+                invoiceSubmissionId: schedule.InvoiceSubmissionId, amount: amount, claimedPaId: dto.PaId,
+                detail: new { mode = schedule.PaymentMode, onlineService = schedule.OnlineService, collectorPaId = schedule.PaymentCollectorPaId });
             AssignmentAudit.AddForDoses(_db, "PaymentRecorded", new[] { schedule },
                 "payment recorded: " + mode + (amount > 0 ? ", " + amount.ToString("0") : ""),
                 actor.Type, actor.Id, new { mode = schedule.PaymentMode, amount });
@@ -5873,6 +5884,8 @@ namespace VaccineAPI.Controllers
             var confirmOwners = AssignmentResolver.OwnersOfInvoice(_db, inv.Id).Where(a => !a.IsCashConfirmedByDoctor).ToList();
             var closedNow = CloseSettledOwnersOfInvoice(inv);
             if (confirmOwners.Count == 0) confirmOwners = closedNow;
+            FinancialAudit.Stamp(_db, "Confirm", doctorId: doctorId, clinicId: inv?.ClinicId, childId: inv?.ChildId,
+                invoiceSubmissionId: inv?.Id, amount: inv?.TotalAmount, claimedPaId: inv?.PaId);
             var confirmActor = AssignmentAudit.ActorFromUser(_db, callerUserId, doctorId);
             foreach (var a in confirmOwners)
                 AssignmentAudit.Add(_db, "Confirmed", a, confirmActor.Type, confirmActor.Type == "DOCTOR" ? a.DoctorId : confirmActor.Id,

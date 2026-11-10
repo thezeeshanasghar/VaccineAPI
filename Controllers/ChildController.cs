@@ -1,3 +1,4 @@
+using VaccineAPI.Services;
 ﻿using System.Globalization;
 using System.Net.Mail;
 using System.Text;
@@ -3148,6 +3149,8 @@ namespace VaccineAPI.Controllers
             {
                 return NotFound(new { message = "Child not found." });
             }
+            FinancialAudit.Stamp(_db, "InvoiceIssue", childId: Id, detail: new { scheduleDate = ScheduleDate, consultationFee = ConsultationFee });
+            _db.SaveChanges();
 
             // Convert Id to long before using Find()
             long childId = (long)Id;
@@ -3606,6 +3609,8 @@ namespace VaccineAPI.Controllers
             // only reads what was saved, so an anonymous request can never issue or void an invoice.
             var issued = CreateInvoiceCell(Id, ScheduleDate, InvoiceDate, ConsultationFee);
             if (issued == null) return NotFound(new { message = "Child not found." });
+            FinancialAudit.Stamp(_db, "InvoiceIssue", childId: Id, detail: new { scheduleDate = ScheduleDate, consultationFee = ConsultationFee });
+            _db.SaveChanges();
 
             var fileUrl = $"https://myapi.vaccinationcentre.com/api/Child/{Id}/{ScheduleDate:yyyy-MM-dd}/{InvoiceDate:yyyy-MM-dd}/{ConsultationFee}/Verification-Invoice-PDF";
 

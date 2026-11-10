@@ -3213,6 +3213,27 @@ namespace VaccineAPI.Controllers
         [HttpPut("update-bulk-invoice")]
         public Response<object> updateInvoice([FromBody] BulkInvoiceSubmitDTO dto)
         {
+            // integrity.tx: the invoice, its dose links and the owner link used to commit in three separate saves, so a
+            // failure in between left an invoice with money and no doses (71 such rows in prod). With the flag on they
+            // commit together or not at all. Flag off = exactly the old behaviour.
+            if (!FeatureFlags.IsOn(_db, "integrity.tx") || _db.Database.CurrentTransaction != null)
+                return UpdateInvoiceCore(dto);
+            using var tx = _db.Database.BeginTransaction();
+            try
+            {
+                var result = UpdateInvoiceCore(dto);
+                if (result.IsSuccess) tx.Commit(); else tx.Rollback();
+                return result;
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
+        }
+
+        private Response<object> UpdateInvoiceCore(BulkInvoiceSubmitDTO dto)
+        {
             // Reject an InvoiceDate implausibly ahead of now — a real invoice was found live in
             // production 5 months in the future (InvoiceDate stamped from a due-date bucket the
             // client happened to be browsing instead of the actual given date; VacDoc's

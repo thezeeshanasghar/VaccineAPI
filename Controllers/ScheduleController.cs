@@ -299,7 +299,7 @@ namespace VaccineAPI.Controllers
         [Owns(OwnerKind.Schedule, "Id")]
         [HttpPut("child-schedule")]
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
-            => InOneTransaction(() => UpdateCore(scheduleDTO));
+            => InOneTransaction(() => { IdentityBinding.Bind(_db, scheduleDTO); return UpdateCore(scheduleDTO); });
 
         private Response<ScheduleDTO> UpdateCore(ScheduleDTO scheduleDTO)
         {
@@ -2475,7 +2475,7 @@ namespace VaccineAPI.Controllers
         [Owns(OwnerKind.Child, "ChildId")]
         [HttpPut("update-bulk-injection")]
         public Response<ScheduleDTO> UpdateBulkInjection(ScheduleDTO scheduleDTO)
-            => InOneTransaction(() => UpdateBulkInjectionCore(scheduleDTO));
+            => InOneTransaction(() => { IdentityBinding.Bind(_db, scheduleDTO); return UpdateBulkInjectionCore(scheduleDTO); });
 
         private Response<ScheduleDTO> UpdateBulkInjectionCore(ScheduleDTO scheduleDTO)
         {

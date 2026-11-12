@@ -249,4 +249,25 @@ public class VisitReversalTests
         using var db = w.NewContext();
         Assert.True(db.PAAssignments.Any(a => a.Id == f.AsgId));
     }
+
+    [Fact]
+    public void With_reversal_v2_on_a_doctor_ungive_is_a_correction_and_keeps_the_assignment()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w);
+        using (var fdb = w.NewContext()) { fdb.FeatureFlags.Add(new FeatureFlag { FlagKey = VisitReversal.FlagV2, IsOn = true }); fdb.SaveChanges(); }
+        FeatureFlags.ResetCache();
+        try
+        {
+            GiveVisit(w);
+            var u = w.BulkUngive(w.Schedule1Id, w.BrandId, true, w.Schedule1Id, w.Schedule2Id); Assert.True(u.IsSuccess, u.Message);
+            using var db = w.NewContext();
+            Assert.True(db.PAAssignments.Any(a => a.Id == f.AsgId));
+            Assert.Equal(2, db.PAAssignmentSchedules.Count(l => l.AssignmentId == f.AsgId));
+            Assert.False(db.VaccineRefusals.Any(r => r.AssignmentId == f.AsgId));
+            Assert.False(db.PaActivityLogs.Any(l => l.ActionCode == "AsgReversed" && l.PatientId == w.ChildId));
+            Assert.False(db.Notifications.Any(n => n.Type == "PaRefusalApproved" && n.RecipientId == f.PaId));
+        }
+        finally { FeatureFlags.ResetCache(); }
+    }
 }

@@ -16,8 +16,20 @@ namespace VaccineAPI.Services
     // is left open.
     public static class VisitReversal
     {
+        public const string FlagV2 = "reversal.v2";
+        public const string PaUngiveAfterPaymentMsg = "A PA cannot ungive once payment is recorded. Ask the doctor.";
+        public const string PaCannotReverseMsg = "A PA cannot remove or reverse assignments. Ask the doctor.";
+
+        // PA_REVERSAL_SPEC.md R5: with reversal.v2 on, a PA can never ungive a dose that has an invoice or a payment.
+        public static bool PaUngiveBlocked(Context db, Schedule dose)
+            => FeatureFlags.IsOn(db, FlagV2) && (dose.InvoiceSubmissionId.HasValue || dose.IsPaymentCollected);
+
         public static int CloseEmptied(Context db, IEnumerable<Schedule> ungivenDoses, string note)
         {
+            // PA_REVERSAL_SPEC.md R1: with reversal.v2 on, a plain doctor ungive is a correction. The
+            // assignment and pins stay, no refusal is written, the PA gets no "Visit reversed" push.
+            // "Client refused" is a separate explicit action (R2), not built here.
+            if (FeatureFlags.IsOn(db, FlagV2)) return 0;
             var owners = new Dictionary<long, PAAssignment>();
             foreach (var dose in ungivenDoses)
             {

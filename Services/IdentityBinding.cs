@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using VaccineAPI.Models;
 using VaccineAPI.ModelDTO;
 
@@ -13,6 +15,15 @@ namespace VaccineAPI.Services
     public static class IdentityBinding
     {
         public const string Flag = "identity.bind";
+        private const string ClaimKey = "bind.claimedPaId";
+
+        // What the request body originally said, before Bind replaced it (so audit rows keep the real claim).
+        public static long? ClaimedPaId(ScheduleDTO? dto)
+        {
+            var items = AuthContext.Accessor?.HttpContext?.Items;
+            if (items != null && items.TryGetValue(ClaimKey, out var v)) return v as long?;
+            return dto?.PaId;
+        }
 
         // Returns what was changed, or null when nothing was. Never throws: it must not break the action.
         public static string? Bind(Context db, ScheduleDTO dto)
@@ -25,6 +36,8 @@ namespace VaccineAPI.Services
 
                 string? note = null;
                 var claimedPa = dto.PaId;
+                var items = AuthContext.Accessor?.HttpContext?.Items;
+                if (items != null) items[ClaimKey] = claimedPa;
 
                 if (id.Role == "PA" && id.PaId.HasValue)
                 {
@@ -58,9 +71,14 @@ namespace VaccineAPI.Services
                 }
 
                 if (note != null)
+                {
+                    // The app's give/ungive body carries no ChildId, so read it from the schedule row.
+                    long? childId = dto.ChildId > 0 ? dto.ChildId
+                        : db.Schedules.AsNoTracking().Where(x => x.Id == dto.Id).Select(x => (long?)x.ChildId).FirstOrDefault();
                     FinancialAudit.Stamp(db, "IdentityBind", doctorId: dto.DoctorId > 0 ? dto.DoctorId : (long?)null,
-                        childId: dto.ChildId > 0 ? dto.ChildId : (long?)null, scheduleId: dto.Id > 0 ? dto.Id : (long?)null,
+                        childId: childId, scheduleId: dto.Id > 0 ? dto.Id : (long?)null,
                         claimedPaId: claimedPa, detail: new { note });
+                }
                 return note;
             }
             catch { return null; }

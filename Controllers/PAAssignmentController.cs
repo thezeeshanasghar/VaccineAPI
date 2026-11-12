@@ -207,6 +207,10 @@ namespace VaccineAPI.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId, [FromQuery] string mode = "UnassignOnly", [FromQuery] string? reason = null, [FromQuery] bool notifyPa = true)
         {
+            // R5 (reversal.v2): removing or reversing an assignment is doctor-only. A PA token is refused here
+            // whatever doctorId the caller put in the URL.
+            if (AuthContext.Current?.Role == "PA" && VaccineAPI.Services.FeatureFlags.IsOn(_db, VaccineAPI.Services.VisitReversal.FlagV2))
+                return Ok(new { IsSuccess = false, Message = VaccineAPI.Services.VisitReversal.PaCannotReverseMsg });
             var assignment = await _db.PAAssignments.FindAsync(id);
             if (assignment == null)
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });

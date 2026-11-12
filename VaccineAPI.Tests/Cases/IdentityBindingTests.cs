@@ -118,5 +118,26 @@ namespace VaccineAPI.Tests.Cases
             Assert.Null(IdentityBinding.Bind(db, d));
             Assert.Null(d.PaId);
         }
+
+        [Fact]
+        public void Bind_row_takes_ChildId_from_the_schedule_when_the_body_has_none()
+        {
+            using var w = new StockWorld(); using var db = w.NewContext();
+            Flags(db, true); As(new AuthIdentity { UserId = 7, Role = "PA", PaId = 19, DoctorId = 1 });
+            var d = new ScheduleDTO { Id = w.Schedule1Id, DoctorId = w.DoctorId };   // the app's body: no ChildId, no PaId
+            IdentityBinding.Bind(db, d); db.SaveChanges();
+            Assert.Equal(w.ChildId, db.FinancialAudit.Single(r => r.Action == "IdentityBind").ChildId);
+        }
+
+        [Fact]
+        public void ClaimedPaId_keeps_the_original_body_claim_after_Bind()
+        {
+            using var t = new TestDb(); using var db = t.NewContext();
+            Flags(db, true); As(new AuthIdentity { UserId = 7, Role = "PA", PaId = 19, DoctorId = 1 });
+            var d = Dto(pa: 22);
+            IdentityBinding.Bind(db, d);
+            Assert.Equal(19, d.PaId);
+            Assert.Equal(22, IdentityBinding.ClaimedPaId(d));
+        }
     }
 }

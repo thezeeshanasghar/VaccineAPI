@@ -279,13 +279,14 @@ namespace VaccineAPI.Controllers
         // Every stock effect of a give / ungive / brand-change and the dose record itself are one
         // database transaction: any rejection after stock was touched rolls EVERYTHING back, so a
         // refused request can never leave stock consumed (and a retry can never double-consume).
-        private Response<ScheduleDTO> InOneTransaction(Func<Response<ScheduleDTO>> work)
+        private Response<ScheduleDTO> InOneTransaction(Func<Response<ScheduleDTO>> work, ScheduleDTO? attempt = null)
         {
             using var tx = _db.Database.BeginTransaction();
             try
             {
                 var result = work();
-                if (result != null && result.IsSuccess) tx.Commit(); else tx.Rollback();
+                if (result != null && result.IsSuccess) tx.Commit();
+                else { tx.Rollback(); RecordRejected(attempt, result?.Message); }
                 return result!;
             }
             catch
@@ -295,11 +296,29 @@ namespace VaccineAPI.Controllers
             }
         }
 
+        // PA_REVERSAL_SPEC.md R11: a refused attempt is an event too. The request's own transaction is rolled back, so
+        // this writes one financialaudit row after it, on its own. Only while identity.stamp is on; never throws.
+        private void RecordRejected(ScheduleDTO? dto, string? message)
+        {
+            try
+            {
+                if (dto == null || !FeatureFlags.IsOn(_db, FinancialAudit.Flag)) return;
+                _db.ChangeTracker.Clear();
+                long? childId = dto.ChildId > 0 ? dto.ChildId
+                    : _db.Schedules.AsNoTracking().Where(x => x.Id == dto.Id).Select(x => (long?)x.ChildId).FirstOrDefault();
+                FinancialAudit.Stamp(_db, "Rejected", doctorId: dto.DoctorId > 0 ? dto.DoctorId : (long?)null, childId: childId,
+                    scheduleId: dto.Id > 0 ? dto.Id : (long?)null, claimedPaId: IdentityBinding.ClaimedPaId(dto),
+                    detail: new { message, isDone = dto.IsDone, boundPaId = dto.PaId, boundManagerId = dto.ManagerId });
+                _db.SaveChanges();
+            }
+            catch { /* auditing must never change the response */ }
+        }
+
         [Owns(OwnerKind.Child, "ChildId")]
         [Owns(OwnerKind.Schedule, "Id")]
         [HttpPut("child-schedule")]
         public Response<ScheduleDTO> Update(ScheduleDTO scheduleDTO)
-            => InOneTransaction(() => { IdentityBinding.Bind(_db, scheduleDTO); return UpdateCore(scheduleDTO); });
+            => InOneTransaction(() => { IdentityBinding.Bind(_db, scheduleDTO); return UpdateCore(scheduleDTO); }, scheduleDTO);
 
         private Response<ScheduleDTO> UpdateCore(ScheduleDTO scheduleDTO)
         {
@@ -331,6 +350,9 @@ namespace VaccineAPI.Controllers
                     if (permError != null)
                         return permError;
                 }
+                // R5 (reversal.v2): a PA can never ungive a dose that already has an invoice or payment.
+                if (scheduleDTO.PaId.HasValue && scheduleDTO.IsDone == false && dbSchedule.IsDone && VisitReversal.PaUngiveBlocked(_db, dbSchedule))
+                    return new Response<ScheduleDTO>(false, VisitReversal.PaUngiveAfterPaymentMsg, null);
 
                 // CDC 4-day grace outcome for this give (set in the MinGap check below, carried
                 // onto the success Response so the client can show the informational note).
@@ -1511,7 +1533,7 @@ namespace VaccineAPI.Controllers
             if (doses.Count == 0) return;
             foreach (var d in doses)
                 FinancialAudit.Stamp(_db, given ? "Give" : "Ungive", doctorId: dto.DoctorId, childId: d.ChildId, scheduleId: d.Id,
-                    assignmentId: knownAssignmentId > 0 ? knownAssignmentId : (long?)null, claimedPaId: dto.PaId,
+                    assignmentId: knownAssignmentId > 0 ? knownAssignmentId : (long?)null, claimedPaId: IdentityBinding.ClaimedPaId(dto),
                     detail: new { claimedManagerId = dto.ManagerId });
             var actor = AssignmentAudit.Actor(dto.PaId, dto.ManagerId, dto.DoctorId);
             var action = given ? "Given" : "Ungiven";
@@ -2475,7 +2497,7 @@ namespace VaccineAPI.Controllers
         [Owns(OwnerKind.Child, "ChildId")]
         [HttpPut("update-bulk-injection")]
         public Response<ScheduleDTO> UpdateBulkInjection(ScheduleDTO scheduleDTO)
-            => InOneTransaction(() => { IdentityBinding.Bind(_db, scheduleDTO); return UpdateBulkInjectionCore(scheduleDTO); });
+            => InOneTransaction(() => { IdentityBinding.Bind(_db, scheduleDTO); return UpdateBulkInjectionCore(scheduleDTO); }, scheduleDTO);
 
         private Response<ScheduleDTO> UpdateBulkInjectionCore(ScheduleDTO scheduleDTO)
         {
@@ -2520,6 +2542,8 @@ namespace VaccineAPI.Controllers
                 {
                     if (scheduleDTO.IsDone == false && checkSchedule.IsDone == true)
                     {
+                        if (scheduleDTO.PaId.HasValue && VisitReversal.PaUngiveBlocked(_db, checkSchedule))
+                            return new Response<ScheduleDTO>(false, VisitReversal.PaUngiveAfterPaymentMsg, null);
                         if (checkSchedule.UngiveCount >= 2)
                             return new Response<ScheduleDTO>(false, "One or more vaccines have already been ungiven twice. Contact the doctor.", null);
                         bool ownsGive = scheduleDTO.PaId.HasValue

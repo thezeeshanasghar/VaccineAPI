@@ -301,6 +301,37 @@ namespace VaccineAPI.Controllers
                     (string.IsNullOrEmpty(booking.DoctorComment) ? "" : " Note: " + booking.DoctorComment));
         }
 
+        // Silent close for a booking the clinic already handled outside this page (vaccines given
+        // directly, visit long past). Unlike confirm/cancel it sends the parent NO notification.
+        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
+        [HttpPut("{id}/dismiss")]
+        public async Task<Response<BookingDTO>> DismissBooking(long id, BookingActionDTO actionDTO)
+        {
+            try
+            {
+                var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == id);
+                if (booking == null)
+                {
+                    return new Response<BookingDTO>(false, "Booking not found.", null);
+                }
+                if (booking.Status != "Pending")
+                {
+                    return new Response<BookingDTO>(false, "Only pending bookings can be dismissed.", null);
+                }
+
+                booking.Status = "Dismissed";
+                if (!string.IsNullOrWhiteSpace(actionDTO?.DoctorComment)) { booking.DoctorComment = actionDTO.DoctorComment; }
+                booking.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+
+                return new Response<BookingDTO>(true, "Booking dismissed.", MapBookingToDTO(booking));
+            }
+            catch (Exception ex)
+            {
+                return new Response<BookingDTO>(false, $"An error occurred: {ex.Message}", null);
+            }
+        }
+
         [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [HttpPut("{id}/comment")]
         public async Task<Response<BookingDTO>> AddComment(long id, BookingActionDTO actionDTO)

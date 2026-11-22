@@ -3141,7 +3141,10 @@ namespace VaccineAPI.Controllers
             return $"{yearPrefix}{next:D6}";
         }
 
+        // Issue-Invoice-PDF is the same signed-in issuing call under a name the VPK Assistant APK shim does not
+        // rewrite to the read-only Verification route (see PA_INVOICE_APK_DOWNLOAD_SPEC.md).
         [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Verify-Invoice-PDF")]
+        [HttpGet("{Id}/{ScheduleDate}/{InvoiceDate}/{ConsultationFee}/Issue-Invoice-PDF")]
         public IActionResult DownloadInvoicePDFUpdated(int Id, DateTime ScheduleDate, DateTime InvoiceDate, int ConsultationFee)
         {
             var output = CreateInvoiceCell(Id, ScheduleDate, InvoiceDate, ConsultationFee);

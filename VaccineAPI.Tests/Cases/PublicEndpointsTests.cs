@@ -19,6 +19,7 @@ namespace VaccineAPI.Tests.Cases
 
         [Theory]
         [InlineData("/api/Child/12/2026-11-09/2026-11-09/0/Verify-Invoice-PDF")]
+        [InlineData("/api/Child/12/2026-11-09/2026-11-09/0/Issue-Invoice-PDF")]
         [InlineData("/api/InventoryBackfill/verify")]
         [InlineData("/api/Child/12/2026-11-09/0/Download-Invoice-PDF")]
         [InlineData("/api/Anything/verification-x")]

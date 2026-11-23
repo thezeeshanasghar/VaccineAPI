@@ -854,6 +854,20 @@ namespace VaccineAPI.Controllers
                 }
             }
 
+            // Invoices that have a PA's undecided "ungive after payment" request whose dose is STILL not given:
+            // the money has no vaccine behind it until the doctor decides, so the row is flagged and Confirm
+            // is blocked. A request whose dose was given again is stale and is NOT flagged here (it shows,
+            // marked stale, in Pending Reversal Approvals).
+            var ungivePendingByInvoice = new Dictionary<long, long>();
+            foreach (var ul in UngiveReversalGuard.Pending(_db)
+                         .Where(l => l.DoctorId == doctorId && l.ActionCode == UngiveReversalGuard.Code).ToList())
+            {
+                var up = UngiveReversalGuard.ParseNotes(ul.Notes);
+                if (up.InvoiceId <= 0 || up.ScheduleId <= 0 || ungivePendingByInvoice.ContainsKey(up.InvoiceId)) continue;
+                var upGiven = _db.Schedules.Where(s => s.Id == up.ScheduleId).Select(s => s.IsDone).FirstOrDefault();
+                if (!upGiven) ungivePendingByInvoice[up.InvoiceId] = ul.Id;
+            }
+
             var invoiceRows = invoices.Select(i =>
             {
                 pendingAmendmentByInvoiceId.TryGetValue(i.Id, out var pending);
@@ -914,6 +928,8 @@ namespace VaccineAPI.Controllers
                     ConfirmedAt         = i.ConfirmedAt.HasValue ? Pkt.Iso(i.ConfirmedAt.Value) : (string)null,
                     InvoiceStatus       = i.InvoiceStatus,
                     HasPendingAmendment = i.HasPendingAmendment,
+                    HasUngivePending    = ungivePendingByInvoice.ContainsKey(i.Id),
+                    UngivePendingLogId  = ungivePendingByInvoice.ContainsKey(i.Id) ? (long?)ungivePendingByInvoice[i.Id] : null,
                     PendingAmendmentType = pending != null ? (pending.AmendmentType == "Ungive" ? "UngiveReversal" : "EditReversal") : (string)null,
                     PendingHandover     = i.PendingHandover,
                     HandoverDoneAt      = i.HandoverDoneAt.HasValue ? Pkt.Iso(i.HandoverDoneAt.Value) : (string)null,
@@ -938,6 +954,9 @@ namespace VaccineAPI.Controllers
                 .Where(a =>
                     a.DoctorId == doctorId &&
                     !a.IsCancelled &&
+                    // A cash-confirmed assignment is closed: it is never "awaiting" an invoice, even when its
+                    // dose lost the link to the confirmed invoice (live case: Hakeem Ullah, 19 Nov 2026).
+                    !a.IsCashConfirmedByDoctor &&
                     (a.ClinicId == null || clinicIds.Contains(a.ClinicId.Value)));
 
             if (clinicId.HasValue) assignQuery = assignQuery.Where(a => a.ClinicId == clinicId.Value);

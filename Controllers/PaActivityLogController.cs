@@ -111,19 +111,46 @@ namespace VaccineAPI.Controllers
                          && l.IsReversalApproved == false
                          && l.IsReversalRejected != true)
                 .OrderByDescending(l => l.ActionDate)
-                .Select(l => new {
+                .ToList();
+
+            // Patient / dose / invoice and the dose's CURRENT state, so the doctor can tell what each line is
+            // and whether it is stale (the dose was given again after the PA's ungive).
+            var patientIds = logs.Where(l => l.PatientId.HasValue).Select(l => l.PatientId.Value).Distinct().ToList();
+            var names = _db.Childs.Where(c => patientIds.Contains(c.Id)).ToDictionary(c => c.Id, c => c.Name ?? "");
+            var parsed = logs.ToDictionary(l => l.Id, l => VaccineAPI.Services.UngiveReversalGuard.ParseNotes(l.Notes));
+            var schedIds = parsed.Values.Where(p => p.ScheduleId > 0).Select(p => p.ScheduleId).Distinct().ToList();
+            var doseInfo = (from s in _db.Schedules
+                            where schedIds.Contains(s.Id)
+                            join d in _db.Doses on s.DoseId equals d.Id
+                            select new { s.Id, s.IsDone, DoseName = d.Name }).ToDictionary(x => x.Id, x => x);
+            var invIds = parsed.Values.Where(p => p.InvoiceId > 0).Select(p => p.InvoiceId).Distinct().ToList();
+            var invTotals = _db.InvoiceSubmissions.Where(i => invIds.Contains(i.Id)).ToDictionary(i => i.Id, i => i.TotalAmount);
+
+            var result = logs.Select(l =>
+            {
+                var p = parsed[l.Id];
+                var isUngive = l.ActionCode == "UngiveAfterPayment";
+                var dose = isUngive && doseInfo.ContainsKey(p.ScheduleId) ? doseInfo[p.ScheduleId] : null;
+                return new {
                     l.Id,
                     l.PaId,
                     PaName      = l.PersonalAssistant != null ? l.PersonalAssistant.Name : "",
                     l.PatientId,
+                    PatientName = l.PatientId.HasValue && names.ContainsKey(l.PatientId.Value) ? names[l.PatientId.Value] : "",
                     l.Notes,
                     l.Description,
                     l.ActionCode,
-                    l.ActionDate
-                })
-                .ToList();
+                    l.ActionDate,
+                    ScheduleId  = isUngive ? (long?)p.ScheduleId : null,
+                    DoseName    = dose != null ? dose.DoseName : "",
+                    InvoiceId   = isUngive && p.InvoiceId > 0 ? (long?)p.InvoiceId : null,
+                    InvoiceAmount = isUngive && invTotals.ContainsKey(p.InvoiceId) ? (decimal?)invTotals[p.InvoiceId] : null,
+                    DoseGiven   = dose != null && dose.IsDone,
+                    IsStale     = dose != null && dose.IsDone
+                };
+            }).ToList();
 
-            return Ok(new { IsSuccess = true, ResponseData = logs });
+            return Ok(new { IsSuccess = true, ResponseData = result });
         }
 
         // PATCH /api/PaActivityLog/{id}/approve-reversal
@@ -155,25 +182,22 @@ namespace VaccineAPI.Controllers
                 // only lookup here and was already silently broken: GivenDate is always null by
                 // the time a doctor gets around to approving (the ungive itself clears it), so
                 // the old code fell back to "today," almost never the invoice's real date.
-                long scheduleId = 0;
-                long invoiceSubmissionId = 0;
-                var notesParts = log.Notes ?? "";
-                var sidIndex = notesParts.IndexOf("ScheduleId: ");
-                if (sidIndex >= 0)
-                {
-                    var afterSid = notesParts.Substring(sidIndex + 12);
-                    var sidEnd = afterSid.IndexOf(" |");
-                    long.TryParse(sidEnd >= 0 ? afterSid.Substring(0, sidEnd) : afterSid.Trim(), out scheduleId);
-                }
-                var iidIndex = notesParts.IndexOf("InvoiceSubmissionId: ");
-                if (iidIndex >= 0)
-                    long.TryParse(notesParts.Substring(iidIndex + 21).Trim(), out invoiceSubmissionId);
+                var parsedNotes = VaccineAPI.Services.UngiveReversalGuard.ParseNotes(log.Notes);
+                long scheduleId = parsedNotes.ScheduleId;
+                long invoiceSubmissionId = parsedNotes.InvoiceId;
+                // The ungive nulls Schedule.Amount, so the amount to reverse is the one captured in the note.
+                var noteAmount = VaccineAPI.Services.UngiveReversalGuard.ParseAmount(log.Notes);
 
                 if (scheduleId > 0)
                 {
                     var schedule = _db.Schedules.FirstOrDefault(s => s.Id == scheduleId);
+                    // The dose was given again after the PA's ungive: approving would un-pay a given dose and
+                    // cancel its invoice QR. Only Reject is valid (live case: Hakeem Ullah, 19 Nov 2026).
+                    if (schedule != null && schedule.IsDone)
+                        return Ok(new { IsSuccess = false, Message = "This dose has been given again since the PA ungave it, so this request is stale and cannot be approved. Reject it." });
                     if (schedule != null)
                     {
+                        var reverseAmount = (schedule.Amount ?? 0) > 0 ? schedule.Amount!.Value : noteAmount;
                         schedule.IsPaymentCollected = false;
 
                         if (invoiceSubmissionId > 0)
@@ -181,7 +205,7 @@ namespace VaccineAPI.Controllers
                             var inv = _db.InvoiceSubmissions.FirstOrDefault(x => x.Id == invoiceSubmissionId);
                             if (inv != null)
                             {
-                                inv.TotalAmount = Math.Max(0, inv.TotalAmount - (schedule.Amount ?? 0));
+                                inv.TotalAmount = Math.Max(0, inv.TotalAmount - reverseAmount);
                                 if (inv.TotalAmount == 0)
                                 {
                                     // This was the only (or last remaining) dose on this invoice —
@@ -218,14 +242,14 @@ namespace VaccineAPI.Controllers
 
                         // Reduce PA payable for the ungiven vaccine amount. Manager-originated
                         // logs (PaId null) correctly skip this — Manager has no payable balance.
-                        if (log.PaId.HasValue && log.PaId > 0 && (schedule.Amount ?? 0) > 0)
+                        if (log.PaId.HasValue && log.PaId > 0 && reverseAmount > 0)
                         {
                             _db.PaPayableAdjustments.Add(new PaPayableAdjustment
                             {
                                 PaId = log.PaId.Value,
                                 DoctorId = log.DoctorId,
                                 ClinicId = log.ClinicId,
-                                Amount = -(schedule.Amount ?? 0),
+                                Amount = -reverseAmount,
                                 Reason = $"Doctor approved ungive reversal (ScheduleId: {scheduleId})",
                                 AdjustedAt = DateTime.UtcNow
                             });

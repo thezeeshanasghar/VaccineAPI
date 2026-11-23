@@ -383,6 +383,11 @@ namespace VaccineAPI.Controllers
                 if (scheduleDTO.PaId.HasValue && scheduleDTO.IsDone == false && dbSchedule.IsDone && VisitReversal.PaUngiveBlocked(_db, dbSchedule))
                     return new Response<ScheduleDTO>(false, VisitReversal.PaUngiveAfterPaymentMsg, null);
 
+                // A doctor ungive deletes the linked invoice; refuse when that invoice is already confirmed.
+                if (!scheduleDTO.PaId.HasValue && !scheduleDTO.ManagerId.HasValue && scheduleDTO.IsDone == false
+                    && UngiveReversalGuard.DoctorUngiveWouldDeleteConfirmedInvoice(_db, dbSchedule))
+                    return new Response<ScheduleDTO>(false, UngiveReversalGuard.ConfirmedInvoiceUngiveMsg, null);
+
                 // CDC 4-day grace outcome for this give (set in the MinGap check below, carried
                 // onto the success Response so the client can show the informational note).
                 bool graceApplied = false;
@@ -1349,6 +1354,9 @@ namespace VaccineAPI.Controllers
                     LinkScheduleToAssignment(assignmentId, dbSchedule.Id);
                     giveAssignmentId = assignmentId;
                 }
+                // Re-give while a PA's ungive-after-payment request is still undecided: put the dose back on its invoice.
+                if (!wasGiven && dbSchedule.IsDone)
+                    UngiveReversalGuard.RelinkOnRegive(_db, dbSchedule);
                 if (wasGiven != dbSchedule.IsDone)
                     AuditGiveOrUngive(new[] { dbSchedule }, dbSchedule.IsDone, giveAssignmentId, scheduleDTO);
                 _inventory.SaveAndAssert();
@@ -2580,6 +2588,9 @@ namespace VaccineAPI.Controllers
                     {
                         if (scheduleDTO.PaId.HasValue && VisitReversal.PaUngiveBlocked(_db, checkSchedule))
                             return new Response<ScheduleDTO>(false, VisitReversal.PaUngiveAfterPaymentMsg, null);
+                        if (!scheduleDTO.PaId.HasValue && !scheduleDTO.ManagerId.HasValue
+                            && UngiveReversalGuard.DoctorUngiveWouldDeleteConfirmedInvoice(_db, checkSchedule))
+                            return new Response<ScheduleDTO>(false, UngiveReversalGuard.ConfirmedInvoiceUngiveMsg, null);
                         if (checkSchedule.UngiveCount >= 2)
                             return new Response<ScheduleDTO>(false, "One or more vaccines have already been ungiven twice. Contact the doctor.", null);
                         bool ownsGive = scheduleDTO.PaId.HasValue
@@ -3257,6 +3268,9 @@ namespace VaccineAPI.Controllers
                     if (schedule.IsDone)
                         LinkScheduleToAssignment(bulkAuditAssignmentId, schedule.Id);
             }
+            if (scheduleDTO.IsDone)
+                foreach (var regiven in bulkChanged)
+                    UngiveReversalGuard.RelinkOnRegive(_db, regiven);
             AuditGiveOrUngive(bulkChanged, scheduleDTO.IsDone, bulkAuditAssignmentId, scheduleDTO);
             // A doctor ungive that empties the PA's visit ends it like an approved refusal (spec §11).
             if (bulkUngiven.Count > 0 && AssignmentAudit.Actor(scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId).Type == "DOCTOR")
@@ -5975,6 +5989,16 @@ namespace VaccineAPI.Controllers
                 }
                 return Ok(new { IsSuccess = false, Message = "Invoice already confirmed." });
             }
+
+            // A PA ungave a dose on this invoice and the doctor has not decided it, and the dose is still not given:
+            // the invoice has no vaccine behind it, so it cannot be confirmed until that request is decided.
+            if (UngiveReversalGuard.PendingUngiveLogIdsForInvoice(_db, inv.Id, inv.ChildId).Count > 0)
+                return Ok(new { IsSuccess = false, Message = "A PA ungave a vaccine on this invoice and the request is still pending. Approve or reject it under Pending Reversal Approvals first." });
+
+            // A given, paid dose of this visit is not linked to any invoice: confirming would close the visit
+            // while that money has no invoice behind it. Re-download the invoice so it links first.
+            if (UngiveReversalGuard.UnlinkedPaidDosesOfInvoiceOwners(_db, inv.Id).Count > 0)
+                return Ok(new { IsSuccess = false, Message = "A given, paid vaccine of this visit is not linked to an invoice. Re-issue the invoice so it links, then confirm." });
 
             inv.IsConfirmedByDoctor = true;
             inv.ConfirmedAt = DateTime.UtcNow;

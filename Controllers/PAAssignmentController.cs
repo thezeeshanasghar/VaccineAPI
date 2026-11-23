@@ -205,7 +205,7 @@ namespace VaccineAPI.Controllers
         //     schedules this PA gave/collected payment for on this child back to
         //     "not given", crediting any consumed stock back via the inventory ledger.
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId, [FromQuery] string mode = "UnassignOnly", [FromQuery] string? reason = null, [FromQuery] bool notifyPa = true)
+        public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long doctorId, [FromQuery] string mode = "UnassignOnly", [FromQuery] string? reason = null, [FromQuery] bool notifyPa = true, [FromQuery] bool allowRecordReverse = false)
         {
             // R5 (reversal.v2): removing or reversing an assignment is doctor-only. A PA token is refused here
             // whatever doctorId the caller put in the URL.
@@ -216,6 +216,13 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
             if (assignment.DoctorId != doctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised" });
+
+            // A record-only entry (every pinned dose given, no invoice/brand/fee/payment) is a past record moved
+            // from paper. FullReset would un-give real records with no money to recover, so it needs an explicit
+            // allowRecordReverse=true (the Cash table sends it only after the doctor types REVERSE). Server-side so
+            // a stale screen, another page or a direct call cannot bypass the UI guard.
+            if (mode == "FullReset" && !allowRecordReverse && VaccineAPI.Services.PaOwnership.IsRecordOnly(_db, id))
+                return Ok(new { IsSuccess = false, Message = "This row has no money (no invoice, brand or fee). Reversing would un-give real past records. Use Approve on the Cash table, or reverse from there with confirmation." });
 
             using var tx = await _db.Database.BeginTransactionAsync();
             try
@@ -479,6 +486,45 @@ namespace VaccineAPI.Controllers
             }
 
             return Ok(new { IsSuccess = true });
+        }
+
+        // PATCH /api/PAAssignment/{id}/approve-record
+        // Doctor attests a no-money PA entry (HISTORICAL_ENTRY_PA_OWNERSHIP_SPEC.md, Approve design).
+        // Everything is decided from the DB here; a stale screen cannot approve a row that gained
+        // an invoice, fee, brand or payment after it loaded. Does NOT cancel the assignment and
+        // never touches the cash-confirm columns.
+        [HttpPatch("{id}/approve-record")]
+        public async Task<IActionResult> ApproveRecord(long id, [FromBody] ApproveRecordDto dto)
+        {
+            var asg = await _db.PAAssignments.FindAsync(id);
+            if (asg == null)
+                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+
+            var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.Id == asg.DoctorId);
+            if (doctor == null || !await VerifyCaller(dto.CallerUserId, dto.SecurityStamp) || dto.CallerUserId!.Value != doctor.UserId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised to approve this record." });
+
+            if (asg.IsCancelled)
+                return Ok(new { IsSuccess = false, Message = "This assignment is cancelled." });
+            if (asg.IsCashConfirmedByDoctor)
+                return Ok(new { IsSuccess = false, Message = "Cash is already confirmed on this assignment." });
+            if (asg.RecordApprovedAt.HasValue)
+                return Ok(new { IsSuccess = false, Message = "Already approved." });
+
+            if (!VaccineAPI.Services.PaOwnership.IsRecordOnly(_db, asg.Id))
+                return Ok(new { IsSuccess = false, Message = "This row now has money, a brand or an invoice, so it cannot be approved as a record. Refresh the page and use Confirm." });
+
+            asg.RecordApprovedAt = DateTime.UtcNow;
+            asg.RecordApprovedBy = doctor.Id;
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "RecordApproved", asg, "DOCTOR", doctor.Id,
+                "Record-only entry approved by doctor (no invoice, no brand, no fee)");
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+            }
+            return Ok(new { IsSuccess = true, ApprovedAt = asg.RecordApprovedAt });
         }
 
         // PATCH /api/PAAssignment/{id}/cancel
@@ -885,7 +931,8 @@ namespace VaccineAPI.Controllers
 
             var approveResult = await DeleteAssignment(id, doctorId, "FullReset",
                 "Client refused at home" + (string.IsNullOrWhiteSpace(request.Reason) ? "" : ": " + request.Reason),
-                notifyPa: false); // the PA gets "Refusal approved" below instead
+                notifyPa: false, // the PA gets "Refusal approved" below instead
+                allowRecordReverse: true); // a doctor-approved refusal is itself the reversal decision
             if (await _db.VaccineRefusals.AnyAsync(r => r.Id == request.Id && r.Status == "Approved"))
             {
                 var apRefAsg = await _db.PAAssignments.FindAsync(id);
@@ -2485,6 +2532,12 @@ namespace VaccineAPI.Controllers
             catch (Exception ex) { return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message }); }
             return Ok(new { IsSuccess = true });
         }
+    }
+
+    public class ApproveRecordDto
+    {
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class CancelAssignmentDto

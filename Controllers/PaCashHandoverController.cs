@@ -1060,6 +1060,29 @@ namespace VaccineAPI.Controllers
                     .Distinct()
                     .ToList());
 
+            // Record-only flag per pending assignment (PaOwnership.SkipsPaOwnership on EVERY pinned dose,
+            // all given). Bulk-loaded: one query for all pending assignments, no per-row lookups.
+            var pendingDoseRows = (from l in _db.PAAssignmentSchedules
+                                   where pendingAssignmentIds.Contains(l.AssignmentId)
+                                   join sc in _db.Schedules on l.ScheduleId equals sc.Id
+                                   select new { l.AssignmentId, Sched = sc }).ToList();
+            var recordOnlyAsgIds = new HashSet<long>(
+                pendingDoseRows.GroupBy(x => x.AssignmentId)
+                    .Where(g => g.All(x => x.Sched.IsDone && VaccineAPI.Services.PaOwnership.SkipsPaOwnership(x.Sched)))
+                    .Select(g => g.Key));
+            var recordDoseIds = pendingDoseRows.Where(x => recordOnlyAsgIds.Contains(x.AssignmentId))
+                .Select(x => x.Sched.DoseId).Distinct().ToList();
+            var recordDoseNameById = _db.Doses.Where(d => recordDoseIds.Contains(d.Id))
+                .ToDictionary(d => d.Id, d => d.Name ?? "");
+            var recordDoseNames = pendingDoseRows
+                .Where(x => recordOnlyAsgIds.Contains(x.AssignmentId))
+                .GroupBy(x => x.AssignmentId)
+                .ToDictionary(g => g.Key, g => g.Select(x => new
+                {
+                    Name = recordDoseNameById.ContainsKey(x.Sched.DoseId) ? recordDoseNameById[x.Sched.DoseId] : "",
+                    GivenDate = x.Sched.GivenDate.HasValue ? x.Sched.GivenDate.Value.ToString("yyyy-MM-dd") : (string)null
+                }).ToList());
+
             var awaitingInvoiceRows = pendingAssignments.Select(a => new
             {
                 RowType             = "AwaitingInvoice",
@@ -1082,6 +1105,12 @@ namespace VaccineAPI.Controllers
                 HasPendingAmendment = false,
                 PendingHandover     = false,
                 HasUnbilledPayment  = assignmentsWithUnbilledPayment.Contains(a.Id),
+                // Record-only (no invoice, no brand, no fee, OHF): shows Approve, not Confirm. An approval
+                // only counts while the row is still record-only; money appearing later voids it.
+                IsRecordOnly        = recordOnlyAsgIds.Contains(a.Id),
+                RecordApproved      = a.RecordApprovedAt.HasValue && recordOnlyAsgIds.Contains(a.Id),
+                RecordApprovedAt    = (a.RecordApprovedAt.HasValue && recordOnlyAsgIds.Contains(a.Id)) ? Pkt.Iso(a.RecordApprovedAt.Value) : (string)null,
+                RecordDoses         = recordDoseNames.ContainsKey(a.Id) ? recordDoseNames[a.Id].Cast<object>().ToList() : new List<object>(),
                 PaId                = a.PersonalAssistantId,
                 // Doctor never assigned this PA — the system auto-created the assignment
                 // because the PA gave a dose on their own initiative (EnsurePAAssignment in

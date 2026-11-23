@@ -66,6 +66,13 @@ namespace VaccineAPI.Models
         public bool IsCashConfirmedByDoctor { get; set; } = false;
         public DateTime? CashConfirmedAt { get; set; }
 
+        // Record-only approval: the doctor attests a PA entry that carries no money (every pinned
+        // dose passes PaOwnership.SkipsPaOwnership). Never written by the cash-confirm path, and the
+        // assignment stays un-cancelled as an audit record. RecordApprovedBy is the doctor's id.
+        // Void as soon as any pinned dose gains money (PaOwnership.IsRecordOnly re-checks on read).
+        public DateTime? RecordApprovedAt { get; set; }
+        public long? RecordApprovedBy { get; set; }
+
         // PA's cancellation request — set on RequestCancel, cleared/finalized on doctor approve/reject
         public DateTime? CancelRequestedAt { get; set; }
         public string? CancelRequestReason { get; set; }

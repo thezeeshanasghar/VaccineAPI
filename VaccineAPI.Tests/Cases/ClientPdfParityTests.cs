@@ -222,7 +222,7 @@ public class ClientPdfParityTests : IDisposable
             FileStreamResult s => s.FileDownloadName,
             _ => throw new Xunit.Sdk.XunitException("expected a file result, got " + r.GetType().Name)
         };
-        Assert.Matches(@"^HibaShahid_Schedule_[A-Za-z]+-\d{2}-\d{4}\.pdf$", name);
+        Assert.Matches(@"^Hiba_Shahid_Schedule_[A-Za-z]+-\d{2}-\d{4}\.pdf$", name);
     }
 
     [Fact]

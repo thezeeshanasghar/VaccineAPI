@@ -536,7 +536,7 @@ namespace VaccineAPI.Controllers
                 return NotFound("Child not found");
             }
             var stream = CreateSchedulePdf(id);
-            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
+            var FileName = FileNamePart(dbScheduleChild.Name) + "_Schedule_" +
                            Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
@@ -551,7 +551,7 @@ namespace VaccineAPI.Controllers
                 return NotFound("Child not found");
             }
             var stream = CreateSchedulePdf(id);
-            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
+            var FileName = FileNamePart(dbScheduleChild.Name) + "_Schedule_" +
                            Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             Response.Headers.Add("X-Frame-Options", "ALLOWALL");
             Response.Headers.Add("Content-Disposition", $"inline; filename={FileName}");
@@ -1686,7 +1686,7 @@ namespace VaccineAPI.Controllers
                 return CustomPdfForClient(child, layout, includeFuture);
             }
             var stream = CreateSchedulePdf(id);
-            var fileName = child.Name.Replace(" ", "") + "_Schedule_" +
+            var fileName = FileNamePart(child.Name) + "_Schedule_" +
                            Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             return File(stream, "application/pdf", fileName);
         }
@@ -1871,7 +1871,7 @@ namespace VaccineAPI.Controllers
             Child dbScheduleChild;
             { dbScheduleChild = _db.Childs.Where(x => x.Id == id).FirstOrDefault(); }
             var stream = CreateCustomPdf(id);
-            var FileName = dbScheduleChild.Name.Replace(" ", "") + "_Schedule_" +
+            var FileName = FileNamePart(dbScheduleChild.Name) + "_Schedule_" +
                            Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
             Response.Headers.Add("X-Frame-Options", "ALLOWALL");
             Response.Headers.Add("Content-Disposition", $"inline; filename={FileName}");
@@ -3039,7 +3039,7 @@ namespace VaccineAPI.Controllers
             stream = output;
 
             //}
-            var FileName = childName.Replace(" ", "") + "_Invoice" + "_" +
+            var FileName = FileNamePart(childName) + "_Invoice" + "_" +
                            Pkt.NowWall().Date.ToString("yy") + ".pdf";
             return File(stream, "application/pdf", FileName);
         }
@@ -3124,7 +3124,7 @@ namespace VaccineAPI.Controllers
 
             var bytes = System.IO.File.ReadAllBytes(fullPath);
             var child = _db.Childs.Find(invoice.ChildId);
-            var fileName = $"{child?.Name?.Replace(" ", "") ?? "Invoice"}_Invoice.pdf";
+            var fileName = $"{FileNamePart(child?.Name, "Invoice")}_Invoice.pdf";
             return File(bytes, "application/pdf", fileName);
         }
 
@@ -3164,7 +3164,7 @@ namespace VaccineAPI.Controllers
                 return NotFound(new { message = "Child not found." });
             }
 
-            var fileName = $"{dbChild.Name.Replace(" ", "")}_Invoice_{Pkt.NowWall().Date:MMMM-dd-yyyy}.pdf";
+            var fileName = $"{FileNamePart(dbChild.Name)}_Invoice_{Pkt.NowWall().Date:MMMM-dd-yyyy}.pdf";
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
@@ -3190,7 +3190,7 @@ namespace VaccineAPI.Controllers
             if (!System.IO.File.Exists(fullPath))
                 return NotFound(new { message = "Invoice file missing on server." });
 
-            var fileName = $"{dbChild.Name?.Replace(" ", "")}_Invoice_{invoice.InvoiceId}.pdf";
+            var fileName = $"{FileNamePart(dbChild.Name)}_Invoice_{invoice.InvoiceId}.pdf";
             Response.Headers.Add("X-Frame-Options", "ALLOWALL");
             Response.Headers.Add("Content-Disposition", $"inline; filename={fileName}");
             return File(System.IO.File.ReadAllBytes(fullPath), "application/pdf");
@@ -4722,7 +4722,7 @@ namespace VaccineAPI.Controllers
 
 
             var currentDate = Pkt.NowWall().ToString("dd-MMM-yyyy");
-            var fileName = $"{dbChild.Name}_PID_{currentDate}.pdf";
+            var fileName = $"{FileNamePart(dbChild.Name)}_PID_{currentDate}.pdf";
             return File(output.ToArray(), "application/pdf", fileName);
         }
 
@@ -4794,8 +4794,15 @@ namespace VaccineAPI.Controllers
             child != null && string.Equals(child.Type, "travel", StringComparison.OrdinalIgnoreCase);
 
         // Same name for the doctor's download and the client's, so the two copies are indistinguishable on disk.
+        // Download file names: "Danyal Siddiqi" -> "Danyal_Siddiqi" (words joined by underscore, no spaces).
+        private static string FileNamePart(string name, string fallback = "Patient")
+        {
+            var parts = (name ?? "").Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length == 0 ? fallback : string.Join("_", parts);
+        }
+
         private static string TravelPdfFileName(Child child, bool includeFuture) =>
-            child.Name.Replace(" ", "_") + "_Travel_Immunization_" + (includeFuture ? "" : "Given_") +
+            FileNamePart(child.Name) + "_Travel_Immunization_" + (includeFuture ? "" : "Given_") +
             Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
 
         // The dose order ("MenACWY 1") is internal; certificates print the vaccine name only. Only a trailing 1-2 digit
@@ -4808,7 +4815,7 @@ namespace VaccineAPI.Controllers
 
         // Same name the clinic's custom downloads use (portrait and landscape share it).
         private static string CustomPdfFileName(Child child, bool includeFuture) =>
-            child.Name.Replace(" ", "") + "_Schedule" + (includeFuture ? "" : "_Given") + "_" +
+            FileNamePart(child.Name) + "_Schedule" + (includeFuture ? "" : "_Given") + "_" +
             Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
 
         // Client routes must be provably the owner (a valid token) whatever Auth.Mode is: in Log mode the middleware
@@ -6499,7 +6506,7 @@ namespace VaccineAPI.Controllers
 
             doc.Close();
             var pdfBytes = ms.ToArray();
-            var fileName = $"{child.Name.Replace(" ", "")}_ImmunizationCard_{Pkt.NowWall():yyyyMMdd}.pdf";
+            var fileName = $"{FileNamePart(child.Name)}_ImmunizationCard_{Pkt.NowWall():yyyyMMdd}.pdf";
             return File(pdfBytes, "application/pdf", fileName);
         }
 
@@ -6617,7 +6624,7 @@ namespace VaccineAPI.Controllers
 
             var pdfBytes = ms.ToArray();
             return File(pdfBytes, "application/pdf",
-                $"{dbChild.Name.Replace(" ", "")}_VaccineWise_{Pkt.NowWall():yyyyMMdd}.pdf");
+                $"{FileNamePart(dbChild.Name)}_VaccineWise_{Pkt.NowWall():yyyyMMdd}.pdf");
         }
 
         // ── IMMUNIZATION CARD: AGE WISE (Page 3) ──────────────────────────
@@ -6733,7 +6740,7 @@ namespace VaccineAPI.Controllers
 
             var pdfBytes = ms.ToArray();
             return File(pdfBytes, "application/pdf",
-                $"{dbChild.Name.Replace(" ", "")}_AgeWise_{Pkt.NowWall():yyyyMMdd}.pdf");
+                $"{FileNamePart(dbChild.Name)}_AgeWise_{Pkt.NowWall():yyyyMMdd}.pdf");
         }
 
         private void AddRecurringVaccinesFooter(Document doc, iTextSharpFont normFont, iTextSharpFont boldFont)
@@ -6859,7 +6866,7 @@ namespace VaccineAPI.Controllers
 
                 stamper.Close();
 
-                var fileName = child.Name.Replace(" ", "_") + "_Verification_Copy_" +
+                var fileName = FileNamePart(child.Name) + "_Verification_Copy_" +
                                Pkt.NowWall().ToString("MMMM-dd-yyyy") + ".pdf";
                 return File(outputMs.ToArray(), "application/pdf", fileName);
             }

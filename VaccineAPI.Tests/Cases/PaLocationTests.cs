@@ -132,7 +132,9 @@ public class PaLocationTests
         Assert.IsType<BadRequestObjectResult>(c.Km(1, "2026/10/01", null));
         Assert.IsType<BadRequestObjectResult>(c.GetTrailV2(1, pa, "nope"));
 
-        var day = new DateTime(2026, 10, 12);
+        // relative date: fixed dates age out of the 35-day retention purge and break this test
+        var day = DateTime.UtcNow.AddHours(5).Date.AddDays(-3);
+        var dayKey = day.ToString("yyyy-MM-dd");
         var start = Pkt.DayStartUtc(day).AddHours(5);
         var s = new PaShift { PaId = pa, DoctorId = 1, StartedAt = start, EndedAt = start.AddHours(1) };
         db.PaShifts.Add(s); db.SaveChanges();
@@ -140,9 +142,9 @@ public class PaLocationTests
             db.PaLocations.Add(new PaLocation { ShiftId = s.Id, PaId = pa, DoctorId = 1, Latitude = 31 + i * 0.002, Longitude = 74, Accuracy = 5, RecordedAt = start.AddMinutes(i) });
         db.SaveChanges();
 
-        var km = (OkObjectResult)c.Km(1, "2026-10-12", "2026-10-12");
+        var km = (OkObjectResult)c.Km(1, dayKey, dayKey);
         var kmJson = Newtonsoft.Json.JsonConvert.SerializeObject(km.Value);
-        var tr = (OkObjectResult)c.GetTrailV2(1, pa, "2026-10-12");
+        var tr = (OkObjectResult)c.GetTrailV2(1, pa, dayKey);
         var trJson = Newtonsoft.Json.JsonConvert.SerializeObject(tr.Value);
         var kmCell = Newtonsoft.Json.Linq.JObject.Parse(kmJson)["assistants"][0]["cells"][0];
         var trKm = (double)Newtonsoft.Json.Linq.JObject.Parse(trJson)["km"];

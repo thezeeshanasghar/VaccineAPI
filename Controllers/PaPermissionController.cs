@@ -97,6 +97,7 @@ namespace VaccineAPI.Controllers
                 existing.TrackLocation = incoming.TrackLocation;
                 existing.UseTravelQuickSelect = incoming.UseTravelQuickSelect;
                 existing.UseCustomQuickSelect = incoming.UseCustomQuickSelect;
+                existing.BackdateWithBrand = incoming.BackdateWithBrand;
 
                 existing.ViewFollowUps = incoming.ViewFollowUps;
                 existing.AddFollowUp = incoming.AddFollowUp;

@@ -68,6 +68,35 @@ namespace VaccineAPI.Controllers
         // See feedback/project_no_api_auth_middleware and the 2026-09-28 stock audit — this was
         // the single most severe finding: GiveVaccine/UngiveVaccine/BulkGiveVaccines/
         // BulkUngiveVaccines were written by the settings screen and read nowhere else.
+        // "Back-date with brand" gate (HISTORICAL_ENTRY_PA_OWNERSHIP_SPEC.md). PA callers only.
+        // With the permission OFF (or no papermissions row): (1) the date of an already-given dose
+        // cannot change, for any dose; (2) a dose given with a brand (a new give, or a brand
+        // change) must be dated today (PKT). Back-dated OHF stays allowed. Doctor/Manager skip it.
+        private Response<ScheduleDTO>? CheckBackdateBrandPermission(
+            long? paId, bool giving, bool isDisease, bool originallyGiven, DateTime? storedGivenDate,
+            long? previousBrandId, long? newBrandId, DateTime? newGivenDate)
+        {
+            if (!giving || isDisease || !paId.HasValue || !newGivenDate.HasValue)
+                return null;
+            var allowed = _db.PaPermissions.AsNoTracking()
+                .Where(p => p.PaId == paId.Value).Select(p => p.BackdateWithBrand).FirstOrDefault();
+            if (allowed)
+                return null;
+
+            var newDay = newGivenDate.Value.Date;
+            if (originallyGiven && storedGivenDate.HasValue && storedGivenDate.Value.Date != newDay)
+                return new Response<ScheduleDTO>(false,
+                    "You cannot change the date of a dose that is already given. Ask the doctor to correct it.", null);
+
+            var hasBrand = newBrandId.HasValue && newBrandId.Value > 0;
+            var stockEvent = !originallyGiven || previousBrandId != newBrandId;
+            if (hasBrand && stockEvent && newDay != Pkt.Today())
+                return new Response<ScheduleDTO>(false,
+                    "Back-dating with a brand is not allowed for your account. Ask the doctor to enter this dose.", null);
+
+            return null;
+        }
+
         private Response<ScheduleDTO>? CheckGiveUngivePermission(
             long? paId, long? managerId, long? callerUserId, string? securityStamp,
             bool isGive, bool isBulk, long childId)
@@ -505,6 +534,13 @@ namespace VaccineAPI.Controllers
                 // whether inventory was actually deducted for this schedule, since BrandId can
                 // be persisted on a not-yet-given schedule by earlier partial saves.
                 var wasGiven = dbSchedule.IsDone;
+                // PA without "Back-date with brand": brand give must be dated today, and the date of
+                // an already-given dose cannot change. Evaluated here, before the brand-correction
+                // block below flips wasGiven, against the STORED GivenDate.
+                var backdateBrandError = CheckBackdateBrandPermission(
+                    scheduleDTO.PaId, scheduleDTO.IsDone == true, scheduleDTO.IsDisease == true,
+                    wasGiven == true, dbSchedule.GivenDate, previousBrandId, scheduleDTO.BrandId, scheduleDTO.GivenDate);
+                if (backdateBrandError != null) return backdateBrandError;
                 // v2: the exact Stock batch the give consumed (from AdministerSync). Drives
                 // Schedule.StockId and the certificate lot/expiry. null = OHF / non-consuming /
                 // give-at-zero → lot/expiry stay blank (no fabricated fallback, §6.3).
@@ -2815,6 +2851,23 @@ namespace VaccineAPI.Controllers
             if (scheduleDTO.IsDone && !allSelectedAreDisease && scheduleDTO.GivenDate!.Value.Date > Pkt.Today())
             {
                 return new Response<ScheduleDTO>(false, "The given date cannot be in the future.", null);
+            }
+
+            // PA without "Back-date with brand": same rules as single give, checked for every dose
+            // BEFORE any row is mutated (bulk sets the batch GivenDate on already-given rows too).
+            if (scheduleDTO.IsDone && !allSelectedAreDisease && scheduleDTO.PaId.HasValue)
+            {
+                foreach (var chk in dbChildSchedules)
+                {
+                    var chkBrand = scheduleDTO.ScheduleBrands
+                        .Where(x => x.ScheduleId == chk.Id)
+                        .Select(x => x.BrandId)
+                        .FirstOrDefault() ?? scheduleDTO.BrandId;
+                    var chkErr = CheckBackdateBrandPermission(
+                        scheduleDTO.PaId, true, IsDiseaseSchedule(chk.Id),
+                        chk.IsDone == true, chk.GivenDate, chk.BrandId, chkBrand, scheduleDTO.GivenDate);
+                    if (chkErr != null) return chkErr;
+                }
             }
 
             // v2 §6.5a: on a bulk UNGIVE, pre-reset historical doses are left untouched and

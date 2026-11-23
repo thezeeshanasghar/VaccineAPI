@@ -46,6 +46,10 @@ namespace VaccineAPI.Models
         // Lets the PA tap the doctor's Travel quick-select vaccines when registering a Travel child.
         public bool UseTravelQuickSelect { get; set; }
         public bool UseCustomQuickSelect { get; set; }
+        // OFF (default): the PA can only give a brand dose dated today and cannot change the date
+        // of an already-given dose. Back-dated OHF (no brand) stays allowed. See
+        // HISTORICAL_ENTRY_PA_OWNERSHIP_SPEC.md. Column: add_papermission_backdate_with_brand.sql.
+        public bool BackdateWithBrand { get; set; }
 
         // Follow-Up
         public bool ViewFollowUps { get; set; }

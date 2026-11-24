@@ -17,12 +17,53 @@ namespace VaccineAPI.Services
     public static class VisitReversal
     {
         public const string FlagV2 = "reversal.v2";
-        public const string PaUngiveAfterPaymentMsg = "A PA cannot ungive once payment is recorded. Ask the doctor.";
+        // S4 (UNGIVE_GUARDS_SPEC.md section 5): its own flag, so turning the PA ungive block on does not also change
+        // doctor-ungive assignment closing or PA assignment removal, which reversal.v2 does. Seeded OFF.
+        public const string FlagUngiveBlock = "pa.ungive.block";
+        public const string PaUngiveAfterPaymentMsg = "A PA or manager cannot ungive once an invoice or payment exists. Ask the doctor.";
+        // S0: once the doctor has confirmed the cash, a PA or manager can never ungive any dose on that invoice.
+        public const string StaffUngiveConfirmedMsg = "Cash already confirmed by the doctor. Ask the doctor.";
         public const string PaCannotReverseMsg = "A PA cannot remove or reverse assignments. Ask the doctor.";
 
-        // PA_REVERSAL_SPEC.md R5: with reversal.v2 on, a PA can never ungive a dose that has an invoice or a payment.
+        // PA or manager acting. Role comes from the token when there is one; the claimed ids in the request body are
+        // kept as a fallback for non-enforcing auth mode. A doctor token with a stray PaId is not treated as staff.
+        public static bool IsPaOrManager(long? paId, long? managerId)
+        {
+            var role = AuthContext.Current?.Role;
+            if (role == "DOCTOR" || role == "SUPERADMIN") return false;
+            return role == "PA" || role == "MANAGER" || paId.HasValue || managerId.HasValue;
+        }
+
+        // PA_REVERSAL_SPEC.md R5 / S4: with pa.ungive.block (or reversal.v2) on, a PA or manager can never ungive a
+        // dose that has an invoice link or a recorded payment. A missing flag row reads as OFF.
         public static bool PaUngiveBlocked(Context db, Schedule dose)
-            => FeatureFlags.IsOn(db, FlagV2) && (dose.InvoiceSubmissionId.HasValue || dose.IsPaymentCollected);
+            => (FeatureFlags.IsOn(db, FlagUngiveBlock) || FeatureFlags.IsOn(db, FlagV2))
+               && (dose.InvoiceSubmissionId.HasValue || dose.IsPaymentCollected);
+
+        // S0: true when the dose is given and sits on an invoice the doctor already confirmed. Not behind a flag.
+        public static bool StaffUngiveOnConfirmedInvoice(Context db, Schedule dose)
+            => UngiveReversalGuard.DoctorUngiveWouldDeleteConfirmedInvoice(db, dose);
+
+        // A refused PA/manager ungive leaves one log row (not a reversal request, never shown in the pending list).
+        // The refusal rolls the request's transaction back, so the caller builds the row here and saves it with
+        // SaveBlockedUngive AFTER the rollback. Logging must never change the refusal.
+        public static PaActivityLog BlockedUngiveLog(Context db, long? paId, long? managerId, long suppliedDoctorId, Schedule dose, string reason)
+            => new PaActivityLog
+            {
+                PaId = paId, ManagerId = paId.HasValue ? null : managerId,
+                DoctorId = PaDoctor.Resolve(db, paId, managerId, suppliedDoctorId),
+                PatientId = dose.ChildId, ActionCode = "UngiveBlocked", IsReversal = false,
+                Description = "Ungive refused: " + reason,
+                Notes = $"ScheduleId: {dose.Id} | InvoiceSubmissionId: {dose.InvoiceSubmissionId}",
+                ActionDate = DateTime.UtcNow
+            };
+
+        public static void SaveBlockedUngive(Context db, PaActivityLog? log)
+        {
+            if (log == null) return;
+            try { db.ChangeTracker.Clear(); db.PaActivityLogs.Add(log); db.SaveChanges(); }
+            catch { }
+        }
 
         public static int CloseEmptied(Context db, IEnumerable<Schedule> ungivenDoses, string note)
         {

@@ -68,7 +68,10 @@ namespace VaccineAPI.Tests.Cases
 
             db.FeatureFlags.First(f => f.FlagKey == VisitReversal.FlagV2).IsOn = false; db.SaveChanges(); FeatureFlags.ResetCache();
             As(new AuthIdentity { UserId = 7, Role = "PA", PaId = 19, DoctorId = 1 });
-            Assert.Equal("Assignment not found", Result.Of(Ctl(db).DeleteAssignment(999, 1, "FullReset").GetAwaiter().GetResult()).Message);
+            // Changed deliberately (S0, 2026-11-24): a PA FullReset is refused whatever the flag says; UnassignOnly is
+            // still only gated by reversal.v2, so with the flag off it reaches the lookup as before.
+            Assert.Equal(VisitReversal.PaCannotReverseMsg, Result.Of(Ctl(db).DeleteAssignment(999, 1, "FullReset").GetAwaiter().GetResult()).Message);
+            Assert.Equal("Assignment not found", Result.Of(Ctl(db).DeleteAssignment(999, 1, "UnassignOnly").GetAwaiter().GetResult()).Message);
         }
 
         [Fact]

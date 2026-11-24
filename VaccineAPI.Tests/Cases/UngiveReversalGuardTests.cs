@@ -15,6 +15,7 @@ namespace VaccineAPI.Tests.Cases;
 /// request stayed pending. Result: a leftover "Awaiting Invoice" row after Confirm, and an Approve button that would
 /// have un-paid a given dose. These tests pin the fix.
 /// </summary>
+[Collection("AuthStatics")]
 public class UngiveReversalGuardTests
 {
     private sealed class Fx { public long ChildId, DoseId, Sched, Invoice, Log, Asg; public long DoctorUserId; public string Stamp = ""; }
@@ -492,5 +493,217 @@ public class UngiveReversalGuardTests
         var log = db2.PaActivityLogs.SingleOrDefault(l => l.ActionCode == "UngiveAfterPayment" && l.PaId == paId);
         Assert.True(log != null, "no request written; Update said: " + msg);
         Assert.Equal(w.DoctorId, log.DoctorId);
+    }
+    // ---- S0 / S4 (UNGIVE_GUARDS_SPEC.md 1b): PA and manager ungive blocks ----
+
+    private static (long paId, long userId, string stamp) PaActor(StockWorld w, Fx f, bool linkedGivenToday = true)
+    {
+        var paId = ProdShape(w, f);
+        using (var db = w.NewContext())
+        {
+            db.PaActivityLogs.RemoveRange(db.PaActivityLogs.Where(l => l.Id == f.Log));
+            var sc = db.Schedules.Single(x => x.Id == f.Sched); sc.GivenByPaId = paId; sc.DoneAt = DateTime.UtcNow;
+            db.PaPermissions.Add(new PaPermission { PaId = paId, UngiveVaccine = true, GiveVaccine = true, BulkUngiveVaccines = true, BulkGiveVaccines = true });
+            db.SaveChanges();
+        }
+        using var d2 = w.NewContext();
+        var uid = d2.PersonalAssistant.Single(p => p.Id == paId).UserId;
+        return (paId, uid, d2.Users.Single(u => u.Id == uid).SecurityStamp);
+    }
+
+    private static void Confirm(StockWorld w, Fx f)
+    {
+        using var db = w.NewContext();
+        db.InvoiceSubmissions.Single(i => i.Id == f.Invoice).IsConfirmedByDoctor = true; db.SaveChanges();
+    }
+
+    private static void SetFlag(StockWorld w, string key, bool on)
+    {
+        using var db = w.NewContext();
+        db.FeatureFlags.Add(new FeatureFlag { FlagKey = key, IsOn = on }); db.SaveChanges();
+        FeatureFlags.ResetCache();
+    }
+
+    private static ScheduleDTO PaUngive(Fx f, long paId, long uid, string stamp) =>
+        new ScheduleDTO { Id = f.Sched, ChildId = f.ChildId, DoseId = (int)f.DoseId, PaId = paId, CallerUserId = uid, SecurityStamp = stamp, DoctorId = 0, IsDone = false, IsSkip = false, Date = StockWorld.Today };
+
+    [Fact]
+    public void S0_PA_ungive_on_a_doctor_confirmed_invoice_is_refused_with_no_flag_and_leaves_a_blocked_row()
+    {
+        FeatureFlags.ResetCache();
+        using var w = new StockWorld();
+        var f = Seed(w, true, true);
+        var (paId, uid, stamp) = PaActor(w, f);
+        Confirm(w, f);
+        using (var db = w.NewContext())
+        {
+            var r = w.Schedules(db).Update(PaUngive(f, paId, uid, stamp));
+            Assert.False(r.IsSuccess);
+            Assert.Equal(VisitReversal.StaffUngiveConfirmedMsg, r.Message);
+        }
+        using var db2 = w.NewContext();
+        Assert.True(db2.Schedules.Single(x => x.Id == f.Sched).IsDone);                               // dose untouched
+        Assert.True(db2.InvoiceSubmissions.Single(i => i.Id == f.Invoice).IsConfirmedByDoctor);       // invoice untouched
+        Assert.False(db2.PaActivityLogs.Any(l => l.ActionCode == "UngiveAfterPayment"));              // no reversal request
+        var blocked = db2.PaActivityLogs.Single(l => l.ActionCode == "UngiveBlocked");
+        Assert.Equal(paId, blocked.PaId); Assert.Equal(w.DoctorId, blocked.DoctorId); Assert.False(blocked.IsReversal);
+    }
+
+    [Fact]
+    public void S0_PA_ungive_on_an_unconfirmed_invoice_is_unchanged_while_the_S4_flag_is_off()
+    {
+        FeatureFlags.ResetCache();
+        using var w = new StockWorld();
+        var f = Seed(w, true, true);
+        var (paId, uid, stamp) = PaActor(w, f);
+        using (var db = w.NewContext())
+            Assert.True(w.Schedules(db).Update(PaUngive(f, paId, uid, stamp)).IsSuccess);
+        using var db2 = w.NewContext();
+        Assert.True(db2.PaActivityLogs.Any(l => l.ActionCode == "UngiveAfterPayment" && l.PaId == paId));   // request still written
+        Assert.False(db2.PaActivityLogs.Any(l => l.ActionCode == "UngiveBlocked"));
+    }
+
+    [Fact]
+    public void S4_flag_on_blocks_a_PA_ungive_when_an_invoice_or_payment_exists_and_off_or_missing_does_not()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, true, true);
+        var (paId, uid, stamp) = PaActor(w, f);
+        FeatureFlags.ResetCache();
+        using (var db = w.NewContext()) Assert.False(VisitReversal.PaUngiveBlocked(db, db.Schedules.Single(x => x.Id == f.Sched)));   // flag row missing = off
+        SetFlag(w, VisitReversal.FlagUngiveBlock, true);
+        using (var db = w.NewContext())
+        {
+            var r = w.Schedules(db).Update(PaUngive(f, paId, uid, stamp));
+            Assert.False(r.IsSuccess);
+            Assert.Equal(VisitReversal.PaUngiveAfterPaymentMsg, r.Message);
+        }
+        using var db2 = w.NewContext();
+        Assert.True(db2.Schedules.Single(x => x.Id == f.Sched).IsDone);
+        Assert.True(db2.PaActivityLogs.Any(l => l.ActionCode == "UngiveBlocked"));
+        db2.FeatureFlags.Single(x => x.FlagKey == VisitReversal.FlagUngiveBlock).IsOn = false; db2.SaveChanges(); FeatureFlags.ResetCache();
+        Assert.False(VisitReversal.PaUngiveBlocked(db2, db2.Schedules.Single(x => x.Id == f.Sched)));
+    }
+
+    [Fact]
+    public void S4_flag_on_still_lets_a_PA_ungive_a_dose_with_no_invoice_and_no_payment()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, true, false);
+        using (var db = w.NewContext()) { var sc = db.Schedules.Single(x => x.Id == f.Sched); sc.IsPaymentCollected = false; db.SaveChanges(); }
+        var (paId, uid, stamp) = PaActor(w, f);
+        SetFlag(w, VisitReversal.FlagUngiveBlock, true);
+        using var db2 = w.NewContext();
+        Assert.True(w.Schedules(db2).Update(PaUngive(f, paId, uid, stamp)).IsSuccess);
+    }
+
+    [Fact]
+    public void S0_bulk_PA_ungive_on_a_doctor_confirmed_invoice_is_refused()
+    {
+        FeatureFlags.ResetCache();
+        using var w = new StockWorld();
+        var f = Seed(w, true, true);
+        var (paId, uid, stamp) = PaActor(w, f);
+        Confirm(w, f);
+        using (var db = w.NewContext())
+        {
+            var r = w.Schedules(db).UpdateBulkInjection(PaUngive(f, paId, uid, stamp));
+            Assert.False(r.IsSuccess);
+            Assert.Equal(VisitReversal.StaffUngiveConfirmedMsg, r.Message);
+        }
+        using var db2 = w.NewContext();
+        Assert.True(db2.Schedules.Single(x => x.Id == f.Sched).IsDone);
+    }
+
+    [Fact]
+    public void S0_a_manager_ungive_on_a_confirmed_invoice_is_refused_and_a_doctor_is_not_treated_as_staff()
+    {
+        FeatureFlags.ResetCache();
+        using var w = new StockWorld();
+        var f = Seed(w, true, true);
+        Confirm(w, f);
+        using (var db = w.NewContext())
+        {
+            // The role helper: a manager claim is staff, a doctor call (no ids, no token) is not.
+            Assert.True(VisitReversal.IsPaOrManager(null, 5));
+            Assert.True(VisitReversal.IsPaOrManager(5, null));
+            Assert.False(VisitReversal.IsPaOrManager(null, null));
+            Assert.True(VisitReversal.StaffUngiveOnConfirmedInvoice(db, db.Schedules.Single(x => x.Id == f.Sched)));
+        }
+        // End to end as a manager: seed manager + permission, the child already has an active PA assignment.
+        long mUser; string mStamp; long mId;
+        using (var db = w.NewContext())
+        {
+            var u = new User { MobileNumber = "38" + Guid.NewGuid().ToString("N")[..8], Password = "x", UserType = "MANAGER", CountryCode = "92" };
+            db.Users.Add(u); db.SaveChanges();
+            var m = new Manager { Name = "Mgr", DoctorId = w.DoctorId, UserId = u.Id }; db.Manager.Add(m); db.SaveChanges();
+            db.ManagerPermissions.Add(new ManagerPermission { ManagerId = m.Id, CanGiveVaccine = true }); db.SaveChanges();
+            db.Schedules.Single(x => x.Id == f.Sched).GivenByManagerId = m.Id; db.SaveChanges();
+            mUser = u.Id; mStamp = u.SecurityStamp; mId = m.Id;
+        }
+        using (var db = w.NewContext())
+        {
+            var r = w.Schedules(db).Update(new ScheduleDTO { Id = f.Sched, ChildId = f.ChildId, DoseId = (int)f.DoseId, ManagerId = mId, CallerUserId = mUser, SecurityStamp = mStamp, DoctorId = 0, IsDone = false, IsSkip = false, Date = StockWorld.Today });
+            Assert.False(r.IsSuccess);
+            Assert.Equal(VisitReversal.StaffUngiveConfirmedMsg, r.Message);
+        }
+        using var db2 = w.NewContext();
+        Assert.True(db2.Schedules.Single(x => x.Id == f.Sched).IsDone);
+        Assert.True(db2.PaActivityLogs.Any(l => l.ActionCode == "UngiveBlocked" && l.ManagerId == mId));
+    }
+
+    [Fact]
+    public void S0_doctor_ungive_paths_are_unchanged_by_the_staff_guards()
+    {
+        FeatureFlags.ResetCache();
+        using var w = new StockWorld();
+        var f = Seed(w, true, true);          // unconfirmed invoice
+        SetFlag(w, VisitReversal.FlagUngiveBlock, true);
+        using (var db = w.NewContext())
+            Assert.True(w.Schedules(db).Update(new ScheduleDTO { Id = f.Sched, ChildId = f.ChildId, DoseId = (int)f.DoseId, DoctorId = w.DoctorId, IsDone = false, IsSkip = false, Date = StockWorld.Today }).IsSuccess);
+        using var db2 = w.NewContext();
+        Assert.False(db2.PaActivityLogs.Any(l => l.ActionCode == "UngiveBlocked"));
+    }
+
+    [Fact]
+    public void S0_Approve_is_refused_when_the_invoice_is_already_confirmed_and_Reject_still_works()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, doseGiven: false, linked: false);   // dose ungiven, request pending, invoice named in the note
+        Confirm(w, f);
+        using (var db = w.NewContext())
+        {
+            var r = Result.Of(new PaActivityLogController(db).ApproveReversal(f.Log));
+            Assert.False(r.IsSuccess);
+            Assert.Contains("already confirmed", r.Message);
+        }
+        using (var db = w.NewContext())
+            Assert.Equal(9500m, db.InvoiceSubmissions.Single(i => i.Id == f.Invoice).TotalAmount);   // not cut
+        using (var db = w.NewContext())
+            Assert.True(Result.Of(new PaActivityLogController(db).RejectReversal(f.Log)).IsSuccess);
+    }
+
+    [Fact]
+    public void S0_a_PA_token_cannot_FullReset_an_assignment_even_with_reversal_v2_off()
+    {
+        FeatureFlags.ResetCache();
+        using var w = new StockWorld();
+        var f = Seed(w, true, true);
+        using var db = w.NewContext();
+        var ctx = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        ctx.Items["auth.identity"] = new AuthIdentity { UserId = 7, Role = "PA", PaId = 17, DoctorId = w.DoctorId };
+        var prev = AuthContext.Accessor;
+        AuthContext.Accessor = new Microsoft.AspNetCore.Http.HttpContextAccessor { HttpContext = ctx };
+        try
+        {
+            var ctl = new PAAssignmentController(db, new InventoryTransactionService(db), new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            var r = Result.Of(ctl.DeleteAssignment(f.Asg, w.DoctorId, "FullReset").GetAwaiter().GetResult());
+            Assert.False(r.IsSuccess);
+            Assert.Equal(VisitReversal.PaCannotReverseMsg, r.Message);
+        }
+        finally { AuthContext.Accessor = prev; }
+        using var db2 = w.NewContext();
+        Assert.True(db2.PAAssignments.Any(a => a.Id == f.Asg));          // assignment still there
+        Assert.True(db2.InvoiceSubmissions.Any(i => i.Id == f.Invoice)); // invoice still there
     }
 }

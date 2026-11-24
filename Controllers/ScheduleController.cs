@@ -308,6 +308,9 @@ namespace VaccineAPI.Controllers
         // Every stock effect of a give / ungive / brand-change and the dose record itself are one
         // database transaction: any rejection after stock was touched rolls EVERYTHING back, so a
         // refused request can never leave stock consumed (and a retry can never double-consume).
+        // Set by a refused PA/manager ungive (S0/S4); saved after the rollback so the refusal leaves a trace.
+        private PaActivityLog? _blockedUngive;
+
         private Response<ScheduleDTO> InOneTransaction(Func<Response<ScheduleDTO>> work, ScheduleDTO? attempt = null)
         {
             using var tx = _db.Database.BeginTransaction();
@@ -315,7 +318,7 @@ namespace VaccineAPI.Controllers
             {
                 var result = work();
                 if (result != null && result.IsSuccess) tx.Commit();
-                else { tx.Rollback(); RecordRejected(attempt, result?.Message); }
+                else { tx.Rollback(); RecordRejected(attempt, result?.Message); VisitReversal.SaveBlockedUngive(_db, _blockedUngive); _blockedUngive = null; }
                 return result!;
             }
             catch
@@ -379,9 +382,21 @@ namespace VaccineAPI.Controllers
                     if (permError != null)
                         return permError;
                 }
-                // R5 (reversal.v2): a PA can never ungive a dose that already has an invoice or payment.
-                if (scheduleDTO.PaId.HasValue && scheduleDTO.IsDone == false && dbSchedule.IsDone && VisitReversal.PaUngiveBlocked(_db, dbSchedule))
-                    return new Response<ScheduleDTO>(false, VisitReversal.PaUngiveAfterPaymentMsg, null);
+                // S0: a PA or manager can never ungive a dose on an invoice the doctor already confirmed (no flag).
+                // S4 / R5 (pa.ungive.block or reversal.v2): nor any dose that has an invoice link or a payment.
+                if (scheduleDTO.IsDone == false && dbSchedule.IsDone && VisitReversal.IsPaOrManager(scheduleDTO.PaId, scheduleDTO.ManagerId))
+                {
+                    if (VisitReversal.StaffUngiveOnConfirmedInvoice(_db, dbSchedule))
+                    {
+                        _blockedUngive = VisitReversal.BlockedUngiveLog(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId, dbSchedule, "invoice already confirmed by the doctor");
+                        return new Response<ScheduleDTO>(false, VisitReversal.StaffUngiveConfirmedMsg, null);
+                    }
+                    if (VisitReversal.PaUngiveBlocked(_db, dbSchedule))
+                    {
+                        _blockedUngive = VisitReversal.BlockedUngiveLog(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId, dbSchedule, "invoice or payment exists");
+                        return new Response<ScheduleDTO>(false, VisitReversal.PaUngiveAfterPaymentMsg, null);
+                    }
+                }
 
                 // A doctor ungive deletes the linked invoice; refuse when that invoice is already confirmed.
                 if (!scheduleDTO.PaId.HasValue && !scheduleDTO.ManagerId.HasValue && scheduleDTO.IsDone == false
@@ -2603,8 +2618,19 @@ namespace VaccineAPI.Controllers
                 {
                     if (scheduleDTO.IsDone == false && checkSchedule.IsDone == true)
                     {
-                        if (scheduleDTO.PaId.HasValue && VisitReversal.PaUngiveBlocked(_db, checkSchedule))
-                            return new Response<ScheduleDTO>(false, VisitReversal.PaUngiveAfterPaymentMsg, null);
+                        if (VisitReversal.IsPaOrManager(scheduleDTO.PaId, scheduleDTO.ManagerId))
+                        {
+                            if (VisitReversal.StaffUngiveOnConfirmedInvoice(_db, checkSchedule))
+                            {
+                                _blockedUngive = VisitReversal.BlockedUngiveLog(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId, checkSchedule, "invoice already confirmed by the doctor");
+                                return new Response<ScheduleDTO>(false, VisitReversal.StaffUngiveConfirmedMsg, null);
+                            }
+                            if (VisitReversal.PaUngiveBlocked(_db, checkSchedule))
+                            {
+                                _blockedUngive = VisitReversal.BlockedUngiveLog(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId, checkSchedule, "invoice or payment exists");
+                                return new Response<ScheduleDTO>(false, VisitReversal.PaUngiveAfterPaymentMsg, null);
+                            }
+                        }
                         if (!scheduleDTO.PaId.HasValue && !scheduleDTO.ManagerId.HasValue
                             && UngiveReversalGuard.DoctorUngiveWouldDeleteConfirmedInvoice(_db, checkSchedule))
                             return new Response<ScheduleDTO>(false, UngiveReversalGuard.ConfirmedInvoiceUngiveMsg, null);

@@ -187,6 +187,11 @@ namespace VaccineAPI.Controllers
                 // The ungive nulls Schedule.Amount, so the amount to reverse is the one captured in the note.
                 var noteAmount = VaccineAPI.Services.UngiveReversalGuard.ParseAmount(log.Notes);
 
+                // S0: the doctor already confirmed this invoice, so the cash is counted and there is nothing to
+                // forgive or reduce. Only Reject is valid; the confirmed invoice is never cut from here.
+                if (invoiceSubmissionId > 0 && _db.InvoiceSubmissions.Any(i => i.Id == invoiceSubmissionId && i.IsConfirmedByDoctor))
+                    return Ok(new { IsSuccess = false, Message = "The doctor already confirmed this invoice, so there is nothing to reduce. Reject this request." });
+
                 if (scheduleId > 0)
                 {
                     var schedule = _db.Schedules.FirstOrDefault(s => s.Id == scheduleId);

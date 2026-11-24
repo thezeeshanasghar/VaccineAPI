@@ -209,7 +209,10 @@ namespace VaccineAPI.Controllers
         {
             // R5 (reversal.v2): removing or reversing an assignment is doctor-only. A PA token is refused here
             // whatever doctorId the caller put in the URL.
-            if (AuthContext.Current?.Role == "PA" && VaccineAPI.Services.FeatureFlags.IsOn(_db, VaccineAPI.Services.VisitReversal.FlagV2))
+            // S0: a FullReset (it deletes the invoice and un-gives doses) is never a PA action, flag or not.
+            // UnassignOnly keeps its reversal.v2 gating.
+            if (AuthContext.Current?.Role == "PA"
+                && (mode == "FullReset" || VaccineAPI.Services.FeatureFlags.IsOn(_db, VaccineAPI.Services.VisitReversal.FlagV2)))
                 return Ok(new { IsSuccess = false, Message = VaccineAPI.Services.VisitReversal.PaCannotReverseMsg });
             var assignment = await _db.PAAssignments.FindAsync(id);
             if (assignment == null)

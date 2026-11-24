@@ -43,9 +43,7 @@ namespace VaccineAPI.Controllers
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50)
         {
-            var query = _db.PaActivityLogs
-                .Include(l => l.PersonalAssistant)
-                .Where(l => l.DoctorId == doctorId);
+            var query = VaccineAPI.Services.PaDoctor.ForDoctor(_db, _db.PaActivityLogs.Include(l => l.PersonalAssistant), doctorId);
 
             if (paId.HasValue)
                 query = query.Where(l => l.PaId == paId.Value);
@@ -103,10 +101,8 @@ namespace VaccineAPI.Controllers
         [HttpGet("pending-reversals/{doctorId:long}")]
         public ActionResult GetPendingReversals(long doctorId)
         {
-            var logs = _db.PaActivityLogs
-                .Include(l => l.PersonalAssistant)
-                .Where(l => l.DoctorId == doctorId
-                         && (l.ActionCode == "UngiveAfterPayment" || l.ActionCode == "InvoiceAmountReduction")
+            var logs = VaccineAPI.Services.PaDoctor.ForDoctor(_db, _db.PaActivityLogs.Include(l => l.PersonalAssistant), doctorId)
+                .Where(l => (l.ActionCode == "UngiveAfterPayment" || l.ActionCode == "InvoiceAmountReduction")
                          && l.IsReversal == true
                          && l.IsReversalApproved == false
                          && l.IsReversalRejected != true)
@@ -162,6 +158,9 @@ namespace VaccineAPI.Controllers
             var log = _db.PaActivityLogs.FirstOrDefault(l => l.Id == id);
             if (log == null)
                 return Ok(new { IsSuccess = false, Message = "Log entry not found." });
+
+            // Rows written before the PaDoctor fix carry DoctorId 0; use their PA's / manager's doctor.
+            var effectiveDoctorId = VaccineAPI.Services.PaDoctor.Effective(_db, log);
 
             if (!log.IsReversal)
                 return Ok(new { IsSuccess = false, Message = "This entry is not a pending reversal." });
@@ -231,7 +230,7 @@ namespace VaccineAPI.Controllers
                         var invoiceToVoid = _db.Invoices
                             .FirstOrDefault(i => i.DoseId == schedule.DoseId
                                               && i.ChildId == schedule.ChildId
-                                              && i.DoctorId == log.DoctorId
+                                              && i.DoctorId == effectiveDoctorId
                                               && i.IsVoided == false);
                         if (invoiceToVoid != null)
                         {
@@ -247,7 +246,7 @@ namespace VaccineAPI.Controllers
                             _db.PaPayableAdjustments.Add(new PaPayableAdjustment
                             {
                                 PaId = log.PaId.Value,
-                                DoctorId = log.DoctorId,
+                                DoctorId = effectiveDoctorId,
                                 ClinicId = log.ClinicId,
                                 Amount = -reverseAmount,
                                 Reason = $"Doctor approved ungive reversal (ScheduleId: {scheduleId})",
@@ -278,7 +277,7 @@ namespace VaccineAPI.Controllers
                     _db.PaPayableAdjustments.Add(new PaPayableAdjustment
                     {
                         PaId = log.PaId.Value,
-                        DoctorId = log.DoctorId,
+                        DoctorId = effectiveDoctorId,
                         ClinicId = log.ClinicId,
                         Amount = -reduction,
                         Reason = $"Doctor approved invoice amount reduction of Rs {reduction}",

@@ -859,8 +859,8 @@ namespace VaccineAPI.Controllers
             // is blocked. A request whose dose was given again is stale and is NOT flagged here (it shows,
             // marked stale, in Pending Reversal Approvals).
             var ungivePendingByInvoice = new Dictionary<long, long>();
-            foreach (var ul in UngiveReversalGuard.Pending(_db)
-                         .Where(l => l.DoctorId == doctorId && l.ActionCode == UngiveReversalGuard.Code).ToList())
+            foreach (var ul in PaDoctor.ForDoctor(_db, UngiveReversalGuard.Pending(_db), doctorId)
+                         .Where(l => l.ActionCode == UngiveReversalGuard.Code).ToList())
             {
                 var up = UngiveReversalGuard.ParseNotes(ul.Notes);
                 if (up.InvoiceId <= 0 || up.ScheduleId <= 0 || ungivePendingByInvoice.ContainsKey(up.InvoiceId)) continue;

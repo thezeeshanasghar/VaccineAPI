@@ -290,7 +290,7 @@ namespace VaccineAPI.Controllers
                 _db.PaActivityLogs.Add(new PaActivityLog
                 {
                     PaId = scheduleDTO.PaId.Value,
-                    DoctorId = scheduleDTO.DoctorId,
+                    DoctorId = VaccineAPI.Services.PaDoctor.Resolve(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId),
                     ClinicId = null,
                     PatientId = scheduleDTO.ChildId,
                     ActionCode = "SCHEDULE_ADD_VACCINE",
@@ -766,7 +766,7 @@ namespace VaccineAPI.Controllers
                             _db.PaActivityLogs.Add(new PaActivityLog
                             {
                                 PaId = scheduleDTO.PaId.Value,
-                                DoctorId = scheduleDTO.DoctorId,
+                                DoctorId = VaccineAPI.Services.PaDoctor.Resolve(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId),
                                 ClinicId = null,
                                 PatientId = dbSchedule.ChildId,
                                 ActionCode = "UngiveAfterPayment",
@@ -1278,7 +1278,7 @@ namespace VaccineAPI.Controllers
                             NewAmount = 0,
                             PaId = scheduleDTO.PaId,
                             ManagerId = scheduleDTO.ManagerId,
-                            DoctorId = scheduleDTO.DoctorId,
+                            DoctorId = VaccineAPI.Services.PaDoctor.Resolve(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId),
                             Notes = scheduleDTO.ManagerId.HasValue
                                 ? $"Manager ungave vaccine after invoice was downloaded. ScheduleId: {dbSchedule.Id}. Payment collected: {dbSchedule.IsPaymentCollected}"
                                 : $"PA ungave vaccine after invoice was downloaded. ScheduleId: {dbSchedule.Id}. Payment collected: {dbSchedule.IsPaymentCollected}",
@@ -2206,7 +2206,7 @@ namespace VaccineAPI.Controllers
                         _db.PaActivityLogs.Add(new PaActivityLog
                         {
                             PaId = scheduleDTO.PaId.Value,
-                            DoctorId = scheduleDTO.DoctorId,
+                            DoctorId = VaccineAPI.Services.PaDoctor.Resolve(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId),
                             ClinicId = null,
                             PatientId = scheduleDTO.ChildId,
                             ActionCode = "SCHEDULE_ADD_VACCINE",
@@ -2975,7 +2975,7 @@ namespace VaccineAPI.Controllers
                         {
                             PaId = scheduleDTO.PaId,
                             ManagerId = scheduleDTO.ManagerId,
-                            DoctorId = scheduleDTO.DoctorId,
+                            DoctorId = VaccineAPI.Services.PaDoctor.Resolve(_db, scheduleDTO.PaId, scheduleDTO.ManagerId, scheduleDTO.DoctorId),
                             ClinicId = null,
                             PatientId = schedule.ChildId,
                             ActionCode = "UngiveAfterPayment",

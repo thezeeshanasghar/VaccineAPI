@@ -109,8 +109,9 @@ namespace VaccineAPI.Services
                 dose.InvoiceSubmissionId = p.InvoiceId;
                 var amt = ParseAmount(l.Notes);
                 if ((dose.Amount ?? 0) <= 0 && amt > 0) dose.Amount = amt;
+                var certDoctorId = PaDoctor.Effective(db, l);
                 var cert = db.Invoices.FirstOrDefault(i => i.DoseId == dose.DoseId && i.ChildId == dose.ChildId
-                                                           && i.DoctorId == l.DoctorId && i.IsVoided
+                                                           && i.DoctorId == certDoctorId && i.IsVoided
                                                            && i.SupersededBy == "UNGIVEN");
                 if (cert != null) { cert.IsVoided = false; cert.SupersededBy = null; }
                 return true;

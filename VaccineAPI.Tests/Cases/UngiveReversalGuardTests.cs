@@ -377,4 +377,120 @@ public class UngiveReversalGuardTests
         using var db2 = w.NewContext();
         Assert.False(db2.Schedules.Single(s => s.Id == f.Sched).IsDone);   // behaviour unchanged for unconfirmed
     }
+
+    // ---- DoctorId = 0 (prod 2026-11-24: all 40 pending requests were stored with DoctorId 0, so none ever
+    //      reached the doctor's list). The PA app sends no DoctorId; the doctor comes from the PA's record. ----
+
+    // Rewrites the seeded request into the exact shape prod has: DoctorId 0, written by a real PA of the doctor.
+    private static long ProdShape(StockWorld w, Fx f)
+    {
+        using var db = w.NewContext();
+        var u = new User { MobileNumber = "37" + Guid.NewGuid().ToString("N")[..8], Password = "x", UserType = "PA", CountryCode = "92" };
+        db.Users.Add(u); db.SaveChanges();
+        var pa = new PersonalAssistant { Name = "Field PA", DoctorId = w.DoctorId, UserId = u.Id, IsActive = true };
+        db.PersonalAssistant.Add(pa); db.SaveChanges();
+        var log = db.PaActivityLogs.Single(l => l.Id == f.Log);
+        log.DoctorId = 0; log.PaId = pa.Id;
+        db.SaveChanges();
+        return pa.Id;
+    }
+
+    [Fact]
+    public void Prod_shape_request_with_DoctorId_0_still_shows_in_its_doctors_pending_list()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, false, false);
+        ProdShape(w, f);
+        using var db = w.NewContext();
+        var res = (OkObjectResult)new PaActivityLogController(db).GetPendingReversals(w.DoctorId);
+        var rows = JObject.FromObject(res.Value!)["ResponseData"]!;
+        Assert.Contains(rows, r => (long)r["Id"]! == f.Log);
+    }
+
+    [Fact]
+    public void Prod_shape_request_is_not_shown_to_a_different_doctor()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, false, false);
+        ProdShape(w, f);
+        using var db = w.NewContext();
+        var res = (OkObjectResult)new PaActivityLogController(db).GetPendingReversals(w.DoctorId + 9999);
+        Assert.DoesNotContain(JObject.FromObject(res.Value!)["ResponseData"]!, r => (long)r["Id"]! == f.Log);
+    }
+
+    [Fact]
+    public void Prod_shape_request_flags_the_invoice_row()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, false, false);
+        ProdShape(w, f);
+        Assert.True((bool)InvoiceRow(w, f.Invoice)["HasUngivePending"]!);
+    }
+
+    [Fact]
+    public void Prod_shape_approve_books_the_PA_payable_reduction_under_the_PAs_doctor_not_0()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, false, false);
+        var paId = ProdShape(w, f);
+        using (var db = w.NewContext())
+            Assert.True(Result.Of(new PaActivityLogController(db).ApproveReversal(f.Log)).IsSuccess);
+        using var db2 = w.NewContext();
+        var adj = db2.PaPayableAdjustments.Single(a => a.PaId == paId);
+        Assert.Equal(w.DoctorId, adj.DoctorId);
+        Assert.Equal(-7700m, adj.Amount);
+    }
+
+    [Fact]
+    public void Prod_shape_relink_still_restores_the_certificate_row()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, true, false);
+        var paId = ProdShape(w, f);
+        using (var db = w.NewContext())
+        {
+            db.Invoices.Add(new Invoice { DoseId = f.DoseId, ChildId = f.ChildId, DoctorId = w.DoctorId, IsVoided = true, SupersededBy = "UNGIVEN" });
+            var s = db.Schedules.Single(x => x.Id == f.Sched);
+            s.Amount = null; s.GivenByPaId = paId; db.SaveChanges();   // re-given by the same PA that wrote the request
+            Assert.True(UngiveReversalGuard.RelinkOnRegive(db, s));
+            db.SaveChanges();
+        }
+        using var db2 = w.NewContext();
+        Assert.False(db2.Invoices.Single(i => i.DoseId == f.DoseId && i.ChildId == f.ChildId).IsVoided);
+    }
+
+    [Fact]
+    public void PaDoctor_resolves_from_the_PA_record_and_never_prefers_the_client_value()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, false, false);
+        var paId = ProdShape(w, f);
+        using var db = w.NewContext();
+        Assert.Equal(w.DoctorId, PaDoctor.Resolve(db, paId, null, 0));
+        Assert.Equal(w.DoctorId, PaDoctor.Resolve(db, paId, null, 987654));   // a spoofed client value loses
+        Assert.Equal(55, PaDoctor.Resolve(db, null, null, 55));                // no actor: falls back to what was sent
+    }
+
+    [Fact]
+    public void A_PA_ungive_with_no_client_DoctorId_stores_the_PAs_doctor_on_the_request()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w, doseGiven: true, linked: true);
+        var paId = ProdShape(w, f);   // gives us a real PA of the doctor
+        using (var db = w.NewContext())
+        {
+            db.PaActivityLogs.RemoveRange(db.PaActivityLogs.Where(l => l.Id == f.Log)); db.SaveChanges();
+            var s = db.Schedules.Single(x => x.Id == f.Sched); s.GivenByPaId = paId; s.DoneAt = DateTime.UtcNow; db.SaveChanges();
+        }
+        string msg;
+        long paUserId; string paStamp;
+        using (var dbp = w.NewContext()) { dbp.PaPermissions.Add(new PaPermission { PaId = paId, UngiveVaccine = true, GiveVaccine = true }); dbp.SaveChanges(); }
+        using (var dbu = w.NewContext()) { var pu = dbu.Users.Single(u => u.Id == dbu.PersonalAssistant.Single(p => p.Id == paId).UserId); paUserId = pu.Id; paStamp = pu.SecurityStamp; }
+        using (var db = w.NewContext())
+            msg = w.Schedules(db).Update(new ScheduleDTO { Id = f.Sched, ChildId = f.ChildId, DoseId = (int)f.DoseId, PaId = paId, CallerUserId = paUserId, SecurityStamp = paStamp, DoctorId = 0, IsDone = false, IsSkip = false, Date = StockWorld.Today }).Message ?? "ok";
+        using var db2 = w.NewContext();
+        var log = db2.PaActivityLogs.SingleOrDefault(l => l.ActionCode == "UngiveAfterPayment" && l.PaId == paId);
+        Assert.True(log != null, "no request written; Update said: " + msg);
+        Assert.Equal(w.DoctorId, log.DoctorId);
+    }
 }

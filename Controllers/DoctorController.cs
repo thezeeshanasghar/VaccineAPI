@@ -646,6 +646,13 @@ namespace VaccineAPI.Controllers
                         return NotFound(new Response<string>(false, $"Clinic with Doctor ID {doctorId.Value} not found", null));
                 }
 
+                // Staff may only point a patient at one of their own doctor's clinics. Agents and
+                // parents (referral / self-registration) legitimately pick another doctor.
+                var caller = AuthContext.Current;
+                if (caller != null && (caller.Role == "DOCTOR" || caller.Role == "PA" || caller.Role == "MANAGER")
+                    && !CallerGuard.OwnsClinic(_db, clinic.Id))
+                    return StatusCode(403, new Response<string>(false, "You can only assign patients to your own clinics", null));
+
                 child.ClinicId = clinic.Id;
 
                 await _db.SaveChangesAsync();

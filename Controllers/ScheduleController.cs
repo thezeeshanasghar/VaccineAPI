@@ -3685,11 +3685,22 @@ namespace VaccineAPI.Controllers
                 owner = owners[0];
             else if (owners.Count > 1 && owners.Select(o => o.PersonalAssistantId).Distinct().Count() == 1)
                 owner = owners[0];            // legacy duplicate rows of the same PA: newest, no cross-PA guess
+            // Point C (HISTORICAL_ENTRY_PA_OWNERSHIP_SPEC.md): money-free gives skip assignment at give
+            // time, so when an invoice later covers them the PA who gave them becomes responsible.
+            // Only when NO assignment covers any dose (owners.Count == 0), never for an ambiguous group.
+            var pointCPaId = (long?)null;
+            if (owner == null && owners.Count == 0)
+            {
+                owner = AdoptGivingPaForInvoicedDoses(invoice, childId, invoiceDoses);
+                if (owner != null) pointCPaId = owner.PersonalAssistantId;
+            }
             if (owner == null)
                 return;                       // no assignment covers this group (or ambiguous): leave it alone
 
             IEnumerable<Schedule> toLink = invoiceDoses;
-            if (!invoiceCreatedThisRequest)
+            if (pointCPaId.HasValue)
+                toLink = invoiceDoses.Where(s => s.GivenByPaId == pointCPaId);   // only what this PA gave
+            else if (!invoiceCreatedThisRequest)
                 toLink = invoiceDoses.Where(s => VaccineAPI.Services.PaVisitGuard.DoseBelongsToVisit(
                     s, invoice, owner.AssignedAt, owner.PersonalAssistantId));
             var linkList = toLink.ToList();
@@ -3729,12 +3740,40 @@ namespace VaccineAPI.Controllers
                     _db.Entry(s).State = EntityState.Modified;
                 }
             }
-            if (invoiceCreatedThisRequest && auditActor.HasValue)
+            if ((invoiceCreatedThisRequest || pointCPaId.HasValue) && auditActor.HasValue)
                 AssignmentAudit.Add(_db, "Invoiced", owner, auditActor.Value.Type,
                     auditActor.Value.Type == "DOCTOR" ? owner.DoctorId : auditActor.Value.Id,
                     "Invoice " + invoice.Id + " created, " + invoice.TotalAmount.ToString("0"),
                     null, new { invoiceId = invoice.Id, amount = invoice.TotalAmount });
             _db.SaveChanges();
+        }
+
+        // Point C. Invoiced doses that no open assignment covers and that one PA gave (GivenByPaId,
+        // which is kept even when the give skipped assignment) hand that PA the liability: create or
+        // reuse the assignment for the dose's group and return it. Null when nothing qualifies, when
+        // the givers differ (no cross-PA guess), or when a manager/doctor gave (invoice stays unowned).
+        private PAAssignment? AdoptGivingPaForInvoicedDoses(InvoiceSubmission invoice, long childId, List<Schedule> invoiceDoses)
+        {
+            var unowned = invoiceDoses
+                .Where(s => s.IsDone && s.GivenByPaId.HasValue
+                            && AssignmentResolver.OpenAssignmentForDose(_db, s.Id) == null)
+                .ToList();
+            if (unowned.Count == 0) return null;
+            var paId = unowned[0].GivenByPaId!.Value;
+            if (unowned.Any(s => s.GivenByPaId != paId)) return null;
+            if (_db.PersonalAssistant.Find(paId) == null) return null;
+
+            var clinicId = _db.Childs.Where(c => c.Id == childId).Select(c => (long?)c.ClinicId).FirstOrDefault();
+            long firstId = 0;
+            foreach (var dose in unowned)
+            {
+                var id = EnsurePAAssignment(childId, paId, invoice.DoctorId, clinicId, dose);
+                if (id <= 0) continue;
+                LinkScheduleToAssignment(id, dose.Id);
+                _db.SaveChanges();   // so the next dose of the same group sees the pin
+                if (firstId == 0) firstId = id;
+            }
+            return firstId > 0 ? _db.PAAssignments.Find(firstId) : null;
         }
 
         // Whether to stamp "Doctor/(PA Name)" or "Manager/(PA Name)" onto an invoice's

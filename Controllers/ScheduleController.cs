@@ -1350,9 +1350,20 @@ namespace VaccineAPI.Controllers
                 long giveAssignmentId = 0;
                 if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
                 {
-                    var assignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null, dbSchedule);
-                    LinkScheduleToAssignment(assignmentId, dbSchedule.Id);
-                    giveAssignmentId = assignmentId;
+                    // Give-side gate (HISTORICAL_ENTRY_PA_OWNERSHIP_SPEC Enforcement A): a dose with no brand,
+                    // no invoice, no fee and no payment carries no money, so it creates no assignment, no pin
+                    // and no collector stamp. GivenByPaId stays (credit). A dose already pinned by an open
+                    // assignment (a planned visit) keeps its owner and is untouched.
+                    if (GiveSkipsAssignment(dbSchedule))
+                    {
+                        dbSchedule.PaymentCollectorPaId = null;
+                    }
+                    else
+                    {
+                        var assignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null, dbSchedule);
+                        LinkScheduleToAssignment(assignmentId, dbSchedule.Id);
+                        giveAssignmentId = assignmentId;
+                    }
                 }
                 // Re-give while a PA's ungive-after-payment request is still undecided: put the dose back on its invoice.
                 if (!wasGiven && dbSchedule.IsDone)
@@ -1483,6 +1494,12 @@ namespace VaccineAPI.Controllers
         // assignment exists/could be created. Flushes immediately on create so the
         // returned Id is usable right away by LinkScheduleToAssignment, ahead of the
         // caller's own later SaveChanges()/transaction commit.
+        // True when a PA give must NOT create/pin an assignment: the dose carries no money or stock
+        // and no open assignment already owns it.
+        private bool GiveSkipsAssignment(Schedule dose)
+            => VaccineAPI.Services.PaOwnership.SkipsPaOwnership(dose)
+               && AssignmentResolver.OpenAssignmentForDose(_db, dose.Id) == null;
+
         private long EnsurePAAssignment(long childId, long paId, long doctorId, long? clinicId, Schedule dose)
         {
             // Validate doctorId is a real doctor — if caller passed a PA ID by mistake, resolve from child's clinic
@@ -3263,10 +3280,22 @@ namespace VaccineAPI.Controllers
             // and pin every dose actually given in this batch to it.
             if (scheduleDTO.IsDone && scheduleDTO.PaId.HasValue && scheduleDTO.DoctorId > 0)
             {
-                bulkAuditAssignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null, dbSchedule);
+                // Give-side gate: money/stock-free doses get no assignment, pin or collector stamp.
+                var ownedDoses = new List<Schedule>();
                 foreach (var schedule in dbChildSchedules)
-                    if (schedule.IsDone)
+                {
+                    if (!schedule.IsDone) continue;
+                    if (bulkChanged.Contains(schedule) && GiveSkipsAssignment(schedule))
+                        schedule.PaymentCollectorPaId = null;
+                    else
+                        ownedDoses.Add(schedule);
+                }
+                if (ownedDoses.Count > 0)
+                {
+                    bulkAuditAssignmentId = EnsurePAAssignment(dbSchedule.ChildId, scheduleDTO.PaId.Value, scheduleDTO.DoctorId, dbSchedule.Child != null ? (long?)dbSchedule.Child.ClinicId : null, ownedDoses[0]);
+                    foreach (var schedule in ownedDoses)
                         LinkScheduleToAssignment(bulkAuditAssignmentId, schedule.Id);
+                }
             }
             if (scheduleDTO.IsDone)
                 foreach (var regiven in bulkChanged)

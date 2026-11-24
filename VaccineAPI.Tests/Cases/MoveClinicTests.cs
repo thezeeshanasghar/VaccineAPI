@@ -91,29 +91,18 @@ public class MoveClinicTests
     }
 
     [Fact]
-    public void BilledDose_Refused()
+    public void BilledDoseAndPaAssignment_NoLongerBlock()
     {
         using var w = new World();
         using (var db = w.Ctx())
         {
             db.Schedules.Add(new Schedule { ChildId = w.ChildId, DoseId = w.DoseId, Date = new DateTime(2026, 11, 1), IsDone = true, Amount = 3500 });
-            db.SaveChanges();
-        }
-        As(DocA(w), () => Assert.False(Move(w, w.A2).IsSuccess));
-        using var db2 = w.Ctx();
-        Assert.Equal(w.A1, db2.Childs.Single().ClinicId);
-    }
-
-    [Fact]
-    public void UnbilledGivenDose_StillAllowed()
-    {
-        using var w = new World();
-        using (var db = w.Ctx())
-        {
-            db.Schedules.Add(new Schedule { ChildId = w.ChildId, DoseId = w.DoseId, Date = new DateTime(2026, 11, 1), IsDone = true });
+            db.PAAssignments.Add(new PAAssignment { ChildId = w.ChildId, DoctorId = w.DoctorA, ClinicId = w.A1 });
             db.SaveChanges();
         }
         As(DocA(w), () => Assert.True(Move(w, w.A2).IsSuccess));
+        using var db2 = w.Ctx();
+        Assert.Equal(w.A2, db2.Childs.Single().ClinicId);
     }
 
     [Fact]

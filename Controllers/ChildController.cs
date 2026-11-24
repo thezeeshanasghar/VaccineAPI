@@ -3842,9 +3842,9 @@ namespace VaccineAPI.Controllers
 
         [Owns(OwnerKind.Child, "Id")]
         // Move a patient to another clinic of the SAME doctor (doctor only, no PA permission).
-        // Reports (P&L, Dashboard, PA cash handover) attribute past doses and cash by the patient's
-        // CURRENT clinic, so a move is refused once the patient has billed doses or any PA
-        // assignment; it exists to fix a patient registered in the wrong clinic.
+        // No billing/PA guard by owner decision: reports (P&L, Dashboard, PA cash handover) attribute
+        // past doses and cash by the patient's CURRENT clinic, so moving a patient with billing shifts
+        // that history to the new clinic (the app warns in the confirm dialog).
         [RolesOnly("DOCTOR", "SUPERADMIN")]
         [HttpPost("{id:long}/move-clinic")]
         public Response<string> MoveClinic(long id, [FromQuery] long toClinicId)
@@ -3860,13 +3860,6 @@ namespace VaccineAPI.Controllers
                 return new Response<string>(false, "You can only move a patient between your own clinics", null);
             if (from.Id == to.Id) return new Response<string>(false, "Patient is already in this clinic", null);
 
-            if (_db.Schedules.Any(s => s.ChildId == id && s.IsDone == true
-                    && ((s.Amount ?? 0) > 0 || (s.VaccineCost ?? 0) > 0)))
-                return new Response<string>(false,
-                    "This patient has billed doses, so moving would shift past revenue and cash between clinics. Move is only for patients registered in the wrong clinic before any billing.", null);
-            if (_db.PAAssignments.Any(a => a.ChildId == id))
-                return new Response<string>(false,
-                    "This patient has a PA assignment. Moving would split the cash trail between clinics.", null);
 
             child.ClinicId = to.Id;
             _db.PaActivityLogs.Add(new PaActivityLog

@@ -374,4 +374,109 @@ public class PaAssignmentLifecycleTests
         Assert.DoesNotContain("Invoiced", actions);
         Assert.DoesNotContain("Confirmed", actions);
     }
+
+    // ---------------- Reassign sheet: visit fields, notes, current PA (owner, 2026-11-25)
+
+    private static void MakeVisit(StockWorld w, Fx f, DateTime day)
+    {
+        using var db = w.NewContext();
+        var a = db.PAAssignments.Single(x => x.Id == f.AsgA);
+        a.IsScheduledVisit = true; a.TargetDate = day; a.WindowStart = new TimeSpan(10, 0, 0); a.WindowMinutes = 60;
+        a.Area = "I-8/2"; a.VisitOrder = 2; a.Notes = "Old note";
+        db.SaveChanges();
+    }
+
+    private static IActionResult ReassignWith(StockWorld w, Fx f, ReassignDto dto)
+    {
+        using var db = w.NewContext();
+        dto.CallerUserId = f.DoctorUserId; dto.SecurityStamp = f.Stamp;
+        return Ctl(db).Reassign(f.AsgA, dto).GetAwaiter().GetResult();
+    }
+
+    [Fact]
+    public void Reassign_to_the_PA_who_already_has_it_is_refused()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w);
+        var r = Result.Of(Reassign(w, f, f.AsgA, newPa: 17));
+        Assert.False(r.IsSuccess);
+        using var db = w.NewContext();
+        Assert.False(db.PAAssignments.Single(x => x.Id == f.AsgA).IsCancelled);
+    }
+
+    [Fact]
+    public void Reassign_without_visit_fields_keeps_the_window_when_the_date_moves()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w);
+        var day = Pkt.Today().Date.AddDays(3);
+        MakeVisit(w, f, day);
+
+        var r = Result.Of(ReassignWith(w, f, new ReassignDto { NewPaId = 19, TargetDate = day.AddDays(1) }));
+        Assert.True(r.IsSuccess, r.Message);
+
+        using var db = w.NewContext();
+        var n = db.PAAssignments.Single(x => x.ReassignedFromAssignmentId == f.AsgA);
+        Assert.True(n.IsScheduledVisit);
+        Assert.Equal(day.AddDays(1), n.TargetDate);
+        Assert.Equal(new TimeSpan(10, 0, 0), n.WindowStart);
+        Assert.Equal("I-8/2", n.Area);
+        Assert.Null(n.VisitOrder);          // order belonged to the old day
+        Assert.Equal("Old note", n.Notes);
+    }
+
+    [Fact]
+    public void Reassign_with_visit_fields_and_notes_saves_them()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w);
+        var day = Pkt.Today().Date.AddDays(3);
+        MakeVisit(w, f, day);
+
+        var r = Result.Of(ReassignWith(w, f, new ReassignDto { NewPaId = 19, IsScheduledVisit = true, WindowStart = "11:30",
+                                                               WindowMinutes = 30, Area = " G-9 ", Notes = "Ring first" }));
+        Assert.True(r.IsSuccess, r.Message);
+
+        using var db = w.NewContext();
+        var n = db.PAAssignments.Single(x => x.ReassignedFromAssignmentId == f.AsgA);
+        Assert.Equal(day, n.TargetDate);
+        Assert.Equal(new TimeSpan(11, 30, 0), n.WindowStart);
+        Assert.Equal(30, n.WindowMinutes);
+        Assert.Equal("G-9", n.Area);
+        Assert.Null(n.VisitOrder);          // time slot changed
+        Assert.Equal("Ring first", n.Notes);
+    }
+
+    [Fact]
+    public void Reassign_with_a_bad_window_is_refused_and_nothing_changes()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w);
+        MakeVisit(w, f, Pkt.Today().Date.AddDays(3));
+
+        var r = Result.Of(ReassignWith(w, f, new ReassignDto { NewPaId = 19, IsScheduledVisit = true, WindowStart = "11:30", WindowMinutes = 7 }));
+        Assert.False(r.IsSuccess);
+
+        using var db = w.NewContext();
+        Assert.False(db.PAAssignments.Single(x => x.Id == f.AsgA).IsCancelled);
+        Assert.False(db.PAAssignments.Any(x => x.ReassignedFromAssignmentId == f.AsgA));
+    }
+
+    [Fact]
+    public void Reassign_turning_the_visit_off_clears_window_and_area()
+    {
+        using var w = new StockWorld();
+        var f = Seed(w);
+        MakeVisit(w, f, Pkt.Today().Date.AddDays(3));
+
+        var r = Result.Of(ReassignWith(w, f, new ReassignDto { NewPaId = 19, IsScheduledVisit = false }));
+        Assert.True(r.IsSuccess, r.Message);
+
+        using var db = w.NewContext();
+        var n = db.PAAssignments.Single(x => x.ReassignedFromAssignmentId == f.AsgA);
+        Assert.False(n.IsScheduledVisit);
+        Assert.Null(n.WindowStart);
+        Assert.Null(n.Area);
+        Assert.Null(n.VisitOrder);
+    }
 }

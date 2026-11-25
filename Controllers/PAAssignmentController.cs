@@ -1070,6 +1070,38 @@ namespace VaccineAPI.Controllers
             if (old.AssignmentStatus == "PendingCancellation")
                 return Ok(new { IsSuccess = false, Message = "This assignment has a pending cancellation request — resolve it before reassigning." });
 
+            if (dto.NewPaId == old.PersonalAssistantId)
+                return Ok(new { IsSuccess = false, Message = "This PA already has the assignment. Pick a different PA." });
+
+            // Visit fields. A caller that sends IsScheduledVisit (the vaccine page Reassign sheet)
+            // sets them, checked exactly like EditVisit. A caller that does not (tracking page)
+            // carries the old ones. Either way a date change keeps the window (owner, 2026-11-25).
+            var newTargetDate = dto.TargetDate ?? old.TargetDate;
+            var visitDateMoved = newTargetDate?.Date != old.TargetDate?.Date;
+            bool visitScheduled; TimeSpan? visitWs; int visitWm; string? visitArea;
+            if (dto.IsScheduledVisit.HasValue)
+            {
+                visitScheduled = dto.IsScheduledVisit.Value;
+                // A home booking is always a scheduled visit (same rule as Create).
+                if (!visitScheduled && old.BookingId.HasValue)
+                    visitScheduled = await _db.Bookings.AnyAsync(b => b.Id == old.BookingId.Value && b.Type == "HomeBooked");
+                var visitErr = VaccineAPI.Services.VisitStatus.Validate(visitScheduled, newTargetDate, dto.WindowStart, dto.WindowMinutes, dto.Area,
+                    visitDateMoved && newTargetDate.HasValue && newTargetDate.Value.Date < Pkt.Today().Date, Pkt.Today(),
+                    out visitWs, out visitWm, out visitArea);
+                if (visitErr != null)
+                    return Ok(new { IsSuccess = false, Message = visitErr });
+                if (!visitScheduled) { visitWs = null; visitArea = null; }
+            }
+            else
+            {
+                visitScheduled = old.IsScheduledVisit;
+                visitWs        = old.WindowStart;
+                visitWm        = old.WindowMinutes;
+                visitArea      = old.Area;
+            }
+            // The tie-break order belongs to the old day and time slot; reset it when either moves.
+            int? visitOrder = visitScheduled && !visitDateMoved && visitWs == old.WindowStart ? old.VisitOrder : null;
+
             // Cancel the old one
             old.IsCancelled  = true;
             old.CancelledAt  = DateTime.UtcNow;
@@ -1088,15 +1120,15 @@ namespace VaccineAPI.Controllers
                 IsCompleted                 = false,
                 ReassignedFromAssignmentId  = old.Id,
                 InvoiceSubmissionId         = old.InvoiceSubmissionId,
-                TargetDate                  = dto.TargetDate ?? old.TargetDate,
+                TargetDate                  = newTargetDate,
                 BookingId                   = old.BookingId,
-                // R6: a scheduled visit keeps its window/area/order on reassign. An explicit
-                // completion does not carry (the new PA completes it themselves).
-                IsScheduledVisit            = old.IsScheduledVisit,
-                WindowStart                 = old.IsScheduledVisit && (dto.TargetDate == null || dto.TargetDate.Value.Date == old.TargetDate?.Date) ? old.WindowStart : null,
-                WindowMinutes               = old.WindowMinutes,
-                Area                        = old.Area,
-                VisitOrder                  = old.VisitOrder
+                // R6: a scheduled visit keeps its window/area/order on reassign unless the
+                // caller edits them. An explicit completion does not carry (the new PA completes it).
+                IsScheduledVisit            = visitScheduled,
+                WindowStart                 = visitWs,
+                WindowMinutes               = (short)visitWm,
+                Area                        = visitArea,
+                VisitOrder                  = visitOrder
             };
 
             _db.PAAssignments.Add(newAssignment);
@@ -2008,6 +2040,13 @@ namespace VaccineAPI.Controllers
                 AssignmentId = a.Id,
                 a.AssignedAt,
                 a.Notes,
+                // The child's vaccine page Reassign sheet starts from these (current date, visit window, area).
+                a.TargetDate,
+                a.IsScheduledVisit,
+                WindowStart  = VaccineAPI.Services.VisitStatus.FormatHm(a.WindowStart),
+                a.WindowMinutes,
+                a.Area,
+                a.BookingId,
                 ScheduleIds  = linkLookup.ContainsKey(a.Id) ? linkLookup[a.Id] : new List<long>(),
                 ChildId      = a.ChildId,
                 ChildName    = children.ContainsKey(a.ChildId)             ? children[a.ChildId].Name       : "",
@@ -2557,6 +2596,11 @@ namespace VaccineAPI.Controllers
         // Why the doctor reassigned (written to the assignment history). Optional, additive.
         public string? Reason { get; set; }
         public DateTime? TargetDate { get; set; }
+        // Optional visit edit. Null IsScheduledVisit = carry the old visit fields unchanged.
+        public bool? IsScheduledVisit { get; set; }
+        public string? WindowStart { get; set; }   // "HH:mm" PKT wall time
+        public int? WindowMinutes { get; set; }
+        public string? Area { get; set; }
         public long? RequestingManagerId { get; set; }
         // Required on the doctor-initiated path (RequestingManagerId absent) — ignored when a
         // manager is calling, since that path is fenced by ManagerPermission/ManagerAccess instead.

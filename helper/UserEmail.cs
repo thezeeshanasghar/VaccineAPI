@@ -134,15 +134,12 @@ namespace VaccineAPI
     </div>");
             }
 
-            // All doses in dueDoses share the same run date by construction (callers pass in
-            // only today's due schedules — see GetRawAlertSchedules/GetAlert2/SendAlertEmail),
-            // so this is always a same-day batch, never an open-ended overdue sweep. "Overdue"
-            // above only reflects a dose whose date fell in the past relative to when the run
-            // executes, which cannot happen for an exact-date-match batch but is kept as a
-            // defensive label in case a caller ever passes a mixed-date list.
-            bool anyOverdue = dueDoses.Any(d => d.Date.Date < today);
+            // Callers pass the doses the alert page lists for the picked day or range, so dates can differ;
+            // each dose row above shows its own date and Due / Was due label.
             string doseCount = dueDoses.Count == 1 ? "1 vaccine" : dueDoses.Count + " vaccines";
-            string dueWord = anyOverdue ? "due" : "due today";
+            // "due today" only when every dose really is today; the alert page can send any picked day/range.
+            bool allToday = dueDoses.All(d => d.Date.Date == today);
+            string dueWord = allToday ? "due today" : "due";
             string headline = dueDoses.Count == 1
                 ? $"{child.Name}'s vaccine is {dueWord}"
                 : $"{doseCount} are {dueWord} for {child.Name}";

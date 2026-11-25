@@ -49,6 +49,16 @@ namespace VaccineAPI
 
         public static string TodayKey() => DayKey(DateTime.UtcNow);
 
+        // A Day value (schedule Date/GivenDate, DOB-style fields) reduced to a PKT calendar day at 00:00.
+        // A Utc/Local value is a real instant (e.g. a client's "...T19:00:00Z" = PKT midnight of the next
+        // day), so it is read in PKT. An Unspecified value is already a wall day: its time is just dropped.
+        public static DateTime DayOf(DateTime v) =>
+            v.Kind == DateTimeKind.Unspecified
+                ? v.Date
+                : DateTime.SpecifyKind(ToWall(v).Date, DateTimeKind.Unspecified);
+
+        public static DateTime? DayOf(DateTime? v) => v.HasValue ? DayOf(v.Value) : (DateTime?)null;
+
         // Strict "yyyy-MM-dd" -> the PKT calendar day (Date at 00:00, Unspecified kind).
         // Years outside 2000..2099 are rejected so later UTC/AddDays arithmetic can never overflow.
         public static bool TryParseDay(string? s, out DateTime day) =>

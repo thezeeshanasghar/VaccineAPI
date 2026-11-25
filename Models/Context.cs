@@ -215,6 +215,18 @@ namespace VaccineAPI.Models
                 }
             }
 
+            // Schedule due/given dates are PKT calendar days and are never stored with a time
+            // (TIMESTAMP_SPEC section 11). Every write path is reduced to the day here, so no endpoint
+            // or client can bring back a "...19:00:00" row. Reads are unchanged.
+            modelBuilder.Entity<Schedule>().Property(s => s.Date).HasConversion(
+                new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
+                    v => Pkt.DayOf(v),
+                    v => v));
+            modelBuilder.Entity<Schedule>().Property(s => s.GivenDate).HasConversion(
+                new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime?, DateTime?>(
+                    v => Pkt.DayOf(v),
+                    v => v));
+
             // One movement can be reversed at most once (NULLs are allowed to repeat).
             modelBuilder.Entity<InventoryTransaction>().HasIndex(t => t.ReversesTransactionId).IsUnique();
             // A ClientRequestId can be accepted at most once per doctor and endpoint.

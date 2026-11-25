@@ -4506,50 +4506,16 @@ namespace VaccineAPI.Controllers
                .Doctor;
             var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
             long[] ClinicIDs = clinics.Select(x => x.Id).ToArray<long>();
-            // DateTime CurrentPakDateTime = Pkt.NowWall();
-            DateTime AddedDateTime = inputDate.AddDays(GapDays);
-            // DateTime NextDayTime = inputDate.AddDays(1).Date;
-
-            if (GapDays == 0)
-            {
-                schedules = db.Schedules
-                    .Include(x => x.Child)
-                    .ThenInclude(x => x.User)
-                    .Include(x => x.Dose)
-                    .Where(c => c.Child.ClinicId == OnlineClinicId)
-                    .Where(c => c.Date.Date == inputDate.Date)
-                    .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
-                    .OrderBy(x => x.Child.Name)
-                    .ThenBy(x => x.Date)
-                    .ToList<Schedule>();
-            }
-            else if (GapDays > 0)
-            {
-                AddedDateTime = AddedDateTime.AddDays(1);
-                schedules = db.Schedules
-                    .Include(x => x.Child)
-                    .ThenInclude(x => x.User)
-                    .Include(x => x.Dose)
-                    .Where(c => c.Child.ClinicId == OnlineClinicId)
-                    .Where(c => c.Date.Date > inputDate.Date && c.Date.Date <= AddedDateTime.Date)
-                    .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
-                    .OrderBy(x => x.Child.Name)
-                    .ThenBy(x => x.Date)
-                    .ToList<Schedule>();
-            }
-            else if (GapDays < 0)
-            {
-                schedules = db.Schedules
-                    .Include(x => x.Child)
-                    .ThenInclude(x => x.User)
-                    .Include(x => x.Dose)
-                    .Where(c => c.Child.ClinicId == OnlineClinicId)
-                    .Where(c => c.Date < inputDate.Date && c.Date >= AddedDateTime)
-                    .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
-                    .OrderBy(x => x.Child.Name)
-                    .ThenBy(x => x.Date)
-                    .ToList<Schedule>();
-            }
+            schedules = AlertWindow(
+                    db.Schedules
+                        .Include(x => x.Child)
+                        .ThenInclude(x => x.User)
+                        .Include(x => x.Dose)
+                        .Where(c => c.Child.ClinicId == OnlineClinicId),
+                    inputDate, GapDays)
+                .OrderBy(x => x.Child.Name)
+                .ThenBy(x => x.Date)
+                .ToList<Schedule>();
             Dictionary<string, string> map = AddDoseNames(schedules);
             List<Schedule> listOfSchedules = removeDuplicateRecords(schedules, map);
             return listOfSchedules;
@@ -4561,7 +4527,6 @@ namespace VaccineAPI.Controllers
         // last-iterated date GetAlertData's collapsed rows would give it.
         private static List<Schedule> GetRawAlertSchedules(DateTime inputDate, int GapDays, long OnlineClinicId, Context db)
         {
-            DateTime AddedDateTime = inputDate.AddDays(GapDays);
             IQueryable<Schedule> query = db.Schedules
                 .Include(x => x.Child)
                 .ThenInclude(x => x.User)
@@ -4570,79 +4535,60 @@ namespace VaccineAPI.Controllers
                 .ThenInclude(x => x.Doctor)
                 .ThenInclude(x => x.User)
                 .Include(x => x.Dose)
-                .Where(c => c.Child.ClinicId == OnlineClinicId)
-                .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true);
+                .Where(c => c.Child.ClinicId == OnlineClinicId);
 
+            return AlertWindow(query, inputDate, GapDays)
+                .OrderBy(x => x.Child.Name).ThenBy(x => x.Date).ToList();
+        }
+
+        // The alert list's filter, shared by the list (GetAlertData), the bulk email (alert2) and the
+        // single email (alertone), so a child on the list can always be emailed: picked day (GapDays 0)
+        // or range, compared by calendar day, not given, not skipped, child active.
+        private static IQueryable<Schedule> AlertWindow(IQueryable<Schedule> query, DateTime inputDate, int GapDays)
+        {
+            DateTime AddedDateTime = inputDate.AddDays(GapDays);
+            query = query.Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true);
             if (GapDays == 0)
-            {
-                query = query.Where(c => c.Date.Date == inputDate.Date);
-            }
-            else if (GapDays > 0)
+                return query.Where(c => c.Date.Date == inputDate.Date);
+            if (GapDays > 0)
             {
                 AddedDateTime = AddedDateTime.AddDays(1);
-                query = query.Where(c => c.Date.Date > inputDate.Date && c.Date.Date <= AddedDateTime.Date);
+                return query.Where(c => c.Date.Date > inputDate.Date && c.Date.Date <= AddedDateTime.Date);
             }
-            else
-            {
-                query = query.Where(c => c.Date < inputDate.Date && c.Date >= AddedDateTime);
-            }
-
-            return query.OrderBy(x => x.Child.Name).ThenBy(x => x.Date).ToList();
+            return query.Where(c => c.Date < inputDate.Date && c.Date >= AddedDateTime);
         }
 
         ///////////////
        [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
        [Owns(OwnerKind.Clinic, "OnlineClinicId")]
        [HttpGet("alert2/{GapDays}/{OnlineClinicId}")]
-        public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId)
+        public Response<IEnumerable<ChildDTO>> GetAlert2(int GapDays, long OnlineClinicId, DateTime? inputDate = null)
         {
-            List<Schedule> schedules = GetAlertData2(GapDays, OnlineClinicId, _db);
+            // Emails exactly the children the alert list shows for the picked day/range (same filter,
+            // GetRawAlertSchedules). No inputDate (old clients) = today PKT.
+            var dueToday = GetRawAlertSchedules(inputDate ?? Pkt.Today(), GapDays, OnlineClinicId, _db);
 
-            // Fetch all child IDs from schedules
-            var childIds = schedules.Select(s => s.Child.Id).Distinct().ToList();
-
-            // Fetch all children with User info in one query
-            var children = _db.Childs
-                .Include(c => c.User)
-                .Where(c => childIds.Contains(c.Id))
-                .ToList();
-
-            // Map to DTOs and include mobile/password
-            var childInfoDTOs = children.Select(c => new ChildDTO
+            var childInfoDTOs = new List<ChildDTO>();
+            foreach (var group in dueToday.GroupBy(s => s.ChildId))
             {
-                Id = c.Id,
-                Name = c.Name,
-                Email = c.Email,
-                ClinicId = c.ClinicId,
-                MobileNumber = c.User?.MobileNumber,
-                Password = c.User?.Password,
-                UserId = c.UserId
-            }).ToList();
+                var dbChild = group.First().Child;
+                childInfoDTOs.Add(new ChildDTO
+                {
+                    Id = dbChild.Id,
+                    Name = dbChild.Name,
+                    Email = dbChild.Email,
+                    ClinicId = dbChild.ClinicId,
+                    MobileNumber = dbChild.User?.MobileNumber,
+                    Password = dbChild.User?.Password,
+                    UserId = dbChild.UserId
+                });
 
-            foreach (var child in childInfoDTOs)
-            {
-                if (string.IsNullOrEmpty(child.Email))
-                    continue;
-
-                var dbSchedules = _db.Schedules
-                    .Where(x => x.ChildId == child.Id && x.Date == Pkt.Today())
-                    .Include(x => x.Dose)
-                    .ToList();
-
-                if (!dbSchedules.Any())
+                if (string.IsNullOrEmpty(dbChild.Email))
                     continue;
 
                 try
                 {
-                    var dbChild = _db.Childs
-                        .Include(c => c.User)
-                        .Include(c => c.Clinic)
-                            .ThenInclude(cl => cl.Doctor)
-                                .ThenInclude(d => d.User)
-                        .FirstOrDefault(c => c.Id == child.Id);
-                    if (dbChild == null) continue;
-
-                    var dueDoses = dbSchedules
+                    var dueDoses = group
                         .Select(s => (DoseName: s.Dose.Name, Date: s.Date))
                         .ToList();
                     var linkToken = LinkLoginToken.Generate(dbChild.UserId, dbChild.Id, LinkLoginSecret());
@@ -4660,7 +4606,7 @@ namespace VaccineAPI.Controllers
         [RolesOnly("DOCTOR", "PA", "MANAGER", "SUPERADMIN")]
         [Owns(OwnerKind.Child, "ChildId")]
         [HttpGet("alertone/{ChildId}")]
-        public Response<object> SendAlertEmail(long ChildId, long? paId = null, long? doctorId = null)
+        public Response<object> SendAlertEmail(long ChildId, long? paId = null, long? doctorId = null, DateTime? inputDate = null, int GapDays = 0)
         {
             var child = _db.Childs
                 .Include(c => c.Clinic)
@@ -4679,15 +4625,17 @@ namespace VaccineAPI.Controllers
                 return new Response<object>(false, "Not authorized for this clinic.", null);
             }
 
-            var specificDate = Pkt.Today();
-            var todaySchedules = _db.Schedules
-                .Where(s => s.ChildId == ChildId && s.Date == specificDate)
+            // Same filter as the alert list for the picked day/range (AlertWindow). No inputDate (old
+            // clients) = today PKT.
+            var todaySchedules = AlertWindow(
+                    _db.Schedules.Where(s => s.ChildId == ChildId), inputDate ?? Pkt.Today(), GapDays)
                 .Include(s => s.Dose)
+                .OrderBy(s => s.Date)
                 .ToList();
 
             if (!todaySchedules.Any())
             {
-                return new Response<object>(false, "No schedule found for today.", null);
+                return new Response<object>(false, "No due vaccine found for the selected date.", null);
             }
 
             try
@@ -4708,37 +4656,6 @@ namespace VaccineAPI.Controllers
                 Console.WriteLine("Error sending email: " + ex.Message);
                 return new Response<object>(false, "Failed to send email.", null);
             }
-        }
-
-        private static List<Schedule> GetAlertData2(int GapDays, long OnlineClinicId, Context db)
-        {
-            var doctor = db.Clinics
-                .Where(x => x.Id == OnlineClinicId)
-                .Include(x => x.Doctor)
-                .First()
-                .Doctor;
-            var clinics = db.Clinics.Where(x => x.DoctorId == doctor.Id).ToList();
-            long[] ClinicIDs = clinics.Select(x => x.Id).ToArray();
-            DateTime CurrentPakDateTime = Pkt.NowWall();
-            DateTime AddedDateTime = CurrentPakDateTime.AddDays(GapDays);
-            DateTime NextDayTime = CurrentPakDateTime.AddDays(1).Date;
-            List<Schedule> schedules = new List<Schedule>();
-            if (GapDays == 0)
-            {
-                schedules = db.Schedules
-                    .Include(x => x.Child)
-                    .ThenInclude(x => x.User)
-                    .Include(x => x.Dose)
-                    .Where(c => ClinicIDs.Contains(c.Child.ClinicId))
-                    .Where(c => c.Date.Date == CurrentPakDateTime.Date)
-                    .Where(c => c.IsDone != true && c.IsSkip != true && c.Child.IsInactive != true)
-                    .OrderBy(x => x.Child.Id)
-                    .ThenBy(x => x.Date)
-                    .ToList();
-            }
-            Dictionary<string, string> map = AddDoseNames(schedules);
-            List<Schedule> listOfSchedules = removeDuplicateRecords(schedules, map);
-            return listOfSchedules;
         }
 
         private static Dictionary<String, String> AddDoseNames(List<Schedule> schedules)

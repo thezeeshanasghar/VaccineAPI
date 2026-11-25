@@ -23,7 +23,9 @@ namespace VaccineAPI
                     return day;
                 }
             }
-            return base.ReadJson(reader, objectType, existingValue, serializer);
+            // A Day never keeps a time: an instant ("...Z") becomes its PKT day, a bare time is dropped.
+            var parsed = base.ReadJson(reader, objectType, existingValue, serializer);
+            return parsed is DateTime dt ? Pkt.DayOf(dt) : parsed;
         }
 
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)

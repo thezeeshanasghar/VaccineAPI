@@ -46,6 +46,9 @@ public class TimeContractTests
     private static bool IsInstantName(string n) =>
         n.EndsWith("At") || n is "ActionDate" or "ApprovalDate" or "PaidDate" or "ValidUpto";
 
+    // Day columns that must never store a time (TIMESTAMP_SPEC 11.5.2): reduced to the PKT day on write.
+    private static readonly HashSet<string> DayOnlyColumns = new() { "Schedule.Date", "Schedule.GivenDate" };
+
     [Fact]
     public void EveryInstantColumnHasTheUtcConverter()
     {
@@ -57,7 +60,13 @@ public class TimeContractTests
             {
                 if (p.ClrType != typeof(DateTime) && p.ClrType != typeof(DateTime?)) continue;
                 if (IsInstantName(p.Name) && p.GetValueConverter() == null) missing.Add(et.ClrType.Name + "." + p.Name);
-                if (!IsInstantName(p.Name) && p.GetValueConverter() != null) missing.Add("unexpected converter " + et.ClrType.Name + "." + p.Name);
+                var key = et.ClrType.Name + "." + p.Name;
+                if (DayOnlyColumns.Contains(key))
+                {
+                    if (p.GetValueConverter() == null) missing.Add("missing day-only converter " + key);
+                    continue;
+                }
+                if (!IsInstantName(p.Name) && p.GetValueConverter() != null) missing.Add("unexpected converter " + key);
             }
         Assert.Empty(missing);
     }

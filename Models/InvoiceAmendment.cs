@@ -11,6 +11,9 @@ namespace VaccineAPI.Models
         public string AmendmentType { get; set; } = "";   // "Edit" | "Ungive"
         public decimal OldAmount { get; set; }
         public decimal NewAmount { get; set; }
+        // Visit fee the edit sets on the invoice. Applied to InvoiceSubmission.ConsultationFee on
+        // approval. Null on Ungive rows and on edits made before 2026-11-26 (fee was only in Notes).
+        public decimal? NewConsultationFee { get; set; }
         // Nullable: a Manager-driven amendment has no PA acting on it — see
         // Schedule.GivenByManagerId comment for why PA/Manager ID spaces are kept separate.
         public long? PaId { get; set; }

@@ -126,7 +126,9 @@ namespace VaccineAPI.Controllers
                     // ConfirmInvoice action to receive this (revised) amount — the assignment must
                     // stay open, not close here.
                     inv.TotalAmount = amendment.NewAmount;
-                    inv.ConsultationFee = inv.ConsultationFee; // unchanged
+                    // The fee the edit set — previously left unchanged, so an approved edit that added
+                    // the visit fee kept ConsultationFee = 0 while TotalAmount included it.
+                    if (amendment.NewConsultationFee.HasValue) inv.ConsultationFee = amendment.NewConsultationFee.Value;
                     inv.InvoiceStatus = "Active";
                 }
                 inv.HasPendingAmendment = false;

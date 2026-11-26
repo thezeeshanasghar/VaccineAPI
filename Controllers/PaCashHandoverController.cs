@@ -750,6 +750,19 @@ namespace VaccineAPI.Controllers
                 .GroupBy(a => a.InvoiceSubmissionId)
                 .ToDictionary(g => g.Key, g => g.First());
 
+            // Latest APPROVED edit per invoice — kept on the row after approval so the doctor still
+            // sees "Edited old -> new" (VISIT_FEE_BREAKDOWN_SPEC.md). One batched query, no per-row load.
+            var lastApprovedEditByInvoiceId = _db.InvoiceAmendments
+                .Where(a =>
+                    a.DoctorId == doctorId &&
+                    a.AmendmentType == "Edit" &&
+                    a.IsApprovedByDoctor &&
+                    invoiceIdsForAmendments.Contains(a.InvoiceSubmissionId))
+                .OrderByDescending(a => a.CreatedAt)
+                .ToList()
+                .GroupBy(a => a.InvoiceSubmissionId)
+                .ToDictionary(g => g.Key, g => g.First());
+
             // InvoiceSubmissionId -> PAAssignment.Id — the real FK link (PAAssignment.InvoiceSubmissionId,
             // written at assignment-create/reassign time, see VaccineAPI staging a6fd23e). Lets the doctor
             // delete an assignment (and cascade its invoice/schedules) directly from an Invoice/amendment
@@ -872,6 +885,8 @@ namespace VaccineAPI.Controllers
             var invoiceRows = invoices.Select(i =>
             {
                 pendingAmendmentByInvoiceId.TryGetValue(i.Id, out var pending);
+                lastApprovedEditByInvoiceId.TryGetValue(i.Id, out var lastEdit);
+                var rowAmount = (i.TotalAmount <= 0 && pending != null) ? pending.OldAmount : i.TotalAmount;
 
                 // Live label: current PaId's name, current Manager/PA-alone/Doctor prefix — this
                 // is what fixes both the "reassigned but still shows the old PA's name" bug (row
@@ -923,7 +938,15 @@ namespace VaccineAPI.Controllers
                     // i.TotalAmount can be 0/stale on an invoice that only landed here via the
                     // orphan-rescue above (its own TotalAmount>0 check is what excluded it) — the
                     // pending amendment's OldAmount is the real pre-edit total to show in that case.
-                    Amount              = (i.TotalAmount <= 0 && pending != null) ? pending.OldAmount : i.TotalAmount,
+                    Amount              = rowAmount,
+                    // Breakdown: vaccines + visit fee = total. NoVisitFee is a warning only (never blocks Confirm).
+                    ConsultationFee     = i.ConsultationFee,
+                    VaccineAmount       = Math.Max(0m, rowAmount - i.ConsultationFee),
+                    NoVisitFee          = i.ConsultationFee <= 0 && i.SubmittedByLabel != "Historical Backfill",
+                    LastEditOld         = lastEdit != null ? (decimal?)lastEdit.OldAmount : null,
+                    LastEditNew         = lastEdit != null ? (decimal?)lastEdit.NewAmount : null,
+                    LastEditBy          = lastEdit == null ? (string)null : (lastEdit.PaId.HasValue ? "PA" : lastEdit.ManagerId.HasValue ? "Manager" : "Doctor"),
+                    LastEditAt          = lastEdit != null ? Pkt.Iso(lastEdit.CreatedAt) : (string)null,
                     PaymentMode         = i.PaymentMode ?? "",
                     IsConfirmed         = i.IsConfirmedByDoctor,
                     ConfirmedAt         = i.ConfirmedAt.HasValue ? Pkt.Iso(i.ConfirmedAt.Value) : (string)null,

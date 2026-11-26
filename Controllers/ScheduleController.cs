@@ -3483,6 +3483,7 @@ namespace VaccineAPI.Controllers
                         PaId = dto.PaId.Value,
                         DoctorId = dto.DoctorId,
                         Notes = $"PA edited invoice. Consultation fee: {dto.ConsultationFee}",
+                        NewConsultationFee = dto.ConsultationFee,
                         CreatedAt = DateTime.UtcNow
                     });
 
@@ -3528,6 +3529,7 @@ namespace VaccineAPI.Controllers
                         ManagerId = dto.ManagerId.Value,
                         DoctorId = dto.DoctorId,
                         Notes = $"Manager edited invoice. Consultation fee: {dto.ConsultationFee}",
+                        NewConsultationFee = dto.ConsultationFee,
                         CreatedAt = DateTime.UtcNow
                     });
 
@@ -3558,6 +3560,7 @@ namespace VaccineAPI.Controllers
                         NewAmount = newAmount,
                         DoctorId = dto.DoctorId,
                         Notes = $"Doctor edited invoice. Consultation fee: {dto.ConsultationFee}",
+                        NewConsultationFee = dto.ConsultationFee,
                         CreatedAt = now,
                         IsApprovedByDoctor = true,
                         ApprovedAt = now,

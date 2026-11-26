@@ -558,6 +558,18 @@ namespace VaccineAPI.Controllers
             return File(stream, "application/pdf");
         }
 
+        // Disease rows print the year the child had the disease, which the doctor enters as
+        // DiseaseYear. The schedule Date is only the template due date of the dose that the
+        // disease replaced, so printing its year was wrong (e.g. 2024 printed for a 2026 disease).
+        // A fixed bulk-give bug once saved a full ISO datetime, so take the first 4 digits;
+        // fall back to the schedule year only when no DiseaseYear was ever entered.
+        private static string DiseaseYearLabel(Schedule s)
+        {
+            var raw = (s.DiseaseYear ?? "").Trim();
+            if (System.Text.RegularExpressions.Regex.IsMatch(raw, @"^\d{4}")) return raw.Substring(0, 4);
+            return s.Date.Date.ToString("yyyy");
+        }
+
         private string GetYearOrMonthFromDaysSchedule(int days)
         {
         var ageMap = new Dictionary<int, string>
@@ -1329,7 +1341,7 @@ namespace VaccineAPI.Controllers
                             }
                             else if (dbSchedule.IsDisease == true)
                             {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("yyyy") + " Y", font));
+                                PdfPCell dateCell = new PdfPCell(new Phrase(DiseaseYearLabel(dbSchedule) + " Y", font));
                                 dateCell.HorizontalAlignment = Element.ALIGN_LEFT;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);
@@ -2166,7 +2178,7 @@ namespace VaccineAPI.Controllers
                             }
                             else if (dbSchedule.IsDisease == true)
                             {
-                                PdfPCell dateCell = new PdfPCell(new Phrase(dbSchedule.Date.Date.ToString("yyyy") + " Y", font));
+                                PdfPCell dateCell = new PdfPCell(new Phrase(DiseaseYearLabel(dbSchedule) + " Y", font));
                                 dateCell.HorizontalAlignment = Element.ALIGN_CENTER;
                                 dateCell.BorderColor = GrayColor.LightGray;
                                 table.AddCell(dateCell);

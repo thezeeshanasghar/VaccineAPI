@@ -13,7 +13,6 @@ namespace VaccineAPI.Tests.Cases;
 /// payment is recorded it must be refused for the doctor as well as the PA, so given doses and
 /// collected cash are never left with no owner. Each assignment is judged on its own pins only.
 /// </summary>
-[Collection("AuthStatics")]
 public class PaAssignmentCancelTests
 {
     private sealed class Fx { public long ChildId, AsgA, AsgB, A1, B1; }
@@ -49,8 +48,7 @@ public class PaAssignmentCancelTests
     private static IActionResult Cancel(StockWorld w, long asgId, string callerType, long callerId)
     {
         using var db = w.NewContext();
-        var who = callerType == "PA" ? TestAuth.Pa(callerId, w.DoctorId) : TestAuth.Doctor(callerId);
-        return TestAuth.As(who, () => Ctl(db).Cancel(asgId, new CancelAssignmentDto { CallerType = callerType, CallerId = callerId, Reason = "test" })).GetAwaiter().GetResult();
+        return Ctl(db).Cancel(asgId, new CancelAssignmentDto { CallerType = callerType, CallerId = callerId, Reason = "test" }).GetAwaiter().GetResult();
     }
 
     private static bool IsCancelled(StockWorld w, long asgId)

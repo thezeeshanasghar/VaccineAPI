@@ -17,7 +17,6 @@ namespace VaccineAPI.Tests.Cases;
 /// dose, a PA ungive and a cash-confirmed assignment are left alone. A recorded payment no longer blocks
 /// the PA's refusal REQUEST; the doctor's approval reverses it. Every test checks the database afterwards.
 /// </summary>
-[Collection("AuthStatics")]
 public class VisitReversalTests
 {
     private sealed class Fx { public long AsgId, PaId, DoctorUserId; public string Stamp = ""; }
@@ -182,12 +181,12 @@ public class VisitReversalTests
 
         using (var db = w.NewContext())
         {
-            var ok = Assert.IsType<OkObjectResult>(TestAuth.As(TestAuth.Pa(f.PaId, w.DoctorId), () => Ctl(db).RequestRefusal(f.AsgId, new CancelAssignmentDto { CallerId = f.PaId, Reason = "Refused at the door" })).GetAwaiter().GetResult());
+            var ok = Assert.IsType<OkObjectResult>(Ctl(db).RequestRefusal(f.AsgId, new CancelAssignmentDto { CallerId = f.PaId, Reason = "Refused at the door" }).GetAwaiter().GetResult());
             Assert.True((bool)JObject.FromObject(ok.Value!)["IsSuccess"]!);
         }
         using (var db = w.NewContext())
         {
-            var ok = Assert.IsType<OkObjectResult>(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).ApproveRefusal(f.AsgId, w.DoctorId)).GetAwaiter().GetResult());
+            var ok = Assert.IsType<OkObjectResult>(Ctl(db).ApproveRefusal(f.AsgId, w.DoctorId).GetAwaiter().GetResult());
             Assert.True((bool)JObject.FromObject(ok.Value!)["IsSuccess"]!);
         }
         using var chk = w.NewContext();
@@ -206,7 +205,7 @@ public class VisitReversalTests
         Assert.True(w.GiveDose1().IsSuccess);
         using (var db = w.NewContext()) { db.PAAssignments.Single(a => a.Id == f.AsgId).IsCashConfirmedByDoctor = true; db.SaveChanges(); }
         using var db2 = w.NewContext();
-        var ok = Assert.IsType<OkObjectResult>(TestAuth.As(TestAuth.Pa(f.PaId, w.DoctorId), () => Ctl(db2).RequestRefusal(f.AsgId, new CancelAssignmentDto { CallerId = f.PaId })).GetAwaiter().GetResult());
+        var ok = Assert.IsType<OkObjectResult>(Ctl(db2).RequestRefusal(f.AsgId, new CancelAssignmentDto { CallerId = f.PaId }).GetAwaiter().GetResult());
         Assert.False((bool)JObject.FromObject(ok.Value!)["IsSuccess"]!);
         using var chk = w.NewContext();
         Assert.False(chk.VaccineRefusals.Any(r => r.AssignmentId == f.AsgId));

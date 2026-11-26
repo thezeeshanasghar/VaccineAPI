@@ -14,7 +14,6 @@ namespace VaccineAPI.Tests.Cases;
 /// (PA_TRACKING_MERGE_SPEC.md Q4, Q7, Q9, Q10). Every test checks the database afterwards, not just
 /// the HTTP result, and that the sibling vaccine group of the same child is never touched.
 /// </summary>
-[Collection("AuthStatics")]
 public class PaAssignmentLifecycleTests
 {
     private sealed class Fx { public long ChildId, AsgA, AsgB, A1, A2, B1, DoctorUserId; public string Stamp = ""; }
@@ -240,7 +239,7 @@ public class PaAssignmentLifecycleTests
         using var w = new StockWorld();
         var f = Seed(w);
         using (var db = w.NewContext())
-            Assert.True(Result.Of(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).Cancel(f.AsgA, new CancelAssignmentDto { CallerType = "DOCTOR", CallerId = w.DoctorId, Reason = "Parent postponed" })).GetAwaiter().GetResult()).IsSuccess);
+            Assert.True(Result.Of(Ctl(db).Cancel(f.AsgA, new CancelAssignmentDto { CallerType = "DOCTOR", CallerId = w.DoctorId, Reason = "Parent postponed" }).GetAwaiter().GetResult()).IsSuccess);
         var e = Assert.Single(Audit(w, f.ChildId, f.AsgA));
         Assert.Equal("Cancelled", e.Action);
         Assert.Equal("DOCTOR", e.Actor);
@@ -255,7 +254,7 @@ public class PaAssignmentLifecycleTests
         using var w = new StockWorld();
         var f = Seed(w);
         using (var db = w.NewContext())
-            Assert.True(Result.Of(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).DeleteAssignment(f.AsgA, w.DoctorId, "UnassignOnly")).GetAwaiter().GetResult()).IsSuccess);
+            Assert.True(Result.Of(Ctl(db).DeleteAssignment(f.AsgA, w.DoctorId, "UnassignOnly").GetAwaiter().GetResult()).IsSuccess);
         using var chk = w.NewContext();
         Assert.False(chk.PAAssignments.Any(x => x.Id == f.AsgA));
         Assert.Empty(chk.PAAssignmentSchedules.Where(l => l.AssignmentId == f.AsgA));     // pins go with it
@@ -298,12 +297,12 @@ public class PaAssignmentLifecycleTests
             db.SaveChanges();
         }
         using var db2 = w.NewContext();
-        var rowA = RowFor(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db2).GetForDoctor(w.DoctorId)).GetAwaiter().GetResult(), f.AsgA);
+        var rowA = RowFor(Ctl(db2).GetForDoctor(w.DoctorId).GetAwaiter().GetResult(), f.AsgA);
         Assert.Equal(4, rowA.Value<int>("Stage"));
         Assert.Equal("Paid", rowA.Value<string>("StageLabel"));
         Assert.Equal(3, rowA.Value<int>("StageAgeDays"));          // invoice was submitted 3 days ago
         Assert.Equal(8000m, rowA.Value<decimal>("CashAmount"));
-        var rowB = RowFor(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db2).GetForDoctor(w.DoctorId)).GetAwaiter().GetResult(), f.AsgB);
+        var rowB = RowFor(Ctl(db2).GetForDoctor(w.DoctorId).GetAwaiter().GetResult(), f.AsgB);
         Assert.Equal(1, rowB.Value<int>("Stage"));
     }
 
@@ -319,7 +318,7 @@ public class PaAssignmentLifecycleTests
         }
         var managerId = AddManager(w, canView: true);
         using var db2 = w.NewContext();
-        var raw = TestAuth.As(TestAuth.Manager(managerId, w.DoctorId), () => Ctl(db2).GetForDoctor(w.DoctorId, requestingManagerId: managerId)).GetAwaiter().GetResult();
+        var raw = Ctl(db2).GetForDoctor(w.DoctorId, requestingManagerId: managerId).GetAwaiter().GetResult();
         var row = RowFor(raw, f.AsgA);
         Assert.Equal(2, row.Value<int>("Stage"));                  // collapsed from Paid to Given
         Assert.Equal("Given", row.Value<string>("StageLabel"));
@@ -337,7 +336,7 @@ public class PaAssignmentLifecycleTests
         var f = Seed(w);
         var managerId = AddManager(w, canView: false);
         using var db = w.NewContext();
-        var r = Result.Of(TestAuth.As(TestAuth.Manager(managerId, w.DoctorId), () => Ctl(db).GetForDoctor(w.DoctorId, requestingManagerId: managerId)).GetAwaiter().GetResult());
+        var r = Result.Of(Ctl(db).GetForDoctor(w.DoctorId, requestingManagerId: managerId).GetAwaiter().GetResult());
         Assert.False(r.IsSuccess);
     }
 
@@ -351,7 +350,7 @@ public class PaAssignmentLifecycleTests
         using (var db = w.NewContext()) newId = db.PAAssignments.Single(x => x.ReassignedFromAssignmentId == f.AsgA).Id;
 
         using var db2 = w.NewContext();
-        var ok = Assert.IsType<OkObjectResult>(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db2).GetHistory(newId)).GetAwaiter().GetResult());
+        var ok = Assert.IsType<OkObjectResult>(Ctl(db2).GetHistory(newId).GetAwaiter().GetResult());
         var arr = (JArray)JObject.FromObject(ok.Value!)["ResponseData"]!;
         var actions = arr.Select(x => x.Value<string>("Action")).ToList();
         Assert.Contains("Reassigned", actions);
@@ -369,7 +368,7 @@ public class PaAssignmentLifecycleTests
         var f = Seed(w); GiveGroupA(w, f, invoice: true, confirmedInvoice: true);
         var managerId = AddManager(w, canView: true);
         using var db = w.NewContext();
-        var ok = Assert.IsType<OkObjectResult>(TestAuth.As(TestAuth.Manager(managerId, w.DoctorId), () => Ctl(db).GetHistory(f.AsgA, managerId)).GetAwaiter().GetResult());
+        var ok = Assert.IsType<OkObjectResult>(Ctl(db).GetHistory(f.AsgA, managerId).GetAwaiter().GetResult());
         var actions = ((JArray)JObject.FromObject(ok.Value!)["ResponseData"]!).Select(x => x.Value<string>("Action")).ToList();
         Assert.Contains("Given", actions);
         Assert.DoesNotContain("Invoiced", actions);

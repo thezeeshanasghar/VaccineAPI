@@ -16,7 +16,6 @@ namespace VaccineAPI.Tests.Cases;
 /// the real endpoints, the history names the person, folds one visit's per-dose rows into one line,
 /// keeps the "given" line after an ungive, and never shows a derived copy of a logged event.
 /// </summary>
-[Collection("AuthStatics")]
 public class AssignmentAuditTrailTests
 {
     private sealed class Fx { public long AsgId, PaId, DoctorUserId; public string Stamp = ""; }
@@ -45,8 +44,7 @@ public class AssignmentAuditTrailTests
     private static JArray History(StockWorld w, long asgId, long? managerId = null)
     {
         using var db = w.NewContext();
-        var who = managerId.HasValue ? TestAuth.Manager(managerId.Value, w.DoctorId) : TestAuth.Doctor(w.DoctorId);
-        var ok = Assert.IsType<OkObjectResult>(TestAuth.As(who, () => Ctl(db).GetHistory(asgId, managerId)).GetAwaiter().GetResult());
+        var ok = Assert.IsType<OkObjectResult>(Ctl(db).GetHistory(asgId, managerId).GetAwaiter().GetResult());
         return (JArray)JObject.FromObject(ok.Value!)["ResponseData"]!;
     }
 
@@ -173,11 +171,11 @@ public class AssignmentAuditTrailTests
         using var w = new StockWorld();
         var f = Seed(w);
         using (var db = w.NewContext())
-            Assert.True(Result.Of(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).SetTargetDate(f.AsgId, new SetTargetDateDto { DoctorId = w.DoctorId, TargetDate = new DateTime(2026, 10, 25) })).GetAwaiter().GetResult()).IsSuccess);
+            Assert.True(Result.Of(Ctl(db).SetTargetDate(f.AsgId, new SetTargetDateDto { DoctorId = w.DoctorId, TargetDate = new DateTime(2026, 10, 25) }).GetAwaiter().GetResult()).IsSuccess);
         using (var db = w.NewContext())
-            Assert.True(Result.Of(TestAuth.As(TestAuth.Pa(f.PaId, w.DoctorId), () => Ctl(db).RequestCancel(f.AsgId, new CancelAssignmentDto { CallerType = "PA", CallerId = f.PaId, Reason = "Parent postponed" })).GetAwaiter().GetResult()).IsSuccess);
+            Assert.True(Result.Of(Ctl(db).RequestCancel(f.AsgId, new CancelAssignmentDto { CallerType = "PA", CallerId = f.PaId, Reason = "Parent postponed" }).GetAwaiter().GetResult()).IsSuccess);
         using (var db = w.NewContext())
-            Assert.True(Result.Of(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).ApproveCancelRequest(f.AsgId, w.DoctorId)).GetAwaiter().GetResult()).IsSuccess);
+            Assert.True(Result.Of(Ctl(db).ApproveCancelRequest(f.AsgId, w.DoctorId).GetAwaiter().GetResult()).IsSuccess);
 
         var h = History(w, f.AsgId);
         Assert.Equal(new[] { "TargetDateSet", "CancelRequested", "CancelApproved" }, h.Select(x => x.Value<string>("Action")).ToArray());

@@ -13,7 +13,6 @@ namespace VaccineAPI.Tests.Cases;
 /// invoice, brand, fee or payment is a record, not a cash liability. The doctor approves it; the server decides
 /// from the DB (never the screen) and the bin refuses to reverse it without an explicit flag.
 /// </summary>
-[Collection("AuthStatics")]
 public class PaRecordApproveTests
 {
     private sealed class Fx { public long ChildId, Asg, S1, S2; public long DoctorUserId; public string Stamp = ""; }
@@ -193,7 +192,7 @@ public class PaRecordApproveTests
         using var w = new StockWorld();
         var f = Seed(w);
         using var db = w.NewContext();
-        var r = Result.Of(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).DeleteAssignment(f.Asg, w.DoctorId, "FullReset", "test")).GetAwaiter().GetResult());
+        var r = Result.Of(Ctl(db).DeleteAssignment(f.Asg, w.DoctorId, "FullReset", "test").GetAwaiter().GetResult());
         Assert.False(r.IsSuccess);
         Assert.Contains("no money", r.Message);
         using var chk = w.NewContext();
@@ -206,7 +205,7 @@ public class PaRecordApproveTests
         using var w = new StockWorld();
         var f = Seed(w);
         using var db = w.NewContext();
-        var r = Result.Of(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).DeleteAssignment(f.Asg, w.DoctorId, "FullReset", "test", true, true)).GetAwaiter().GetResult());
+        var r = Result.Of(Ctl(db).DeleteAssignment(f.Asg, w.DoctorId, "FullReset", "test", true, true).GetAwaiter().GetResult());
         Assert.True(r.IsSuccess, r.Message);
     }
 
@@ -216,7 +215,7 @@ public class PaRecordApproveTests
         using var w = new StockWorld();
         var f = Seed(w);
         using var db = w.NewContext();
-        var r = Result.Of(TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).DeleteAssignment(f.Asg, w.DoctorId, "UnassignOnly")).GetAwaiter().GetResult());
+        var r = Result.Of(Ctl(db).DeleteAssignment(f.Asg, w.DoctorId, "UnassignOnly").GetAwaiter().GetResult());
         Assert.True(r.IsSuccess, r.Message);
     }
 

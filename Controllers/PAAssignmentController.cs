@@ -45,59 +45,6 @@ namespace VaccineAPI.Controllers
         private Task<bool> VerifyCaller(long? userId, string? securityStamp)
             => Task.FromResult(CallerGuard.VerifyCaller(_db, userId, securityStamp));
 
-        // ---- Who is calling, from the login token only (never from ids in the URL or body). ----
-        // These checks refuse a request with no token even while the API runs in Log mode: on
-        // 2026-11-26 tokenless requests were shown to list, cancel and reverse assignments.
-        // VacDoc has sent the token on every call since 2026-10-07 (auth.interceptor.ts).
-        private static AuthIdentity? Me => AuthContext.Current;
-
-        // The doctor, a PA or a manager of this practice, or the super admin.
-        private static bool IsStaffOf(long doctorId)
-        {
-            var me = Me;
-            if (me == null) return false;
-            if (me.Role == "SUPERADMIN") return true;
-            return (me.Role == "DOCTOR" || me.Role == "PA" || me.Role == "MANAGER") && me.DoctorId == doctorId;
-        }
-
-        // The doctor or a manager of this practice (doctor-side screens), or the super admin.
-        private static bool IsDoctorSideOf(long doctorId)
-        {
-            var me = Me;
-            if (me == null) return false;
-            if (me.Role == "SUPERADMIN") return true;
-            return (me.Role == "DOCTOR" || me.Role == "MANAGER") && me.DoctorId == doctorId;
-        }
-
-        // The doctor of this practice only (approvals and reversals), or the super admin.
-        private static bool IsDoctorOf(long doctorId)
-        {
-            var me = Me;
-            if (me == null) return false;
-            return me.Role == "SUPERADMIN" || (me.Role == "DOCTOR" && me.DoctorId == doctorId);
-        }
-
-        // The PA this assignment belongs to.
-        private static bool IsPaOf(PAAssignment a)
-        {
-            var me = Me;
-            return me != null && me.Role == "PA" && me.PaId == a.PersonalAssistantId;
-        }
-
-        // A requestingManagerId in the URL is only believed when the token is that manager's.
-        private static bool ManagerIdIsCaller(long? requestingManagerId)
-        {
-            if (!requestingManagerId.HasValue) return true;
-            var me = Me;
-            return me != null && me.Role == "MANAGER" && me.ManagerId == requestingManagerId.Value;
-        }
-
-        private IActionResult NotAllowed() => Ok(new
-        {
-            IsSuccess = false,
-            Message = Me == null ? "Your session has expired. Please log out and log in again." : "You are not allowed to do this."
-        });
-
         // GET /api/PAAssignment/pa/{paId}
         [HttpGet("pa/{paId}")]
         public async Task<IActionResult> GetByPA(long paId, [FromQuery] long? userId, [FromQuery] string? securityStamp)
@@ -272,9 +219,6 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
             if (assignment.DoctorId != doctorId)
                 return Ok(new { IsSuccess = false, Message = "Not authorised" });
-            // Removing or reversing (FullReset un-gives doses and deletes the invoice) is the doctor's call only.
-            if (!IsDoctorOf(assignment.DoctorId))
-                return NotAllowed();
 
             // A record-only entry (every pinned dose given, no invoice/brand/fee/payment) is a past record moved
             // from paper. FullReset would un-give real records with no money to recover, so it needs an explicit
@@ -517,9 +461,6 @@ namespace VaccineAPI.Controllers
             if (assignment.IsCancelled)
                 return Ok(new { IsSuccess = false, Message = "Assignment is already cancelled" });
 
-            if (!IsPaOf(assignment) && !IsDoctorOf(assignment.DoctorId))
-                return NotAllowed();
-
             // Ownership check: PA can only complete their own assignment
             if (paId.HasValue && assignment.PersonalAssistantId != paId.Value)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to complete this assignment" });
@@ -603,12 +544,6 @@ namespace VaccineAPI.Controllers
             if (assignment.IsCancelled)
                 return Ok(new { IsSuccess = false, Message = "Assignment is already cancelled" });
 
-            // Who is cancelling comes from the login token; the body's CallerType/CallerId are overwritten.
-            // The PA cancels their own; the doctor (or a manager on the doctor's screens) any of the practice's.
-            if (IsPaOf(assignment)) { dto.CallerType = "PA"; dto.CallerId = assignment.PersonalAssistantId; }
-            else if (IsDoctorSideOf(assignment.DoctorId)) { dto.CallerType = "DOCTOR"; dto.CallerId = assignment.DoctorId; }
-            else return NotAllowed();
-
             // PA can only cancel their own; doctor can cancel any under their DoctorId
             if (dto.CallerType == "PA" && assignment.PersonalAssistantId != dto.CallerId)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to cancel this assignment" });
@@ -687,9 +622,8 @@ namespace VaccineAPI.Controllers
             if (assignment.IsCancelled)
                 return Ok(new { IsSuccess = false, Message = "Assignment is already cancelled" });
 
-            if (!IsPaOf(assignment))
-                return NotAllowed();
-            dto.CallerId = assignment.PersonalAssistantId;
+            if (assignment.PersonalAssistantId != dto.CallerId)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to cancel this assignment" });
 
             if (assignment.AssignmentStatus == "PendingCancellation")
                 return Ok(new { IsSuccess = false, Message = "Cancellation already requested — awaiting doctor approval" });
@@ -747,7 +681,6 @@ namespace VaccineAPI.Controllers
         [HttpGet("pending-cancellations/{doctorId}")]
         public async Task<IActionResult> GetPendingCancellations(long doctorId)
         {
-            if (!IsDoctorSideOf(doctorId)) return NotAllowed();
             var pending = await _db.PAAssignments
                 .Where(a => a.DoctorId == doctorId && a.AssignmentStatus == "PendingCancellation" && !a.IsCancelled)
                 .OrderByDescending(a => a.CancelRequestedAt)
@@ -785,8 +718,8 @@ namespace VaccineAPI.Controllers
             if (assignment == null)
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
 
-            if (assignment.DoctorId != doctorId || !IsDoctorOf(assignment.DoctorId))
-                return NotAllowed();
+            if (assignment.DoctorId != doctorId)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to act on this assignment" });
 
             if (assignment.AssignmentStatus != "PendingCancellation" || assignment.IsCancelled)
                 return Ok(new { IsSuccess = false, Message = "This cancellation request has already been resolved" });
@@ -819,8 +752,8 @@ namespace VaccineAPI.Controllers
             if (assignment == null)
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
 
-            if (assignment.DoctorId != dto.DoctorId || !IsDoctorOf(assignment.DoctorId))
-                return NotAllowed();
+            if (assignment.DoctorId != dto.DoctorId)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to act on this assignment" });
 
             if (assignment.AssignmentStatus != "PendingCancellation" || assignment.IsCancelled)
                 return Ok(new { IsSuccess = false, Message = "This cancellation request has already been resolved" });
@@ -872,9 +805,8 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
             if (assignment.IsCompleted || assignment.IsCancelled)
                 return Ok(new { IsSuccess = false, Message = "This assignment is already closed" });
-            if (!IsPaOf(assignment))
-                return NotAllowed();
-            dto.CallerId = assignment.PersonalAssistantId;
+            if (assignment.PersonalAssistantId != dto.CallerId)
+                return Ok(new { IsSuccess = false, Message = "You are not authorised for this assignment" });
 
             if (await _db.VaccineRefusals.AnyAsync(r => r.AssignmentId == id && r.Status == "Pending"))
                 return Ok(new { IsSuccess = false, Message = "A refusal request is already awaiting the doctor" });
@@ -948,7 +880,6 @@ namespace VaccineAPI.Controllers
         [HttpGet("pending-refusals/{doctorId}")]
         public async Task<IActionResult> GetPendingRefusals(long doctorId)
         {
-            if (!IsDoctorSideOf(doctorId)) return NotAllowed();
             var pending = await _db.VaccineRefusals
                 .Where(r => r.DoctorId == doctorId && r.Status == "Pending")
                 .OrderByDescending(r => r.RequestedAt)
@@ -995,8 +926,8 @@ namespace VaccineAPI.Controllers
                 .FirstOrDefaultAsync(r => r.AssignmentId == id && r.Status == "Pending");
             if (request == null)
                 return Ok(new { IsSuccess = false, Message = "This request has already been resolved" });
-            if (request.DoctorId != doctorId || !IsDoctorOf(request.DoctorId))
-                return NotAllowed();
+            if (request.DoctorId != doctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised" });
             var approveAsg = await _db.PAAssignments.FindAsync(id);
             if (approveAsg != null && approveAsg.IsCashConfirmedByDoctor)
                 return Ok(new { IsSuccess = false, Message = "Cash is already confirmed for this assignment. Changes go through an Amendment." });
@@ -1027,8 +958,8 @@ namespace VaccineAPI.Controllers
                 .FirstOrDefaultAsync(r => r.AssignmentId == id && r.Status == "Pending");
             if (request == null)
                 return Ok(new { IsSuccess = false, Message = "This request has already been resolved" });
-            if (request.DoctorId != dto.DoctorId || !IsDoctorOf(request.DoctorId))
-                return NotAllowed();
+            if (request.DoctorId != dto.DoctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised" });
 
             request.Status = "Rejected";
             request.ResolvedAt = DateTime.UtcNow;
@@ -1074,8 +1005,6 @@ namespace VaccineAPI.Controllers
         [HttpGet("refusal-flag/{childId}")]
         public async Task<IActionResult> GetRefusalFlag(long childId)
         {
-            var flagDoctorId = await _db.Childs.Where(c => c.Id == childId).Select(c => (long?)c.Clinic.DoctorId).FirstOrDefaultAsync();
-            if (!flagDoctorId.HasValue || !IsStaffOf(flagDoctorId.Value)) return NotAllowed();
             var approved = await _db.VaccineRefusals
                 .Where(r => r.ChildId == childId && r.Status == "Approved")
                 .OrderByDescending(r => r.ResolvedAt)
@@ -1424,8 +1353,6 @@ namespace VaccineAPI.Controllers
             var asg = await _db.PAAssignments.FindAsync(id);
             if (asg == null)
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
-            if (!IsDoctorSideOf(asg.DoctorId) || !ManagerIdIsCaller(requestingManagerId))
-                return NotAllowed();
 
             if (requestingManagerId.HasValue)
             {
@@ -1639,8 +1566,6 @@ namespace VaccineAPI.Controllers
         [HttpGet("clinic/{clinicId}")]
         public async Task<IActionResult> GetPAsForClinic(long clinicId)
         {
-            var clinicDoctorId = await _db.Clinics.Where(c => c.Id == clinicId).Select(c => (long?)c.DoctorId).FirstOrDefaultAsync();
-            if (!clinicDoctorId.HasValue || !IsStaffOf(clinicDoctorId.Value)) return NotAllowed();
             // Fetch PaAccess rows first, then look up PAs in memory — avoids EF Join+Where MySQL alias bug
             var paIds = await _db.PaAccess
                 .Where(a => a.ClinicId == clinicId)
@@ -1667,8 +1592,8 @@ namespace VaccineAPI.Controllers
             if (assignment == null)
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
 
-            if (assignment.DoctorId != dto.DoctorId || !IsDoctorSideOf(assignment.DoctorId))
-                return NotAllowed();
+            if (assignment.DoctorId != dto.DoctorId)
+                return Ok(new { IsSuccess = false, Message = "Not authorised" });
 
             var oldTarget = assignment.TargetDate;
             assignment.TargetDate = dto.TargetDate;
@@ -2049,9 +1974,6 @@ namespace VaccineAPI.Controllers
             if (assignment.AssignmentStatus == "PendingHandover" || assignment.IsCompleted)
                 return Ok(new { IsSuccess = false, Message = "Assignment is already marked done." });
 
-            if (!IsPaOf(assignment) && !IsDoctorOf(assignment.DoctorId))
-                return NotAllowed();
-
             if (paId.HasValue && assignment.PersonalAssistantId != paId.Value)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to update this assignment." });
 
@@ -2080,7 +2002,6 @@ namespace VaccineAPI.Controllers
         [HttpGet("active/{doctorId}")]
         public async Task<IActionResult> GetActiveForDoctor(long doctorId)
         {
-            if (!IsStaffOf(doctorId)) return NotAllowed();
             // Was restricted to AssignedAt falling on today — any open assignment made on a
             // prior day (e.g. still PendingHandover, waiting on the doctor) went invisible here
             // while still blocking a new one via Create's own unrestricted duplicate check
@@ -2163,7 +2084,6 @@ namespace VaccineAPI.Controllers
             [FromQuery] DateTime? toDate = null,
             [FromQuery] long? requestingManagerId = null)
         {
-            if (!IsStaffOf(doctorId) || !ManagerIdIsCaller(requestingManagerId)) return NotAllowed();
             var clinicIds = await _db.Clinics
                 .Where(c => c.DoctorId == doctorId)
                 .Select(c => c.Id)
@@ -2365,7 +2285,6 @@ namespace VaccineAPI.Controllers
         public async Task<IActionResult> GetRoute(long doctorId, [FromQuery] DateTime? date = null,
             [FromQuery] long? requestingManagerId = null, [FromQuery] long? callerUserId = null, [FromQuery] string? securityStamp = null)
         {
-            if (!IsDoctorSideOf(doctorId) || !ManagerIdIsCaller(requestingManagerId)) return NotAllowed();
             var forManager = requestingManagerId.HasValue;
             List<long>? managerClinics = null;
             if (forManager)

@@ -45,6 +45,25 @@ namespace VaccineAPI.Controllers
         private Task<bool> VerifyCaller(long? userId, string? securityStamp)
             => Task.FromResult(CallerGuard.VerifyCaller(_db, userId, securityStamp));
 
+        // The caller is this assignment's own PA, proven by the login stamp (VerifyCaller). The stamp
+        // survives API restarts; the token does not while prod has no fixed AuthTokenSecret.
+        private async Task<bool> IsAssignmentPaCaller(PAAssignment a, long? userId, string? securityStamp)
+        {
+            if (!await VerifyCaller(userId, securityStamp)) return false;
+            var paUserId = await _db.PersonalAssistant.Where(p => p.Id == a.PersonalAssistantId).Select(p => (long?)p.UserId).FirstOrDefaultAsync();
+            return paUserId.HasValue && paUserId.Value == userId!.Value;
+        }
+
+        // PA cancel reasons (PA_CANCEL_REDESIGN_SPEC.md D2). "Family wants another day" moves the visit
+        // (pa-move) instead of cancelling it, so it has no code here.
+        private static string? CancelReasonLabel(string? code) => code switch
+        {
+            "CANT_REACH" => "Can't reach the family",
+            "NOT_AVAILABLE" => "I'm not available",
+            "OTHER" => "Other",
+            _ => null
+        };
+
         // GET /api/PAAssignment/pa/{paId}
         [HttpGet("pa/{paId}")]
         public async Task<IActionResult> GetByPA(long paId, [FromQuery] long? userId, [FromQuery] string? securityStamp)
@@ -102,6 +121,28 @@ namespace VaccineAPI.Controllers
                     .Where(r => r.Status == "Pending" && rawAssignmentIds.Contains(r.AssignmentId))
                     .Select(r => r.AssignmentId)
                     .ToListAsync());
+
+            // "Moved · family asked" (PA_CANCEL_REDESIGN_SPEC.md §3.5): the latest PA move of each assignment,
+            // from the audit log in one query. The label shows only while the visit is still on that date,
+            // so a later doctor date change clears it.
+            var movedTo = new Dictionary<long, DateTime>();
+            var movedKidIds = rawAssignments.Select(x => (long?)x.ChildId).Distinct().ToList();
+            var moveLogs = await _db.PaActivityLogs
+                .Where(l => l.ActionCode == "AsgVisitMovedByPa" && movedKidIds.Contains(l.PatientId))
+                .OrderBy(l => l.Id)
+                .Select(l => l.Notes)
+                .ToListAsync();
+            foreach (var n in moveLogs)
+            {
+                try
+                {
+                    var j = Newtonsoft.Json.Linq.JObject.Parse(n ?? "{}");
+                    var asgId = (long?)j["assignmentId"];
+                    var to = (DateTime?)j["data"]?["to"];
+                    if (asgId.HasValue && to.HasValue) movedTo[asgId.Value] = to.Value.Date;
+                }
+                catch { }
+            }
 
             // PA Daily Route: stop numbers for this PA's scheduled visits, ranked per date at read time.
             var stopNumbers = VaccineAPI.Services.VisitStatus.Compute(
@@ -182,6 +223,7 @@ namespace VaccineAPI.Controllers
                     a.IsAutoCreated,
                     a.AssignmentStatus,
                     RefusalPending = pendingRefusalAssignmentIds.Contains(a.Id),
+                    MovedByPa     = movedTo.ContainsKey(a.Id) && a.TargetDate.HasValue && a.TargetDate.Value.Date == movedTo[a.Id],
                     a.IsCompleted,
                     a.IsCashConfirmedByDoctor,
                     InvoiceAmount = invoice != null ? invoice.TotalAmount : 0m,
@@ -551,6 +593,11 @@ namespace VaccineAPI.Controllers
             if (dto.CallerType == "DOCTOR" && assignment.DoctorId != dto.CallerId)
                 return Ok(new { IsSuccess = false, Message = "You are not authorised to cancel this assignment" });
 
+            // PA_CANCEL_REDESIGN_SPEC.md §3.1: a PA cancel must prove it is this assignment's PA (login stamp,
+            // not ids in the body, and not the token, which does not survive an API restart on prod).
+            if (dto.CallerType == "PA" && !await IsAssignmentPaCaller(assignment, dto.CallerUserId, dto.SecurityStamp))
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to cancel this assignment" });
+
             // Cancel only calls off the PA's task. Once a dose is given or payment is recorded it would
             // leave given doses and collected cash with no owner, so neither PA nor doctor may use it:
             // the PA must ask the doctor, the doctor must Reassign / Take back / Reverse instead
@@ -566,9 +613,22 @@ namespace VaccineAPI.Controllers
             if (hasGivenOrPaid && dto.CallerType == "DOCTOR")
                 return Ok(new { IsSuccess = false, Message = "Vaccines are already given or payment is recorded, so this assignment cannot be cancelled. Reassign it to another PA, or reverse the visit." });
 
+            // A PA must say why (spec D2). "Family wants another day" is not a cancel: it is pa-move.
+            if (dto.CallerType == "PA")
+            {
+                var label = CancelReasonLabel(dto.ReasonCode);
+                var note = (dto.Reason ?? "").Trim();
+                if (label == null)
+                    return Ok(new { IsSuccess = false, Message = "Pick a reason for cancelling." });
+                if (dto.ReasonCode == "OTHER" && note.Length == 0)
+                    return Ok(new { IsSuccess = false, Message = "Write the reason for cancelling." });
+                dto.Reason = note.Length > 0 ? label + ": " + note : label;
+            }
+
             assignment.IsCancelled  = true;
             assignment.CancelledAt  = DateTime.UtcNow;
             assignment.CancelReason = dto.Reason;
+            assignment.CancelledBy  = dto.CallerType == "PA" ? "PA" : "DOCTOR";
             VaccineAPI.Services.AssignmentAudit.Add(_db, "Cancelled", assignment, dto.CallerType == "PA" ? "PA" : "DOCTOR", dto.CallerId,
                 "Assignment cancelled (task only)", dto.Reason);
 
@@ -583,8 +643,8 @@ namespace VaccineAPI.Controllers
             {
                 var cKid = await _db.Childs.FindAsync(assignment.ChildId);
                 var cPa = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
-                VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelled", "DOCTOR", assignment.DoctorId, "Assignment cancelled by PA",
-                    $"{cPa?.Name ?? "Your PA"} cancelled the assignment for {cKid?.Name ?? "a patient"}. Please reassign or reschedule.", assignment.ChildId, assignment.ClinicId);
+                VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelled", "DOCTOR", assignment.DoctorId, "Visit cancelled by PA",
+                    $"{cPa?.Name ?? "Your PA"} cancelled {cKid?.Name ?? "a patient"}'s visit: {assignment.CancelReason}. Tap to assign again.", assignment.ChildId, assignment.ClinicId);
                 await _db.SaveChangesAsync();
                 var doctor = await _db.Doctors.FindAsync(assignment.DoctorId);
                 if (doctor != null && !string.IsNullOrEmpty(doctor.Email))
@@ -597,7 +657,7 @@ namespace VaccineAPI.Controllers
                     var cancelSender = EmailSenderResolver.Resolve(doctor, _db);
                     _ = Task.Run(() => UserEmail.SendEmail(
                         doctor.Email,
-                        $"{paNameStr} has cancelled the assignment for patient {childNameStr}. Reason: {reasonStr}. Please reassign or reschedule.",
+                        $"{paNameStr} cancelled the visit for patient {childNameStr}: {reasonStr}. Open PA Assignment Tracking to assign it again.",
                         "PA Assignment Cancelled",
                         sender: cancelSender
                     ));
@@ -607,191 +667,89 @@ namespace VaccineAPI.Controllers
             return Ok(new { IsSuccess = true });
         }
 
-        // PATCH /api/PAAssignment/{id}/request-cancel
-        // PA-only: clean assignment cancel becomes a pending request requiring doctor approval (no instant cancel)
-        [HttpPatch("{id}/request-cancel")]
-        public async Task<IActionResult> RequestCancel(long id, [FromBody] CancelAssignmentDto dto)
+        // PATCH /api/PAAssignment/{id}/pa-move
+        // The PA moves their own visit because the family asked for another day (PA_CANCEL_REDESIGN_SPEC.md
+        // §3.2, decision D1: no doctor approval, the doctor is told). Only the visit date moves; the doses'
+        // own due dates stay. Same open/nothing-given rule as a PA cancel.
+        [HttpPatch("{id}/pa-move")]
+        public async Task<IActionResult> PaMove(long id, [FromBody] PaMoveDto dto)
         {
-            var assignment = await _db.PAAssignments.FindAsync(id);
-            if (assignment == null)
+            var a = await _db.PAAssignments.FindAsync(id);
+            if (a == null)
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+            if (!await IsAssignmentPaCaller(a, dto.CallerUserId, dto.SecurityStamp))
+                return Ok(new { IsSuccess = false, Message = "You are not authorised to move this visit" });
+            if (a.IsCancelled || a.IsCompleted || a.IsCashConfirmedByDoctor || a.AssignmentStatus == "PendingHandover")
+                return Ok(new { IsSuccess = false, Message = "This visit is already closed." });
 
-            if (assignment.IsCompleted)
-                return Ok(new { IsSuccess = false, Message = "Assignment is already completed" });
-
-            if (assignment.IsCancelled)
-                return Ok(new { IsSuccess = false, Message = "Assignment is already cancelled" });
-
-            if (assignment.PersonalAssistantId != dto.CallerId)
-                return Ok(new { IsSuccess = false, Message = "You are not authorised to cancel this assignment" });
-
-            if (assignment.AssignmentStatus == "PendingCancellation")
-                return Ok(new { IsSuccess = false, Message = "Cancellation already requested — awaiting doctor approval" });
-
-            // Belt-and-suspenders — frontend already blocks this, but guard here too (same rule as instant Cancel)
             var hasGivenOrPaid = await _db.PAAssignmentSchedules
-                .Where(l => l.AssignmentId == assignment.Id)
+                .Where(l => l.AssignmentId == a.Id)
                 .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
                 .AnyAsync(s => s.IsDone == true || s.IsPaymentCollected == true);
-
             if (hasGivenOrPaid)
-                return BadRequest(new { IsSuccess = false, Message = "This assignment has vaccines given or payment recorded and can no longer be self-cancelled. Please contact the doctor." });
+                return Ok(new { IsSuccess = false, Message = "Vaccines are already given or payment is recorded, so this visit cannot be moved. Please contact the doctor." });
 
-            assignment.AssignmentStatus   = "PendingCancellation";
-            assignment.CancelRequestedAt  = DateTime.UtcNow;
-            assignment.CancelRequestReason = dto.Reason;
-            VaccineAPI.Services.AssignmentAudit.Add(_db, "CancelRequested", assignment, "PA", dto.CallerId,
-                "Asked the doctor to cancel", dto.Reason);
+            var newDate = dto.NewDate.Date;
+            if (newDate < Pkt.Today().Date)
+                return Ok(new { IsSuccess = false, Message = "Pick today or a later date." });
+            if (a.TargetDate.HasValue && a.TargetDate.Value.Date == newDate)
+                return Ok(new { IsSuccess = false, Message = "The visit is already on that date." });
+
+            var oldDate = a.TargetDate;
+            a.TargetDate = newDate;
+            // Same as a doctor date move on a scheduled home visit: the time no longer applies on the new
+            // day (time TBD, area kept), so the stop order recomputes.
+            var timeCleared = a.IsScheduledVisit && a.WindowStart.HasValue;
+            if (timeCleared) a.WindowStart = null;
+
+            VaccineAPI.Services.AssignmentAudit.Add(_db, "VisitMovedByPa", a, "PA", a.PersonalAssistantId,
+                "Visit moved " + (oldDate.HasValue ? "from " + oldDate.Value.ToString("dd MMM yyyy") + " " : "")
+                + "to " + newDate.ToString("dd MMM yyyy") + ": family asked" + (timeCleared ? "; visit time cleared" : ""),
+                "Family wants another day", new { from = oldDate, to = newDate, timeCleared });
+
+            var kid = await _db.Childs.FindAsync(a.ChildId);
+            var pa = await _db.PersonalAssistant.FindAsync(a.PersonalAssistantId);
+            var name = kid?.Name ?? "a patient";
+            VaccineAPI.Services.NotifyHelper.Add(_db, "PaMoved", "DOCTOR", a.DoctorId, "Visit moved by PA",
+                $"{pa?.Name ?? "Your PA"} moved {name} to {newDate:dd MMM}: family asked.", a.ChildId, a.ClinicId);
+            if (a.IsScheduledVisit && kid != null)
+                VaccineAPI.Services.NotifyHelper.Add(_db, "VisitChanged", "PARENT", kid.UserId, "Home visit updated",
+                    $"{kid.Name}'s home visit has moved to {newDate:dd MMM}. The visit time will be confirmed.", a.ChildId, a.ClinicId);
 
             try { await _db.SaveChangesAsync(); }
             catch (Exception ex)
             {
                 return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
             }
-
-            // Notify doctor by email (fire-and-forget)
-            var doctor = await _db.Doctors.FindAsync(assignment.DoctorId);
-            {
-                var rqPa = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
-                var rqKid = await _db.Childs.FindAsync(assignment.ChildId);
-                VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelRequest", "DOCTOR", assignment.DoctorId, "Cancellation request",
-                    $"{rqPa?.Name ?? "Your PA"} asks to cancel the assignment for {rqKid?.Name ?? "a patient"}. Tap to approve or reject.", assignment.ChildId, assignment.ClinicId);
-                await _db.SaveChangesAsync();
-            }
-            if (doctor != null && !string.IsNullOrEmpty(doctor.Email))
-            {
-                var paUser = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
-                var paNameStr    = paUser?.Name ?? "Your PA";
-                var child        = await _db.Childs.FindAsync(assignment.ChildId);
-                var childNameStr = child?.Name ?? "a patient";
-                var reasonStr    = dto.Reason ?? "No reason given";
-                var cancelReqSender = EmailSenderResolver.Resolve(doctor, _db);
-                _ = Task.Run(() => UserEmail.SendEmail(
-                    doctor.Email,
-                    $"{paNameStr} has requested to cancel the assignment for patient {childNameStr}. Reason: {reasonStr}. Please review and approve or reject this request in the VacDoc app.",
-                    "PA Cancellation Request — Approval Needed",
-                    sender: cancelReqSender
-                ));
-            }
-
             return Ok(new { IsSuccess = true });
         }
 
-        // GET /api/PAAssignment/pending-cancellations/{doctorId}
-        [HttpGet("pending-cancellations/{doctorId}")]
-        public async Task<IActionResult> GetPendingCancellations(long doctorId)
+        // PATCH /api/PAAssignment/{id}/follow-up-closed
+        // Doctor taps "No visit needed" on a visit a PA cancelled, so it leaves the Needs-you panel
+        // (PA_CANCEL_REDESIGN_SPEC.md §3.4, decision D4: no reason asked). Idempotent.
+        [HttpPatch("{id}/follow-up-closed")]
+        public async Task<IActionResult> FollowUpClosed(long id, [FromBody] VisitActionDto dto)
         {
-            var pending = await _db.PAAssignments
-                .Where(a => a.DoctorId == doctorId && a.AssignmentStatus == "PendingCancellation" && !a.IsCancelled)
-                .OrderByDescending(a => a.CancelRequestedAt)
-                .ToListAsync();
-
-            var childIds = pending.Select(a => a.ChildId).Distinct().ToList();
-            var childNames = await _db.Childs
-                .Where(c => childIds.Contains(c.Id))
-                .ToDictionaryAsync(c => c.Id, c => c.Name ?? "");
-
-            var paIds = pending.Select(a => a.PersonalAssistantId).Distinct().ToList();
-            var paNames = await _db.PersonalAssistant
-                .Where(p => paIds.Contains(p.Id))
-                .ToDictionaryAsync(p => p.Id, p => p.Name ?? "");
-
-            var result = pending.Select(a => new
-            {
-                AssignmentId       = a.Id,
-                ChildId            = a.ChildId,
-                ChildName          = childNames.ContainsKey(a.ChildId) ? childNames[a.ChildId] : "",
-                PaId               = a.PersonalAssistantId,
-                PaName             = paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "",
-                CancelRequestedAt  = a.CancelRequestedAt,
-                CancelRequestReason = a.CancelRequestReason
-            });
-
-            return Ok(new { IsSuccess = true, ResponseData = result });
-        }
-
-        // PATCH /api/PAAssignment/{id}/approve-cancel
-        [HttpPatch("{id}/approve-cancel")]
-        public async Task<IActionResult> ApproveCancelRequest(long id, [FromQuery] long doctorId)
-        {
-            var assignment = await _db.PAAssignments.FindAsync(id);
-            if (assignment == null)
+            var a = await _db.PAAssignments.FindAsync(id);
+            if (a == null || a.DoctorId != dto.DoctorId)
                 return Ok(new { IsSuccess = false, Message = "Assignment not found" });
+            if (!(await VerifyDoctorCaller(dto.DoctorId, dto.CallerUserId, dto.SecurityStamp)).Ok)
+                return Ok(new { IsSuccess = false, Message = "Not authorised." });
+            if (!a.IsCancelled || a.CancelledBy != "PA")
+                return Ok(new { IsSuccess = false, Message = "Only a visit cancelled by a PA can be closed here." });
 
-            if (assignment.DoctorId != doctorId)
-                return Ok(new { IsSuccess = false, Message = "You are not authorised to act on this assignment" });
-
-            if (assignment.AssignmentStatus != "PendingCancellation" || assignment.IsCancelled)
-                return Ok(new { IsSuccess = false, Message = "This cancellation request has already been resolved" });
-
-            assignment.IsCancelled  = true;
-            assignment.CancelledAt  = DateTime.UtcNow;
-            assignment.CancelReason = assignment.CancelRequestReason;
-            VaccineAPI.Services.AssignmentAudit.Add(_db, "CancelApproved", assignment, "DOCTOR", assignment.DoctorId,
-                "Approved the PA's cancel request", assignment.CancelRequestReason);
-
-            try { await _db.SaveChangesAsync(); }
-            catch (Exception ex)
+            if (!a.FollowUpClosedAt.HasValue)
             {
-                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+                a.FollowUpClosedAt = DateTime.UtcNow;
+                VaccineAPI.Services.AssignmentAudit.Add(_db, "FollowUpClosed", a, "DOCTOR", a.DoctorId,
+                    "No visit needed after the PA cancelled");
+                try { await _db.SaveChangesAsync(); }
+                catch (Exception ex)
+                {
+                    return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
+                }
             }
-
-            var apKid = await _db.Childs.FindAsync(assignment.ChildId);
-            VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelApproved", "PA", assignment.PersonalAssistantId, "Cancellation approved",
-                $"Your request to cancel the assignment for {apKid?.Name ?? "the patient"} was approved.", assignment.ChildId, assignment.ClinicId);
-            await _db.SaveChangesAsync();
-
-            return Ok(new { IsSuccess = true, Message = "Cancellation approved" });
-        }
-
-        // PATCH /api/PAAssignment/{id}/reject-cancel
-        [HttpPatch("{id}/reject-cancel")]
-        public async Task<IActionResult> RejectCancelRequest(long id, [FromBody] RejectCancelDto dto)
-        {
-            var assignment = await _db.PAAssignments.FindAsync(id);
-            if (assignment == null)
-                return Ok(new { IsSuccess = false, Message = "Assignment not found" });
-
-            if (assignment.DoctorId != dto.DoctorId)
-                return Ok(new { IsSuccess = false, Message = "You are not authorised to act on this assignment" });
-
-            if (assignment.AssignmentStatus != "PendingCancellation" || assignment.IsCancelled)
-                return Ok(new { IsSuccess = false, Message = "This cancellation request has already been resolved" });
-
-            assignment.AssignmentStatus = "Active";
-            assignment.RejectionNote    = dto.Notes;
-            VaccineAPI.Services.AssignmentAudit.Add(_db, "CancelRejected", assignment, "DOCTOR", assignment.DoctorId,
-                "Rejected the PA's cancel request. Assignment stays active", dto.Notes);
-
-            try { await _db.SaveChangesAsync(); }
-            catch (Exception ex)
-            {
-                return Ok(new { IsSuccess = false, Message = ex.InnerException?.Message ?? ex.Message });
-            }
-
-            var rjKid = await _db.Childs.FindAsync(assignment.ChildId);
-            VaccineAPI.Services.NotifyHelper.Add(_db, "PaCancelRejected", "PA", assignment.PersonalAssistantId, "Cancellation rejected",
-                $"Your request to cancel the assignment for {rjKid?.Name ?? "the patient"} was rejected. The assignment stays active.", assignment.ChildId, assignment.ClinicId);
-            await _db.SaveChangesAsync();
-
-            // Notify PA by email (fire-and-forget)
-            var pa = await _db.PersonalAssistant.FindAsync(assignment.PersonalAssistantId);
-            if (pa != null && !string.IsNullOrEmpty(pa.Email))
-            {
-                var child = await _db.Childs.FindAsync(assignment.ChildId);
-                var childNameStr = child?.Name ?? "the patient";
-                var reason = !string.IsNullOrEmpty(dto.Notes) ? dto.Notes : "No reason given";
-                var rejectDoctor = await _db.Doctors.FindAsync(assignment.DoctorId);
-                var rejectSender = EmailSenderResolver.Resolve(rejectDoctor, _db);
-                _ = Task.Run(() => UserEmail.SendEmail(
-                    pa.Email,
-                    $"Hi {pa.Name},<br><br>Your request to cancel the assignment for patient <b>{childNameStr}</b> has been <b>rejected</b>.<br>Reason: {reason}<br><br>The assignment remains active.",
-                    "Cancellation Request Rejected",
-                    sender: rejectSender
-                ));
-            }
-
-            return Ok(new { IsSuccess = true, Message = "Cancellation request rejected" });
+            return Ok(new { IsSuccess = true });
         }
 
         // POST /api/PAAssignment/{id}/request-refusal
@@ -1067,9 +1025,6 @@ namespace VaccineAPI.Controllers
             if (old.IsCancelled)
                 return Ok(new { IsSuccess = false, Message = "Cannot reassign a cancelled assignment" });
 
-            if (old.AssignmentStatus == "PendingCancellation")
-                return Ok(new { IsSuccess = false, Message = "This assignment has a pending cancellation request — resolve it before reassigning." });
-
             if (dto.NewPaId == old.PersonalAssistantId)
                 return Ok(new { IsSuccess = false, Message = "This PA already has the assignment. Pick a different PA." });
 
@@ -1106,6 +1061,7 @@ namespace VaccineAPI.Controllers
             old.IsCancelled  = true;
             old.CancelledAt  = DateTime.UtcNow;
             old.CancelReason = "Reassigned to another PA";
+            old.CancelledBy  = "REASSIGN";
 
             // Create new assignment for the new PA — carries the old assignment's
             // InvoiceSubmissionId FK forward directly (this assignment's invoice, no guessing)
@@ -1281,9 +1237,6 @@ namespace VaccineAPI.Controllers
                 return Ok(new { IsSuccess = false, Message = "Assignment is already cancelled" });
             if (asg.IsCashConfirmedByDoctor)
                 return Ok(new { IsSuccess = false, Message = "Cash is already confirmed for this assignment. Changes go through an Amendment." });
-            if (asg.AssignmentStatus == "PendingCancellation")
-                return Ok(new { IsSuccess = false, Message = "This assignment has a pending cancellation request — resolve it first." });
-
             var doses = await _db.PAAssignmentSchedules
                 .Where(l => l.AssignmentId == asg.Id)
                 .Join(_db.Schedules, l => l.ScheduleId, s => s.Id, (l, s) => s)
@@ -1324,6 +1277,7 @@ namespace VaccineAPI.Controllers
             asg.IsCancelled = true;
             asg.CancelledAt = DateTime.UtcNow;
             asg.CancelReason = "Taken back by the doctor" + (string.IsNullOrWhiteSpace(dto.Reason) ? "" : ": " + dto.Reason);
+            asg.CancelledBy = "TAKEBACK";
 
             VaccineAPI.Services.AssignmentAudit.Add(_db, "TakenBack", asg, "DOCTOR", asg.DoctorId,
                 $"Taken back from PA {paId}: doses stay given, doctor collects", dto.Reason,
@@ -2121,14 +2075,10 @@ namespace VaccineAPI.Controllers
             switch (status)
             {
                 case "Active":
-                    // Excludes PendingCancellation too — those await a doctor decision on the
-                    // dedicated GetPendingCancellations view, not action as a normal open task.
-                    // Without this, a request that nobody approves/rejects sits here forever
-                    // looking exactly like a live assignment (confirmed live: 0 currently stuck,
-                    // but the code path allowed it — see project_pa_orphan_cleanup memory).
+                    // The PA cancel-request path (PendingCancellation) was removed 2026-11-26
+                    // (PA_CANCEL_REDESIGN_SPEC.md §5); prod had no such rows.
                     query = query.Where(a => !a.IsCancelled && !a.IsCashConfirmedByDoctor
-                                           && !a.IsCompleted && a.AssignmentStatus != "PendingHandover"
-                                           && a.AssignmentStatus != "PendingCancellation");
+                                           && !a.IsCompleted && a.AssignmentStatus != "PendingHandover");
                     break;
                 case "PendingHandover":
                     query = query.Where(a => !a.IsCancelled && !a.IsCashConfirmedByDoctor
@@ -2247,6 +2197,8 @@ namespace VaccineAPI.Controllers
                     a.CompletedAt,
                     a.CancelledAt,
                     a.CancelReason,
+                    a.CancelledBy,
+                    a.FollowUpClosedAt,
                     a.IsCashConfirmedByDoctor,
                     a.CashConfirmedAt,
                     ChildId    = a.ChildId,
@@ -2266,6 +2218,68 @@ namespace VaccineAPI.Controllers
             }).ToList();
 
             return Ok(new { IsSuccess = true, ResponseData = result });
+        }
+
+        // GET /api/PAAssignment/pa-cancelled/{doctorId}?callerUserId=&securityStamp=
+        // Visits a PA cancelled that nobody has picked up yet (PA_CANCEL_REDESIGN_SPEC.md §3.3), for the
+        // doctor's Needs-you panel. Not date-filtered: a patient must not drop out because the cancel is old.
+        // Picked up = every pinned dose is given, or another open assignment pins one of them; or the doctor
+        // tapped "No visit needed" (FollowUpClosedAt). Doctor only (managers do not see the panel).
+        [HttpGet("pa-cancelled/{doctorId}")]
+        public async Task<IActionResult> GetPaCancelledPickups(long doctorId, [FromQuery] long? callerUserId = null, [FromQuery] string? securityStamp = null)
+        {
+            if (!(await VerifyDoctorCaller(doctorId, callerUserId, securityStamp)).Ok)
+                return Ok(new { IsSuccess = false, Message = "Not authorised." });
+
+            var cands = await _db.PAAssignments
+                .Where(a => a.DoctorId == doctorId && a.IsCancelled && a.CancelledBy == "PA" && a.FollowUpClosedAt == null)
+                .ToListAsync();
+            if (cands.Count == 0) return Ok(new { IsSuccess = true, ResponseData = new List<object>() });
+
+            var candIds = cands.Select(a => a.Id).ToList();
+            var links = await _db.PAAssignmentSchedules.Where(l => candIds.Contains(l.AssignmentId)).ToListAsync();
+            var sIds = links.Select(l => l.ScheduleId).Distinct().ToList();
+            var doseRows = sIds.Any()
+                ? await _db.Schedules.Where(s => sIds.Contains(s.Id))
+                    .Join(_db.Doses, s => s.DoseId, d => d.Id, (s, d) => new { s.Id, s.IsDone, d.Name })
+                    .ToListAsync()
+                : new();
+            var doseById = doseRows.ToDictionary(x => x.Id);
+            // Doses pinned by any open assignment: those are picked up again.
+            var openPinned = sIds.Any()
+                ? (await _db.PAAssignmentSchedules.Where(l => sIds.Contains(l.ScheduleId))
+                    .Join(_db.PAAssignments, l => l.AssignmentId, a => a.Id, (l, a) => new { l.ScheduleId, a.Id, a.IsCancelled, a.IsCashConfirmedByDoctor })
+                    .Where(x => !x.IsCancelled && !x.IsCashConfirmedByDoctor)
+                    .Select(x => x.ScheduleId).ToListAsync()).ToHashSet()
+                : new HashSet<long>();
+
+            var kidIds = cands.Select(a => a.ChildId).Distinct().ToList();
+            var kids = await _db.Childs.Where(c => kidIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name ?? "");
+            var paIdsC = cands.Select(a => a.PersonalAssistantId).Distinct().ToList();
+            var paNames = await _db.PersonalAssistant.Where(p => paIdsC.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Name ?? "");
+
+            var rows = cands.Select(a =>
+            {
+                var mine = links.Where(l => l.AssignmentId == a.Id && doseById.ContainsKey(l.ScheduleId)).Select(l => doseById[l.ScheduleId]).ToList();
+                var needs = mine.Any(d => !d.IsDone) && !mine.Any(d => openPinned.Contains(d.Id));
+                return new
+                {
+                    NeedsPickup = needs,
+                    AssignmentId = a.Id,
+                    a.ChildId,
+                    ChildName = kids.ContainsKey(a.ChildId) ? kids[a.ChildId] : "",
+                    PaId = a.PersonalAssistantId,
+                    PaName = paNames.ContainsKey(a.PersonalAssistantId) ? paNames[a.PersonalAssistantId] : "",
+                    a.CancelledAt,
+                    a.CancelReason,
+                    Doses = mine.Where(d => !d.IsDone).Select(d => d.Name).ToList()
+                };
+            })
+            .Where(r => r.NeedsPickup)
+            .OrderByDescending(r => r.CancelledAt)
+            .ToList();
+
+            return Ok(new { IsSuccess = true, ResponseData = rows });
         }
 
         // ───────────── PA Daily Route (spec v3.1) ─────────────
@@ -2587,6 +2601,17 @@ namespace VaccineAPI.Controllers
         public string CallerType { get; set; } // "DOCTOR" or "PA"
         public long CallerId { get; set; }
         public string? Reason { get; set; }
+        // PA cancel only: CANT_REACH | NOT_AVAILABLE | OTHER (Reason is the note; required for OTHER).
+        public string? ReasonCode { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
+    }
+
+    public class PaMoveDto
+    {
+        public DateTime NewDate { get; set; }
+        public long? CallerUserId { get; set; }
+        public string? SecurityStamp { get; set; }
     }
 
     public class ReassignDto

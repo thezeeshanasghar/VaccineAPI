@@ -307,6 +307,7 @@ namespace VaccineAPI.Controllers
                 a.IsCancelled = true;
                 a.CancelledAt = DateTime.UtcNow;
                 a.CancelReason = "Cancelled by doctor, patient deleted";
+                a.CancelledBy = "DOCTOR";
                 VaccineAPI.Services.AssignmentAudit.Add(_db, "Cancelled", a, "DOCTOR", doctorId,
                     $"Payment Rs. {amount:N0} cancelled: patient deleted", "Patient deleted",
                     new { invoiceId = inv.Id, amount, wasConfirmed, patientName = name });

@@ -1,3 +1,4 @@
+using VaccineAPI;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
@@ -166,22 +167,30 @@ public class AssignmentAuditTrailTests
     }
 
     [Fact]
-    public void Target_date_change_and_PA_cancel_request_and_its_approval_are_logged_with_the_reason()
+    public void Target_date_change_PA_move_and_PA_cancel_are_logged_with_who_and_why()
     {
         using var w = new StockWorld();
         var f = Seed(w);
+        long paUserId; const string paStamp = "pa-stamp-1";
         using (var db = w.NewContext())
-            Assert.True(Result.Of(Ctl(db).SetTargetDate(f.AsgId, new SetTargetDateDto { DoctorId = w.DoctorId, TargetDate = new DateTime(2026, 10, 25) }).GetAwaiter().GetResult()).IsSuccess);
+        {
+            paUserId = db.PersonalAssistant.Single(p => p.Id == f.PaId).UserId;
+            db.Users.Single(u => u.Id == paUserId).SecurityStamp = paStamp; db.SaveChanges();
+        }
         using (var db = w.NewContext())
-            Assert.True(Result.Of(Ctl(db).RequestCancel(f.AsgId, new CancelAssignmentDto { CallerType = "PA", CallerId = f.PaId, Reason = "Parent postponed" }).GetAwaiter().GetResult()).IsSuccess);
+            Assert.True(Result.Of(Ctl(db).SetTargetDate(f.AsgId, new SetTargetDateDto { DoctorId = w.DoctorId, TargetDate = Pkt.Today().AddDays(1) }).GetAwaiter().GetResult()).IsSuccess);
         using (var db = w.NewContext())
-            Assert.True(Result.Of(Ctl(db).ApproveCancelRequest(f.AsgId, w.DoctorId).GetAwaiter().GetResult()).IsSuccess);
+            Assert.True(Result.Of(Ctl(db).PaMove(f.AsgId, new PaMoveDto { NewDate = Pkt.Today().AddDays(4), CallerUserId = paUserId, SecurityStamp = paStamp }).GetAwaiter().GetResult()).IsSuccess);
+        using (var db = w.NewContext())
+            Assert.True(Result.Of(Ctl(db).Cancel(f.AsgId, new CancelAssignmentDto { CallerType = "PA", CallerId = f.PaId, ReasonCode = "CANT_REACH", Reason = "phone off", CallerUserId = paUserId, SecurityStamp = paStamp }).GetAwaiter().GetResult()).IsSuccess);
 
         var h = History(w, f.AsgId);
-        Assert.Equal(new[] { "TargetDateSet", "CancelRequested", "CancelApproved" }, h.Select(x => x.Value<string>("Action")).ToArray());
-        var req = h.Single(x => x.Value<string>("Action") == "CancelRequested");
-        Assert.Equal("Atif Zubair", req.Value<string>("ActorName"));
-        Assert.Equal("Parent postponed", req.Value<string>("Reason"));
-        Assert.Equal("Parent postponed", h.Single(x => x.Value<string>("Action") == "CancelApproved").Value<string>("Reason"));
+        Assert.Equal(new[] { "TargetDateSet", "VisitMovedByPa", "Cancelled" }, h.Select(x => x.Value<string>("Action")).ToArray());
+        var moved = h.Single(x => x.Value<string>("Action") == "VisitMovedByPa");
+        Assert.Equal("Atif Zubair", moved.Value<string>("ActorName"));
+        Assert.Equal("Family wants another day", moved.Value<string>("Reason"));
+        var cancelled = h.Single(x => x.Value<string>("Action") == "Cancelled");
+        Assert.Equal("Atif Zubair", cancelled.Value<string>("ActorName"));
+        Assert.Equal("Can't reach the family: phone off", cancelled.Value<string>("Reason"));
     }
 }

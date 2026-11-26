@@ -18,6 +18,11 @@ namespace VaccineAPI.Models
         public bool IsCancelled { get; set; } = false;
         public DateTime? CancelledAt { get; set; }
         public string? CancelReason { get; set; }
+        // Who set IsCancelled: "PA" | "DOCTOR" | "MANAGER" | "REASSIGN" | "TAKEBACK"; NULL on rows from
+        // before 2026-11-26 (PA_CANCEL_REDESIGN_SPEC.md §2, add_paassignment_cancelledby_columns.sql).
+        public string? CancelledBy { get; set; }
+        // The doctor tapped "No visit needed" on a PA-cancelled visit, so it leaves the Needs-you panel.
+        public DateTime? FollowUpClosedAt { get; set; }
         public long? ReassignedFromAssignmentId { get; set; }
         public bool IsAutoCreated { get; set; } = false;
 

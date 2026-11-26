@@ -127,6 +127,7 @@ namespace VaccineAPI.Services
                 a.IsCancelled = true;
                 a.CancelledAt = DateTime.UtcNow;
                 a.CancelReason = "Patient deleted";
+                a.CancelledBy = "DOCTOR";
                 AssignmentAudit.Add(db, "Cancelled", a, "DOCTOR", a.DoctorId,
                     "Assignment cancelled: patient deleted", "Patient deleted");
             }

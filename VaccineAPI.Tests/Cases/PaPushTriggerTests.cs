@@ -8,6 +8,7 @@ using Xunit;
 namespace VaccineAPI.Tests.Cases;
 
 /// <summary>PA push triggers: the 1-hour-before reminder window and the notifications for visit/assignment changes.</summary>
+[Collection("AuthStatics")]
 public class PaPushTriggerTests
 {
     private static readonly TimeSpan Pkt = TimeSpan.FromHours(5);
@@ -71,7 +72,7 @@ public class PaPushTriggerTests
         using var w = new StockWorld();
         var (childId, asgId) = SeedVisit(w, new TimeSpan(15, 0, 0), new DateTime(2026, 11, 5));
         using var db = w.NewContext();
-        var r = await Ctl(db).SetTargetDate(asgId, new SetTargetDateDto { DoctorId = w.DoctorId, TargetDate = new DateTime(2026, 11, 6) });
+        var r = await TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).SetTargetDate(asgId, new SetTargetDateDto { DoctorId = w.DoctorId, TargetDate = new DateTime(2026, 11, 6) }));
         Assert.NotNull(r);
         using var check = w.NewContext();
         var parentId = check.Childs.Single(c => c.Id == childId).UserId;
@@ -85,7 +86,7 @@ public class PaPushTriggerTests
         using var w = new StockWorld();
         var (_, asgId) = SeedVisit(w, new TimeSpan(15, 0, 0), new DateTime(2026, 11, 5));
         using var db = w.NewContext();
-        await Ctl(db).SetTargetDate(asgId, new SetTargetDateDto { DoctorId = w.DoctorId, TargetDate = new DateTime(2026, 11, 5) });
+        await TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).SetTargetDate(asgId, new SetTargetDateDto { DoctorId = w.DoctorId, TargetDate = new DateTime(2026, 11, 5) }));
         using var check = w.NewContext();
         Assert.Empty(check.Notifications);
     }
@@ -96,7 +97,7 @@ public class PaPushTriggerTests
         using var w = new StockWorld();
         var (_, asgId) = SeedVisit(w, null, new DateTime(2026, 11, 5));
         using var db = w.NewContext();
-        await Ctl(db).DeleteAssignment(asgId, w.DoctorId);
+        await TestAuth.As(TestAuth.Doctor(w.DoctorId), () => Ctl(db).DeleteAssignment(asgId, w.DoctorId));
         using var check = w.NewContext();
         Assert.Contains(check.Notifications, n => n.Type == "PaAssignmentRemoved" && n.RecipientType == "PA" && n.RecipientId == 17);
     }
